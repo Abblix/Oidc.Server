@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -58,10 +59,11 @@ public class ProfileClockSkewReachesValidationTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             TimeProvider.System,
-            new Mock<IReplayCache>().Object);
+            new Mock<IReplayCache>().Object,
+            new ServiceCollection().BuildServiceProvider());
 
         await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {
@@ -111,7 +113,7 @@ public class ProfileClockSkewReachesValidationTests
 
         var validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             options.Object,
             new Mock<ISecureHttpFetcher>().Object,
             SingleIssuer.LicensedCatalog);
@@ -154,13 +156,13 @@ public class ProfileClockSkewReachesValidationTests
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             new Mock<IClientInfoProvider>().Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
             TimeProvider.System);
 
-        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), "header.payload.signature", TokenTypePolicy.CheckedByCaller);
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, "header.payload.signature", TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(
             SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),

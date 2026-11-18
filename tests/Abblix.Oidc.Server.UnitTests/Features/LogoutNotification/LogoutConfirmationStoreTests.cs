@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -146,6 +147,58 @@ public class LogoutConfirmationStoreTests
 
         Assert.Equal(first, second);
         Assert.True(await _store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, first));
+    }
+
+    /// <summary>
+    /// Two first requests for one session that overlap are asked the same question, so the end user's answer to
+    /// the page either of them rendered ends the session. The other request runs whole inside this one's read,
+    /// which is the overlap where issuing by a read and then a write lets each of them answer with a value of its
+    /// own, the later write voiding the earlier one.
+    /// </summary>
+    [Fact]
+    public async Task TwoOverlappingFirstRequests_AreAskedTheSameQuestion()
+    {
+        var keyFactory = new EntityStorageKeyFactory();
+        var overlapping = new LetsAnotherCallerIn(
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new ProtobufSerializer()),
+            keyFactory.LogoutConfirmationKey(SingleIssuer.Tenant, SessionId));
+        var store = new LogoutConfirmationStore(overlapping.Storage, keyFactory, Options.Create(_options));
+
+        string? other = null;
+        overlapping.OnNextReadOf(async () => other = await store.IssueAsync(SingleIssuer.Tenant, SessionId));
+
+        var mine = await store.IssueAsync(SingleIssuer.Tenant, SessionId);
+
+        Assert.Equal(other, mine);
+        Assert.True(await store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, mine));
+    }
+
+    /// <summary>
+    /// A storage that refuses every write and reads nothing back, as one whose write still counts an expired entry
+    /// while its read does not, fails the request with the cause rather than keeping it, and a thread, busy for good.
+    /// </summary>
+    [Fact]
+    public async Task AStorageThatNeverTakesTheQuestion_FailsTheRequest()
+    {
+        var storage = new Mock<IEntityStorage>(MockBehavior.Strict);
+        storage
+            .Setup(s => s.GetAsync<LogoutConfirmation>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync((LogoutConfirmation?)null);
+        storage
+            .Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(),
+                It.IsAny<LogoutConfirmation>(),
+                It.IsAny<StorageOptions>(),
+                It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(false);
+        var store = new LogoutConfirmationStore(storage.Object, new EntityStorageKeyFactory(), Options.Create(_options));
+
+        // On a thread of its own and with a deadline, so an issuing that never ends fails the test instead of the run
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
     }
 
     /// <summary>

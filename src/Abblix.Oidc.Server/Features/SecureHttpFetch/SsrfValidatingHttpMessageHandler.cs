@@ -92,7 +92,7 @@ public class SsrfValidatingHttpMessageHandler(
                     ex);
             }
 
-            var privateAddress = addresses.FirstOrDefault(SecureUriValidator.IsPrivateOrReservedAddress);
+            var privateAddress = addresses.FirstOrDefault(PrivateNetworks.IsPrivateOrReservedAddress);
             if (privateAddress != null)
             {
                 throw new HttpRequestException(

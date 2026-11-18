@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -51,8 +52,8 @@ public class ClientSecretJwtThroughTheValidatorTests
 
         // Each assertion names the issuer of the tenant it is presented at, so the client lookup alone
         // decides the second one
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString])));
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString])));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString]))).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString]))).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -70,7 +71,7 @@ public class ClientSecretJwtThroughTheValidatorTests
         var authenticator = Authenticator(jwt);
 
         string[] audiences = audience is null ? [] : [audience];
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences)));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences))).TryGetSuccess(out _));
     }
 
     private static ServiceProvider JsonWebTokenServices()
@@ -100,10 +101,11 @@ public class ClientSecretJwtThroughTheValidatorTests
 
         return new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            jwt.GetRequiredService<IJsonWebTokenValidator>(),
+            new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()),
             clients.Object,
             TimeProvider.System,
-            replayCache.Object);
+            replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
     }
 
     private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)

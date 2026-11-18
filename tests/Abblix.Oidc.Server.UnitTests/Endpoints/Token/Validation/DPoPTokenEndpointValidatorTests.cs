@@ -151,18 +151,50 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
-    /// A FAPI 2.0 client that authenticates with mutual TLS gets a certificate-bound token by that alone,
-    /// with no separate registration for certificate-bound tokens, so the profile is met without a proof.
+    /// Authenticating with mutual TLS binds no token by itself: RFC 8705 section 3.4 has the client state its
+    /// "intention to use mutual-TLS client certificate-bound access tokens", false when omitted. So a FAPI 2.0 client
+    /// authenticating so without that registration would get a Bearer token without a proof, and the profile refuses
+    /// it; with the registration its token is certificate-bound and the profile is met without a proof.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingHeaderFapi2MutualTlsClient_ReturnsNull()
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, true, true)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, true, true)]
+    public async Task ValidateAsync_MissingHeaderFapi2MutualTlsClient_IsServedOnlyWhenRegisteredForBinding(
+        string tokenEndpointAuthMethod, bool tlsClientCertificateBoundAccessTokens, bool served)
     {
         using var certificate = CreateCertificate();
         var context = CreateContext(
             proofJwt: null,
             clientRequiresDPoP: false,
             clientCertificate: certificate,
+            tlsClientCertificateBoundAccessTokens: tlsClientCertificateBoundAccessTokens,
             securityProfile: ClientSecurityProfile.Fapi2,
+            tokenEndpointAuthMethod: tokenEndpointAuthMethod);
+
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        if (served)
+            Assert.Null(error);
+        else
+            AssertProofRejected(error, context);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall only issue sender-constrained access tokens", MTLS being the
+    /// mechanism, so the profile binds the token of a client authenticating with mutual TLS whether or not it
+    /// registered tls_client_certificate_bound_access_tokens, and such a client is served without a proof.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1AdvancedMutualTlsClientNotRegisteredForBinding_ReturnsNull()
+    {
+        using var certificate = CreateCertificate();
+        var context = CreateContext(
+            proofJwt: null,
+            clientRequiresDPoP: false,
+            clientCertificate: certificate,
+            securityProfile: ClientSecurityProfile.Fapi1Advanced,
             tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
 
         var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
@@ -379,12 +411,12 @@ public class DPoPTokenEndpointValidatorTests
 
     private void SetupProofValidatorSuccess(Proof proof) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
 
     private void SetupProofValidatorFailure(ProofError error) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)error);
 
     private void RequireNonceAtTokenEndpoint() => _opts.DPoP.Nonce.RequireAtTokenEndpoint = true;
@@ -418,5 +450,63 @@ public class DPoPTokenEndpointValidatorTests
         Assert.Equal(ErrorCodes.UseDPoPNonce, nonceError.Error);
         Assert.Equal(FreshNonce, nonceError.Nonce);
         Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server, "when creating or processing JWTs", "use PS256, ES256, or EdDSA": the
+    /// proof is judged under the profile of the client presenting it, which for FAPI 2.0 refuses a proof signed RS256
+    /// and admits ES256, while a client held to no profile keeps RS256. A client held to FAPI 1.0 Advanced sends no
+    /// proof at all.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.ES256, true)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheProofAlgorithm(
+        ClientSecurityProfile? profile, string algorithm, bool accepted)
+    {
+        SecurityProfileRequirements? judgedUnder = null;
+        _proofValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Callback<SecurityProfileRequirements, string, string?, CancellationToken>(
+                (requirements, _, _, _) => judgedUnder = requirements)
+            .ReturnsAsync((Result<Proof, ProofError>)BuildProof());
+        var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false, securityProfile: profile);
+
+        await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2: protected resources "shall only support sender-constrained access tokens via MTLS".
+    /// A client held to FAPI 1.0 Advanced is issued certificate-bound tokens only: a request carrying a DPoP proof is
+    /// refused with invalid_request, signed ES256 or not, and one without a certificate the token could be bound to with
+    /// invalid_client, the mutual TLS authentication being what is missing; a FAPI 2.0 client keeps DPoP.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true, true, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true, false, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, false, ErrorCodes.InvalidClient)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, true, null)]
+    [InlineData(ClientSecurityProfile.Fapi2, true, false, null)]
+    public async Task ValidateAsync_Fapi1Advanced_IssuesCertificateBoundTokensOnly(
+        ClientSecurityProfile profile, bool withProof, bool withCertificate, string? expectedError)
+    {
+        using var certificate = CreateCertificate();
+        var proof = BuildProof();
+        proof.Token.Header.Algorithm = SigningAlgorithms.ES256;
+        if (withProof)
+            SetupProofValidatorSuccess(proof);
+        var context = CreateContext(
+            proofJwt: withProof ? ProofJwt : null,
+            clientRequiresDPoP: false,
+            clientCertificate: withCertificate ? certificate : null,
+            tlsClientCertificateBoundAccessTokens: true,
+            securityProfile: profile);
+
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, error?.Error);
     }
 }

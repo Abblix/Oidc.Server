@@ -60,7 +60,9 @@ public static class LicenseLoader
     {
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var validationResult = await validator.ValidateAsync(
-            licenseJwt,
+            // Read from a file, a mounted secret or a YAML block, the value may end in a line break that is not
+            // part of the token, which a compact serialization refuses
+            licenseJwt.Trim(),
             new ValidationParameters
             {
                 // RequireValidIssuer, not RequireIssuer: the delegate below is what decides whether this

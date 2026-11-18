@@ -42,7 +42,7 @@ public class JsonSerializationBinderRarTests
         Assert.NotNull(merged);
         Assert.Equal("client-123", merged.ClientId);
         Assert.NotNull(merged.AuthorizationDetails);
-        Assert.Equal(WireJson, merged.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(WireJson, merged.AuthorizationDetails.ToJsonString());
     }
 
     [Fact]

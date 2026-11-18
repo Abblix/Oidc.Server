@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -45,7 +45,7 @@ public class AuthorizationResponseFormatter(
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IUriResolver uriResolver,
-    IParametersProvider parametersProvider) : IAuthorizationResponseFormatter
+    IParametersProvider parametersProvider) : IAuthorizationResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats an authorization response based on the specified request and response model asynchronously.

@@ -20,7 +20,6 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 /// This interface centralizes JWT Bearer security functionality to:
 /// - Validate that the JWT issuer (iss claim) is from a trusted identity provider
 /// - Resolve the signing keys (JWKS) for verifying the JWT signature
-/// - Provide replay protection per RFC 7523 Section 3
 /// - Expose configuration settings (clock skew, algorithm whitelist, etc.)
 /// The trust is asked at the tenant the grant is requested at, so a host trusting different identity providers at
 /// different tenants answers for the tenant it is handed.
@@ -58,19 +57,11 @@ public interface IJwtBearerIssuerProvider
 	/// </summary>
 	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
+	/// <param name="refetch">Whether to read the issuer's keys at its JWKS URI again past the copy held, as on a
+	/// kid the copy does not hold.</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys that can be used to verify signatures for JWTs
 	/// issued by this issuer. Returns empty if the issuer is not trusted or has no configured keys.
 	/// </returns>
-	IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer);
-
-	/// <summary>
-	/// Atomically records the JWT's JTI for replay protection and reports whether it had already
-	/// been recorded. The entry is kept until the assertion's own expiration, so a JWT cannot be
-	/// replayed for any part of its validity window.
-	/// </summary>
-	/// <param name="jti">The JWT ID (jti claim) to reserve.</param>
-	/// <param name="expiresAt">The assertion's expiration; bounds how long the JTI is remembered.</param>
-	/// <returns>True if this JTI was already recorded (a replay); false if it was recorded just now.</returns>
-	Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt);
+	IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer, bool refetch = false);
 }

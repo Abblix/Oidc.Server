@@ -82,4 +82,12 @@ public record DeviceAuthorizationRequest(
     /// the eventual access token issued via the device-code grant emits the claim byte-exact.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// Whether the client named no scope, so the scope of this request is the default the server served it with.
+    /// Carried onto the grant the host approves, whatever context the host builds, so the token endpoint does not
+    /// take a default the client never named for a scope it asked for. A record stored before this member existed
+    /// reads false, as a scope the client named.
+    /// </summary>
+    public bool ClientNamedNoScope { get; init; }
 }

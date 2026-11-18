@@ -373,7 +373,7 @@ public partial class MultiTenancyRegistrationTests
     {
         using var provider = BuildProvider();
         var local = provider.GetRequiredService<IIssuerLocal<object>>();
-        TenantDefinition Acme(string generation)
+        static TenantDefinition Acme(string generation)
             => new() { Id = "acme", Issuer = new Uri(AcmeIssuer), Generation = generation };
 
         EnterTenant(provider, Acme("1"));

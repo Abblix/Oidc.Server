@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -33,7 +34,10 @@ public class ResponseJwtBuilder(
     IOptions<OidcOptions> options) : IResponseJwtBuilder
 {
     /// <inheritdoc />
-    public async Task<string> BuildAsync(TenantDefinition tenant, string? clientId, IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<Result<string, OidcError>> BuildAsync(
+        TenantDefinition tenant,
+        string? clientId,
+        IReadOnlyList<(string name, string? value)> parameters)
     {
         var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
@@ -67,11 +71,12 @@ public class ResponseJwtBuilder(
         }
 
         // JARM section 2.2 / section 3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
-        // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted.
+        // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted. A client with no
+        // key that algorithm can encrypt to is the formatter's refusal, which the caller answers
         return await clientJwtFormatter.FormatAsync(
             tenant,
             token,
             clientInfo,
-            ClientJwtEncryption.ForJarm(clientInfo, options.Value));
+            ClientJwtEncryption.ForJarm(clientInfo));
     }
 }

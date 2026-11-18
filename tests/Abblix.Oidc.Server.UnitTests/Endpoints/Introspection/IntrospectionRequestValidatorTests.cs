@@ -10,6 +10,7 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection;
@@ -80,6 +81,7 @@ public class IntrospectionRequestValidatorTests
         return new ClientRequest
         {
             ClientId = clientId,
+            ClientSecret = "secret",
         };
     }
 
@@ -106,10 +108,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -120,7 +122,7 @@ public class IntrospectionRequestValidatorTests
         Assert.Equal(introspectionRequest, validRequest.Model);
         Assert.Equal(token, validRequest.Token);
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, clientInfo, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -136,7 +138,7 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
@@ -167,15 +169,98 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(publicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(publicClient));
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<UnauthenticatedCallerError>(error);
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
         _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 9701 section 5: the server "MUST refuse to serve introspection requests that don't authenticate the caller
+    /// and return an HTTP status code 400". Where the authenticators find no credential in the request, it is refused
+    /// as such before the token is read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoCredential_IsAnUnauthenticatedCaller()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// The Authorization header on two lines is the request RFC 6749 section 5.2 names invalid_request, decided before
+    /// the absence of a credential is: two lines are not read as none.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithTwoAuthorizationHeaders_IsInvalidRequestNotAnUnauthenticatedCaller()
+    {
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest
+            {
+                ClientId = TestConstants.DefaultClientId,
+                AuthorizationHeaderLines = ["Basic Y2xpZW50OnNlY3JldA==", "Basic Y2xpZW50OnNlY3JldA=="],
+            });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Same(ErrorFactory.MoreThanOneAuthorizationHeader, error);
+    }
+
+    /// <summary>
+    /// An Authorization header that does not parse is still an attempt to authenticate through it, which RFC 6749
+    /// section 5.2 answers 401: it goes to the authenticators and is not the caller that presented nothing.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAnUnparsableAuthorizationHeader_IsNotAnUnauthenticatedCaller()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest { ClientId = TestConstants.DefaultClientId, AuthorizationHeaderLines = ["Basic ,"] });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsNotType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+    }
+
+    /// <summary>
+    /// RFC 7662 section 2.3: a caller whose credential "is invalid" is answered 401, as RFC 6749 section 5.2 has it, so
+    /// a failed credential is a plain invalid_client and not the unauthenticated caller of RFC 9701.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAFailedCredential_IsAPlainInvalidClient()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsNotType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
     }
 
     /// <summary>
@@ -195,10 +280,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -209,7 +294,7 @@ public class IntrospectionRequestValidatorTests
         Assert.Equal(introspectionRequest, validRequest.Model);
         Assert.Null(validRequest.Token);
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -228,9 +313,9 @@ public class IntrospectionRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "No signing key matched: kid='sent\r\nforged'"));
 
         await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
@@ -255,11 +340,11 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
@@ -283,10 +368,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -297,7 +382,7 @@ public class IntrospectionRequestValidatorTests
         Assert.Equal(introspectionRequest, validRequest.Model);
         Assert.Null(validRequest.Token);
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -318,11 +403,11 @@ public class IntrospectionRequestValidatorTests
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .Callback(new Action<TenantDefinition, ClientRequest>((_, _) => callOrder.Add("authenticate")))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, __) => callOrder.Add("validate")))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, __) => callOrder.Add("validate")))
             .ReturnsAsync(token);
 
         // Act
@@ -347,7 +432,7 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
@@ -373,17 +458,17 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(jwt);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -401,10 +486,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -430,10 +515,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -458,10 +543,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -475,7 +560,7 @@ public class IntrospectionRequestValidatorTests
         Assert.Equal(ErrorCodes.TemporarilyUnavailable, refusal.Error);
         Assert.Equal(CallerRateLimiters.Introspection, refusal.Budget);
         Assert.NotNull(refusal.RetryAfter);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -491,10 +576,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns<TenantDefinition, ClientRequest>((_, request) => Task.FromResult<ClientInfo?>(new ClientInfo(request.ClientId!)));
+            .Returns<TenantDefinition, ClientRequest>((_, request) => Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(request.ClientId!)));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken(OtherClientId));
 
         // Act
@@ -524,10 +609,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act, Assert
@@ -553,10 +638,10 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act

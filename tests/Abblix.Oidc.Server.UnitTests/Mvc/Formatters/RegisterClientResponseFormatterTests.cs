@@ -47,7 +47,8 @@ public class RegisterClientResponseFormatterTests
     private readonly RegisterClientResponseFormatter _formatter = new(
         new RegistrationClientUriBuilder(
             new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
-            new FixedLinkGenerator(ConfigurationEndpoint)));
+            new FixedLinkGenerator(ConfigurationEndpoint)),
+        SingleIssuer.Accessor);
 
     /// <summary>Answers every address with one URL, so the configuration endpoint is known without routing.</summary>
     private sealed class FixedLinkGenerator(Uri uri) : LinkGenerator

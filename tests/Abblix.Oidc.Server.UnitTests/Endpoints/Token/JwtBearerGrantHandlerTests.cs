@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -18,6 +21,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -662,9 +666,40 @@ public class JwtBearerGrantHandlerTests
 		return captured!.ValidateAudience!;
 	}
 
+	/// <summary>
+	/// The keys read again on an unfamiliar kid are the trusted issuer's, asked for past the copy held, while the keys
+	/// first returned come from the copy.
+	/// </summary>
+	[Fact]
+	public async Task TheIssuersKeys_AreReadPastTheCopyOnlyForTheRefetch()
+	{
+		const string issuer = "https://trusted-issuer.example.com";
+		var (handler, mocks) = CreateHandler(tokenEndpoint: TokenEndpointUri);
+		ValidationParameters? captured = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+		mocks.IssuerProvider
+			.Setup(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, It.IsAny<bool>()))
+			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+		await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
+		await captured!.ResolveIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
+		await captured.RefetchIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
+
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, false), Times.Once);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, true), Times.Once);
+	}
+
 	private record Mocks(
 		Mock<IJsonWebTokenValidator> JwtValidator,
 		Mock<IJwtBearerIssuerProvider> IssuerProvider,
+		Mock<IReplayCache> ReplayCache,
 		Mock<IRequestInfoProvider> RequestInfoProvider,
 		Mock<ISessionIdGenerator> SessionIdGenerator,
 		FakeTimeProvider TimeProvider);
@@ -685,6 +720,10 @@ public class JwtBearerGrantHandlerTests
 	{
 		var jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
 		var issuerProvider = new Mock<IJwtBearerIssuerProvider>(MockBehavior.Strict);
+		var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
+		replayCache
+			.Setup(c => c.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(true);
 		var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
 		var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
 		var timeProvider = fixedTime.HasValue
@@ -727,16 +766,24 @@ public class JwtBearerGrantHandlerTests
 
 		var logger = new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerGrantHandler>>();
 
+		var policy = new JwtBearerAssertionPolicy(
+			new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerAssertionPolicy>>().Object,
+			issuerProvider.Object,
+			timeProvider,
+			replayCache.Object,
+			requestInfoProvider.Object,
+			SingleIssuer.LicensedCatalog);
+
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,
-			jwtValidator.Object,
+			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
-			SingleIssuer.LicensedCatalog);
+			policy);
 
-		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
+		return (handler, new Mocks(jwtValidator, issuerProvider, replayCache, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}
 
 	private static JsonWebToken CreateValidJwt()
@@ -846,9 +893,9 @@ public class JwtBearerGrantHandlerTests
 		jwt.Payload.JwtId = "unique-jti-12345";
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
-		mocks.IssuerProvider
-			.Setup(p => p.IsReplayedAsync("unique-jti-12345", It.IsAny<DateTimeOffset?>()))
-			.ReturnsAsync(true);
+		mocks.ReplayCache
+			.Setup(c => c.TryReserveAsync("unique-jti-12345", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(false);
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
 		{
@@ -1077,6 +1124,8 @@ public class JwtBearerGrantHandlerTests
 			maxJwtAge: TimeSpan.FromMinutes(10));
 		var jwt = CreateValidJwt();
 		jwt.Payload.IssuedAt = fixedTime.AddMinutes(-issuedMinutesAgo);
+		// An algorithm every profile admits, since what is under test is the assertion's age
+		jwt.Header.Algorithm = SigningAlgorithms.ES256;
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
@@ -1322,9 +1371,37 @@ public class JwtBearerGrantHandlerTests
 		issuerProvider
 			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, issuer))
 			.ReturnsAsync(trustedIssuer);
+	}
 
-		issuerProvider
-			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
-			.ReturnsAsync(false);
+	/// <summary>
+	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS, so a bearer assertion presented by
+	/// a client held to FAPI 1.0 Advanced is refused under RS256 although its trusted issuer allows it; PS256 passes.
+	/// The validator is driven as the real one judges the algorithm list it is handed.
+	/// </summary>
+	[Theory]
+	[InlineData("RS256", false)]
+	[InlineData("PS256", true)]
+	public async Task AlgorithmValidation_UnderFapi1Advanced_AdmitsOnlyItsAlgorithms(string algorithm, bool accepted)
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		jwt.Header.Algorithm = algorithm;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.ReturnsAsync((string _, ValidationParameters parameters) =>
+				parameters.AllowedSigningAlgorithms is { } allowed && !allowed.Contains(algorithm)
+					? new JwtValidationError(JwtError.InvalidAlgorithm, "Outside the allowed list")
+					: jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer, allowedAlgorithms: ["RS256", "PS256"]);
+		var clientInfo = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+		Assert.Equal(accepted, result.TryGetSuccess(out _));
 	}
 }

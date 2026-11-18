@@ -50,4 +50,8 @@ message AuthorizationContext {
   // opaque JSON because the act object may carry arbitrary actor metadata and nested
   // act.act delegation chains; round-trip preserves byte-exact shape.
   optional string actor_json = 12;
+
+  // Whether the client named no scope at the authorization step and the scope began as its default; a grant
+  // stored before the field existed reads false, as a scope the client named
+  bool client_named_no_scope = 13;
 }

@@ -103,8 +103,8 @@ public class GrantRevocationTests
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => "jti_" + ++_next);
         var formatter = new Mock<IAuthServiceJwtFormatter>();
         formatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync((TenantDefinition _, JsonWebToken jwt, ServiceJwtEncryption _) =>
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync((TenantDefinition _, JsonWebToken jwt, ClientInfo? _, ServiceJwtEncryption _) =>
             {
                 _issued[jwt.Payload.JwtId!] = jwt;
                 return jwt.Payload.JwtId!;
@@ -174,7 +174,7 @@ public class GrantRevocationTests
                 GrantId = GrantId,
             },
         };
-        _issued[token.Payload.JwtId!] = token;
+        _issued[token.Payload.JwtId] = token;
         return token;
     }
 

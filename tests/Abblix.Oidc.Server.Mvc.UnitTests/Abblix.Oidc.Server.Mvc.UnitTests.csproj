@@ -43,4 +43,9 @@
 	  </None>
 	</ItemGroup>
 
+	<ItemGroup>
+		<Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
+		<Compile Include="../Abblix.Oidc.Server.UnitTests/TestInfrastructure/TestSigningAlgorithms.cs" Link="Shared/TestSigningAlgorithms.cs" />
+	</ItemGroup>
+
 </Project>

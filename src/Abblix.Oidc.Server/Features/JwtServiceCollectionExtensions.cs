@@ -52,12 +52,6 @@ public static class JwtServiceCollectionExtensions
         services.TryAdd(
             ServiceDescriptor.Singleton(typeof(IAuthServiceKeysProvider), KeyProviderRegistration.LibraryProvider));
 
-        // The write-role counterpart to the reader above. The default is the read-only static
-        // configuration that fails loud if asked to persist a generated key; a persistent store (shipped
-        // with key generation and rotation) replaces it host-first via TryAdd. It is segregated from the
-        // reader (ISP), so read-only consumers never depend on persistence.
-        services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
-
         // The JWKS endpoint is cached for OidcOptions.KeyRolloverPropagation, so a key the ring mints waits that
         // window before it signs. Set after the ring's own configuration, the host's included: a ring window of its own
         // would let a client with a warm cache meet a key it has never seen.
@@ -98,6 +92,7 @@ public static class JwtServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
         services.TryAddSingleton<IResponseJwtBuilder, ResponseJwtBuilder>();
+        services.TryAddSingleton<IIntrospectionResponseJwtBuilder, IntrospectionResponseJwtBuilder>();
         return services;
     }
 }

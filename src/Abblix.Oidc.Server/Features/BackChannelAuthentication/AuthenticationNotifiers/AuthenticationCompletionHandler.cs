@@ -37,9 +37,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
-/// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
-/// handler outside this library keeps compiling - a deployment that registered none simply has nobody
-/// to wake.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll, or null for a mode whose clients
+/// never wait on one.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
@@ -47,7 +46,7 @@ public abstract partial class AuthenticationCompletionHandler(
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
-    IBackChannelLongPollingService? statusNotifier = null)
+    IBackChannelLongPollingService? statusNotifier)
 {
     /// <summary>
     /// The fingerprint that stands for a CIBA request id in this handler's and its delivery mode's records.
@@ -64,12 +63,12 @@ public abstract partial class AuthenticationCompletionHandler(
     /// own Status is not read: whether this request may still be answered is decided from the STORED
     /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     /// <returns>A task representing the asynchronous authentication completion operation.</returns>
     /// <remarks>
     /// This method:
     /// <list type="bullet">
-    ///   <item>Refuses unless the STORED record reads Pending</item>
+    ///   <item>Refuses unless the STORED record reads Pending and its ExpiresAt has not come</item>
     ///   <item>Refuses an answer from somebody other than the end user the request named, or at an
     ///   authentication level its essential acr does not accept, by denying or removing according to the
     ///   mode</item>
@@ -78,8 +77,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </list>
     /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier. The full statement of the condition, and why it is stated that way rather than as a
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
         TenantDefinition tenant,
@@ -107,14 +106,15 @@ public abstract partial class AuthenticationCompletionHandler(
         // top of that mints against a record nobody can check and writes it back into existence.
         //
         // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
-        // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
-        // deciding, or push removed it after a configuration fault, where nothing was answered at all.
+        // apart - a poll redeemed it, a push delivered it, it was evicted after it had expired, or push
+        // removed it after a configuration fault, where nothing was answered at all. A record still there
+        // and pending past its expiry is the one cause told apart: it is refused as expired.
         // Naming one of them would send an operator who just fixed a client registration looking for a
         // second completion that never happened.
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "completed");
 
         // What the request recorded when it arrived - whom it named, what it asked for, the levels it
-        // required, and where and with which token the client is to be notified - is the STORED record's,
+        // required, where and with which token the client is to be notified, and when it expires - is the STORED record's,
         // never the host's copy: a host answers with a record of its own, and one it builds with a
         // constructor carries none of it. Taken onto that copy rather than read beside it, because the copy
         // is what every check below judges, what each mode delivers from and writes back, and the token
@@ -128,6 +128,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 .Match<string[]?>(levels => levels, _ => null);
         request.ClientNotificationEndpoint = stored.ClientNotificationEndpoint;
         request.ClientNotificationToken = stored.ClientNotificationToken;
+        request.ExpiresAt = stored.ExpiresAt;
 
         // The grant the host completes with is minted for the client its context names, so that has to be
         // the client the request came from. The grant itself cannot be taken from the stored record: it
@@ -208,10 +209,17 @@ public abstract partial class AuthenticationCompletionHandler(
         // there, before it mints.
 
         // When the end user approved it, unless the host already said: a revocation of the end user at this client is
-        // measured against it at redemption, and the session the host hands over may be older than the approval
+        // measured against it at redemption, and the session the host hands over may be older than the approval.
+        //
+        // Whether the client named a scope is a fact about the request the server stored, not about the context the
+        // host may have rebuilt, so it is set from that record as the device approval sets it
         request.AuthorizedGrant = request.AuthorizedGrant with
         {
             AuthorizedAt = request.AuthorizedGrant.AuthorizedAt ?? clock.GetUtcNow(),
+            Context = request.AuthorizedGrant.Context with
+            {
+                ClientNamedNoScope = stored.AuthorizedGrant.Context.ClientNamedNoScope,
+            },
         };
 
         // Update status to Authenticated before handling delivery
@@ -272,8 +280,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come: a request already answered, removed or expired cannot be refused either.</exception>
     public async Task DenyAuthenticationAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "denied");
@@ -288,9 +296,17 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
     private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, string answered)
     {
+        // A pending record outlives its expiry so a late poll is told expired_token, so its presence no longer says it
+        // may still be answered: one whose ExpiresAt has come is refused as one that is gone
         var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
-            return stored;
+        {
+            if (clock.GetUtcNow() < stored.ExpiresAt)
+                return stored;
+
+            LogExpiredBeforeAnswered(FingerprintOf(authenticationRequestId), answered);
+            throw NotPending(answered, stored);
+        }
 
         LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), answered, stored?.Status.ToString());
         throw NotPending(answered, stored);
@@ -313,15 +329,22 @@ public abstract partial class AuthenticationCompletionHandler(
     /// The refusal of an answer to a request that is not pending, worded once for every caller.
     /// </summary>
     /// <param name="answered">What the caller was doing: completed or denied.</param>
-    /// <param name="stored">The record found, or null when there was none.</param>
+    /// <param name="stored">The record found, or null when there was none. One still reading pending is refused
+    /// because its expiry has come.</param>
     internal static InvalidOperationException NotPending(string answered, BackChannelAuthenticationRequest? stored)
         => new(
             $"The authentication request cannot be {answered}: the stored record "
-            + (stored is null
-                ? "is not there"
-                : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
-            + ". Only a pending request can be answered. Recovering from a failed delivery means "
-            + "asking the end user again rather than answering the same request twice.");
+            + stored switch
+            {
+                null => "is not there" + OnlyAPendingRequest,
+                { Status: BackChannelAuthenticationStatus.Pending } =>
+                    "has expired. The client has to make a new authentication request.",
+                _ => $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}" + OnlyAPendingRequest,
+            });
+
+    private const string OnlyAPendingRequest =
+        ". Only a pending request can be answered. Recovering from a failed delivery means asking the end user " +
+        "again rather than answering the same request twice.";
 
     // The reasons a request is refused with. access_denied throughout: CIBA Core 1.0 defines it for the token
     // endpoint and the push error payload alike, and it is the server or the end user denying the request.
@@ -372,7 +395,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     protected abstract Task HandleDeliveryAsync(
         TenantDefinition tenant,
         [Credential] string authenticationRequestId,
@@ -452,8 +475,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </para>
     /// <para>
     /// Whether anybody IS waiting is not this method's question either. Push never writes through it:
-    /// it takes the request instead, and no push client is ever a waiter. A deployment that registered no
-    /// notifier skips the call.
+    /// it takes the request instead, and no push client is ever a waiter, so push hands no notifier.
     /// </para>
     /// </remarks>
     /// <param name="tenant">The tenant the request is completed at.</param>

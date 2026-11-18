@@ -39,23 +39,42 @@ public sealed class LogoutConfirmationStore(
 
         // Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a
         // fresh value here would let a request arriving while the end user reads the page void the answer they
-        // are about to give. The store does not grow either way: the key is the session's, so a new value would
-        // replace this record rather than add one.
-        if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
-            return outstanding.Confirmation;
+        // are about to give. A value is written only where the session has none, and the storage decides that
+        // between concurrent callers: of two first requests that overlap, one writes and the other reads back what
+        // it wrote. The default storage decides within one process only; across nodes that takes a storage built on
+        // the store's own set-if-absent. A value answered or expired between that losing write and the read leaves the session with no
+        // question, and the next pass asks afresh.
+        for (var attempt = 0; attempt < IssuingAttempts; attempt++)
+        {
+            if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
+                return outstanding.Confirmation;
 
-        // Drawn from a cryptographically secure source and sized by configuration, like every other value this
-        // server issues that an outsider must not be able to state: guessing one would end a session.
-        var confirmation = Base64Url.EncodeToString(
-            CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
+            // Drawn from a cryptographically secure source and sized by configuration, like every other value this
+            // server issues that an outsider must not be able to state: guessing one would end a session.
+            var confirmation = Base64Url.EncodeToString(
+                CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
 
-        await storage.SetAsync(
-            key,
-            new LogoutConfirmation { Confirmation = confirmation },
-            new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime });
+            if (await storage.TrySetIfAbsentAsync(
+                    key,
+                    new LogoutConfirmation { Confirmation = confirmation },
+                    new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime }))
+            {
+                return confirmation;
+            }
+        }
 
-        return confirmation;
+        throw new InvalidOperationException(
+            $"The logout confirmation could not be issued: on each of {IssuingAttempts} attempts the storage " +
+            "reported a value already written and then read none, as a storage whose write still counts an expired " +
+            "entry while its read no longer returns it does");
     }
+
+    /// <summary>
+    /// How many times a question is read and written before giving up. Each pass that writes nothing has lost to
+    /// another request of the same session, so a few are enough; a storage whose write still counts an expired entry
+    /// while its read no longer returns it would otherwise keep the request, and a thread, busy for good.
+    /// </summary>
+    private const int IssuingAttempts = 16;
 
     /// <inheritdoc />
     public async Task<bool> RedeemLogoutConfirmationAsync(TenantDefinition tenant, string sessionId, string confirmation)

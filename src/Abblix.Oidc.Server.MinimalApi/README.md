@@ -2,10 +2,15 @@
 
 Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
+
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
 
 🚀 Features
-- Minimal API integration: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcServices` and `MapOidcEndpoints`, with full feature parity with the MVC integration - JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
+- Every tenant of a multi-tenant server is served through the same endpoints
+
+✏️ Improvements
+- The MVC and Minimal API hosts read a request the same way
 
 ## Key Features
 
@@ -29,6 +34,11 @@ This package includes Abblix.OIDC.Server, Abblix.OIDC, Abblix.JWT, Abblix.Depend
 ## Quick Start
 
 ```csharp
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.MinimalApi;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Grants every client everything it asks for, which suits only clients of your own;
@@ -39,7 +49,9 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    Issuer = new Uri("https://auth.example.com"),
+    // The address the app is served on, read from the "Issuer" setting
+    Issuer = new Uri(builder.Configuration["Issuer"]
+        ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
 }));
@@ -53,6 +65,8 @@ app.MapOidcEndpoints();
 
 app.Run();
 ```
+
+The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
 
 `MapOidcEndpoints()` maps all enabled endpoints onto a route group and returns the `RouteGroupBuilder`, so cross-cutting conventions can be applied to all OIDC endpoints at once:
 
@@ -110,7 +124,7 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 ## Getting Started
 
-To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+To learn more about the Abblix OIDC Server product, visit our [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) site and explore the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide).
 
 ## License
 

@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
@@ -26,9 +29,15 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
 /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
+/// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to, judged against its
+/// profile.</param>
+/// <param name="options">Supplies the service token settings the client's access and refresh tokens are issued with.
+/// </param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationContextValidator
+    IClientInfoProvider clientInfoProvider,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
+    IOptions<OidcOptions> options) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
@@ -55,6 +64,28 @@ public partial class ClientValidator(
         {
             LogClientNotFound(clientId);
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
+        }
+
+        // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: the server signs only with the profile's algorithms,
+        // and this endpoint signs for the client with what the client is configured for - a front-channel ID token,
+        // a JWT authorization response. A client the startup check never saw, added to the store afterwards, is
+        // refused here before anything is signed for it
+        // So are the access and refresh tokens it would be issued, signed and encrypted with what the deployment
+        // configures, and each JWT it registered an encryption algorithm for that it has no key to be encrypted to under
+        var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
+            ..SecurityProfileConsistency.FindServiceTokenViolations(
+                SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
+            ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
+                encryptionKeyResolver, clientInfo, requirements),
+        ];
+        if (violations.Count > 0)
+        {
+            LogClientCannotSatisfyProfile(clientId, violations);
+            return context.Error(
+                ErrorCodes.UnauthorizedClient, "The client's configuration does not satisfy its security profile");
         }
 
         context.ClientInfo = clientInfo;

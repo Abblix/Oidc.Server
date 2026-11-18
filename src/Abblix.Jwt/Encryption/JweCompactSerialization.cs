@@ -54,7 +54,7 @@ internal static class JweCompactSerialization
         // Invalid base64 means invalid token
         try
         {
-            return Array.ConvertAll(jwtParts, static s => Base64Url.DecodeFromChars(s));
+            return Array.ConvertAll(jwtParts, JoseBase64Url.Decode);
         }
         catch (FormatException)
         {

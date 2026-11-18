@@ -94,6 +94,21 @@ public partial class AuthorizationRequestProcessorTests
     /// The processor over this fixture's collaborators and the consent backstop given.
     /// </summary>
     private AuthorizationRequestProcessor ProcessorWith(IConsentConstraintEnforcer consentConstraintEnforcer)
+        => ProcessorWith(
+            consentConstraintEnforcer,
+            [
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(detector => detector.TryReserveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()) == System.Threading.Tasks.Task.FromResult(true))),
+                new TokenResponseBuilder(_accessTokenService.Object),
+                new IdTokenResponseBuilder(_identityTokenService.Object),
+            ]);
+
+    /// <summary>
+    /// The processor over this fixture's collaborators, with the response builders in the order given, which is the
+    /// order a host's registrations put them in.
+    /// </summary>
+    private AuthorizationRequestProcessor ProcessorWith(
+        IConsentConstraintEnforcer consentConstraintEnforcer,
+        IAuthorizationResponseBuilder[] responseBuilders)
     {
         return new AuthorizationRequestProcessor(
             _authSessionService.Object,
@@ -103,11 +118,7 @@ public partial class AuthorizationRequestProcessorTests
             _cutoffChecker.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             _timeProvider,
-            [
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
-                new TokenResponseBuilder(_accessTokenService.Object),
-                new IdTokenResponseBuilder(_identityTokenService.Object),
-            ],
+            responseBuilders,
             consentConstraintEnforcer);
     }
 
@@ -123,7 +134,8 @@ public partial class AuthorizationRequestProcessorTests
         string? idTokenHintSubject = null,
         string? clientId = null,
         DateTimeOffset? promptedAt = null,
-        ResourceDefinition[]? resources = null)
+        ResourceDefinition[]? resources = null,
+        string? state = null)
     {
         clientId ??= TestConstants.DefaultClientId;
 
@@ -132,6 +144,7 @@ public partial class AuthorizationRequestProcessorTests
             ClientId = clientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = TestConstants.DefaultRedirectUri,
+            State = state,
             Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,

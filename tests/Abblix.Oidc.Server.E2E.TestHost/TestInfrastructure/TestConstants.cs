@@ -84,14 +84,21 @@ public static class TestConstants
     /// Authorization header.</summary>
     public const string ClientSecretBasicClientId = "e2e-client-secret-basic";
 
-    /// <summary>Client restricted to the client_credentials grant that authenticates with a JWT signed by its
-    /// secret (<c>client_secret_jwt</c>, OpenID Connect Core 1.0 section 9), so a test can see the token endpoint
-    /// judge the assertion's audience as RFC 10070 section 4 requires.</summary>
+    /// <summary>Client restricted to the client_credentials and authorization_code grants that authenticates with
+    /// a JWT signed by its secret (<c>client_secret_jwt</c>, OpenID Connect Core 1.0 section 9), so a test can see
+    /// the token endpoint
+    /// and the pushed authorization request endpoint judge the assertion's audience as RFC 10070 sections 4 and 5
+    /// require.</summary>
     public const string ClientSecretJwtClientId = "e2e-client-secret-jwt";
 
     /// <summary>The secret of <see cref="ClientSecretJwtClientId"/>, long enough to be an HS256 key (RFC 7518
     /// section 3.2), which <see cref="ConfidentialClientSecret"/> is not.</summary>
     public const string ClientSecretJwtSecret = "e2e-client-secret-jwt-0123456789abcdefghij";
+
+    /// <summary>Client authenticating as <see cref="ClientSecretJwtClientId"/> does, with the same secret, whose
+    /// host grants it the pushed authorization request endpoint URL as its assertion's audience, the value
+    /// RFC 9126 section 2 had a server accept before RFC 10070 section 5 replaced that paragraph.</summary>
+    public const string PushedAuthorizationRequestAudienceClientId = "e2e-client-secret-jwt-par-audience";
 
     /// <summary>Client restricted to the OAuth 2.0 <c>none</c> response type (OAuth 2.0 Multiple
     /// Response Type Encoding Practices section 4): the authorization endpoint authorizes the request but
@@ -134,6 +141,10 @@ public static class TestConstants
 
     /// <summary>Confidential authorization code client whose access tokens each name one resource.</summary>
     public const string SingleResourceClientId = "e2e-single-resource";
+
+    /// <summary>Confidential authorization code client whose default scope is one only <see cref="ApiResource"/>
+    /// declares, and which receives offline access only when the request asks for consent.</summary>
+    public const string DefaultScopeCodeClientId = "e2e-default-scope-code";
 
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",

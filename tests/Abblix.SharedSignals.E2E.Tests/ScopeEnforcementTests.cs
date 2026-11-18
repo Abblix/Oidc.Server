@@ -106,7 +106,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.DoesNotContain("error", challenge.Parameter!);
+        Assert.DoesNotContain("error", challenge.Parameter);
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter);
     }
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter);
     }
 
     /// <summary>
@@ -177,8 +177,8 @@ public sealed class ScopeEnforcementTests
         // RFC 6750 Section 3.1 names the code, and the scope attribute is what tells the receiver what to
         // ask its authorization server for. Without it a 403 is a dead end.
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains("insufficient_scope", challenge.Parameter!);
-        Assert.Contains($"scope=\"{SsfScopes.Manage}\"", challenge.Parameter!);
+        Assert.Contains("insufficient_scope", challenge.Parameter);
+        Assert.Contains($"scope=\"{SsfScopes.Manage}\"", challenge.Parameter);
     }
 
     /// <summary>

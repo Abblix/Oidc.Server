@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Features.ExternalKeys;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,31 +16,39 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
+/// Refuses a tenant declaring keys the library's key provider never reads; with the keys coming from each tenant's
 /// settings, a tenant declaring no signing key, a key lacking a member its type requires, or a key another tenant
-/// declares; and, with the keys held by a custodian, a tenant naming no key there or one another tenant names.
+/// declares; and, with the keys held by a custodian, whether or not a key provider of the host's own stands in front
+/// of the library's, a tenant naming no key there or one another tenant names.
 /// </summary>
 /// <param name="serviceProvider">Tells which key provider serves the keys, and resolves the custodian.</param>
 public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
 {
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
-        => serviceProvider.GetService<KeyProviderRegistration>()?.Kind switch
+    {
+        var registration = serviceProvider.GetService<KeyProviderRegistration>();
+        return registration?.Kind switch
         {
             KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
                 .Concat(UnsignedOf(tenants))
+                .Concat(UndersizedSettingsKeysOf(tenants))
                 .Concat(IncompleteSettingsKeysOf(tenants))
                 .Concat(SharedSettingsKeysOf(tenants)),
 
             KeyProviderKind.Custodian => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
-                .Concat(CustodianKeysOf(tenants))
-                .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>())),
+                .Concat(NamedInTheCustodianOf(tenants)),
 
             KeyProviderKind.Minted => Unread(tenants, "the server mints the keys"),
 
-            // A key provider of the host's own answers for each tenant's keys itself, so nothing here judges them
+            // A provider of the host's own in front of the custodian, as the cache a host keeps there, still serves
+            // the keys each tenant names in it; what the provider reads of the settings is its own
+            KeyProviderKind.Host when registration is { Placed: KeyProviderKind.Custodian }
+                => NamedInTheCustodianOf(tenants),
+
+            // Over any other placement a key provider of the host's own answers for each tenant's keys itself
             KeyProviderKind.Host => [],
 
             // No key provider is registered, so no tenant's keys are read
@@ -47,6 +56,18 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             var unknown => throw new InvalidOperationException($"Unexpected {nameof(KeyProviderKind)} '{unknown}'."),
         };
+    }
+
+    /// <summary>
+    /// The keys each tenant names in the custodian: named at all, by no other tenant, and for encryption under an
+    /// algorithm the custodian serves.
+    /// </summary>
+    private IEnumerable<TenantRefusal> NamedInTheCustodianOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => CustodianKeysOf(tenants)
+            .Concat(UnservedEncryptionOf(
+                tenants,
+                serviceProvider.GetRequiredService<IKeyCustodian>(),
+                serviceProvider.GetRequiredService<EncryptionAlgorithmsProvider>()));
 
     /// <summary>
     /// A tenant whose keys come from its settings and that declares no signing key cannot issue a single token and
@@ -69,6 +90,28 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
                 "custodian or minted by the server.");
+
+    /// <summary>
+    /// No signing key a tenant declares is smaller than RFC 7518 lets it sign with: an RSA key below 2048 bits
+    /// (sections 3.3 and 3.5), a symmetric key shorter than the hash output of its algorithm (section 3.2). Such a key
+    /// signs nothing, and found missing at the first token it would read as a key that is not there. A key without the
+    /// material to measure is refused as incomplete instead.
+    /// </summary>
+    private static IEnumerable<TenantRefusal> UndersizedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => (from tenant in tenants
+            from key in tenant.SigningKeys
+            where key.HasPublicKey
+            select UndersizedRefusal(tenant, key))
+           .OfType<TenantRefusal>();
+
+    private static TenantRefusal? UndersizedRefusal(TenantDefinition tenant, JsonWebKey key)
+        => SigningKeyFloor.Undersized(key) is { } size
+            ? TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': The signing key '{key.KeyId}' has {size.Bits} bits, below the {size.Floor} " +
+                $"RFC 7518 requires of it, so nothing is signed with it. Replace it with a key of at least " +
+                $"{size.Floor} bits.")
+            : null;
 
     /// <summary>
     /// No key, compared by its thumbprint, is declared by two tenants: sharing one would let a party trusting one
@@ -184,21 +227,42 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
     /// <summary>
     /// A tenant whose encryption key the custodian holds publishes it with a key management algorithm the custodian
-    /// serves: a client encrypts exactly as the published key says, so under any other every token sent to the
+    /// serves and the host registers: a client encrypts exactly as the published key says, and an inbound JWE is
+    /// tried with a key only under an algorithm registered for it, so under any other every token sent to the
     /// tenant would fail to open.
     /// </summary>
     private static IEnumerable<TenantRefusal> UnservedEncryptionOf(
         IReadOnlyCollection<TenantDefinition> tenants,
-        IKeyCustodian custodian)
+        IKeyCustodian custodian,
+        EncryptionAlgorithmsProvider encryptionAlgorithms)
         =>
             from tenant in tenants
-            where tenant.CustodianKeys is { EncryptionKeyName: not null } keys &&
-                  !custodian.ServesKeyManagement(keys.EncryptionAlgorithm)
+            where tenant.CustodianKeys is { EncryptionKeyName: not null }
+            let algorithm = tenant.CustodianKeys!.EncryptionAlgorithm
+            let unserved = WhoDoesNotServe(algorithm, custodian, encryptionAlgorithms)
+            where unserved is not null
             select TenantRefusal.Of(
                 tenant,
-                $"Tenant '{tenant.Id}': the key custodian {custodian.GetType().Name} does not serve the key " +
-                $"management algorithm '{tenant.CustodianKeys!.EncryptionAlgorithm}' that " +
+                $"Tenant '{tenant.Id}': {unserved} the key management algorithm '{algorithm}' that " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}." +
                 $"{nameof(CustodianHeldKeys.EncryptionAlgorithm)} names, so no token encrypted to the tenant could be " +
                 "opened.");
+
+    /// <summary>
+    /// Which of the two parties an inbound JWE under <paramref name="algorithm"/> needs fails it, said as the start of
+    /// the refusal, or null where both serve it.
+    /// </summary>
+    private static string? WhoDoesNotServe(
+        string algorithm,
+        IKeyCustodian custodian,
+        EncryptionAlgorithmsProvider encryptionAlgorithms)
+    {
+        if (!custodian.ServesKeyManagement(algorithm))
+            return $"the key custodian {custodian.GetType().Name} does not serve";
+
+        if (!encryptionAlgorithms.KeyManagementAlgorithms.Contains(algorithm, StringComparer.Ordinal))
+            return "the host registers no implementation of";
+
+        return null;
+    }
 }

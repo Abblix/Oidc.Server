@@ -147,6 +147,60 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A default carrying offline_access is served without it where the server ignores it, as a request naming it
+    /// would be, so the resource validator, asking the same answer before the scope validator runs, never settles
+    /// resources for a scope the request is not served with. Received, it stays.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId })]
+    [InlineData(true, new[] { Scopes.OpenId, Scopes.OfflineAccess })]
+    public void ServedScope_OfADefaultCarryingOfflineAccess_LeavesItOutWhereIgnored(
+        bool promptConsent, string[] expected)
+    {
+        var context = CreateContext(
+            [],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId, Scopes.OfflineAccess];
+
+        Assert.Equal(expected, context.ServedScope());
+    }
+
+    /// <summary>
+    /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
+    /// it is served the client's default on the first pass, marked as not named, and the same request read back from
+    /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
+    /// the client named.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId }, true)]
+    [InlineData(true, new[] { Scopes.OfflineAccess }, false)]
+    public async Task ValidateAsync_OfflineAccessAlone_IsServedAlikeOnEveryPass(
+        bool promptConsent, string[] expectedScope, bool expectedNamedNoScope)
+    {
+        var context = CreateContext(
+            [Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+        Assert.Equal(expectedScope, context.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, context.Request.ClientNamedNoScope);
+
+        var readBack = CreateContext(
+            context.Request.Scope,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        readBack.ClientInfo.DefaultScope = [Scopes.OpenId];
+        readBack.Request = readBack.Request with { ClientNamedNoScope = context.Request.ClientNamedNoScope };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, readBack));
+        Assert.Equal(expectedScope, readBack.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, readBack.Request.ClientNamedNoScope);
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0, sections 11 and 17.4: a request returning an authorization code and no access token
     /// through the user agent receives offline_access when it asks for consent with prompt=consent, or when the
     /// client is configured to receive it without, and has it ignored otherwise, the rest of the request going on.
@@ -177,6 +231,33 @@ public class ScopeValidatorTests
         Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
         Assert.Equal(received, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
         Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
+    }
+
+    /// <summary>
+    /// A client the host lets keep offline access beside an access token carried through the user agent receives it
+    /// with such a response, past OpenID Connect Core 1.0 section 17.4, and only that rule is lifted: the response
+    /// still has to return an authorization code, and the consent conditions of section 11 still hold.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", false, false)]
+    [InlineData(FlowTypes.Implicit, $"{ResponseTypes.IdToken} {ResponseTypes.Token}", true, false)]
+    public async Task ValidateAsync_OfflineAccessBesideAUserAgentAccessToken_IsReceivedOnlyWhereTheHostAllowsIt(
+        FlowTypes flowType, string responseType, bool promptConsent, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            flowType,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
+        context.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken = true;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
     }
 
     /// <summary>
@@ -651,5 +732,61 @@ public class ScopeValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(ErrorCodes.InvalidScope, result?.Error);
+    }
+
+    /// <summary>
+    /// A response type delivering an ID token makes the request an OpenID Connect Authentication Request, whose
+    /// scope OpenID Connect Core 1.0 section 3.1.2.1 has REQUIRED and containing openid, and section 3.1.2.2 has the
+    /// server "verify that all the REQUIRED parameters are present". A default the client never named does not stand
+    /// in for it, nor does a scope without openid, on the first pass or on the request read back from a page.
+    /// </summary>
+    [Theory]
+    [InlineData(new string[0], new[] { Scopes.OpenId })]
+    [InlineData(new string[0], null)]
+    [InlineData(new[] { Scopes.Profile }, null)]
+    public async Task AnIdTokenRequest_NotNamingOpenId_IsRefusedAsMissingARequiredParameter(
+        string[] named, string[]? defaultScope)
+    {
+        var context = CreateContext(
+            named,
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+        context.ClientInfo.DefaultScope = defaultScope;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
+
+    /// <summary>
+    /// The request read back from a page carries the default it was served with and the mark that the client named
+    /// none, and is refused the same as on the first pass.
+    /// </summary>
+    [Fact]
+    public async Task AnIdTokenRequest_ReadBackWithAServedDefault_IsRefused()
+    {
+        var context = CreateContext(
+            [Scopes.OpenId],
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+        context.Request = context.Request with { ClientNamedNoScope = true };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
+
+    /// <summary>
+    /// The positive control of the rule above: an ID token request naming openid is served.
+    /// </summary>
+    [Fact]
+    public async Task AnIdTokenRequest_NamingOpenId_IsServed()
+    {
+        var context = CreateContext(
+            [Scopes.OpenId],
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 }

@@ -61,6 +61,7 @@ public sealed class JwtSubjectTokenResolver(
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
+        ClientInfo client,
         [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
@@ -77,6 +78,7 @@ public sealed class JwtSubjectTokenResolver(
         // TokenExchangeGrantHandler.
         var validation = await jwtValidator.ValidateAsync(
             tenant,
+            client,
             subjectToken,
             accepted,
             ServiceTokenValidation.AnyAudience);

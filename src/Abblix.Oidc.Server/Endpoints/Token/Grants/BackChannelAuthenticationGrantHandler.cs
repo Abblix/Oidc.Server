@@ -71,12 +71,14 @@ public class BackChannelAuthenticationGrantHandler(
     /// <remarks>
     /// <para><strong>Behavior by Authentication Status:</strong></para>
     /// <list type="bullet">
-    ///   <item><term>Authenticated:</term> Returns authorized grant and removes from storage (poll mode only)</item>
+    ///   <item><term>Authenticated:</term> Returns authorized grant and removes from storage (poll mode only);
+    ///   once the request's expiry has come, returns expired_token and removes it instead</item>
     ///   <item><term>Pending (short-polling):</term> Immediately returns authorization_pending error</item>
     ///   <item><term>Pending (long-polling):</term> Waits for status change notification up to configured timeout,
     ///   then re-checks storage to return grant or appropriate error</item>
     ///   <item><term>Denied:</term> Returns access_denied error</item>
-    ///   <item><term>Expired/Not Found:</term> Returns expired_token error</item>
+    ///   <item><term>Expired:</term> Returns expired_token error and removes the request</item>
+    ///   <item><term>Not Found or issued to another client:</term> Returns invalid_grant error</item>
     ///   <item><term>Rate Limited:</term> Returns slow_down when asked before the instant this request's client was given</item>
     /// </list>
     /// <para>
@@ -119,7 +121,8 @@ public class BackChannelAuthenticationGrantHandler(
         return authenticationRequest switch
         {
             // CIBA Core section 11: "If the auth_req_id is invalid or was issued to another Client, an
-            // invalid_grant error MUST be returned". One evicted on expiry cannot be told from one never issued.
+            // invalid_grant error MUST be returned". A request is kept past its expiry, so a late poll reaches the
+            // expired_token answer below; one evicted after that cannot be told from one never issued.
             null => new OidcError(ErrorCodes.InvalidGrant, "The authentication request is not recognized"),
 
             // If the client making the request is not the same as the one that initiated the authentication
@@ -129,7 +132,7 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                => await _redeemer.RedeemAsync(tenant, 
+                => await RedeemUnlessExpiredAsync(tenant,
                     request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the user has not yet been authenticated and the request is still pending, either
@@ -297,7 +300,7 @@ public class BackChannelAuthenticationGrantHandler(
         switch (updatedRequest)
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
-                return await _redeemer.RedeemAsync(tenant, 
+                return await RedeemUnlessExpiredAsync(tenant,
                     authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
@@ -319,6 +322,32 @@ public class BackChannelAuthenticationGrantHandler(
     }
 
     /// <summary>
+    /// Redeems an approved request, unless its expiry has come.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 section 7.3, on expires_in: "A Client calling the token endpoint with an expired auth_req_id will
+    /// receive an error". The end user approving in time does not stretch that lifetime, and the record of an approval
+    /// stays in the store for as long as the host completing it asked, which can be longer, so its presence says
+    /// nothing about expiry: the instant it carries, the request's own, decides. Judged on the record read for this
+    /// poll, so a completion written after the request expired is refused here as well.
+    /// </remarks>
+    private async Task<Result<AuthorizedGrant, OidcError>> RedeemUnlessExpiredAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticated,
+        ClientInfo clientInfo,
+        IBackChannelGrantProcessor processor)
+    {
+        if (authenticated.ExpiresAt <= timeProvider.GetUtcNow())
+        {
+            await storage.TryRemoveAsync(tenant, authenticationRequestId);
+            return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
+        }
+
+        return await _redeemer.RedeemAsync(tenant, authenticationRequestId, authenticated, clientInfo, processor);
+    }
+
+    /// <summary>
     /// Resolves the processor for the client's registered delivery mode, or null when there is none to
     /// resolve.
     /// </summary>
@@ -329,7 +358,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// a client configured for a delivery this deployment does not offer. GetRequiredKeyedService answers
     /// both with an InvalidOperationException, which reaches the token endpoint as an unhandled failure -
     /// while the backchannel authentication endpoint answers the identical client state with a named error
-    /// an operator can read (BackChannelAuthentication/Validation/ClientValidator.cs).
+    /// an operator can read (BackChannelAuthentication/BackChannelAuthenticationHandler.cs).
     /// Keyed lookup with a null check is the dispatch convention this project documents for a value read
     /// off a wire or off client metadata, precisely so an unknown discriminator is a rejection rather than
     /// a throw.
@@ -359,12 +388,13 @@ public class BackChannelAuthenticationGrantHandler(
     }
 
     /// <summary>
-    /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, worded as
-    /// its sibling on the backchannel authentication endpoint words it.
+    /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, coded and worded
+    /// as its sibling on the backchannel authentication endpoint: the client has authenticated, so this is
+    /// unauthorized_client, and invalid_client would be a 401 challenging credentials that worked.
     /// </summary>
     private static OidcError NotConfiguredForDelivery()
         => new(
-            ErrorCodes.InvalidClient,
+            ErrorCodes.UnauthorizedClient,
             "The client is not properly configured for backchannel authentication. " +
             "A token delivery mode (poll, ping, or push) must be specified.");
 }

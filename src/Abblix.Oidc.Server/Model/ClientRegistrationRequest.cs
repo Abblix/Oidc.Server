@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
@@ -23,16 +24,39 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 /// <remarks>
 /// See the OpenID Connect Registration specification at https://openid.net/specs/openid-connect-registration-1_0.html.
+/// <para>
+/// <see cref="ResponseTypes"/>, <see cref="GrantTypes"/>, <see cref="ApplicationType"/>,
+/// <see cref="TokenEndpointAuthMethod"/> and <see cref="PostLogoutRedirectUris"/> read their default back for an
+/// explicit JSON <c>null</c> too, which the deserializer assigns whatever the annotation says. At registration RFC 7591
+/// section 2 lets the server "reject any requested client metadata values by replacing requested values with suitable
+/// defaults"; at update RFC 7592 section 2.2 treats an omitted field as a null one.
+/// </para>
 /// </remarks>
 [ExternalInput]
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// The Authorization header from the HTTP request, used for initial access token validation
-    /// per RFC 7591 Section 3. This is a transport-level property, not part of the registration metadata.
+    /// Every line of the HTTP <c>Authorization</c> header field, as received, or <c>null</c> when the request carries
+    /// none: the initial access token per RFC 7591 Section 3. A transport-level property, not part of the
+    /// registration metadata. Kept line by line because the field is not a list (RFC 9110 sections 11.6.2 and 5.3).
     /// </summary>
     [JsonIgnore]
-    public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
+    [Credential]
+    public IReadOnlyList<string>? AuthorizationHeaderLines { get; init; }
+
+    /// <summary>
+    /// The credentials of the <c>Authorization</c> header: <c>null</c> when the request carries no line, more than
+    /// one line (<see cref="HasMoreThanOneAuthorizationHeader"/>) or a line that does not parse.
+    /// </summary>
+    [JsonIgnore]
+    public AuthenticationHeaderValue? AuthorizationHeader
+        => AuthenticationHeaderValueExtensions.FromSingleLine(AuthorizationHeaderLines);
+
+    /// <summary>
+    /// Whether the request carries the <c>Authorization</c> header field on more than one line.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasMoreThanOneAuthorizationHeader => AuthorizationHeaderLines is { Count: > 1 };
 
     /// <summary>
     /// The <c>redirect_uris</c> array (RFC 7591 section 2) listing every absolute URI the OP may use to deliver
@@ -65,7 +89,16 @@ public record ClientRegistrationRequest
     /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = [[Abblix.Oidc.ResponseTypes.Code]];
+    public string[][] ResponseTypes { get => field ??= [[Abblix.Oidc.ResponseTypes.Code]]; init; }
+
+    /// <summary>
+    /// The <c>response_modes</c> the client may use, which FAPI 2.0 Message Signing section 5.3.3 introduces:
+    /// "OPTIONAL. A JSON array of strings containing the list of response modes that the client may use. If omitted,
+    /// the default is that the client may use any of the response modes supported by the authorization server."
+    /// Stored as <see cref="Features.ClientInformation.ClientInfo.AllowedResponseModes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.ResponseModes)]
+    public string[]? ResponseModes { get; init; }
 
     /// <summary>
     /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 section 2,
@@ -77,7 +110,7 @@ public record ClientRegistrationRequest
     /// union the server actually supports and advertises in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    public string[] GrantTypes { get; init; } = [Abblix.Oidc.GrantTypes.AuthorizationCode];
+    public string[] GrantTypes { get => field ??= [Abblix.Oidc.GrantTypes.AuthorizationCode]; init; }
 
     /// <summary>
     /// The <c>application_type</c> declared at registration (OIDC Dynamic Client Registration section 2),
@@ -85,7 +118,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
     [AllowedValues(ApplicationTypes.Web, ApplicationTypes.Native)]
-    public string ApplicationType { get; init; } = ApplicationTypes.Web;
+    public string ApplicationType { get => field ?? ApplicationTypes.Web; init; }
 
     /// <summary>
     /// The <c>contacts</c> array (RFC 7591 section 2): email addresses of people responsible for this client,
@@ -365,7 +398,7 @@ public record ClientRegistrationRequest
     /// methods the server actually supports and announces in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
+    public string TokenEndpointAuthMethod { get => field ?? ClientAuthenticationMethods.ClientSecretBasic; init; }
 
     /// <summary>
     /// The <c>token_endpoint_auth_signing_alg</c>: the JWS algorithm the client uses when signing
@@ -596,7 +629,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
-    public Uri[] PostLogoutRedirectUris { get; init; } = [];
+    public Uri[] PostLogoutRedirectUris { get => field ??= []; init; }
 
     /// <summary>
     /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered
@@ -714,6 +747,10 @@ public record ClientRegistrationRequest
         /// <summary>The <c>response_types</c> registration parameter declaring the response type values
         /// the client intends to use at the authorization endpoint.</summary>
         public const string ResponseTypes = "response_types";
+
+        /// <summary>The <c>response_modes</c> registration parameter (FAPI 2.0 Message Signing section 5.3.3)
+        /// listing the response modes the client may use.</summary>
+        public const string ResponseModes = "response_modes";
 
         /// <summary>The <c>grant_types</c> registration parameter declaring the grant type values the
         /// client will use at the token endpoint.</summary>

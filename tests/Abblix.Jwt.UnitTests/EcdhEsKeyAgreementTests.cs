@@ -262,8 +262,12 @@ public class EcdhEsKeyAgreementTests
 	[Fact]
 	public async Task EcdhEs_WrongDecryptionKey_DecryptionFails()
 	{
-		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
-		var wrongKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(
+			EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs);
+
+		// Named by the same kid, so the wrong key reaches the key agreement rather than being passed over
+		var wrongKey = JsonWebKeyFactory.CreateEllipticCurve(
+			EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs) with { KeyId = recipientKey.KeyId };
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
@@ -287,13 +291,8 @@ public class EcdhEsKeyAgreementTests
 		string contentEncryption,
 		bool emptyEncryptedKey)
 	{
-		// Arrange
-		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(curve, curve switch
-		{
-			EllipticCurveTypes.P256 => SigningAlgorithms.ES256,
-			EllipticCurveTypes.P384 => SigningAlgorithms.ES384,
-			_ => SigningAlgorithms.ES512,
-		});
+		// Arrange: the recipient key declares the key management algorithm it opens, as RFC 8725 section 3.1 binds it
+		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(curve, keyManagementAlgorithm);
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 		var token = CreateTestToken();
 

@@ -39,10 +39,10 @@ public sealed class RevocationRetentionOptionsValidator : IValidateOptions<OidcO
 
         // A negative tolerance narrows the cutoff instead of widening it, so tokens issued before a
         // revocation would survive it - the same silent nothing, reached from the other side.
-        if (options.RevocationCutoffSkew < TimeSpan.Zero)
+        if (options.ReplicaClockSkew < TimeSpan.Zero)
         {
             return ValidateOptionsResult.Fail(
-                $"{nameof(options.RevocationCutoffSkew)} is {options.RevocationCutoffSkew}. A negative " +
+                $"{nameof(options.ReplicaClockSkew)} is {options.ReplicaClockSkew}. A negative " +
                 "tolerance moves the cutoff backwards, so tokens issued before a revocation would pass it. " +
                 "Use zero to allow none, or a positive value covering the clock difference between instances.");
         }

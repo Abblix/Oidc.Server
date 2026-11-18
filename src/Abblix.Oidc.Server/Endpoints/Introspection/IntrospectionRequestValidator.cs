@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.RateLimiting;
@@ -61,11 +62,15 @@ public partial class IntrospectionRequestValidator(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-		if (clientInfo == null)
-		{
-			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
-		}
+		// RFC 7662 section 2.1 accepts client authentication as RFC 6749 describes it, whose section 5.2 names a
+		// request that "includes multiple credentials, utilizes more than one mechanism for authenticating the
+		// client" an invalid_request. Decided before the authenticator, which would count a failed attempt
+		if (clientRequest.HasMoreThanOneAuthorizationHeader)
+			return ErrorFactory.MoreThanOneAuthorizationHeader;
+
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		if (!authenticated.TryGetSuccess(out var clientInfo))
+			return RefusalOf(authenticated.GetFailure());
 
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
@@ -73,7 +78,7 @@ public partial class IntrospectionRequestValidator(
 		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
-			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new UnauthenticatedCallerError("The client is not authorized");
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read, which is where
@@ -104,7 +109,7 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
-			tenant, introspectionRequest.Token,
+			tenant, clientInfo, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 
@@ -132,4 +137,22 @@ public partial class IntrospectionRequestValidator(
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
+
+	/// <summary>
+	/// The answer to a caller the authenticator did not authenticate, by why it did not.
+	/// </summary>
+	private static OidcError RefusalOf(OidcError failure) => failure switch
+	{
+		// RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the client"
+		// an invalid_request, not a failed authentication
+		MoreThanOneClientAuthenticationMethodError => failure,
+
+		// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection requests
+		// that don't authenticate the caller and return an HTTP status code 400", where no authenticator, a host's
+		// own included, found a credential in the request
+		UnauthenticatedCallerError => failure,
+
+		// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
+		_ => new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"),
+	};
 }

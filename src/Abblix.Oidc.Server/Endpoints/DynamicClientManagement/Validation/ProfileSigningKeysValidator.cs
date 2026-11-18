@@ -1,0 +1,108 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Model;
+using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
+
+namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+
+/// <summary>
+/// Under a security profile admitting only certain signature algorithms (FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section
+/// 5.4.1), gives a registration naming no algorithm for its ID tokens and JWT authorization responses the first
+/// admitted one a signing key of the tenant can produce, and refuses with <c>invalid_client_metadata</c> a
+/// registration whose algorithms, named or given, no such key produces.
+/// </summary>
+/// <remarks>
+/// Decided against the tenant's keys rather than against the list alone: an algorithm the list admits and no key
+/// produces is accepted at registration and fails when the first ID token is signed, as a server error the client can
+/// do nothing about.
+/// </remarks>
+/// <param name="keys">The tenant's signing keys.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
+public class ProfileSigningKeysValidator(
+    IAuthServiceKeysProvider keys,
+    SigningAlgorithmsProvider signingAlgorithms) : IClientRegistrationContextValidator
+{
+    /// <inheritdoc />
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+    {
+        var requirements = context.SecurityProfileRequirementsAt(tenant);
+        if (!requirements.RequireFapiSigningAlgorithms)
+            return null;
+
+        var signingKeys = await keys.GetSigningKeys(tenant).ToArrayAsync();
+        bool Produces(string algorithm) => Array.Exists(signingKeys, key => signingAlgorithms.CanSign(key, algorithm));
+
+        if (WithUnnamedAlgorithmsGiven(context.Request, signingKeys) is not { } request)
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                "No signing key of this server produces " +
+                $"{string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}, which its security " +
+                "profile admits alone");
+        }
+
+        var unproduced = new[]
+            {
+                // Only what can be issued to the client, the answer startup and the profile's algorithm check give
+                (Parameters.IdTokenSignedResponseAlg, SecurityProfileConsistency.IdentityTokenSignature(
+                    request.ResponseTypes, request.GrantTypes, request.BackChannelLogoutUri is not null,
+                    request.IdTokenSignedResponseAlg)),
+                (Parameters.AuthorizationSignedResponseAlg, SecurityProfileConsistency.AuthorizationResponseSignature(
+                    request.ResponseTypes, request.RedirectUris ?? [], request.AuthorizationSignedResponseAlg)),
+                (Parameters.UserInfoSignedResponseAlg, SecurityProfileConsistency.SignedOrNull(request.UserInfoSignedResponseAlg)),
+                (Parameters.IntrospectionSignedResponseAlg,
+                    SecurityProfileConsistency.SignedOrNull(request.IntrospectionSignedResponseAlg)),
+            }
+            .Where(setting => setting.Item2 is { } algorithm && !Produces(algorithm))
+            .Select(setting => $"{setting.Item1} is {setting.Item2}, which no signing key of this server produces")
+            .ToArray();
+
+        if (unproduced.Length > 0)
+            return ErrorFactory.InvalidClientMetadata(string.Join("; ", unproduced));
+
+        context.Request = request;
+        return null;
+    }
+
+    /// <summary>
+    /// <paramref name="request"/> with each algorithm the server signs with for the client and it named none for given
+    /// the first admitted one <paramref name="signingKeys"/> produce, or null where it named none and no key produces
+    /// one. The introspection algorithm is among them: RFC 9701 section 6 makes RS256 the default of an omitted one,
+    /// which the profile refuses, so the registration says which algorithm the server signs with instead. So is the
+    /// userinfo algorithm of a client that registered userinfo encryption alone, whose response is a JWT (OpenID Connect
+    /// Core 1.0 section 5.3.2) the profile would refuse unsigned.
+    /// </summary>
+    private ClientRegistrationRequest? WithUnnamedAlgorithmsGiven(
+        ClientRegistrationRequest request,
+        JsonWebKey[] signingKeys)
+    {
+        var introspectionAlgorithm = SecurityProfileConsistency.SignedOrNull(request.IntrospectionSignedResponseAlg);
+        var userInfoUnsigned = request is { UserInfoSignedResponseAlg: null, UserInfoEncryptedResponseAlg: not null };
+        if (request is { IdTokenSignedResponseAlg: not null, AuthorizationSignedResponseAlg: not null } &&
+            introspectionAlgorithm is not null && !userInfoUnsigned)
+        {
+            return request;
+        }
+
+        if (SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys, signingAlgorithms) is not { } given)
+            return null;
+
+        return request with
+        {
+            IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg ?? given,
+            AuthorizationSignedResponseAlg = request.AuthorizationSignedResponseAlg ?? given,
+            IntrospectionSignedResponseAlg = introspectionAlgorithm ?? given,
+            UserInfoSignedResponseAlg = userInfoUnsigned ? given : request.UserInfoSignedResponseAlg,
+        };
+    }
+}

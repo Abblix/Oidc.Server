@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
@@ -25,9 +24,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Returns an <c>invalid_redirect_uri</c> error on the first non-conforming entry,
+    /// Returns an <c>invalid_client_metadata</c> error on the first non-conforming entry,
     /// or <c>null</c> when every URI passes the rules above.
     /// </summary>
+    /// <remarks>
+    /// Not <c>invalid_redirect_uri</c>: OIDC Registration 1.0 section 3.3 gives that code to "one or more
+    /// redirect_uris", and these URIs are another metadata field.
+    /// </remarks>
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
@@ -35,23 +38,23 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
         foreach (var uri in request.PostLogoutRedirectUris)
         {
             if (uri is not { IsAbsoluteUri : true })
-                return ErrorFactory.InvalidRedirectUri(
+                return ErrorFactory.InvalidClientMetadata(
                     $"{Parameters.PostLogoutRedirectUris} must contain only absolute URIs");
 
             if (uri.Fragment.HasValue())
-                return ErrorFactory.InvalidRedirectUri($"{Parameters.PostLogoutRedirectUris} must not contain fragment");
+                return ErrorFactory.InvalidClientMetadata($"{Parameters.PostLogoutRedirectUris} must not contain fragment");
 
             var applicationType = context.Request.ApplicationType;
             switch (applicationType)
             {
                 case ApplicationTypes.Web when uri.Scheme != Uri.UriSchemeHttps:
                     // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
-                    return ErrorFactory.InvalidRedirectUri(
+                    return ErrorFactory.InvalidClientMetadata(
                             $"{Parameters.PostLogoutRedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
                 case ApplicationTypes.Web when LoopbackHosts.IsAnyLoopbackHost(uri):
                     // they MUST NOT use localhost as the hostname
-                    return ErrorFactory.InvalidRedirectUri(
+                    return ErrorFactory.InvalidClientMetadata(
                             $"{Parameters.PostLogoutRedirectUris} must not use host name {uri.Host}");
 
                 case ApplicationTypes.Web:
@@ -61,19 +64,23 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                                                   && !LoopbackHosts.IsNativeLoopbackHost(uri):
                     // The rule OpenID Connect Dynamic Client Registration 1.0 section 2 sets for redirect_uris, applied
                     // here as well: OpenID Connect RP-Initiated Logout 1.0 sets no loopback rule of its own
-                    return ErrorFactory.InvalidRedirectUri(
+                    return ErrorFactory.InvalidClientMetadata(
                         $"Native Clients MUST only register http: {Parameters.PostLogoutRedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1]");
 
                 case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
                     // Native Clients MUST only register redirect_uris using custom URI schemes
-                    return ErrorFactory.InvalidRedirectUri(
+                    return ErrorFactory.InvalidClientMetadata(
                         $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes");
 
                 case ApplicationTypes.Native:
                     break;
 
+                // A refusal, as RedirectUrisValidator answers it: the value comes from the request body, and a
+                // client registering no redirect URI never meets that validator's own refusal
                 default:
-                    throw new UnexpectedTypeException(nameof(applicationType), applicationType.GetType());
+                    return ErrorFactory.InvalidClientMetadata(
+                        $"'{Parameters.ApplicationType}' names no application type this server "
+                        + $"knows: it must be '{ApplicationTypes.Web}' or '{ApplicationTypes.Native}'");
             }
         }
 

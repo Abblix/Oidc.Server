@@ -6,11 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -18,7 +22,6 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -68,8 +71,7 @@ public class LogoutTokenServiceTests
             timeProvider,
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            _tokenIdGenerator.Object);
     }
 
     /// <summary>
@@ -85,8 +87,7 @@ public class LogoutTokenServiceTests
             new FakeTimeProvider(_currentTime),
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            _tokenIdGenerator.Object);
         var clientInfo = CreateClientInfo();
         var logoutContext = CreateLogoutContext();
         SetupMocks(clientInfo, logoutContext, _ => { });
@@ -118,7 +119,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken.Header.Type);
         // The default ClientInfo registers RS256 for ID Token signing, and section 2.4 signs the logout
         // token in the same manner as the ID Token.
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
@@ -146,7 +147,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(algorithm, capturedToken!.Header.Algorithm);
+        Assert.Equal(algorithm, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -170,7 +171,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.PS512, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.PS512, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -195,7 +196,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -217,7 +218,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(Issuer, capturedToken!.Payload.Issuer);
+        Assert.Equal(Issuer, capturedToken.Payload.Issuer);
     }
 
     /// <summary>
@@ -239,7 +240,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Contains(ClientId, capturedToken!.Payload.Audiences);
+        Assert.Contains(ClientId, capturedToken.Payload.Audiences);
     }
 
     /// <summary>
@@ -269,8 +270,8 @@ public class LogoutTokenServiceTests
         // Assert
         Assert.NotNull(token1);
         Assert.NotNull(token2);
-        Assert.NotNull(token1!.Payload.JwtId);
-        Assert.NotNull(token2!.Payload.JwtId);
+        Assert.NotNull(token1.Payload.JwtId);
+        Assert.NotNull(token2.Payload.JwtId);
         Assert.NotEqual(token1.Payload.JwtId, token2.Payload.JwtId);
     }
 
@@ -293,7 +294,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
     }
 
     /// <summary>
@@ -315,7 +316,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.NotBefore);
+        Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
     }
 
     /// <summary>
@@ -338,7 +339,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + expiresIn, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + expiresIn, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -360,7 +361,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
+        Assert.Equal(SubjectId, capturedToken.Payload.Subject);
 
         _subjectTypeConverter.Verify(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo), Times.Once);
     }
@@ -384,7 +385,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SessionId, capturedToken!.Payload.SessionId);
+        Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
     /// <summary>
@@ -406,7 +407,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.True(capturedToken!.Payload.Json.ContainsKey(IanaClaimTypes.Events));
+        Assert.True(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.Events));
 
         var events = capturedToken.Payload.Json[IanaClaimTypes.Events] as JsonObject;
         Assert.NotNull(events);
@@ -433,7 +434,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload.Nonce);
+        Assert.Null(capturedToken.Payload.Nonce);
     }
 
     /// <summary>
@@ -522,7 +523,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
+        Assert.Equal(SubjectId, capturedToken.Payload.Subject);
         Assert.True(string.IsNullOrEmpty(capturedToken.Payload.SessionId));
     }
 
@@ -554,7 +555,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.True(string.IsNullOrEmpty(capturedToken!.Payload.Subject));
+        Assert.True(string.IsNullOrEmpty(capturedToken.Payload.Subject));
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
@@ -576,9 +577,9 @@ public class LogoutTokenServiceTests
         var result = await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Same(capturedToken, result.Token);
-        Assert.Equal(EncodedJwt, result.EncodedJwt);
+        var issued = result.GetSuccess();
+        Assert.Same(capturedToken, issued.Token);
+        Assert.Equal(EncodedJwt, issued.EncodedJwt);
 
         _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
@@ -618,6 +619,45 @@ public class LogoutTokenServiceTests
         Assert.Same(clientInfo, formattedClient);
 
         _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A logout token the server cannot sign for the client - here ES256, the algorithm the client's ID tokens use and
+    /// its logout tokens fall back to, at a tenant holding only an RSA key - is not issued: the service answers with
+    /// the formatter's refusal, which the back-channel notifier answers by not sending the notification.
+    /// </summary>
+    [Fact]
+    public async Task CreateLogoutTokenAsync_ATokenNoTenantKeySigns_IsRefused()
+    {
+        var clientInfo = CreateClientInfo();
+        clientInfo.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.ES256;
+        _subjectTypeConverter
+            .Setup(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo))
+            .Returns(SubjectId);
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 } }
+                .ToAsyncEnumerable());
+        var service = new LogoutTokenService(
+            new Mock<ILogger<LogoutTokenService>>().Object,
+            new FakeTimeProvider(_currentTime),
+            _subjectTypeConverter.Object,
+            new ClientJwtFormatter(
+                NullLogger<ClientJwtFormatter>.Instance,
+                new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
+                new ClientEncryptionKeyResolver(
+                    new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
+                    new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
+                    TimeProvider.System, TestEncryptionAlgorithms.Every),
+                serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
+            _tokenIdGenerator.Object);
+
+        var result = await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, CreateLogoutContext());
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     private static ClientInfo CreateClientInfo(

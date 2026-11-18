@@ -11,6 +11,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
+using static Abblix.Oidc.Server.Features.ClientInformation.SecurityProfileConsistency;
+using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -21,7 +23,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// per-request rejection the client has to reverse-engineer later. Whether a client is held to a
 /// profile is a server-side policy decision: a dynamically registered client cannot declare one, so it
 /// inherits the default profile of the issuer it registers with, its tenant's
-/// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>.
+/// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>. An update is judged under the
+/// profile the host holds the stored client to on top of that default, so a client cannot update itself out of it.
 /// </summary>
 public class SecurityProfileValidator : SyncClientRegistrationContextValidator
 {
@@ -32,10 +35,57 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
     /// </summary>
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
-        var violations = SecurityProfileConsistency.FindViolations(
-            context.Request.ResponseTypes,
-            context.Request.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile));
+        var requirements = context.SecurityProfileRequirementsAt(tenant);
+        var request = context.Request;
+
+        // RFC 7591 section 3.2.2 names its own error for a redirect URI the server does not admit
+        var redirectUriViolations = FindRedirectUriViolations(request.RedirectUris ?? [], requirements);
+        if (redirectUriViolations.Count > 0)
+            return new OidcError(ErrorCodes.InvalidRedirectUri, string.Join("; ", redirectUriViolations));
+
+        // Only what the registration names: one naming nothing is given an algorithm its profile admits
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindViolations(
+                request.ResponseTypes,
+                request.TokenEndpointAuthMethod,
+                assertionAudiences: ClientAssertionAudiences.Issuer,
+                requirements),
+            ..FindGrantTypeViolations(request.GrantTypes, requirements),
+            ..FindTokenDeliveryViolations(request.BackChannelTokenDeliveryMode, requirements),
+            ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
+                [
+                    (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(
+                        request.ResponseTypes, request.GrantTypes, request.BackChannelLogoutUri is not null,
+                        request.IdTokenSignedResponseAlg)),
+                    (Parameters.AuthorizationSignedResponseAlg, AuthorizationResponseSignature(
+                        request.ResponseTypes, request.RedirectUris ?? [], request.AuthorizationSignedResponseAlg)),
+                    (Parameters.UserInfoSignedResponseAlg, UserInfoSignature(
+                        request.UserInfoSignedResponseAlg, request.UserInfoEncryptedResponseAlg)),
+                    (Parameters.IntrospectionSignedResponseAlg, SignedOrNull(request.IntrospectionSignedResponseAlg)),
+                    (Parameters.RequestObjectSigningAlg, request.RequestObjectSigningAlg),
+                    (Parameters.TokenEndpointAuthSigningAlg, request.TokenEndpointAuthSigningAlg),
+                    (Parameters.BackChannelAuthenticationRequestSigningAlg,
+                        request.BackChannelAuthenticationRequestSigningAlg),
+                ],
+                requirements),
+            ..FindJwksUriViolations(request.JwksUri, requirements),
+            ..FindResponseModeViolations(request.ResponseModes, request.ResponseTypes, requirements),
+            ..SecurityProfileConsistency.FindTokenBindingViolations(
+                request.TokenEndpointAuthMethod,
+                request.TlsClientCertificateBoundAccessTokens ?? false,
+                request.DpopBoundAccessTokens ?? false,
+                requirements),
+            ..FindEncryptionAlgorithmViolations(
+                [
+                    (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg),
+                    (Parameters.UserInfoEncryptedResponseAlg, request.UserInfoEncryptedResponseAlg),
+                    (Parameters.IntrospectionEncryptedResponseAlg, request.IntrospectionEncryptedResponseAlg),
+                    (Parameters.AuthorizationEncryptedResponseAlg, request.AuthorizationEncryptedResponseAlg),
+                    (Parameters.RequestObjectEncryptionAlg, request.RequestObjectEncryptionAlg),
+                ],
+                requirements),
+        ];
 
         return violations.Count == 0
             ? null

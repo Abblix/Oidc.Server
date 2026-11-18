@@ -259,8 +259,6 @@ jobs:
           while [ -n "$REST" ]; do
             case "$REST" in
               [0-9]*.[0-9]*.[0-9]*) VERSION=$REST; break ;;
-            esac
-            case "$REST" in
               *.*) REST=${REST#*.} ;;
               *) REST="" ;;
             esac
@@ -364,11 +362,14 @@ jobs:
               # the release and the next bump of MinVerMinimumMajorMinor. Re-asserting the patch
               # would have rebuilt the same silent failure inside the fix for it.
               #
-              # Only for a dev build. A tagged pre-release arrives here with no dev identifier, and a
-              # sentence about floating would be advice about a line it is not on.
+              # Only for a dev build: a version read here without the dev identifier gets no sentence
+              # about floating, which would be advice about a line it is not on. The step does not
+              # fail on it, because the package is already on the feed by now.
               case "$VERSION" in
                 *-dev.*)
                   echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
+                  ;;
+                *)
                   ;;
               esac
             } >> "$GITHUB_STEP_SUMMARY"

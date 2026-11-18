@@ -32,13 +32,17 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
+/// <param name="serviceProvider">Resolves per request where the token and backchannel authentication endpoints are
+/// served, for a client allowed such a URL
+/// as its assertion's audience.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
-    IJsonWebTokenValidator tokenValidator,
+    ProfiledJwtValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     TimeProvider clock,
-    IReplayCache replayCache)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, clock)
+    IReplayCache replayCache,
+    IServiceProvider serviceProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, clock, serviceProvider)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
@@ -63,8 +67,10 @@ public partial class ClientSecretJwtAuthenticator(
         TenantDefinition tenant, string jwt)
     {
         var context = new ValidationContext();
+        var profile = DefaultProfileRequirementsOf(tenant);
 
         var result = await tokenValidator.ValidateAsync(
+            profile,
             jwt,
             new ValidationParameters
             {
@@ -74,7 +80,7 @@ public partial class ClientSecretJwtAuthenticator(
 
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
-                ClockSkew = DefaultProfileRequirementsOf(tenant).ClockSkewOrDefault(),
+                ClockSkew = profile.ClockSkewOrDefault(),
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });

@@ -17,6 +17,7 @@ public record BackChannelAuthenticationOptions
     /// Specifies the default expiration time for backchannel authentication requests.
     /// This value defines how long the authentication request will remain valid if no specific expiration
     /// time is requested. It is set to 5 minutes by default.
+    /// It must be positive and no longer than <see cref="MaximumExpiry"/>, or the server does not start.
     /// </summary>
     public TimeSpan DefaultExpiry { get; set; } = TimeSpan.FromMinutes(5);
 
@@ -24,6 +25,8 @@ public record BackChannelAuthenticationOptions
     /// Specifies the maximum allowed expiration time for backchannel authentication requests.
     /// This value restricts the maximum duration an authentication request can be valid for,
     /// even if a longer expiration is requested. It is set to 30 minutes by default.
+    /// A pending request is kept for its lifetime plus this value, so that a poll after its expiry is still answered
+    /// that it expired. It must be positive and at most a year, or the server does not start.
     /// </summary>
     public TimeSpan MaximumExpiry { get; set; } = TimeSpan.FromMinutes(30);
 

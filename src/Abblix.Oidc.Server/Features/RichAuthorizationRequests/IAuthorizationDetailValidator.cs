@@ -61,8 +61,8 @@ public interface IAuthorizationDetailValidator
 
     /// <summary>
     /// Validates a single entry as the consent decision left it, which may carry values the server
-    /// itself added while the end-user was choosing. Defaults to <see cref="ValidateAsync"/>, so a
-    /// type that does not enrich answers the same question in both phases.
+    /// itself added while the end-user was choosing. A type that does not enrich answers it with
+    /// <see cref="ValidateAsync"/>, the same question in both phases.
     /// </summary>
     /// <remarks>
     /// RFC 9396 section 7.1 says that "Whether enrichment is allowed and specifics of how it works are
@@ -74,7 +74,7 @@ public interface IAuthorizationDetailValidator
     /// That shape is one the request-time question may legitimately refuse: RFC 9396 section 5 has the server
     /// reject an entry that "contains fields with invalid values for the authorization details type",
     /// and a type whose definition says the client must not choose the accounts makes a populated
-    /// placeholder exactly that. Such a type overrides this member so the consent decision's own
+    /// placeholder exactly that. Such a type answers this member differently so the consent decision's own
     /// output is accepted, while <see cref="ValidateAsync"/> keeps refusing it from a client.
     /// </para>
     /// <para>
@@ -104,8 +104,8 @@ public interface IAuthorizationDetailValidator
     /// endpoint answers with access_denied, since the likely cause is an end user who edited the consent form.
     /// An entry no end user could have produced, one missing a member the type requires, is a fault in the
     /// host's code that made the decision and is thrown, so it fails the host's own tests instead of reading
-    /// as a refusal. Without an override, every entry this type's request-phase rules refuse comes back as an
-    /// <see cref="OidcError"/>, the first of the two.
+    /// as a refusal. A type answering with <see cref="ValidateAsync"/> returns every entry its request-phase rules
+    /// refuse as an <see cref="OidcError"/>, the first of the two.
     /// </para>
     /// </remarks>
     /// <param name="tenant">The tenant the request is served at.</param>
@@ -123,8 +123,7 @@ public interface IAuthorizationDetailValidator
         AuthorizationDetail detail,
         IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
-        CancellationToken token)
-        => ValidateAsync(tenant, detail, client, token);
+        CancellationToken token);
 
     /// <summary>
     /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing

@@ -71,12 +71,7 @@ public sealed class ClientSecretsCheck : ITenantsCheck
     /// </remarks>
     private static void CheckSecretsArePresent(List<string> failures, ClientInfo client)
     {
-        var authenticatesBySecret = client.TokenEndpointAuthMethod is
-            ClientAuthenticationMethods.ClientSecretBasic or
-            ClientAuthenticationMethods.ClientSecretPost or
-            ClientAuthenticationMethods.ClientSecretJwt;
-
-        if (!authenticatesBySecret)
+        if (HoldsSecretFor(client.TokenEndpointAuthMethod, client.ClientSecrets))
             return;
 
         if (client.ClientSecrets is not { Length: > 0 })
@@ -85,21 +80,16 @@ public sealed class ClientSecretsCheck : ITenantsCheck
                 $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}' and has no " +
                 $"usable secret. When the registry comes from configuration, this is what a hash the binder could " +
                 $"not read looks like: check that every hash is a valid Base64 or hexadecimal string.");
-            return;
         }
-
-        if (client.TokenEndpointAuthMethod is ClientAuthenticationMethods.ClientSecretJwt)
+        else if (client.TokenEndpointAuthMethod is ClientAuthenticationMethods.ClientSecretJwt)
         {
-            if (!Array.Exists(client.ClientSecrets, secret => !string.IsNullOrEmpty(secret.Value)))
-            {
-                failures.Add(
-                    $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}', which uses " +
-                    $"the raw secret value as the HMAC key, and no secret carries " +
-                    $"{nameof(ClientSecret.Value)}. A hash cannot serve this method: it is one-way, and the key " +
-                    $"the client signs with cannot be recovered from it.");
-            }
+            failures.Add(
+                $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}', which uses " +
+                $"the raw secret value as the HMAC key, and no secret carries " +
+                $"{nameof(ClientSecret.Value)}. A hash cannot serve this method: it is one-way, and the key " +
+                $"the client signs with cannot be recovered from it.");
         }
-        else if (!Array.Exists(client.ClientSecrets, secret => secret.Sha256Hash != null || secret.Sha512Hash != null))
+        else
         {
             failures.Add(
                 $"Client '{client.ClientId}' authenticates with '{client.TokenEndpointAuthMethod}', which compares " +
@@ -108,6 +98,26 @@ public sealed class ClientSecretsCheck : ITenantsCheck
                 $"or {nameof(ClientSecret.Sha256HashHex)}.");
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="secrets"/> hold a secret in the form <paramref name="tokenEndpointAuthMethod"/> reads:
+    /// client_secret_jwt the value, the HMAC key; client_secret_basic and client_secret_post a hash, which the presented
+    /// secret is compared against. A method reading no secret is served by any, none included. Startup asks it of a
+    /// configured client, and an RFC 7592 update of the secrets the stored client keeps under the method it moves to.
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">The client's token endpoint authentication method.</param>
+    /// <param name="secrets">The client's secrets.</param>
+    internal static bool HoldsSecretFor(string tokenEndpointAuthMethod, ClientSecret[]? secrets)
+        => tokenEndpointAuthMethod switch
+        {
+            ClientAuthenticationMethods.ClientSecretJwt
+                => Array.Exists(secrets ?? [], secret => !string.IsNullOrEmpty(secret.Value)),
+
+            ClientAuthenticationMethods.ClientSecretBasic or ClientAuthenticationMethods.ClientSecretPost
+                => Array.Exists(secrets ?? [], secret => secret.Sha256Hash != null || secret.Sha512Hash != null),
+
+            _ => true,
+        };
 
     private static void CheckHashLength(
         List<string> failures,

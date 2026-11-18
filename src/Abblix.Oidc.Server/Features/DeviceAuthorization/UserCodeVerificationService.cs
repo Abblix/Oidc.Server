@@ -130,7 +130,13 @@ public partial class UserCodeVerificationService(
                 current =>
                 {
                     current.Status = DeviceAuthorizationStatus.Authorized;
-                    current.AuthorizedGrant = authorizedGrant with { AuthorizedAt = timeProvider.GetUtcNow() };
+                    // The host builds the grant's context, so whether the client named a scope is set from the
+                    // request it answers rather than left to the host to copy
+                    current.AuthorizedGrant = authorizedGrant with
+                    {
+                        AuthorizedAt = timeProvider.GetUtcNow(),
+                        Context = authorizedGrant.Context with { ClientNamedNoScope = current.ClientNamedNoScope },
+                    };
                 }))
         {
             return false;

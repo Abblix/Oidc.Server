@@ -121,6 +121,11 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         {
             SingleResourceAccessTokens = true,
         },
+        Mint(TestConstants.DefaultScopeCodeClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            DefaultScope = [TestConstants.ApiScope],
+            OfflineAccess = OfflineAccess.ConsentRequired,
+        },
 
         // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
@@ -137,7 +142,19 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         {
             ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
-            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials, GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            RedirectUris = [redirect],
+        },
+        new ClientInfo(TestConstants.PushedAuthorizationRequestAudienceClientId)
+        {
+            ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            RedirectUris = [redirect],
+            ClientAssertionAudiences =
+                ClientAssertionAudiences.Issuer | ClientAssertionAudiences.PushedAuthorizationRequestEndpoint,
         },
         new ClientInfo(TestConstants.DefaultScopeClientId)
         {

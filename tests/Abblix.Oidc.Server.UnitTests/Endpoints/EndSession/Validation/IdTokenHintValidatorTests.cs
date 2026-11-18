@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -84,7 +85,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_id_token",
+                TestTenant.Matched, null, "valid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -109,7 +110,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_id_token",
+                TestTenant.Matched, null, "valid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -135,7 +136,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_id_token",
+                TestTenant.Matched, null, "valid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -161,7 +162,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_id_token",
+                TestTenant.Matched, null, "valid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -187,7 +188,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "access_token_as_hint",
+                TestTenant.Matched, null, "access_token_as_hint",
                 TokenTypesArg.Is(JwtTypes.IdTokens),
                 It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
@@ -219,7 +220,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_id_token",
+                TestTenant.Matched, null, "valid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -245,7 +246,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "invalid_id_token",
+                TestTenant.Matched, null, "invalid_id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(validationError);
 
@@ -307,8 +308,8 @@ public class IdTokenHintValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "id_token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new System.Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "id_token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new System.Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options))
             .ReturnsAsync(idToken);
 
         // Act
@@ -332,7 +333,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "id_token",
+                TestTenant.Matched, null, "id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -356,7 +357,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "id_token",
+                TestTenant.Matched, null, "id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 
@@ -381,7 +382,7 @@ public class IdTokenHintValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "id_token",
+                TestTenant.Matched, null, "id_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(idToken);
 

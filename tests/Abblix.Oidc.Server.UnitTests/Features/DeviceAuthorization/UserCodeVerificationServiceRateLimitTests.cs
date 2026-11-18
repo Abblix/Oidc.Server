@@ -185,7 +185,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task ARefusalByTheAddressCap_SaysHowLongToWait()
     {
-        void SmallCap(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 3;
+        static void SmallCap(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 3;
 
         for (var i = 0; i < 3; i++)
             await ServiceOver(null, configure: SmallCap).VerifyAsync(SingleIssuer.Tenant, "9999000" + i);
@@ -204,7 +204,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task AnAddressThatSpentItsAllowance_LeavesAnotherAddressItsOwn()
     {
-        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+        static void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
         await ServiceOver(null, address: Address, configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
@@ -220,7 +220,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task TwoAttemptsTheServerCannotSee_ShareOneAllowance()
     {
-        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+        static void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
         await ServiceOver(null, address: null, configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
@@ -237,7 +237,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task AnAttemptTheServerCannotSee_SpendsTheServersBudget()
     {
-        void OneOfTheBudget(DeviceAuthorizationOptions options) => options.MaxFailedAttemptsPerWindow = 1;
+        static void OneOfTheBudget(DeviceAuthorizationOptions options) => options.MaxFailedAttemptsPerWindow = 1;
 
         await ServiceOver(null, address: null, configure: OneOfTheBudget).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
@@ -255,7 +255,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task AFloodTheServerCannotSee_LeavesACallerItCanSeeAnswered()
     {
-        void SmallBudget(DeviceAuthorizationOptions options)
+        static void SmallBudget(DeviceAuthorizationOptions options)
         {
             options.MaxAddressFailuresPerWindow = 1;
             options.MaxFailedAttemptsPerWindow = 2;
@@ -278,7 +278,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task AnAddressArrivingUnderBothForms_SpendsOneAllowance()
     {
-        void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
+        static void OneAttempt(DeviceAuthorizationOptions options) => options.MaxAddressFailuresPerWindow = 1;
 
         await ServiceOver(null, address: $"::ffff:{Address}", configure: OneAttempt).VerifyAsync(SingleIssuer.Tenant, "99990000");
 
@@ -419,7 +419,7 @@ public class UserCodeVerificationServiceRateLimitTests
     [Fact]
     public async Task AVerifiedValue_DoesNotCarryTheFailuresOfItsEarlierLife()
     {
-        void PauseAtThree(DeviceAuthorizationOptions options) => options.MaxFailuresBeforeBackoff = 3;
+        static void PauseAtThree(DeviceAuthorizationOptions options) => options.MaxFailuresBeforeBackoff = 3;
 
         var deviceOptions = DeviceOptions();
         PauseAtThree(deviceOptions);

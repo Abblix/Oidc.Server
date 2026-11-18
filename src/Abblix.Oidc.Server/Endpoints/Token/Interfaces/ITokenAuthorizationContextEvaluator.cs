@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
@@ -19,9 +20,11 @@ public interface ITokenAuthorizationContextEvaluator
     /// Evaluates and constructs a new <see cref="AuthorizationContext"/> by refining and reconciling the scopes and resources
     /// from the original authorization request based on the current token request.
     /// </summary>
+    /// <param name="tenant">The tenant the token is issued at, whose default security profile applies to a client
+    /// that names none.</param>
     /// <param name="request">The valid token request that contains the original authorization grant and any additional
     /// token-specific requests.</param>
     /// <returns>An updated <see cref="AuthorizationContext"/> that reflects the actual scopes and resources that
     /// should be considered during the token issuance process.</returns>
-    AuthorizationContext EvaluateAuthorizationContext(ValidTokenRequest request);
+    AuthorizationContext EvaluateAuthorizationContext(TenantDefinition tenant, ValidTokenRequest request);
 }

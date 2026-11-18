@@ -567,4 +567,50 @@ public class NonceValidatorTests
         // Assert
         Assert.Null(result);
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests the openid scope,
+    /// the authorization server shall require the nonce parameter". The condition is the scope, not the response
+    /// type, so a client held to FAPI 1.0 Advanced is refused a code request naming openid without a nonce, which
+    /// OpenID Connect Core alone lets through; one not naming openid, or carrying a nonce, passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.OpenId, null, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.OpenId, ValidNonce, null)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.Profile, null, null)]
+    [InlineData(null, Scopes.OpenId, null, null)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresANonceWithTheOpenIdScope(
+        ClientSecurityProfile? profile, string scope, string? nonce, string? expectedError)
+    {
+        var context = CreateContext([ResponseTypes.Code], nonce);
+        context.Request = context.Request with { Scope = [scope] };
+        context.ClientInfo.SecurityProfile = profile;
+        context.ClientInfo.AllowedScopes = [scope];
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// The FAPI 1.0 Part 1 section 5.2.2.2 condition is that "the client requests the openid scope": a request naming
+    /// no scope is not asked for a nonce although the default it is served carries openid, on its first pass and on its
+    /// way back from a page, where the request carries the served scope.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_Fapi1Advanced_ADefaultOpenIdScope_AsksNoNonce(bool comingBack)
+    {
+        var context = CreateContext([ResponseTypes.Code], nonce: null);
+        context.Request = context.Request with
+        {
+            Scope = comingBack ? [Scopes.OpenId] : [],
+            ClientNamedNoScope = comingBack,
+        };
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
 }

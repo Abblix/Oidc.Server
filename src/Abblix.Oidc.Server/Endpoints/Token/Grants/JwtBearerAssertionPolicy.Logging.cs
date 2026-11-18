@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -48,4 +49,22 @@ partial class JwtBearerAssertionPolicy
 		Level = LogLevel.Warning,
 		Message = "JWT assertion rejected: JWT too old. Issued at {IssuedAt}, age {JwtAge}, max allowed {MaxAge}, client {ClientId}, issuer {Issuer}")]
 	private partial void LogTooOld(DateTimeOffset IssuedAt, TimeSpan JwtAge, TimeSpan MaxAge, string ClientId, Sanitized Issuer);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.JwtBearer.MissingJti,
+		Level = LogLevel.Warning,
+		Message = "JWT assertion missing required 'jti' claim for client {ClientId}, issuer {Issuer}")]
+	private partial void LogMissingJti(string ClientId, Sanitized Issuer);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.JwtBearer.ReplayDetected,
+		Level = LogLevel.Warning,
+		Message = "SECURITY: JWT replay attack detected - JTI: {JwtId}, Client: {ClientId}, Issuer: {Issuer}, KeyId: {KeyId}, IP: {ClientIp}")]
+	private partial void LogReplayDetected(Sanitized JwtId, string ClientId, Sanitized Issuer, Sanitized KeyId, IPAddress? ClientIp);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.JwtBearer.ScopesNotAllowed,
+		Level = LogLevel.Warning,
+		Message = "JWT Bearer grant rejected: scopes {InvalidScopes} not allowed for issuer {Issuer}")]
+	private partial void LogScopesNotAllowed(Sanitized[] InvalidScopes, Sanitized Issuer);
 }

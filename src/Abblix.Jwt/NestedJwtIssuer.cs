@@ -37,11 +37,14 @@ internal sealed class NestedJwtIssuer(IJsonWebTokenSigner signer, IJsonWebTokenE
 
         if (encryptionKey != null)
         {
-            // The encryptor is byte-oriented; wrap the inner JWS as its UTF-8 plaintext.
+            // The encryptor is byte-oriented; wrap the inner JWS as its UTF-8 plaintext. RFC 7519 section 5.2: in
+            // nested signing or encryption "this Header Parameter MUST be present; in this case, the value MUST be
+            // "JWT"".
             jwtString = await encryptor.EncryptAsync(
                 Encoding.UTF8.GetBytes(jwtString),
                 encryptionKey,
                 token.Header.Type,
+                JsonWebTokenTypes.Jwt,
                 keyEncryptionAlgorithm,
                 contentEncryptionAlgorithm,
                 CancellationToken.None);
@@ -49,4 +52,22 @@ internal sealed class NestedJwtIssuer(IJsonWebTokenSigner signer, IJsonWebTokenE
 
         return jwtString;
     }
+
+    /// <summary>
+    /// Encrypts <paramref name="token"/> without signing it: RFC 7519 section 3 has the JWE "with the JWT Claims Set
+    /// being the plaintext encrypted by the JWE", and section 5.2 cty JWT only for a nested JWT, so it carries none.
+    /// </summary>
+    public Task<string> EncryptClaimsAsync(
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+        => encryptor.EncryptAsync(
+            Encoding.UTF8.GetBytes(token.Payload.Json.ToJsonString()),
+            encryptionKey,
+            token.Header.Type,
+            contentType: null,
+            keyEncryptionAlgorithm,
+            contentEncryptionAlgorithm,
+            CancellationToken.None);
 }

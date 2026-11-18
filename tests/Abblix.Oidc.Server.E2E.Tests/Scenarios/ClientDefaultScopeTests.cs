@@ -38,6 +38,22 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(Scopes.Profile, payload[IanaClaimTypes.Scope]?.GetValue<string>());
     }
 
+    /// <summary>
+    /// A client with no default, asking for no scope, is issued a token with no scope, and the response leaves the
+    /// member out: RFC 6749 section 3.3 defines a scope value as one or more characters, so an empty one is not a value.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientWithNoDefault_IsAnsweredWithNoScopeMember()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, Form(TestConstants.ClientCredentialsClientId));
+
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+        Assert.False(tokens.ContainsKey(TokenResponse.Parameters.Scope));
+    }
+
     [Fact]
     public async Task ARequestNamingNoScope_OfAClientRequiredToNameOne_IsRefused()
     {

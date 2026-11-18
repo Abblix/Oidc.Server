@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -25,6 +27,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -62,7 +65,7 @@ public class UnreadableAssertionTimestampTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
 
         // Refused before anything irreversible: the identifier of an assertion that could not even
         // be read is not spent.
@@ -87,7 +90,7 @@ public class UnreadableAssertionTimestampTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     private static (ClientSecretJwtAuthenticator, Mock<IReplayCache>) Build(Action<JsonObject> corrupt)
@@ -141,10 +144,11 @@ public class UnreadableAssertionTimestampTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             new FakeTimeProvider(Now),
-            replayCache.Object);
+            replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
 
         return (authenticator, replayCache);
     }

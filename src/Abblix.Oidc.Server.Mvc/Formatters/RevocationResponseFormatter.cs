@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Formatter for responses to token revocation requests.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter
+public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a token revocation request.

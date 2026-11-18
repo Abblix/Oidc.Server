@@ -8,10 +8,13 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
+using Moq;
 using ParApiModel = Abblix.Oidc.Server.Model.PushedAuthorizationResponse;
 using CorePushedAuthorizationResponse = Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
 
@@ -24,7 +27,11 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 /// </summary>
 public class PushedAuthorizationResponseFormatterTests
 {
-    private readonly PushedAuthorizationResponseFormatter _formatter = new();
+    private readonly PushedAuthorizationResponseFormatter _formatter = new(
+        Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = "main", Issuer = new Uri("https://auth.example.com") },
+        }));
 
     [Fact]
     public async Task FormatResponseAsync_PushedAuthorizationResponse_ReturnsJsonWith201()
@@ -44,8 +51,12 @@ public class PushedAuthorizationResponseFormatterTests
         Assert.Equal(TimeSpan.FromSeconds(60), body.ExpiresIn);
     }
 
+    /// <summary>
+    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and RFC 6749 section 5.2 gives a client
+    /// that authenticated through the Authorization header a 401 with a challenge for its scheme.
+    /// </summary>
     [Fact]
-    public async Task FormatResponseAsync_InvalidClientError_ReturnsJson401()
+    public async Task FormatResponseAsync_InvalidClientError_Returns401WithABasicChallenge()
     {
         var request = new AuthorizationRequest();
         var error = new AuthorizationError(
@@ -55,13 +66,11 @@ public class PushedAuthorizationResponseFormatterTests
             ResponseMode: ResponseModes.Query,
             RedirectUri: null);
 
-        var result = await _formatter.FormatResponseAsync(request, error);
+        var response = await ActionResultRunner.RunAsync(await _formatter.FormatResponseAsync(request, error));
 
-        var json = Assert.IsType<JsonResult>(result);
-        Assert.Equal(StatusCodes.Status401Unauthorized, json.StatusCode);
-        var body = Assert.IsType<ErrorResponse>(json.Value);
-        Assert.Equal(ErrorCodes.InvalidClient, body.Error);
-        Assert.Equal("Client authentication failed", body.ErrorDescription);
+        Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
+        Assert.StartsWith(TokenTypes.Basic, response.Headers[HeaderNames.WWWAuthenticate].ToString());
+        Assert.Contains(ErrorCodes.InvalidClient, response.Body);
     }
 
     [Fact]
@@ -75,10 +84,10 @@ public class PushedAuthorizationResponseFormatterTests
             ResponseMode: ResponseModes.Query,
             RedirectUri: null);
 
-        var result = await _formatter.FormatResponseAsync(request, error);
+        var response = await ActionResultRunner.RunAsync(await _formatter.FormatResponseAsync(request, error));
 
-        var json = Assert.IsType<JsonResult>(result);
-        Assert.Equal(StatusCodes.Status400BadRequest, json.StatusCode);
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Contains(ErrorCodes.InvalidRequest, response.Body);
     }
 
     /// <summary>
@@ -97,11 +106,11 @@ public class PushedAuthorizationResponseFormatterTests
             ResponseMode: ResponseModes.Query,
             RedirectUri: new Uri("https://example.com/cb"));
 
-        var result = await _formatter.FormatResponseAsync(request, error);
+        var response = await ActionResultRunner.RunAsync(await _formatter.FormatResponseAsync(request, error));
 
-        Assert.IsNotType<RedirectResult>(result);
-        Assert.IsNotType<LocalRedirectResult>(result);
-        Assert.IsNotType<RedirectToActionResult>(result);
-        Assert.IsType<JsonResult>(result);
+        Assert.False(
+            response.Headers.ContainsKey(HeaderNames.Location),
+            "a pushed authorization error must be answered to the caller, never redirected to a browser");
+        Assert.Contains(ErrorResponse.Parameters.Error, response.Body);
     }
 }

@@ -48,6 +48,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using Xunit;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
@@ -75,39 +76,6 @@ public class ServiceCollectionOverrideTests
 
         Assert.Single(descriptors);
         Assert.Same(stub, descriptors[0].ImplementationInstance);
-    }
-
-    [Fact]
-    public void AddAuthServiceJwt_HostPreregisteredKeysStore_Wins()
-    {
-        // The write-role store is segregated from the reader; a host that persists keys elsewhere
-        // registers its own, and the library's fail-loud default must not shadow it.
-        var services = new ServiceCollection();
-        var stub = new Mock<IAuthServiceKeysStore>().Object;
-        services.AddSingleton<IAuthServiceKeysStore>(stub);
-
-        services.AddAuthServiceJwt();
-
-        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthServiceKeysStore));
-        Assert.Same(stub, descriptor.ImplementationInstance);
-    }
-
-    [Fact]
-    public async Task DefaultKeysStore_AddAsync_FailsLoud()
-    {
-        // With no persistent store registered, the default cannot save a generated key and must fail
-        // clearly rather than dropping it silently.
-        var services = new ServiceCollection();
-        services.AddAuthServiceJwt();
-        await using var provider = services.BuildServiceProvider();
-
-        var store = provider.GetRequiredService<IAuthServiceKeysStore>();
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-        var descriptor = new AuthServiceKeyDescriptor(
-            key, KeyLifecycleStatus.Active, DateTimeOffset.MinValue, DateTimeOffset.MaxValue, DateTimeOffset.MaxValue);
-
-        await Assert.ThrowsAsync<NotSupportedException>(
-            () => store.AddAsync(descriptor, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -158,6 +126,12 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(SingleIssuer.Accessor);
@@ -191,9 +165,18 @@ public class ServiceCollectionOverrideTests
 
         services.AddLogging();
         services.AddSingleton(clients.Object);
-        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        // The profile forbids RSA1_5, so the client's key set is read; it publishes none
+        var keys = new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>();
+        keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+        services.AddSingleton(keys.Object);
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         var fapi2 = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 };
@@ -207,7 +190,7 @@ public class ServiceCollectionOverrideTests
             fapi2.ToTenant(),
             new ClientRequest { ClientId = TestConstants.DefaultClientId });
 
-        Assert.Null(authenticated);
+        Assert.False(authenticated.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -236,6 +219,12 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
+        services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(SingleIssuer.Accessor);
@@ -245,8 +234,8 @@ public class ServiceCollectionOverrideTests
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
         var request = new ClientRequest { ClientId = TestConstants.DefaultClientId };
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
     }
 
     [Fact]

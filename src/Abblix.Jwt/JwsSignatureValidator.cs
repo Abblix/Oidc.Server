@@ -62,29 +62,17 @@ internal sealed class JwsSignatureValidator(IJsonWebTokenSigner signer)
     /// <param name="jwtParts">The three compact-serialization segments
     /// (<c>header.payload.signature</c>) needed to recompute and compare the signature.</param>
     /// <returns>The token unchanged on success; a <see cref="JwtValidationError"/> with
-    /// <see cref="JwtError.InvalidHeader"/> when the <c>jwk</c> header is malformed or
-    /// absent; or whatever category <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises
+    /// <see cref="JwtError.InvalidHeader"/> when the <c>jwk</c> header is malformed, absent, a symmetric key or
+    /// carries private members; or whatever category <see cref="IJsonWebTokenSigner.ValidateAsync"/> raises
     /// when the cryptographic check fails.</returns>
     private async Task<Result<JsonWebToken, JwtValidationError>> ValidateEmbeddedKeyAsync(
         JsonWebToken token, string[] jwtParts)
     {
-        if (!token.Header.TryReadVerificationKey(out var embeddedJwk))
+        return await EmbeddedVerificationKey.Read(token.Header).BindAsync<JsonWebToken>(async embeddedJwk =>
         {
-            return new JwtValidationError(
-                JwtError.InvalidHeader,
-                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' is not a valid JWK");
-        }
-
-        if (embeddedJwk is null)
-        {
-            return new JwtValidationError(
-                JwtError.InvalidHeader,
-                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' is required when " +
-                $"{nameof(ValidationOptions.UseEmbeddedVerificationKey)} is set");
-        }
-
-        var error = await signer.ValidateAsync(jwtParts, token.Header, embeddedJwk.ToAsync());
-        return error is null ? token : error;
+            var error = await signer.ValidateAsync(jwtParts, token.Header, embeddedJwk.ToAsync());
+            return error is null ? token : error;
+        });
     }
 
     /// <summary>
@@ -133,7 +121,26 @@ internal sealed class JwsSignatureValidator(IJsonWebTokenSigner signer)
                 $"but the host did not provide {nameof(ValidationParameters.ResolveIssuerSigningKeys)}.");
         }
 
-        var error = await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+        var signingKeys = await resolveIssuerSigningKeys(issuer).ToArrayAsync();
+        if (parameters.RefetchIssuerSigningKeys is { } refetch && NamesAnUnfamiliarKey(token.Header, signingKeys))
+        {
+            signingKeys = await refetch(issuer).ToArrayAsync();
+        }
+
+        var error = await signer.ValidateAsync(jwtParts, token.Header, signingKeys.ToAsyncEnumerable());
         return error is null ? token : error;
     }
+
+    /// <summary>
+    /// Whether the header names a key by its <c>kid</c> that none of <paramref name="signingKeys"/> carries, the
+    /// signal OpenID Connect Core 1.0 section 10.1.1 gives a verifier to read the signer's keys again.
+    /// </summary>
+    /// <remarks>
+    /// A header naming no key gives no such signal: a key set rotated under it reads the same as a signature that
+    /// does not match, and reading the keys again on every such failure would let any caller make this server fetch
+    /// the signer's set at will.
+    /// </remarks>
+    private static bool NamesAnUnfamiliarKey(JsonWebTokenHeader header, JsonWebKey[] signingKeys)
+        => header.KeyId is { Length: > 0 } keyId &&
+           !signingKeys.Any(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
 }

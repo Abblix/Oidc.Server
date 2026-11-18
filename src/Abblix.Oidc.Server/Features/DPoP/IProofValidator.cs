@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.DPoP;
@@ -27,6 +28,8 @@ public interface IProofValidator
     /// access-token presentation), the proof's <c>ath</c> claim is verified against the
     /// access-token hash per RFC 9449 section 4.2.
     /// </summary>
+    /// <param name="profile">The controls in force for the client presenting the proof, whose signature algorithms
+    /// narrow those a proof may use (FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1).</param>
     /// <param name="proofJwt">The compact JWS form of the DPoP proof, taken from the
     /// <c>DPoP</c> request header.</param>
     /// <param name="accessToken">The access token presented alongside the proof, when the
@@ -37,6 +40,7 @@ public interface IProofValidator
     /// validation step passes, otherwise <see cref="ProofError"/> describing the failure
     /// reason.</returns>
     Task<Result<Proof, ProofError>> ValidateAsync(
+        SecurityProfileRequirements profile,
         string proofJwt,
         string? accessToken = null,
         CancellationToken cancellationToken = default);

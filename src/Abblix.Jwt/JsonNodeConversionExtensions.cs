@@ -44,7 +44,7 @@ public static class JsonNodeConversionExtensions
     /// allowing for easy manipulation and traversal of the JSON structure.
     /// </remarks>
     private static JsonElement ToJsonElement(this string jsonString)
-        => JsonDocument.Parse(jsonString).RootElement;
+        => JsonElement.Parse(jsonString);
 
     /// <summary>
     /// Converts a JsonElement to a JsonNode, allowing for more dynamic manipulation of the JSON structure.

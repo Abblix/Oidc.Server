@@ -65,8 +65,8 @@ public record SuccessfullyAuthenticated(
 	public required SessionPersistence SessionPersistence { get; init; }
 
 	/// <summary>
-	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder for
-	/// implicit/hybrid flows only (where the response itself carries tokens). <c>null</c> for the code flow.
+	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder only for
+	/// a response carrying an access token, whose scope it is. <c>null</c> otherwise.
 	/// </summary>
 	public string? Scope { get; set; }
 

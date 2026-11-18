@@ -21,11 +21,5 @@ public static class CryptoRandom
 	/// </summary>
 	/// <param name="count">The number of random bytes to generate.</param>
 	/// <returns>An array of bytes filled with cryptographically strong random values.</returns>
-	public static byte[] GetRandomBytes(int count)
-	{
-		var buffer = new byte[count];
-		using var random = RandomNumberGenerator.Create();
-		random.GetBytes(buffer);
-		return buffer;
-	}
+	public static byte[] GetRandomBytes(int count) => RandomNumberGenerator.GetBytes(count);
 }

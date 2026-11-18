@@ -396,7 +396,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Same(deviceRequest.AuthorizationDetails, policy.LastRequested);
         Assert.NotNull(policy.LastSeen);
         Assert.NotSame(granted, policy.LastSeen);
-        Assert.Equal(granted.ToJsonString(), policy.LastSeen!.ToJsonString());
+        Assert.Equal(granted.ToJsonString(), policy.LastSeen.ToJsonString());
     }
 
     /// <summary>

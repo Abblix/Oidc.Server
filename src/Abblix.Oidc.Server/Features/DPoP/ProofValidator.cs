@@ -6,6 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -32,7 +37,7 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// claims, and replay protection.
 /// </remarks>
 internal sealed class ProofValidator(
-    IJsonWebTokenValidator jwtValidator,
+    ProfiledJwtValidator jwtValidator,
     IReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
     IRequestInfoProvider requestInfoProvider,
@@ -40,6 +45,7 @@ internal sealed class ProofValidator(
 {
     /// <inheritdoc/>
     public async Task<Result<Proof, ProofError>> ValidateAsync(
+        SecurityProfileRequirements profile,
         string proofJwt,
         string? accessToken = null,
         CancellationToken cancellationToken = default)
@@ -59,6 +65,7 @@ internal sealed class ProofValidator(
         }
 
         var jwtResult = await jwtValidator.ValidateAsync(
+            profile,
             proofJwt,
             new ()
             {
@@ -77,8 +84,15 @@ internal sealed class ProofValidator(
         var httpMethod = requestInfoProvider.RequestMethod;
         var requestUri = requestInfoProvider.RequestUri;
 
-        var error = ValidateJwkShape(jwt.Header, out var jwk) ??
-                    ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
+        // The JWT validator verified the signature under the embedded 'jwk' and refused one carrying private
+        // material, which RFC 9449 section 4.3 lists as "The jwk JOSE Header Parameter does not contain a private
+        // key", so the header holds a public key on the success path.
+        var jwk = jwt.Header.TryReadVerificationKey(out var embedded) && embedded is not null
+            ? embedded
+            : throw new InvalidOperationException(
+                $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
+
+        var error = ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
                     ProofBindingClaims.AccessToken(jwt.Payload, accessToken) ??
                     TryGetJti(jwt.Payload, out jwtId);
 
@@ -90,8 +104,12 @@ internal sealed class ProofValidator(
         // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
         // the documented probabilistic guarantee accepted under RFC 9449 section 11.1.
+        // The jti is reserved as its digest, which section 11.1 offers against memory exhaustion: "a server that is
+        // tracking jti values should reject DPoP proof JWTs with unnecessarily large jti values or store only a hash
+        // thereof". The digest is the one a PKCE code_challenge or a nonce is kept under against reuse, and it
+        // refuses no client, where a length limit would have to guess what every client generates.
         var fresh = await replayCache.TryReserveAsync(
-            jwtId,
+            Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(jwtId))),
             issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
             cancellationToken);
 
@@ -103,29 +121,6 @@ internal sealed class ProofValidator(
         }
 
         return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
-    }
-
-    /// <summary>
-    /// Enforces the RFC 9449 section 4.2 rule that the embedded <c>jwk</c> MUST NOT contain
-    /// private-key material. The JWT validator already extracted the JWK and used its
-    /// public part to verify the signature, so the key is guaranteed non-null on the
-    /// success path; this post-check catches accidental private-key disclosure before
-    /// the proof is accepted.
-    /// </summary>
-    private static ProofError? ValidateJwkShape(JsonWebTokenHeader header, out JsonWebKey jwk)
-    {
-        jwk = header.TryReadVerificationKey(out var embedded) && embedded is not null
-            ? embedded
-            : throw new InvalidOperationException(
-                $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
-        if (jwk.HasPrivateKey)
-        {
-            return new ProofError(
-                ProofErrorReasons.InvalidJwk,
-                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' must not contain private key material.");
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -196,8 +191,7 @@ internal sealed class ProofValidator(
 
     /// <summary>
     /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 section 4.1.7
-    /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy. The downstream
-    /// replay-cache uses the value as its key.
+    /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy.
     /// </summary>
     private static ProofError? TryGetJti(JsonWebTokenPayload payload, out string jti)
     {

@@ -67,7 +67,9 @@ public class ClockSkewCeilingCheckTests
         var refusal = Assert.Single(Check(TimeSpan.FromSeconds(seconds)));
 
         Assert.Equal("acme", Assert.Single(refusal.TenantIds));
-        Assert.Contains(nameof(JwtBearerOptions.ClockSkew), refusal.Message);
+        Assert.Contains(
+            $"{nameof(OidcOptions)}.{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)}",
+            refusal.Message);
     }
 
     /// <summary>
@@ -144,7 +146,7 @@ public class ClockSkewCeilingCheckTests
     {
         var options = new JwtBearerOptions();
 
-        var skew = options.ResolveClockSkew(profile);
+        var skew = options.ResolveClockSkew(SecurityProfileRequirements.Resolve(profile));
 
         Assert.Equal(TimeSpan.FromSeconds(pastSeconds), skew.Past);
         Assert.Equal(TimeSpan.FromSeconds(futureSeconds), skew.Future);
@@ -265,7 +267,7 @@ public class ClockSkewCeilingCheckTests
         var optedOutClient = new ClientInfo("client-1") { SecurityProfile = ClientSecurityProfile.None };
 
         var accepted = options.JwtBearer.ResolveClockSkew(
-            optedOutClient.SecurityProfile ?? tenantProfile).Past;
+            SecurityProfileRequirements.Resolve(optedOutClient.SecurityProfile ?? tenantProfile)).Past;
 
         var retained = options.JwtBearer.ClockSkew
                        ?? SecurityProfileRequirements
@@ -290,6 +292,37 @@ public class ClockSkewCeilingCheckTests
         // prescription, not to a value somebody typed.
         Assert.Equal(
             (ClockSkew)TimeSpan.FromSeconds(30),
-            options.ResolveClockSkew(ClientSecurityProfile.Fapi2));
+            options.ResolveClockSkew(SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2)));
+    }
+
+    private static List<TenantRefusal> CheckDrift(TimeSpan drift, ClientSecurityProfile profile = ClientSecurityProfile.Fapi2)
+        => new ClockSkewCeilingCheck().Check(
+            [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com"), DefaultSecurityProfile = profile }],
+            new OidcOptions { ReplicaClockSkew = drift }).ToList();
+
+    /// <summary>
+    /// The drift between this server's own instances lets a token it issued be dated that far ahead, which FAPI 2.0
+    /// bounds as it bounds any iat or nbf, so a value past the ceiling is refused for a tenant held to it, naming this
+    /// setting rather than the one for assertions.
+    /// </summary>
+    [Fact]
+    public void TheInstanceDriftAboveTheCeiling_Refuses_NamingIt()
+    {
+        var refusal = Assert.Single(CheckDrift(TimeSpan.FromSeconds(61)));
+
+        Assert.Equal("acme", Assert.Single(refusal.TenantIds));
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.ReplicaClockSkew)}", refusal.Message);
+        Assert.DoesNotContain(nameof(OidcOptions.JwtBearer), refusal.Message);
+    }
+
+    /// <summary>
+    /// At the ceiling, and under no bounding profile at any value, the drift passes, so the refusal above cannot be
+    /// satisfied by a guard that refuses everything.
+    /// </summary>
+    [Fact]
+    public void TheInstanceDriftAtTheCeilingOrWithNoProfile_Passes()
+    {
+        Assert.Empty(CheckDrift(TimeSpan.FromSeconds(60)));
+        Assert.Empty(CheckDrift(TimeSpan.FromMinutes(10), ClientSecurityProfile.None));
     }
 }

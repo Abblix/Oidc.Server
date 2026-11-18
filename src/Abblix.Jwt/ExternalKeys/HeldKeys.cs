@@ -25,7 +25,7 @@ internal sealed class HeldKeys(KeyRingSchedule schedule)
     public IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys)
         => _keys
             .Where(opened => OpenedKey.Serves(opened.Key, usage))
-            .ToList()
+            .ToArray()
             .ProduceFirst(opened => opened.CreatedAt, schedule.Now, schedule.Propagation)
             .Select(opened => opened.Key.Sanitize(includePrivateKeys));
 

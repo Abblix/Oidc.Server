@@ -25,24 +25,27 @@ public static class OidcResults
     /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
-    /// and the JSON error body; everything else uses the fallback status code with a JSON body.
+    /// and the JSON error body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback, a
+    /// <see cref="BearerRequestError"/> with a Bearer challenge carrying it too; everything else uses the fallback
+    /// status code with a JSON body.
     /// </summary>
     public static IResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
     {
         if (FormatRefusal(error) is { } refusal)
             return refusal;
 
-        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
-
+        // The Bearer challenge is built in the arms that send it and nowhere else: building it refuses a code or scope
+        // outside the set RFC 6750 section 3 gives its attributes, a rule about that header that an answer without it
+        // must not fail on
         return (error.Error, fallbackStatusCode) switch
         {
             (ErrorCodes.InvalidToken, _) => Results
                 .StatusCode(StatusCodes.Status401Unauthorized)
-                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
             (ErrorCodes.InsufficientScope, _) => Results
                 .StatusCode(StatusCodes.Status403Forbidden)
-                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
             // RFC 6749 section 5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
             // JSON body because RFC 7617 defines no error attributes for the Basic scheme.
@@ -50,7 +53,16 @@ public static class OidcResults
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
                 .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
-            (_, StatusCodes.Status400BadRequest) => Results
+            // RFC 6750 section 3: a Bearer-protected endpoint refusing how the token was included "MUST include the
+            // HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
+            (_, _) when error is BearerRequestError => Results
+                .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest)
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
+
+            // RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1 has
+            // invalid_request answered with 400 too, so an endpoint whose other errors take another status does not
+            // lend it to a malformed request
+            (ErrorCodes.InvalidRequest, _) or (_, StatusCodes.Status400BadRequest) => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest),
 
             (_, StatusCodes.Status401Unauthorized) => Results
@@ -103,6 +115,10 @@ public static class OidcResults
 
         return result;
     }
+
+    /// <summary>Decorates a result to shape the response before the inner result executes.</summary>
+    internal static IResult WithResponse(this IResult inner, Action<HttpResponse> decorate)
+        => new ResultDecorator(inner, decorate);
 
     /// <summary>Decorates a result to set a response header before the inner result executes.</summary>
     public static IResult WithHeader(this IResult inner, string name, string value)

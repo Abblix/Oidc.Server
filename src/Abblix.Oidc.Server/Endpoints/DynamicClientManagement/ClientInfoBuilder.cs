@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Builds the <see cref="ClientInfo"/> stored for a dynamically managed client from its registration metadata
 /// (Builder). A registration (RFC 7591) and its full replacement (RFC 7592 section 2.2) assemble the client the
 /// same way, so a field mapped for one cannot be forgotten by the other; they differ only in what they carry
-/// over from elsewhere - the secrets and the sector identifier.
+/// over from elsewhere - the secrets, the sector identifier and what the host set on the client.
 /// </summary>
 /// <param name="clientId">The identifier of the client being built.</param>
 /// <param name="model">The registration metadata the client is built from.</param>
@@ -28,6 +28,9 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private string[]? _defaultScope;
     private Uri[]? _defaultAllowedResources;
     private string[]? _defaultTokenExchangeAudiences;
+    private ClientAssertionAudiences _assertionAudiences = ClientAssertionAudiences.Issuer;
+    private bool _offlineAccessWithUserAgentAccessToken;
+    private ClientInfo _hostSettings = new(clientId);
 
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
@@ -57,6 +60,26 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Sets what the client's authentication assertions may name as their audience, which registration metadata
+    /// carries no member for, so it is always the host's.
+    /// </summary>
+    public ClientInfoBuilder WithClientAssertionAudiences(ClientAssertionAudiences audiences)
+    {
+        _assertionAudiences = audiences;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets whether the client receives offline access beside an access token carried through the user agent, which
+    /// registration metadata carries no member for, so it is always the host's.
+    /// </summary>
+    public ClientInfoBuilder WithOfflineAccessWithUserAgentAccessToken(bool allowed)
+    {
+        _offlineAccessWithUserAgentAccessToken = allowed;
+        return this;
+    }
+
+    /// <summary>
     /// Sets the sector identifier the client's pairwise subjects are computed under.
     /// </summary>
     public ClientInfoBuilder WithSectorIdentifier(string? sectorIdentifier)
@@ -75,6 +98,17 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Takes what the host set on <paramref name="stored"/> and no registration metadata can carry, its security
+    /// profile among them: RFC 7592 section 2.2 replaces the client metadata, so an update keeps these as they were.
+    /// A new registration takes the defaults of <see cref="ClientInfo"/>.
+    /// </summary>
+    public ClientInfoBuilder WithHostSettingsOf(ClientInfo stored)
+    {
+        _hostSettings = stored;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the client from the registration metadata and whatever was set on this builder.
     /// </summary>
     public ClientInfo Build()
@@ -86,6 +120,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             SectorIdentifierUri = model.SectorIdentifierUri,
         };
 
+        ApplyHostSettings(clientInfo);
         ApplyFlowMetadata(clientInfo);
         ApplySecurityRequirements(clientInfo);
         ApplyDescriptiveMetadata(clientInfo);
@@ -96,10 +131,40 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         return clientInfo;
     }
 
+    /// <summary>
+    /// Copies every member of <see cref="ClientInfo"/> the registration metadata has no member for and nothing else
+    /// on this builder sets. <see cref="ClientInfo.ClientAssertionAudiences"/> and
+    /// <see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/> are not among them: the host grants those
+    /// through <see cref="Common.Configuration.NewClientOptions"/>, set on this builder. The logout token lifetime
+    /// within <see cref="ClientInfo.BackChannelLogout"/> is carried where those options are built, since a client
+    /// omitting its back-channel logout URI drops them whole.
+    /// </summary>
+    private void ApplyHostSettings(ClientInfo clientInfo)
+    {
+        clientInfo.SecurityProfile = _hostSettings.SecurityProfile;
+        clientInfo.PlainPkceAllowed = _hostSettings.PlainPkceAllowed;
+        clientInfo.AuthorizationCodeExpiresIn = _hostSettings.AuthorizationCodeExpiresIn;
+        clientInfo.AccessTokenExpiresIn = _hostSettings.AccessTokenExpiresIn;
+        clientInfo.SingleResourceAccessTokens = _hostSettings.SingleResourceAccessTokens;
+        clientInfo.RefreshToken = _hostSettings.RefreshToken;
+        clientInfo.IdentityTokenExpiresIn = _hostSettings.IdentityTokenExpiresIn;
+        clientInfo.LogoutTokenSignedResponseAlgorithm = _hostSettings.LogoutTokenSignedResponseAlgorithm;
+        clientInfo.ForceUserClaimsInIdentityToken = _hostSettings.ForceUserClaimsInIdentityToken;
+        clientInfo.ForceAuthorizationDetailsInIdentityToken = _hostSettings.ForceAuthorizationDetailsInIdentityToken;
+        clientInfo.ResourceLocations = _hostSettings.ResourceLocations;
+        clientInfo.AllowCrossClientSubjectTokenExchange = _hostSettings.AllowCrossClientSubjectTokenExchange;
+        clientInfo.AllowCrossClientIntrospection = _hostSettings.AllowCrossClientIntrospection;
+        clientInfo.ParseLoginHintTokenAsJwt = _hostSettings.ParseLoginHintTokenAsJwt;
+        clientInfo.DefaultScope = _hostSettings.DefaultScope;
+        clientInfo.RequireScope = _hostSettings.RequireScope;
+        clientInfo.ExpiresAfter = _hostSettings.ExpiresAfter;
+    }
+
     private void ApplyFlowMetadata(ClientInfo clientInfo)
     {
         clientInfo.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod;
         clientInfo.AllowedResponseTypes = model.ResponseTypes;
+        clientInfo.AllowedResponseModes = model.ResponseModes;
         clientInfo.AllowedGrantTypes = model.GrantTypes;
 
         // A client that registers none has none: the flows that redirect are the ones that require
@@ -116,6 +181,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         // Metadata naming none takes the host's default set, RFC 7591 section 2.
         clientInfo.AllowedScopes = model.Scope ?? _defaultScope;
         clientInfo.OfflineAccess = model.OfflineAccess;
+        clientInfo.AllowOfflineAccessWithUserAgentAccessToken = _offlineAccessWithUserAgentAccessToken;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;
         clientInfo.DefaultMaxAge = model.DefaultMaxAge;
@@ -140,6 +206,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 
     private void ApplySecurityRequirements(ClientInfo clientInfo)
     {
+        clientInfo.ClientAssertionAudiences = _assertionAudiences;
         clientInfo.Jwks = model.Jwks;
         clientInfo.JwksUri = model.JwksUri;
         clientInfo.PkceRequired = model.PkceRequired;
@@ -213,6 +280,10 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             clientInfo.BackChannelLogout = new (
                 model.BackChannelLogoutUri,
                 model.BackChannelLogoutSessionRequired ?? false);
+
+            // The logout token lifetime is the host's, which no registration metadata carries
+            if (_hostSettings.BackChannelLogout is { } stored)
+                clientInfo.BackChannelLogout.LogoutTokenExpiresIn = stored.LogoutTokenExpiresIn;
         }
 
         if (model.FrontChannelLogoutUri != null)

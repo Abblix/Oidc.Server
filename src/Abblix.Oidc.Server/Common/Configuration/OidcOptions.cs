@@ -130,29 +130,15 @@ public record OidcOptions
 	public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// The default content encryption algorithm used for encrypting JWT tokens.
+	/// The content encryption algorithm the JWTs this server issues for itself (access, refresh, registration access
+	/// and initial access tokens, see <see cref="ServiceTokens"/>) are encrypted with.
 	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
 	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
-	/// Defaults to A256CBC-HS512 for maximum security.
+	/// Defaults to A256CBC-HS512 for maximum security. A JWT sent to a client whose client registered no enc is
+	/// encrypted with the value its specification names instead
+	/// (<see cref="Features.Tokens.Formatters.ClientJwtEncryption.DefaultContentEncryptionAlgorithm"/>).
 	/// </summary>
 	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
-
-	/// <summary>
-	/// The content encryption algorithm used for an encrypted authorization response (JARM) when the client
-	/// registered <c>authorization_encrypted_response_alg</c> but omitted
-	/// <c>authorization_encrypted_response_enc</c>.
-	/// </summary>
-	/// <remarks>
-	/// Separate from <see cref="DefaultContentEncryptionAlgorithm"/> because the specification names a
-	/// different value for this one response: JWT Secured Authorization Response Mode section 3 says that
-	/// "if authorization_encrypted_response_alg is specified, the default for this value is A128CBC-HS256".
-	/// A client registering only the key-management algorithm expects that, so the server has to encrypt
-	/// with it or produce a response the client cannot read.
-	/// It is a setting rather than a constant so a deployment whose clients all understand a stronger
-	/// algorithm can raise the floor, the same way the general default can be raised.
-	/// </remarks>
-	public string DefaultAuthorizationResponseEncryptionAlgorithm { get; set; }
-		= EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
 
 	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
@@ -447,15 +433,30 @@ public record OidcOptions
 	public TimeSpan SessionClientsRetention { get; set; } = TimeSpan.FromDays(31);
 
 	/// <summary>
-	/// How far a token may appear to have been issued after a revocation cutoff and still be refused by it.
+	/// The worst difference between the clocks of this server's own instances: how far a token this server issued
+	/// may appear to be dated ahead and still be accepted, and how far it may appear to have been issued after a
+	/// revocation cutoff and still be refused by it. Defaults to five seconds.
 	/// </summary>
 	/// <remarks>
-	/// The cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
+	/// <para>
+	/// Not the tolerance for assertions other parties sign, which is <see cref="JwtBearerOptions.ClockSkew"/>: this
+	/// one prices the drift between the instances of this deployment, and one number holds it, since two settings
+	/// for one fact would be set apart and the larger one would let a token through the smaller one's gap.
+	/// </para>
+	/// <para>
+	/// A token this server issued is read back by whichever instance the next request reaches, and that instance's
+	/// clock may lag the one that issued it, so a token presented within the second it was issued would read as not
+	/// yet valid. Its <c>nbf</c> and <c>iat</c> may therefore be up to this far ahead; its <c>exp</c> is never
+	/// extended, since the expiry the issuing instance set is a deadline no instance moves.
+	/// </para>
+	/// <para>
+	/// A revocation cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
 	/// the two come from different clocks. The error is not symmetric in consequence. A token that reads as
 	/// older than it is gets refused once and the client asks again; a token that reads as newer escapes the
 	/// revocation entirely, and because a refresh rotation carries the original <c>iat</c> forward it keeps
 	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
 	/// reports it.
+	/// </para>
 	/// <para>
 	/// The value is added to the cutoff, so it widens what a revocation catches, and the cost is that it
 	/// catches more than the revocation named. A token minted after a legitimate sign-in, but inside this
@@ -478,10 +479,11 @@ public record OidcOptions
 	/// </para>
 	/// <para>
 	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
-	/// single-instance deployment and of nothing else.
+	/// single-instance deployment and of nothing else. A tenant held to FAPI 2.0 is refused while the value is above
+	/// that profile's ceiling.
 	/// </para>
 	/// </remarks>
-	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromSeconds(5);
+	public TimeSpan ReplicaClockSkew { get; set; } = TimeSpan.FromSeconds(5);
 
 	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.
@@ -532,9 +534,10 @@ public record OidcOptions
 	/// Enables detection of a client reusing a constant PKCE <c>code_challenge</c> or OpenID Connect
 	/// <c>nonce</c> across authorization requests, which defeats the transaction-binding those values provide
 	/// (RFC 9700 Section 2.1.1 encourages the authorization server to make a reasonable effort to detect and
-	/// prevent it). When set, the server records each value at the moment it issues an authorization code and
-	/// rejects a later authorization request from the same client that repeats a value within this interval.
-	/// Recording at code issuance - not on every authorization request - means re-processing one request
+	/// prevent it). When set, the server reserves each value as it issues an authorization code and rejects a
+	/// later authorization request from the same client that repeats a value within this interval, or the code of
+	/// one that presented it at the same time.
+	/// Reserving at code issuance - not on every authorization request - means re-processing one request
 	/// across a login or consent redirect is not flagged. Left <c>null</c> (the default) the check is off:
 	/// a conforming client generates a fresh value per request and is never affected, but a client that
 	/// incorrectly reuses a value across separate authorizations would then be rejected, so it is opt-in.

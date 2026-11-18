@@ -8,12 +8,13 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -22,14 +23,18 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// configuration on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the registered client.</param>
-public class RegisterClientResponseFormatter(RegistrationClientUriBuilder uriBuilder) : IRegisterClientResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class RegisterClientResponseFormatter(
+    RegistrationClientUriBuilder uriBuilder,
+    ITenantAccessor tenantAccessor) : IRegisterClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(
         ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, OidcError> response)
         => Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
+            onFailure: error => error.Format(
+                StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
 
     private IResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
     {

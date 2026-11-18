@@ -32,8 +32,10 @@ public static class ServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddClientInformation(this IServiceCollection services)
     {
-        services.TryAddSingleton<ReloadableClientInfoStorage>();
-        services.TryAddSingleton<IClientRegistrations>(DefaultClientRegistrations.Create);
+        // The registrations go to the host's ITenantClientRegistrationStore when it registers one, in any order, and
+        // to memory otherwise. The in-memory store is not registered under that contract, so a host asking for one
+        // learns whether it registered its own.
+        services.TryAddSingleton(ReloadableClientInfoStorage.Create);
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
 
         services.AddOidcOptionsValidators();

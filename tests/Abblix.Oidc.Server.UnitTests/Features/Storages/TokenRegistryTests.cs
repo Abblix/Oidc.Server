@@ -452,7 +452,7 @@ public class TokenRegistryTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresAt, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(expiresAt, capturedOptions.AbsoluteExpiration);
         Assert.Null(capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Null(capturedOptions.SlidingExpiration);
     }
@@ -1214,7 +1214,7 @@ public class TokenRegistryTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.NotNull(capturedOptions!.AbsoluteExpiration);
+        Assert.NotNull(capturedOptions.AbsoluteExpiration);
         Assert.Null(capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Null(capturedOptions.SlidingExpiration);
     }

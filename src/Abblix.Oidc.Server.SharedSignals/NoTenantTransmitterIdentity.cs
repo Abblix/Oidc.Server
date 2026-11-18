@@ -35,4 +35,7 @@ internal sealed class NoTenantTransmitterIdentity(SharedSignalsTransmitterOption
 
     /// <inheritdoc />
     public string? ReceiverIssuer => null;
+
+    /// <inheritdoc />
+    public string? TenantId => null;
 }

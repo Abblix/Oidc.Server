@@ -65,13 +65,13 @@ public class TokenRequestProcessor(
 	{
 		var clientInfo = request.ClientInfo;
 
-		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
+		var requestedContext = tokenContextEvaluator.EvaluateAuthorizationContext(tenant, request);
 
-		authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, authContext);
+		var grantedContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, requestedContext);
 
 		// Read before the token service is handed the context: whether a refresh token and an ID token are issued
 		// follows what was granted, while the access token may carry less, narrowed to the resources it names.
-		string[] grantedScope = [..authContext.Scope];
+		string[] grantedScope = [..grantedContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
 		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
@@ -82,13 +82,21 @@ public class TokenRequestProcessor(
 
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
-		var accessToken = await accessTokenService.CreateAccessTokenAsync(
-			tenant,
-			request.AuthorizedGrant.AuthSession,
-			authContext,
-			clientInfo,
-			grantId,
-			request.AuthorizedGrant.ExpiresNoLaterThan);
+		EncodedJsonWebToken accessToken;
+		try
+		{
+			accessToken = await accessTokenService.CreateAccessTokenAsync(
+				tenant,
+				request.AuthorizedGrant.AuthSession,
+				grantedContext,
+				clientInfo,
+				grantId,
+				request.AuthorizedGrant.ExpiresNoLaterThan);
+		}
+		catch (AudienceKeyRefusedException refused)
+		{
+			return UnusableResource(refused);
+		}
 
 		// A token exchanged at the very end of its subject token's life is minted already expired, because the
 		// subject token was valid when it was checked and its expiry caps the new token. Such a token is refused
@@ -101,13 +109,29 @@ public class TokenRequestProcessor(
 				"The grant expired before a token could be issued under it.");
 		}
 
-		var response = CreateResponse(accessToken, lifetime, authContext);
+		// Scopes were asked for and every one was dropped on the way, by the offline access policy or by narrowing to
+		// the token's resources. RFC 6749 section 5.1 lets an absent scope mean "as requested" and section 3.3 allows
+		// no empty value, so no answer carrying a token can say so; section 5.2 refuses it as invalid_scope
+		if (ClientNamedScope(request, requestedContext) && !accessToken.Token.Payload.Scope.Any())
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				"None of the requested scopes can be granted to this client for the resources the token is issued for.");
+		}
+
+		var response = CreateResponse(accessToken, lifetime, grantedContext);
 
 		if (issuesRefreshToken)
-			await AddRefreshTokenAsync(tenant, response, request, authContext, presentedRefreshToken, grantId);
+			await AddRefreshTokenAsync(tenant, response, request, grantedContext, presentedRefreshToken, grantId);
 
-		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
-			await AddIdentityTokenAsync(tenant, response, request, authContext, accessToken);
+		// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not
+		// judged in, so a refusal of that key set is answered here rather than thrown, before anything is spent
+		var issuesIdentityToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId);
+		if (await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken, issuesIdentityToken)
+		    is { } refusal)
+		{
+			return refusal;
+		}
 
 		// Spent last, once every token of the response is issued, so a failure to issue one leaves the presented
 		// token unspent; the request losing the race to renew a single-use token hands over nothing it issued.
@@ -116,6 +140,23 @@ public class TokenRequestProcessor(
 
 		return response;
 	}
+
+	/// <summary>
+	/// Whether the client itself named the scopes the request is answered for: in the token request, or at the
+	/// authorization step a code, a device code or a backchannel request comes from.
+	/// </summary>
+	/// <remarks>
+	/// At that step a client naming no scope is served its default, which the grant marks, so a default the client
+	/// never named does not count. The other grants naming no scope in the token request are given one by the server
+	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
+	/// a token left with none of it answers a request that asked for nothing. A refresh token is minted only with
+	/// offline_access, so a refresh naming no scope keeps it and never ends with none - unless a host declares
+	/// offline_access as the scope of a resource the refreshed token does not address.
+	/// </remarks>
+	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
+		=> request.Model.Scope is { Length: > 0 } ||
+		   context is { Scope.Length: > 0, ClientNamedNoScope: false } &&
+		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
 	/// <summary>
 	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,
@@ -142,8 +183,10 @@ public class TokenRequestProcessor(
 	/// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
 	/// cannot mint a credential these grants must never produce. All user-facing grants
 	/// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
+	/// The security profile check judges a client's ID token algorithm by this same answer, so what it judges is
+	/// what can be issued.
 	/// </remarks>
-	private static bool MayIssueDerivedTokens(string grantType)
+	internal static bool MayIssueDerivedTokens(string grantType)
 		=> grantType != GrantTypes.ClientCredentials &&
 		   grantType != GrantTypes.TokenExchange;
 
@@ -278,31 +321,34 @@ public class TokenRequestProcessor(
 			grantId.NotNull(nameof(grantId)));
 	}
 
-	private async Task AddIdentityTokenAsync(
+	private async Task<OidcError?> AddIdentityTokenAsync(
 		TenantDefinition tenant,
 		TokenIssued response,
 		ValidTokenRequest request,
 		AuthorizationContext authContext,
-		EncodedJsonWebToken accessToken)
+		EncodedJsonWebToken accessToken,
+		bool issues)
 	{
-		// The bindings exist only when the caller says it IS the push path. The mode could be read
-		// off clientInfo instead, and is not, so that this method does not have to know CIBA's
-		// delivery rules to serve every other grant type - see PushDeliveryBindings.
-		//
-		// The refresh token is read from the RESPONSE because it was minted in the step before. That order
-		// is load-bearing: assembling these bindings before the step that mints it silently drops
-		// rt_hash from every push notification that carries one.
-		var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
-			? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
-			: null;
+		if (!issues)
+			return null;
 
-		response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-			tenant, request.AuthorizedGrant.AuthSession,
-			authContext,
-			request.ClientInfo,
-			false,
-			null,
-			accessToken.EncodedJwt,
-			pushBindings);
+		var created = await identityTokenService.CreateIdentityTokenAsync(
+			tenant,
+			TokenResponseIdentityToken.For(
+				request, authContext, accessToken.EncodedJwt, response.RefreshToken?.EncodedJwt));
+
+		if (created is { } issued && issued.TryGetFailure(out var refusal))
+			return refusal;
+
+		response.IdToken = created?.GetSuccess();
+		return null;
 	}
+
+	/// <summary>
+	/// RFC 8707 section 2: the resource the request named is unusable, since none of the keys it publishes is one a
+	/// token can be encrypted to, under this server's algorithms and the profile in force. The request named the
+	/// resource, so it is answered rather than failed.
+	/// </summary>
+	private static OidcError UnusableResource(AudienceKeyRefusedException refused)
+		=> new(ErrorCodes.InvalidTarget, refused.Message);
 }

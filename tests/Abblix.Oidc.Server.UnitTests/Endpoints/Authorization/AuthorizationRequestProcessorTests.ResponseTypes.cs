@@ -19,10 +19,13 @@ using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -66,6 +69,34 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Equal(expectedCode, success.Code);
         Assert.Null(success.AccessToken);
         Assert.Null(success.IdToken);
+    }
+
+    /// <summary>
+    /// RFC 8707 section 2: an access token issued at the authorization endpoint for a resource none of whose keys a
+    /// token can be encrypted to is answered as the token endpoint answers it, with invalid_target on the error
+    /// response, not with a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeToken_ForAResourceWithoutAUsableKey_IsInvalidTarget()
+    {
+        var request = CreateRequest(responseType: [ResponseTypes.Token]);
+        var session = CreateAuthSession();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "RSA-OAEP-256", "refused"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
     }
 
     /// <summary>
@@ -176,14 +207,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -194,6 +218,33 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Null(success.Code);
         Assert.Null(success.AccessToken);
         Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// An ID token the client's key set cannot receive is refused by the identity token service; the authorization
+    /// endpoint answers the refusal on its error response rather than failing as a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeIdToken_TheClientsKeySetCannotReceive_IsAnsweredWithTheRefusal()
+    {
+        var request = CreateRequest(responseType: [ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "no usable key"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
     }
 
     /// <summary>
@@ -318,6 +369,47 @@ public partial class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2.1: the ID token returned as a detached signature over a
+    /// code id_token response includes s_hash when the client supplied a state, so the state the
+    /// response echoes must reach the token service.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeCodeIdTokenAndState_PassesTheStateToTheIdToken()
+    {
+        // Arrange
+        const string state = "VgSUIEnflnDxTe1vAtr54o";
+        var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken], state: state);
+        var session = CreateAuthSession();
+        var expectedIdToken = new EncodedJsonWebToken(new JsonWebToken(), "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("auth_code_123");
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, "auth_code_123", null, state, session, null)))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
     /// Verifies hybrid flow with code and id_token.
     /// Per OIDC Hybrid Flow, response_type=code id_token generates both.
     /// </summary>
@@ -348,14 +440,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                expectedCode,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -397,14 +482,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                null,
-                expectedToken.EncodedJwt))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, expectedToken.EncodedJwt, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -415,6 +493,56 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Null(success.Code);
         Assert.Same(expectedToken, success.AccessToken);
         Assert.Equal(TokenTypes.Bearer, success.TokenType);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// The ID token of a hybrid response hashes the code and the access token issued beside it (OpenID Connect Core
+    /// 1.0 sections 3.3.2.11 and 3.2.2.10), so it is built after them whatever order the builders are registered in. A
+    /// host calling EnableImplicitFlow before the core registration puts the ID token builder ahead of the code builder;
+    /// the order here is stricter still, ID token first, so one response pins both hashes.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_HybridResponse_HashesTheCodeAndTokenWhateverTheBuildersOrder()
+    {
+        var processor = ProcessorWith(
+            new ConsentConstraintEnforcer(NullLogger<ConsentConstraintEnforcer>.Instance, _authorizationDetailsPolicy.Object),
+            [
+                new IdTokenResponseBuilder(_identityTokenService.Object),
+                new TokenResponseBuilder(_accessTokenService.Object),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(detector => detector.TryReserveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()) == Task.FromResult(true))),
+            ]);
+
+        var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token]);
+        var session = CreateAuthSession();
+        const string expectedCode = "auth_code_for_c_hash";
+        var expectedToken = new EncodedJsonWebToken(new JsonWebToken(), "access_token_for_at_hash");
+        var expectedIdToken = new EncodedJsonWebToken(new JsonWebToken(), "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched, It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync(expectedCode);
+
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(expectedToken);
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, expectedToken.EncodedJwt, null, session, null)))
+            .ReturnsAsync(expectedIdToken);
+
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
         Assert.Same(expectedIdToken, success.IdToken);
     }
 
@@ -456,14 +584,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                expectedCode,
-                expectedToken.EncodedJwt))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, expectedToken.EncodedJwt, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -575,14 +696,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -590,14 +704,7 @@ public partial class AuthorizationRequestProcessorTests
 
         // Assert
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)),
             Times.Once);
     }
 }

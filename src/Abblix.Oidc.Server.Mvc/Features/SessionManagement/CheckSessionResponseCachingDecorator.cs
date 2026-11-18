@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
@@ -23,10 +23,10 @@ namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 /// <param name="catalog">The catalog the tenant was resolved from, which tells when the tenant is gone and
 /// its cached response with it.</param>
 public class CheckSessionResponseCachingDecorator(
-    ICheckSessionResponseFormatter inner,
+    ICheckSessionResponseFormatter<ActionResult> inner,
     ICheckSessionResponseCache<ActionResult> cache,
     ITenantAccessor tenantAccessor,
-    ITenantCatalog catalog): ICheckSessionResponseFormatter
+    ITenantCatalog catalog): ICheckSessionResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a Check Session response and caches the formatted result using the provided response's cache key.

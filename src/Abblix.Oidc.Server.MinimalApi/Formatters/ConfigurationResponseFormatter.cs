@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -30,7 +30,7 @@ public class ConfigurationResponseFormatter(
     IHttpContextAccessor httpContextAccessor,
     LinkGenerator linkGenerator,
     ISignedMetadataProvider signedMetadataProvider,
-    ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
+    ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)

@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,9 +27,9 @@ namespace Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 /// <param name="sessionManagementService">The service responsible for session management.</param>
 /// <param name="tenantAccessor">Names the tenant whose session cookie is cleared.</param>
 public class EndSessionResponseFormatterDecorator(
-    IEndSessionResponseFormatter inner,
+    IEndSessionResponseFormatter<ActionResult> inner,
     ISessionManagementService sessionManagementService,
-    ITenantAccessor tenantAccessor): IEndSessionResponseFormatter
+    ITenantAccessor tenantAccessor): IEndSessionResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats an End Session response, clearing the session-management cookie when the logout ended the session

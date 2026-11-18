@@ -29,7 +29,8 @@ internal enum KeyProviderKind
     Minted,
 
     /// <summary>
-    /// A provider the host registered, which answers for each tenant's keys itself.
+    /// A provider the host registered, which answers for each tenant's keys itself, except the keys each tenant
+    /// names in a custodian the host placed its keys in.
     /// </summary>
     Host,
 }

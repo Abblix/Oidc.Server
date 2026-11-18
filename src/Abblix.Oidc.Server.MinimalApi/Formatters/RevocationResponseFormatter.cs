@@ -13,7 +13,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using RevocationRequest = Abblix.Oidc.Server.Model.RevocationRequest;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// error on failure.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter
+public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response)

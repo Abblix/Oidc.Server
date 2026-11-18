@@ -7,13 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
-using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -51,8 +51,8 @@ public class ClientManagementController : ControllerBase
     /// <param name="formatter">The formatter responsible for generating the client registration response.</param>
     /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="request">The details of the client registration request.</param>
-    /// <param name="authorizationHeader">The optional initial access token from the Authorization header,
-    /// used to authenticate the registration request per RFC 7591 Section 3.</param>
+    /// <param name="authorizationHeaderLines">Every line of the Authorization header, carrying the optional initial
+    /// access token that authenticates the registration request per RFC 7591 Section 3.</param>
     /// <returns>A task that returns an action result that includes
     /// the client registration response.</returns>
     /// <remarks>
@@ -63,19 +63,19 @@ public class ClientManagementController : ControllerBase
     [HttpPost]
     [ActionName(nameof(RegisterClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
-    [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
-    [RefusesUnreadableClientMetadata]
+    [RefusesRegistrationMetadataAfterTheToken]
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
-        [FromServices] IRegisterClientResponseFormatter formatter,
+        [FromServices] IRegisterClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromBody] Core.ClientRegistrationRequest request,
-        [FromHeader(Name = HttpRequestHeaders.Authorization)] AuthenticationHeaderValue? authorizationHeader)
+        [HeaderBinder(typeof(AuthenticationHeaderBinder), HttpRequestHeaders.Authorization)]
+        IReadOnlyList<string>? authorizationHeaderLines)
     {
         // The core model deserializes straight from the JSON payload; the transport-level
         // Authorization header is the only value the body cannot carry.
-        var clientRegistrationRequest = request with { AuthorizationHeader = authorizationHeader };
+        var clientRegistrationRequest = request with { AuthorizationHeaderLines = authorizationHeaderLines };
 
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
@@ -100,7 +100,7 @@ public class ClientManagementController : ControllerBase
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
-        [FromServices] IReadClientResponseFormatter formatter,
+        [FromServices] IReadClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {
@@ -128,12 +128,11 @@ public class ClientManagementController : ControllerBase
     [HttpPut]
     [ActionName(nameof(UpdateClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
-    [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
-    [RefusesUnreadableClientMetadata]
+    [RefusesUpdateMetadataAfterTheToken]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
-        [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromServices] IUpdateClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest,
         [FromBody] Core.ClientRegistrationRequest registrationRequest)
@@ -165,7 +164,7 @@ public class ClientManagementController : ControllerBase
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
-        [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromServices] IRemoveClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {

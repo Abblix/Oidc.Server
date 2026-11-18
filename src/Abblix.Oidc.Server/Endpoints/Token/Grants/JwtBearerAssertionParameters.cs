@@ -51,6 +51,7 @@ internal sealed class JwtBearerAssertionParameters(
 		ValidateIssuer = issuer => _issuerValidator.ValidateAsync(tenant, issuer),
 		ValidateAudience = audiences => _audienceValidator.ValidateAsync(tenant, audiences),
 		ResolveIssuerSigningKeys = issuer => issuerProvider.GetSigningKeysAsync(tenant, issuer),
+		RefetchIssuerSigningKeys = issuer => issuerProvider.GetSigningKeysAsync(tenant, issuer, refetch: true),
 		ClockSkew = clockSkew,
 	};
 }

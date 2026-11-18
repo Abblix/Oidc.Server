@@ -88,6 +88,11 @@ public class StrictestRequirementsTests
         // The tightest bound and the tightest tolerance this type knows of.
         [nameof(SecurityProfileRequirements.MaxClockSkew)] = ClockSkew.Fapi2Ceiling,
         [nameof(SecurityProfileRequirements.DefaultClockSkew)] = ClockSkew.Fapi2,
+        [nameof(SecurityProfileRequirements.MaxRequestObjectLifetime)] = SecurityProfileRequirements.FapiRequestObjectLifetime,
+
+        // The fewest JARM modes a profile admits, compared by identity: the bundle holds the shared set
+        [nameof(SecurityProfileRequirements.SignedAuthorizationResponseModes)] =
+            SecurityProfileRequirements.LiteralJwtResponseMode,
     };
 
     /// <summary>

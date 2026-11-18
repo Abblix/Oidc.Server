@@ -16,7 +16,6 @@ namespace Abblix.Jwt.Signing;
 /// Uses constant-time comparison to prevent timing attacks during verification.
 /// </summary>
 /// <remarks>
-/// HMAC instances are created per operation to avoid shared state.
 /// Per RFC 7518 Section 3.2, the HMAC key must be at least as long as the hash output:
 /// - HS256: minimum 256 bits (32 bytes) with SHA-256
 /// - HS384: minimum 384 bits (48 bytes) with SHA-384
@@ -28,29 +27,35 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public byte[] Sign(OctetJsonWebKey octetKey, byte[] data)
+	/// <remarks>RFC 7518 section 3.2: a key at least as long as the hash output, as <see cref="Sign"/> and
+	/// <see cref="Verify"/> require. A key whose bytes a custodian holds carries none here, and the custodian carries
+	/// the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key)
+		=> key.KeyValue is not { } keyValue || keyValue.Length >= GetMinimumKeyLengthBytes();
+
+	/// <inheritdoc />
+	public byte[] Sign(OctetJsonWebKey key, byte[] data)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
 		var minLength = GetMinimumKeyLengthBytes();
 		if (keyValue.Length < minLength)
 			throw new ArgumentException(
 				$"{algorithm} requires a key of at least {minLength} bytes ({minLength << 3} bits) " +
 				$"per RFC 7518 section 3.2; got {keyValue.Length} bytes.",
-				nameof(octetKey));
+				nameof(key));
 
-		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
-		return hmac.ComputeHash(data);
+		return HmacAlgorithms.Compute(algorithm, keyValue, data);
 	}
 
 	/// <inheritdoc />
-	public bool Verify(OctetJsonWebKey octetKey, byte[] data, byte[] signature)
+	public bool Verify(OctetJsonWebKey key, byte[] data, byte[] signature)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
 		// RFC 7518 section 3.2: a key shorter than the hash output cannot satisfy the algorithm's
 		// nominal strength; reject without performing the HMAC so callers cannot silently
@@ -58,8 +63,7 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 		if (keyValue.Length < GetMinimumKeyLengthBytes())
 			return false;
 
-		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
-		var computedSignature = hmac.ComputeHash(data);
+		var computedSignature = HmacAlgorithms.Compute(algorithm, keyValue, data);
 		return CryptographicOperations.FixedTimeEquals(signature, computedSignature);
 	}
 

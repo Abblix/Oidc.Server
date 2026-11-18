@@ -269,7 +269,7 @@ public partial class AuthorizationRequestProcessorTests
         Assert.NotNull(capture.Grant);
         // Defensive DeepClone at the boundary (C2): value-equality, not reference.
         Assert.Equal(partialAd.ToJsonString(), capture.Grant.Context.AuthorizationDetails!.ToJsonString());
-        Assert.Single(capture.Grant.Context.AuthorizationDetails!);
+        Assert.Single(capture.Grant.Context.AuthorizationDetails);
     }
 
     [Fact]

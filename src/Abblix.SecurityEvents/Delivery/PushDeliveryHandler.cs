@@ -84,7 +84,8 @@ public sealed class PushDeliveryHandler(
                 + "(RFC 8935 Section 2.1)."));
         }
 
-        var verdict = await validator.ValidateAsync(body, options, cancellationToken);
+        // The body is the SET itself; a line break a transmitter ends it with is not part of the token
+        var verdict = await validator.ValidateAsync(body.Trim(), options, cancellationToken);
         if (verdict.TryGetFailure(out var error))
         {
             return PushDeliveryResult.BadRequest(new DeliveryError(

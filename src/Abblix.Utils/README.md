@@ -49,6 +49,12 @@ Custom `System.Text.Json` converters for the shapes protocol messages actually u
 
 `PrivateNetworks` states which addresses are internal - loopback, the private and link-local ranges, and the rest a server must not be talked into reaching on somebody else's behalf. `AddressValidatingHttpMessageHandler` is the message-handler half: it follows no redirect, carries no ambient credentials, decompresses nothing, and judges the address on the send itself rather than when the request was scheduled, leaving only the policy to the handler derived from it. `ResolveHostDelegate` names the answer a derived handler needs about a hostname, so one function serves every guard built on this base.
 
+### One load for many callers
+
+`CoalescingLoader<TKey, TValue>` is for documents read from someone else's server when the requests reaching your server decide how often they are read, such as a key set fetched for a token that names an unfamiliar key. Callers that ask while a load runs wait for that load, and the finished load, whether it succeeded or failed, is served for a hold you choose, so a server that is down is asked once per hold rather than once per request. The load runs under no caller's cancellation. The limit holds within one process: each instance of your service loads on its own.
+
+The loads live in an `ExpiringDictionary<TKey, TValue>`, which is usable on its own: a thread-safe dictionary whose entries expire a given time after they were added or renewed, counted on the monotonic clock. An expired entry is invisible at once and gives way to the next addition, and expired entries are swept as new ones arrive, at a constant cost per addition on average, so keys nobody uses again do not pile up.
+
 ### Collections and enums
 
 `ArrayExtensions`, `EnumerableExtensions`, `EnumFlagExtensions` and `ObjectExtensions` carry the small operations that otherwise get re-implemented per project.

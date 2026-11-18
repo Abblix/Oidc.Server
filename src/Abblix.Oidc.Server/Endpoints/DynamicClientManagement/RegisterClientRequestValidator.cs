@@ -39,6 +39,6 @@ public class RegisterClientRequestValidator(IClientRegistrationContextValidator 
             return error;
         }
 
-        return new ValidClientRegistrationRequest(request, context.SectorIdentifier);
+        return new ValidClientRegistrationRequest(context.Request, context.SectorIdentifier);
     }
 }

@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Abblix.Utils;
 
@@ -199,5 +200,36 @@ public static class JsonWebTokenExtensions
     public static void SetSpaceSeparatedStrings(this JsonObject json, string name, IEnumerable<string> value)
     {
         json.SetProperty(name, string.Join(' ', value));
+    }
+
+    /// <summary>
+    /// Reads the three timestamp claims at once, answering false with the reason instead of throwing
+    /// where one of them cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// The typed accessors throw on a value that is not a NumericDate - a string, an object, a number
+    /// outside the range <see cref="DateTimeOffset"/> can hold - because a caller asking for a
+    /// timestamp has nowhere to put "the token lied". A validator does: a claim it cannot read is a
+    /// refusal of the token, never an exception out of the request. This is the read a validator
+    /// makes, and it names the claim, since the sender can fix only the one it is told about.
+    /// </remarks>
+    /// <param name="payload">The payload whose claims are read.</param>
+    /// <param name="notBefore">The <c>nbf</c> claim, or null where the token carries none.</param>
+    /// <param name="expiresAt">The <c>exp</c> claim, or null where the token carries none.</param>
+    /// <param name="issuedAt">The <c>iat</c> claim, or null where the token carries none.</param>
+    /// <param name="whyUnreadable">Which claim could not be read and what it held, or null where all three were read.</param>
+    /// <returns>True where every timestamp the token carries was read.</returns>
+    public static bool TryReadTimestamps(
+        this JsonWebTokenPayload payload,
+        out DateTimeOffset? notBefore,
+        out DateTimeOffset? expiresAt,
+        out DateTimeOffset? issuedAt,
+        [NotNullWhen(false)] out string? whyUnreadable)
+    {
+        notBefore = expiresAt = issuedAt = null;
+
+        return payload.TryReadTimestamp(JwtClaimTypes.NotBefore, out notBefore, out whyUnreadable)
+               && payload.TryReadTimestamp(JwtClaimTypes.ExpiresAt, out expiresAt, out whyUnreadable)
+               && payload.TryReadTimestamp(JwtClaimTypes.IssuedAt, out issuedAt, out whyUnreadable);
     }
 }

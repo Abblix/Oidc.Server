@@ -61,7 +61,7 @@ public partial class RegisterClientRequestProcessor(
 
         var issuedAt = clock.GetUtcNow();
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
-        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
+        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier);
 
         // The registration holds the jti of its registration access token, so the management endpoint
         // accepts that token for this registration alone (RFC 7592 section 5).
@@ -106,6 +106,7 @@ public partial class RegisterClientRequestProcessor(
     /// Converts the registration request and credentials into a ClientInfo entity for storage.
     /// </summary>
     private ClientInfo ToClientInfo(
+        TenantDefinition tenant,
         ClientRegistrationRequest model,
         ClientCredentials credentials,
         string? sectorIdentifier)
@@ -114,16 +115,23 @@ public partial class RegisterClientRequestProcessor(
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
+            .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
+                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
             .Build();
 
     /// <summary>
+    /// Whether a client registered with <paramref name="tokenEndpointAuthMethod"/> has its secret kept itself rather
+    /// than only its hash: client_secret_jwt alone, since verifying the client's HMAC-signed assertion needs it; every
+    /// other method is verified against the hash.
+    /// </summary>
+    internal static bool KeepsSecretValue(string tokenEndpointAuthMethod)
+        => tokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
+
+    /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    /// <remarks>
-    /// Only client_secret_jwt keeps the secret itself, since verifying the client's HMAC-signed assertion
-    /// needs it; every other method is verified against the hash.
-    /// </remarks>
     private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
     {
         if (!credentials.ClientSecret.HasValue())
@@ -133,11 +141,7 @@ public partial class RegisterClientRequestProcessor(
         [
             new ClientSecret
             {
-                Value = tokenEndpointAuthMethod switch
-                {
-                    ClientAuthenticationMethods.ClientSecretJwt => credentials.ClientSecret,
-                    _ => null,
-                },
+                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? credentials.ClientSecret : null,
                 Sha512Hash = credentials.Sha512Hash,
                 ExpiresAt = credentials.ExpiresAt,
             }

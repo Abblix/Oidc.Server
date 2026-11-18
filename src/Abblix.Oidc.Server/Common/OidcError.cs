@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Common;
@@ -27,4 +28,31 @@ public record OidcError(string Error, string ErrorDescription)
     /// </remarks>
     public string ErrorDescription { get; init => field = OAuthErrorDescription.Sanitize(value); } =
         OAuthErrorDescription.Sanitize(ErrorDescription);
+
+    /// <summary>
+    /// The DPoP proof signature algorithms the profile of the client the refused token was issued to admits, which a
+    /// <c>WWW-Authenticate: DPoP</c> challenge answering the refusal advertises (RFC 9449 section 7.1); empty where
+    /// that profile refuses DPoP, null where the client is not known.
+    /// </summary>
+    public IReadOnlyCollection<string>? DPoPAlgorithmsAdmitted { get; init; }
+
+    /// <summary>
+    /// The scheme the refused request presented its access token with, whose challenge carries the error where the
+    /// response advertises both DPoP and Bearer (RFC 9449 section 7.2); null where it could not be established, and
+    /// then both challenges carry it.
+    /// </summary>
+    public AccessTokenScheme? PresentedScheme { get; init; }
+
+    /// <summary>
+    /// The scope the request needs, which a challenge answering an <c>insufficient_scope</c> refusal names in its
+    /// <c>scope</c> attribute (RFC 6750 section 3.1); null where the refusal names none.
+    /// </summary>
+    public string? RequiredScope { get; init; }
+
+    /// <summary>
+    /// The security profile the client the refused access token was issued to names for itself, which a protected
+    /// resource answers the refusal under; null where that client names none or is not known, the tenant's default
+    /// profile then deciding.
+    /// </summary>
+    public ClientSecurityProfile? SecurityProfile { get; init; }
 }

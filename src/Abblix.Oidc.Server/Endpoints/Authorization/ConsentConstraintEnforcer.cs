@@ -151,7 +151,7 @@ public partial class ConsentConstraintEnforcer(
         RefuseTypesOutside(grantedTypes, revalidated, nameof(IAuthorizationDetailsPolicy));
         return revalidated;
 
-        HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details, string culprit)
+        static HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details, string culprit)
         {
             // ToTypedArray drops whatever is not a JSON object, so a shorter result means an entry this
             // guard cannot read - and "no escaped types" would then describe what it managed to look at

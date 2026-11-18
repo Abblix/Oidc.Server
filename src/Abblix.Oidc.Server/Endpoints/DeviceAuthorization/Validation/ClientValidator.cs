@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -23,12 +24,25 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+        // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names a
+        // request that "includes multiple credentials, utilizes more than one mechanism for authenticating the
+        // client" an invalid_request. Decided before the authenticator, which would count a failed attempt
+        if (context.ClientRequest.HasMoreThanOneAuthorizationHeader)
+            return ErrorFactory.MoreThanOneAuthorizationHeader;
+
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
             tenant, context.ClientRequest);
-        if (clientInfo == null)
+        if (!authenticated.TryGetSuccess(out var clientInfo))
         {
+            // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
+            // client" an invalid_request, not a failed authentication
+            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
+                return moreThanOneMethod;
+
+            // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
+            // a failed client authentication invalid_client.
             return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+                ErrorCodes.InvalidClient,
                 "The client is not authorized");
         }
 

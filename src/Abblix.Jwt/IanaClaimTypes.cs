@@ -340,6 +340,18 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string CHash = "c_hash";
 
+    // Financial-grade API Security Profile 1.0 - Part 2: Advanced, Section 5.1.1
+
+    /// <summary>
+    /// Represents the State Hash Value.
+    /// </summary>
+    /// <remarks>
+    /// Carried by an ID token returned from the authorization endpoint as a detached signature over the
+    /// response. It binds the <c>state</c> echoed in that response to the signed token, so a state swapped
+    /// in transit no longer matches it. Computed by the same recipe as <see cref="CHash"/>.
+    /// </remarks>
+    public const string SHash = "s_hash";
+
     // OpenID Connect Core 1.0, Section 7.4
 
     /// <summary>

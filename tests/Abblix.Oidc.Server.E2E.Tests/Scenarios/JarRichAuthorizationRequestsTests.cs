@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// validator) on the unpacked claims. The end-to-end invariant: AD propagates from inside the
 /// signed request object all the way to the access-token claim byte-exact.
 /// </summary>
-public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(factory)
+public partial class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(factory)
 {
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";

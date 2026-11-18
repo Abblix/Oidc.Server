@@ -60,18 +60,20 @@ public class PushedRequestFetcher(
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            return await FetchPushedAsync(tenant, requestUrn);
+            return await FetchPushedAsync(tenant, requestUrn, request.ClientId);
         }
 
-        // If PAR is required by server configuration, return an error if no pushed authorization request is provided
+        // RFC 9126 section 4: where PAR is the only way in, the server "will refuse, using the "invalid_request" error
+        // code, to process any request to the authorization endpoint that does not have a "request_uri" parameter
+        // with a value obtained from the PAR endpoint"
         if (options.Value.RequirePushedAuthorizationRequests)
         {
-            return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
+            return ErrorFactory.InvalidRequest("The Pushed Authorization Request (PAR) is required");
         }
 
         if (await ClientRequiresPushedRequestsAsync(tenant, request.ClientId))
         {
-            return ErrorFactory.InvalidRequestObject(
+            return ErrorFactory.InvalidRequest(
                 "The client is required to use Pushed Authorization Requests (PAR)");
         }
 
@@ -80,11 +82,18 @@ public class PushedRequestFetcher(
     }
 
     /// <summary>
-    /// Fetches the request stored under the URN, refusing a page of a flow that already ended.
+    /// Fetches the request stored under the URN, refusing a page of a flow that already ended and a request that
+    /// names a client other than the one that pushed it.
     /// </summary>
+    /// <remarks>
+    /// RFC 9126 section 4 validates a request arising from a pushed one as any other, and RFC 9101 section 6.3
+    /// requires the client_id the request names and the one inside the request to be identical. The query's value
+    /// is dropped in favor of the pushed one, so without this comparison the mismatch would pass unseen.
+    /// </remarks>
     private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchPushedAsync(
         TenantDefinition tenant,
-        Uri requestUrn)
+        Uri requestUrn,
+        string? namedClientId)
     {
         // Do not consume the request_uri here. RFC 9126 section 7.3 says request_uri SHOULD be
         // one-time-use, and the natural moment to consume is at authorization-code
@@ -107,6 +116,10 @@ public class PushedRequestFetcher(
         return requestObject switch
         {
             null => ErrorFactory.InvalidRequestUri($"Can't find a request by {requestUrn}"),
+
+            _ when namedClientId != null && requestObject.ClientId != namedClientId
+                => ErrorFactory.InvalidRequestUri(
+                    $"The request by {requestUrn} was pushed by a different client than the one this request names"),
 
             // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
             // validation a urn: value would fail in the next fetcher - so the validator can surface it

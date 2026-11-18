@@ -10,6 +10,15 @@ Each tenant of the server is an issuer of its own, and a transmitter answering f
 - push delivery runs for each tenant the server serves, in turn;
 - once a running instance releases a tenant, at least one refresh period after the tenant left the store of tenants, its streams and the events queued on them are deleted, and a stream that cannot be deleted is logged. A tenant that left the store while no instance served it, as during a restart, is not released by the instances that start afterwards, so its streams stay.
 
+## Install
+
+```bash
+dotnet add package Abblix.OIDC.Server.SharedSignals
+dotnet add package Abblix.OIDC.Server.MinimalAPI
+```
+
+The examples below map the server with the Minimal API package; an MVC host installs Abblix.OIDC.Server.MVC instead.
+
 ## Turning it on
 
 Register the transmitter and the stores it uses first, then the server and the transmitter's part in it:
@@ -52,6 +61,8 @@ builder.Services
 The transmitter's issuer names the host without a path. Each tenant's addresses take their paths from the options and put them under the tenant's issuer: for a tenant whose issuer is `https://idp.example.com/acme`, the configuration document is served at `https://idp.example.com/.well-known/ssf-configuration/acme` and its key set address is `https://idp.example.com/acme/.well-known/jwks`.
 
 Each tenant has a transmitter of its own, and what your code resolves from the container - the event dispatcher, the stream store, the event outbox, the stream management service - is the part of the transmitter of the tenant served when it is resolved. Resolve it in the request of the tenant the event belongs to, or inside `TenantScope.Enter` for that tenant. Until the tenant is released, a part that reaches its streams, queued events or signing keys refuses to, once it is used where its tenant is not served, so a part kept across requests by mistake fails rather than putting one tenant's events on another's streams or signing them with another's keys.
+
+A tenant signs its events with its first signing key that performs an algorithm `SecurityEventsOptions.AllowedSigningAlgorithms` allows, RS256 when you set nothing. A tenant held to a FAPI profile signs only with PS256 or ES256: FAPI 1.0 Part 2 section 8.6 requires one of them, and FAPI 2.0 section 5.4.1 adds EdDSA, which this library does not implement. When you set nothing, such a tenant signs with PS256 or ES256 rather than RS256, while what the receiver side of the same host accepts stays RS256; a list you set is narrowed to those two. Give the tenant a key that performs one of them; a key declaring no algorithm, as one taken from a certificate, signs with the first its material performs. A tenant whose own keys perform none of them is refused as every tenant with a key it cannot use is: the server does not start with it in its settings, and a tenant store's reading leaves it out. Keys a custodian holds are not judged at startup, and with none that qualifies the tenant's events wait in the outbox; with a key provider of your own, the keys listed in the tenant's settings are the ones judged.
 
 A tenant catalog of your own hands every request the tenant's definition in force, and so does your code to every tenant scope it enters: the transmitter answers and signs as the definition it was last served at, so a stale one brings back the keys and the issuer it names. Each push delivery pass serves every tenant the definition your catalog answers with at that moment, so pushed events follow a move or a key change without waiting for a request, and a tenant your catalog no longer serves is pushed nothing. When your catalog moves a tenant to another issuer, the streams the tenant declares are answered with the new issuer and a poll address under it, while their stored records keep what they were first written with until the server restarts.
 

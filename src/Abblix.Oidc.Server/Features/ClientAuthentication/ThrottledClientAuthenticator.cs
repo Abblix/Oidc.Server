@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -45,7 +46,11 @@ internal sealed partial class ThrottledClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
     /// <inheritdoc />
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => inner.FindPresentedCredentialsAsync(tenant, request);
+
+    /// <inheritdoc />
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var source = budget.Source;
         if (source is null)
@@ -57,10 +62,12 @@ internal sealed partial class ThrottledClientAuthenticator(
             throw new TooManyAuthenticationFailuresException(refusal);
         }
 
-        var clientInfo = await inner.TryAuthenticateClientAsync(tenant, request);
-        if (clientInfo == null)
+        // A request using more than one method is refused before any credential is looked at, as a repeated
+        // Authorization header is refused before the authenticator, so it spent nothing the budget prices
+        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        if (!result.TryGetSuccess(out _) && result.GetFailure() is not MoreThanOneClientAuthenticationMethodError)
             budget.RecordFailure(source);
 
-        return clientInfo;
+        return result;
     }
 }

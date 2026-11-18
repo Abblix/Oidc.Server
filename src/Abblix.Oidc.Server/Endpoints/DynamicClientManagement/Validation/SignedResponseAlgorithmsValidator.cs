@@ -74,8 +74,7 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     {
         if (string.Equals(alg, SigningAlgorithms.None, StringComparison.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
+            return ErrorFactory.InvalidClientMetadata(
                 $"The algorithm '{SigningAlgorithms.None}' is not allowed for {Parameters.AuthorizationSignedResponseAlg}");
         }
 
@@ -96,9 +95,7 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     {
         if (alg is not null && !jwtAlgorithms.SignedResponseAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"The signing algorithm for {description} is not supported");
+            return ErrorFactory.InvalidClientMetadata($"The signing algorithm for {description} is not supported");
         }
 
         return null;

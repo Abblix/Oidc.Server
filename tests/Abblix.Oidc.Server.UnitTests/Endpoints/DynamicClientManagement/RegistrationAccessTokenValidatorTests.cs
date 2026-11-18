@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -33,7 +34,7 @@ public class RegistrationAccessTokenValidatorTests
     {
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         return new RegistrationAccessTokenValidator(jwtValidator.Object);
@@ -64,6 +65,58 @@ public class RegistrationAccessTokenValidatorTests
 
         Assert.True(result.TryGetSuccess(out var tokenId));
         Assert.Equal("jti-current", tokenId);
+    }
+
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in another case
+    /// carries the same token.
+    /// </summary>
+    [Fact]
+    public async Task AValidToken_UnderTheSchemeInAnotherCase_AnswersWithItsJti()
+    {
+        var validator = CreateValidator(CreateToken("jti-current"));
+        var header = new AuthenticationHeaderValue(TokenTypes.Bearer.ToLowerInvariant(), "the.jwt.token");
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
+
+        Assert.True(result.TryGetSuccess(out var tokenId));
+        Assert.Equal("jti-current", tokenId);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+    /// authentication is necessary or attempted using an unsupported authentication method)" is answered with no error
+    /// code, which the marker tells the challenge builder. Nothing is validated, so the strict validator is not called.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(TokenTypes.Basic, "credentials")]
+    [InlineData(TokenTypes.Basic, null)]
+    public async Task ARequestLackingAuthentication_IsAnsweredWithTheMarker(string? scheme, string? credentials)
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+        var header = scheme is null ? null : new AuthenticationHeaderValue(scheme, credentials);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<MissingAuthenticationError>(error);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 2.1: the scheme alone is not the credentials it defines, a malformed request section 3.1 names
+    /// invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task TheBearerSchemeWithoutAToken_IsAnInvalidRequest()
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+
+        var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant, new AuthenticationHeaderValue(TokenTypes.Bearer), ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<BearerRequestError>(error);
     }
 
     /// <summary>
@@ -106,7 +159,7 @@ public class RegistrationAccessTokenValidatorTests
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, It.IsAny<string>(),
+                TestTenant.Matched, null, It.IsAny<string>(),
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));

@@ -27,20 +27,12 @@ public static class ProofErrorReasons
     /// <summary>Header <c>alg</c> is missing, not asymmetric, or not in the configured whitelist.</summary>
     public const string InvalidAlgorithm = "invalid_alg";
 
-    /// <summary>Header <c>jwk</c> is missing, malformed, or contains private-key material.</summary>
-    /// <remarks>
-    /// Only where THIS validator establishes it. A refusal that came from the JWT core arrives under
-    /// <see cref="InvalidHeader"/> instead, because the core reports a bad <c>jwk</c>, a bad <c>crit</c>
-    /// and a missing required header under one category and cannot tell a consumer which it met.
-    /// </remarks>
-    public const string InvalidJwk = "invalid_jwk";
-
     /// <summary>A JOSE header parameter is malformed or violates a structural rule.</summary>
     /// <remarks>
     /// Deliberately named for the header rather than for one member of it: this is what the JWT core's
     /// <c>InvalidHeader</c> becomes, and that category covers an unusable <c>jwk</c>, a <c>crit</c> that
     /// is malformed or names an extension nothing handles, and a header a trust model requires and the
-    /// token omits. Reporting all three as <c>invalid_jwk</c> told a client its key was bad over a
+    /// token omits. Reporting all three as a key problem would tell a client its key was bad over a
     /// <c>crit</c> it had written itself.
     /// <para>
     /// WHICH of the three happened is on <see cref="ProofError.Detail"/> and goes no further - no

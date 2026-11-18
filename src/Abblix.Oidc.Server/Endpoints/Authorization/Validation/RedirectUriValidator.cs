@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
@@ -36,10 +37,18 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
     /// </returns>
     protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
+        // FAPI 1.0 Part 1 section 5.2.2: "shall require the value of redirect_uri to exactly match one of the
+        // pre-registered redirect URIs" and "shall require redirect URIs to use the https scheme". Refusing http is
+        // what leaves no room for the loopback port allowance of RFC 8252 section 7.3, which applies to http alone
+        var exactHttps = SecurityProfileRequirements
+            .For(context.ClientInfo, tenant.DefaultSecurityProfile)
+            .RequireExactHttpsRedirectUris;
         var uriValidator = UriValidatorFactory.CreateForRedirectUris(context.ClientInfo.RedirectUris);
 
         var redirectUri = context.Request.RedirectUri;
-        if (redirectUri == null || !uriValidator.IsValid(redirectUri))
+        if (redirectUri == null ||
+            (exactHttps && redirectUri is not { IsAbsoluteUri: true, Scheme: "https" }) ||
+            !uriValidator.IsValid(redirectUri))
         {
             LogInvalidRedirectUri(redirectUri, context.ClientInfo.ClientId);
 

@@ -40,6 +40,13 @@ internal sealed partial class JweDecryptionLog(
         => LogNoDecryptionKey(Algorithm(envelope), envelope.EncryptionAlgorithm, envelope.Header.KeyId);
 
     /// <summary>
+    /// No key the token could name can be used with the token's key management algorithm.
+    /// </summary>
+    public void KeysForAnotherAlgorithm(JweEnvelope envelope, int keyCount)
+        => LogKeysForAnotherAlgorithm(
+            Algorithm(envelope), envelope.EncryptionAlgorithm, envelope.Header.KeyId, keyCount);
+
+    /// <summary>
     /// None of <paramref name="keysTried"/> candidate keys opened the token.
     /// </summary>
     public void NoKeyOpened(JweEnvelope envelope, int keysTried)

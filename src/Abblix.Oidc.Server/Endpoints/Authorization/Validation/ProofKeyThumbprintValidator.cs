@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -41,6 +42,14 @@ public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
         var thumbprint = context.Request.ProofKeyThumbprint;
         if (thumbprint is null)
             return null;
+
+        // FAPI 1.0 Part 2 section 8.2: "shall only support sender-constrained access tokens via MTLS", so a commitment
+        // to a DPoP key is one no token of this client will honour
+        if (SecurityProfileRequirements.For(tenant, context.ClientInfo).RequireCertificateBoundTokens)
+        {
+            return context.InvalidRequest(
+                "The security profile issues certificate-bound access tokens only; dpop_jkt is not accepted.");
+        }
 
         if (thumbprint.Length != Sha256ThumbprintLength || !IsBase64UrlAlphabet(thumbprint))
         {

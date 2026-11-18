@@ -13,11 +13,12 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// The registrations of each issuer kept in memory, for as long as the issuer is served.
+/// The registrations of each issuer kept in memory, for as long as the issuer is served: the store the server
+/// keeps registrations in when the host registers no <see cref="ITenantClientRegistrationStore"/> of its own.
 /// </summary>
 /// <param name="registered">The registrations of the issuer serving the request.</param>
 internal sealed class IssuerClientRegistrations(
-    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : IClientRegistrations
+    IIssuerLocal<ConcurrentDictionary<string, RegisteredClient>> registered) : ITenantClientRegistrationStore
 {
     // Built once for each issuer, whatever its settings become
     private ConcurrentDictionary<string, RegisteredClient> Registered(TenantDefinition tenant)
@@ -35,6 +36,14 @@ internal sealed class IssuerClientRegistrations(
     public Task<bool> TryRemoveAsync(TenantDefinition tenant, RegisteredClient current)
         => Task.FromResult(Registered(tenant).TryRemove(current));
 
+    /// <summary>
+    /// Drops the registrations held under an id <paramref name="configured"/> accepts.
+    /// </summary>
+    /// <remarks>
+    /// Only the server's own store is swept this way: a host's store is the host's to read, and a registration met
+    /// there under a configured id is dropped when it is met.
+    /// </remarks>
+    /// <returns>The ids dropped.</returns>
     public IReadOnlyCollection<string> DropHeld(TenantDefinition tenant, Func<string, bool> configured)
     {
         var held = Registered(tenant);

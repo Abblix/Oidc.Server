@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Telemetry;
 
@@ -99,7 +100,11 @@ public sealed class StageObservationTests : IDisposable
     [Fact]
     public async Task AClientAuthenticationFindingNoClient_ClosesItsSpanWithAnError()
     {
-        var observed = new ObservedClientAuthenticator(Mock.Of<IClientAuthenticator>());
+        var inner = new Mock<IClientAuthenticator>();
+        inner
+            .Setup(authenticator => authenticator.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+        var observed = new ObservedClientAuthenticator(inner.Object);
 
         var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest()));
 

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -88,13 +89,15 @@ partial class JwtAssertionAuthenticatorBase
     private partial void LogTimestampsOutsideTheClientsProfile(string ClientId, string Refusal);
 
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries the audience {Audience} where only the issuer "
-                  + "identifier {IssuerIdentifier}, alone and in the form the client's profile accepts, is its audience")]
-    private partial void LogAudienceIsNotTheIssuerAlone(
+        Message = "The client assertion for {ClientId} carries the audience {Audience}, which the assertion "
+                  + "audiences admitted to it, {Audiences}, do not include; the issuer identifier is "
+                  + "{IssuerIdentifier}")]
+    private partial void LogAudienceIsNotOneTheClientMayName(
         string ClientId,
         Sanitized Audience,
+        ClientAssertionAudiences Audiences,
         string IssuerIdentifier);
 
     [LoggerMessage(
@@ -102,4 +105,25 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} carries a timestamp that cannot be read: {WhyUnreadable}")]
     private partial void LogTimestampUnreadable(string ClientId, Sanitized WhyUnreadable);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TokenEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
+                  + "the client's assertion audiences include it")]
+    private partial void LogTokenEndpointAudienceAccepted(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.BackChannelAuthenticationEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the backchannel authentication endpoint URL as its "
+                  + "audience, accepted because the client's assertion audiences include it")]
+    private partial void LogBackChannelAuthenticationEndpointAudienceAccepted(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.PushedAuthorizationRequestEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the pushed authorization request endpoint URL as its "
+                  + "audience, accepted because the client's assertion audiences include it")]
+    private partial void LogPushedAuthorizationRequestEndpointAudienceAccepted(string ClientId);
 }

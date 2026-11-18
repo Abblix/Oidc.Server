@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -51,12 +52,15 @@ public class ClientSecretPostAuthenticator(
 	/// <param name="request">The client request containing the client_id and client_secret for authentication.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
-	/// <see cref="ClientInfo"/> or null if authentication fails.
+	/// <see cref="ClientInfo"/>, or why it is not one: no client_secret presented, or one presented and refused.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (!request.ClientId.NotNullOrWhiteSpace() || !request.ClientSecret.NotNullOrWhiteSpace())
-			return null;
+		if (!IsPresented(request))
+			return ClientAuthenticationFailures.NoCredential;
+
+		if (!request.ClientId.NotNullOrWhiteSpace())
+			return ClientAuthenticationFailures.InvalidCredential;
 
 		return await TryAuthenticateAsync(
 			tenant,
@@ -64,4 +68,14 @@ public class ClientSecretPostAuthenticator(
 			request.ClientSecret,
 			ClientAuthenticationMethods.ClientSecretPost);
 	}
+
+	/// <inheritdoc />
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+		=> Task.FromResult<IEnumerable<string>>(
+			IsPresented(request) ? [nameof(ClientRequest.ClientSecret)] : []);
+
+	/// <summary>
+	/// A client_secret in the body is the credential, whatever accompanies it.
+	/// </summary>
+	private static bool IsPresented(ClientRequest request) => request.ClientSecret.HasValue();
 }

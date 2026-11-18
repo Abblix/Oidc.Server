@@ -73,11 +73,15 @@ public partial class RequestUriFetcher(
                 ErrorCodes.InvalidRequestUri, "The request URI must be an https URI");
         }
 
+        // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
+        // or "request_uri" Request Object's (Section 2.1) "client_id"", answered as a malformed request, as a request
+        // object passed by value is
         var clientId = request.ClientId;
         if (clientId is null)
         {
             return AuthorizationErrorFactory.ValidationError(
-                ErrorCodes.UnauthorizedClient, "The client id is required");
+                ErrorCodes.InvalidRequest,
+                $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
         var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
@@ -99,7 +103,10 @@ public partial class RequestUriFetcher(
         var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
         return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
-            requestObject => request with { RedirectUri = null, Request = requestObject },
+            // The fetched object takes the reference's place rather than standing beside it: a request kept for a
+            // later page is stored as this model, and on its way back would carry both, which only one may
+            // A request object served as a file may end in a line break that is not part of the token
+            requestObject => request with { RedirectUri = null, Request = requestObject.Trim(), RequestUri = null },
             contentError => AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription));
     }
 }

@@ -5,7 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Text;
+using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -25,11 +25,24 @@ internal sealed class JweValidation(
 	/// <summary>The JWE content-encryption algorithms (the <c>enc</c> values) a token may be decrypted under.</summary>
 	public IEnumerable<string> EncryptionMethodsSupported => encryptionAlgorithmsProvider.ContentEncryptionAlgorithms;
 
-	/// <summary>The JWS the compact JWE <paramref name="jwtParts"/> carries, or the reason it does not open.</summary>
-	public async Task<Result<string, JwtValidationError>> DecryptAsync(
+	/// <summary>
+	/// The plaintext the compact JWE <paramref name="jwtParts"/> carries, or the reason it does not open: decrypted once
+	/// <see cref="ValidationParameters.ValidateKeyManagementAlgorithm"/> accepts its key management algorithm. A JWE
+	/// found inside comes back through the validator, so every layer is judged before any key is used on it.
+	/// </summary>
+	public async Task<Result<byte[], JwtValidationError>> DecryptAsync(
 		string[] jwtParts,
 		ValidationParameters parameters)
 	{
+		if (parameters.ValidateKeyManagementAlgorithm is { } validateAlgorithm &&
+			JweEnvelope.Read(jwtParts).TryGetSuccess(out var envelope) &&
+			!validateAlgorithm(envelope.Algorithm))
+		{
+			return new JwtValidationError(
+				JwtError.InvalidToken,
+				$"The key management algorithm '{envelope.Algorithm}' is not accepted on this validation path");
+		}
+
 		// The token may be a perfectly well-formed JWE - the failure mode here is that
 		// this validation path was not wired with a decryption-key resolver. Most callsites
 		// validate JWS only (DPoP proofs per RFC 9449 section 4.2, client_assertion per RFC 7521,
@@ -44,11 +57,9 @@ internal sealed class JweValidation(
 				JwtError.InvalidToken,
 				"Received a JWE-encrypted token but no decryption keys are configured for this validation path; this endpoint accepts JWS only.");
 		}
+
 		var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
-		var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
-
-		// DecryptAsync is byte-oriented; the inner JWS is UTF-8 text.
-		return result.MapSuccess(Encoding.UTF8.GetString);
+		return await encryptor.DecryptAsync(jwtParts, decryptionKeys);
 	}
 }

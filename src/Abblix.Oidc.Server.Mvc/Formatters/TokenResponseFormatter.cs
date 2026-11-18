@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Formatter for token responses.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter
+public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a token request.
@@ -34,7 +34,7 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
     /// <returns>
     /// A task that returns the formatted token response.
     /// </returns>
-    public Task<ActionResult<TokenResponse>> FormatResponseAsync(
+    public Task<ActionResult> FormatResponseAsync(
         TokenRequest request,
         Result<TokenIssued, OidcError> response)
     {
@@ -49,17 +49,17 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
                     ExpiresIn = success.ExpiresIn,
 
                     RefreshToken = success.RefreshToken?.EncodedJwt,
-                    Scope = success.Scope.ToArray(),
+                    Scope = success.Scope.ToArray() is { Length: > 0 } scope ? scope : null,
                     IdToken = success.IdToken?.EncodedJwt,
                     AuthorizationDetails = success.AuthorizationDetails,
                 };
 
-                return new ActionResult<TokenResponse>(new OkObjectResult(tokenResponse));
+                return (ActionResult)new OkObjectResult(tokenResponse);
             },
             onFailure: FormatError));
     }
 
-    private ActionResult<TokenResponse> FormatError(OidcError error)
+    private ActionResult FormatError(OidcError error)
     {
         // The shared formatter owns the status-code policy: invalid_client comes back as a 401
         // with a Basic challenge (RFC 6749 section 5.2), everything else as 400 with the JSON envelope.
@@ -72,6 +72,6 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
         if (error is UseDPoPNonceError { Nonce: var nonce })
             result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);
 
-        return new ActionResult<TokenResponse>(result);
+        return result;
     }
 }

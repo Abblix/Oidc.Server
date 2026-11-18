@@ -721,7 +721,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
                         return await inner.TryCreateAsync(stream, token);
 
                     _entered[create].TrySetResult();
-                    await _apply[create].Task.WaitAsync(HeldFor);
+                    await _apply[create].Task.WaitAsync(HeldFor, CancellationToken.None);
                     var created = await inner.TryCreateAsync(stream, CancellationToken.None);
                     if (cancelAfterCreate is not null)
                         await cancelAfterCreate.CancelAsync();
@@ -739,7 +739,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
                     {
                         var released = Volatile.Read(ref _readReleased);
                         held.TrySetResult();
-                        await released.Task.WaitAsync(HeldFor);
+                        await released.Task.WaitAsync(HeldFor, CancellationToken.None);
                     }
 
                     return found;

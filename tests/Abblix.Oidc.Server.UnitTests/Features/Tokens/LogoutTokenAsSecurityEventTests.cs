@@ -20,7 +20,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.SecurityEvents;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -84,8 +83,7 @@ public class LogoutTokenAsSecurityEventTests
             new FakeTimeProvider(IssuedAt),
             subjectTypeConverter.Object,
             jwtFormatter.Object,
-            tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            tokenIdGenerator.Object);
 
         await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 

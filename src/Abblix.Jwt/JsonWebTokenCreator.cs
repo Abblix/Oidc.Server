@@ -35,6 +35,9 @@ internal sealed class JsonWebTokenCreator(
     /// </summary>
     public IEnumerable<string> EncryptedResponseAlgorithmsSupported => encryptionAlgorithmsProvider.KeyManagementAlgorithms;
 
+    /// <inheritdoc />
+    public IEnumerable<string> EncryptedResponseMethodsSupported => encryptionAlgorithmsProvider.ContentEncryptionAlgorithms;
+
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encryption key.
     /// </summary>
@@ -66,4 +69,12 @@ internal sealed class JsonWebTokenCreator(
         string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
         string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512)
         => issuer.IssueAsync(token, signingKey, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+
+    /// <inheritdoc />
+    public Task<string> EncryptClaimsAsync(
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+        => issuer.EncryptClaimsAsync(token, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 }

@@ -14,11 +14,16 @@ namespace Abblix.Jwt;
 /// </summary>
 /// <remarks>
 /// A Facade: it tells a JWS from a JWE and hands each to its side, <see cref="JwsValidation"/> or
-/// <see cref="JweValidation"/>; a JWE is decrypted and the JWS it carries validated as any other.
+/// <see cref="JweValidation"/>; a JWE is decrypted and the JWT it carries validated as any other, or the claims set it
+/// carries validated as such.
 /// </remarks>
 /// <param name="jws">Validates a JWS through the header chain and the claims chain.</param>
-/// <param name="jwe">Decrypts a JWE to the JWS it carries.</param>
-internal class JsonWebTokenValidator(JwsValidation jws, JweValidation jwe) : IJsonWebTokenValidator
+/// <param name="jwe">Decrypts a JWE to the plaintext it carries.</param>
+/// <param name="plaintextValidation">Validates what a JWE carries: a nested JWT, or the claims set itself.</param>
+internal class JsonWebTokenValidator(
+    JwsValidation jws,
+    JweValidation jwe,
+    JwePlaintextValidation plaintextValidation) : IJsonWebTokenValidator
 {
 
     /// <summary>
@@ -68,10 +73,11 @@ internal class JsonWebTokenValidator(JwsValidation jws, JweValidation jwe) : IJs
         {
             3 => await jws.ValidateAsync(jwtParts, parameters),
             5 => await (await jwe.DecryptAsync(jwtParts, parameters))
-                .BindAsync(innerJwt => ValidateAsync(innerJwt, parameters)),
+                .BindAsync(plaintext => plaintextValidation.ValidateAsync(jwtParts, plaintext, parameters, this)),
             _ => new JwtValidationError(
                 JwtError.MalformedToken,
                 $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
         };
     }
+
 }

@@ -97,7 +97,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
     }
@@ -135,7 +135,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
@@ -192,7 +192,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
@@ -212,7 +212,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
@@ -250,7 +250,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
     }
 
@@ -270,7 +270,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
     }
 
@@ -339,7 +339,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -385,7 +385,7 @@ public class SigningAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>

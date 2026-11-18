@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -24,8 +25,12 @@ public class SignedRequestObjectRequirementValidator : SyncAuthorizationContextV
     /// <inheritdoc />
     protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
-        if (context.ClientInfo.RequireSignedRequestObject &&
-            context.Request is { Request: null, PushedRequestUri: null })
+        // The client's own commitment, or the security profile it is held to (FAPI 1.0 Part 2 section 5.2.2)
+        var required = context.ClientInfo.RequireSignedRequestObject ||
+                       SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile)
+                           .RequireSignedRequestObject;
+
+        if (required && context.Request is { Request: null, PushedRequestUri: null })
         {
             return context.InvalidRequest(
                 "The client is required to pass authorization request parameters as a signed request object");

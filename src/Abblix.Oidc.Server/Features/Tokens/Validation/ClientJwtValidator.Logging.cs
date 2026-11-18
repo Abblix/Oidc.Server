@@ -55,4 +55,10 @@ partial class ClientJwtValidator
         Level = LogLevel.Warning,
         Message = "Audience validation failed, token audiences: {Audiences}, expected requestUri: {RequestUri} or issuer: {Issuer}")]
     private partial void LogAudienceValidationFailed(Sanitized[] Audiences, string RequestUri, Sanitized Issuer);
+
+    [LoggerMessage(
+        EventId = LogEvents.Tokens.ClientJwtValidator.AlgorithmOutsideTheClientsProfile,
+        Level = LogLevel.Warning,
+        Message = "The token from {ClientId} is signed with {Algorithm}, which the client's security profile does not admit")]
+    private partial void LogAlgorithmOutsideTheClientsProfile(string ClientId, Sanitized Algorithm);
 }

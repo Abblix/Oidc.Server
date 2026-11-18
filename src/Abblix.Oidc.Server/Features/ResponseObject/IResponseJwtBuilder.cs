@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -32,6 +34,10 @@ public interface IResponseJwtBuilder
     /// and the <c>aud</c> claim.</param>
     /// <param name="parameters">The authorization response parameters (the same set the plaintext response modes
     /// would place on the wire), as name-value pairs.</param>
-    /// <returns>A task that returns the encoded response JWT.</returns>
-    Task<string> BuildAsync(TenantDefinition tenant, string? clientId, IReadOnlyList<(string name, string? value)> parameters);
+    /// <returns>A task that returns the encoded response JWT, or the refusal when the client asked for its responses
+    /// encrypted and publishes no key one can be encrypted to.</returns>
+    Task<Result<string, OidcError>> BuildAsync(
+        TenantDefinition tenant,
+        string? clientId,
+        IReadOnlyList<(string name, string? value)> parameters);
 }

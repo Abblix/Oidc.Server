@@ -15,6 +15,9 @@ using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Microsoft.AspNetCore.Mvc;
+using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
+using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 
 namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 
@@ -71,6 +74,12 @@ public class DiscoveryControllerMtlsTests
         SubjectTypesSupported = ["public"],
     };
 
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
+
     /// <summary>
     /// Verifies no mTLS aliases when no MtlsBaseUri is configured.
     /// </summary>
@@ -81,11 +90,10 @@ public class DiscoveryControllerMtlsTests
         var baseResponse = MinimalResponse();
 
         // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await FormatAsync(baseResponse);
 
         // Assert
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.MtlsEndpointAliases);
+        Assert.Null(result.MtlsEndpointAliases);
     }
 
     /// <summary>
@@ -107,11 +115,9 @@ public class DiscoveryControllerMtlsTests
             .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri(resolved));
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Equal(new Uri("https://example.com/token"), result.Value.TokenEndpoint);
-        Assert.Equal(new Uri(new Uri(mtlsBaseUri), "/token"), result.Value.MtlsEndpointAliases?.TokenEndpoint);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Equal(new Uri("https://example.com/token"), result.TokenEndpoint);
+        Assert.Equal(new Uri(new Uri(mtlsBaseUri), "/token"), result.MtlsEndpointAliases?.TokenEndpoint);
     }
 
     /// <summary>
@@ -134,11 +140,9 @@ public class DiscoveryControllerMtlsTests
             .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri(resolved));
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Equal(alias, result.Value.MtlsEndpointAliases?.TokenEndpoint?.OriginalString);
-        Assert.Equal(ordinary, result.Value.TokenEndpoint?.OriginalString);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Equal(alias, result.MtlsEndpointAliases?.TokenEndpoint?.OriginalString);
+        Assert.Equal(ordinary, result.TokenEndpoint?.OriginalString);
     }
 
     /// <summary>
@@ -153,15 +157,14 @@ public class DiscoveryControllerMtlsTests
         var baseResponse = MinimalResponse();
 
         // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await FormatAsync(baseResponse);
 
         // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://mtls.example.com/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/revocation"), result.Value.MtlsEndpointAliases.RevocationEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/introspection"), result.Value.MtlsEndpointAliases.IntrospectionEndpoint);
-        Assert.Equal(new Uri("https://mtls.example.com/userinfo"), result.Value.MtlsEndpointAliases.UserInfoEndpoint);
+        Assert.NotNull(result.MtlsEndpointAliases);
+        Assert.Equal(new Uri("https://mtls.example.com/token"), result.MtlsEndpointAliases.TokenEndpoint);
+        Assert.Equal(new Uri("https://mtls.example.com/revocation"), result.MtlsEndpointAliases.RevocationEndpoint);
+        Assert.Equal(new Uri("https://mtls.example.com/introspection"), result.MtlsEndpointAliases.IntrospectionEndpoint);
+        Assert.Equal(new Uri("https://mtls.example.com/userinfo"), result.MtlsEndpointAliases.UserInfoEndpoint);
     }
 
     /// <summary>
@@ -179,11 +182,9 @@ public class DiscoveryControllerMtlsTests
         else
             _oidcOptions.EnabledEndpoints = 0;
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.TokenEndpoint);
-        Assert.Null(result.Value.MtlsEndpointAliases);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Null(result.TokenEndpoint);
+        Assert.Null(result.MtlsEndpointAliases);
     }
 
     /// <summary>
@@ -197,13 +198,12 @@ public class DiscoveryControllerMtlsTests
         var baseResponse = MinimalResponse();
 
         // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await FormatAsync(baseResponse);
 
         // Assert
-        Assert.NotNull(result.Value);
-        Assert.NotNull(result.Value.MtlsEndpointAliases);
-        Assert.Equal(new Uri("https://mtls.example.com:8443/token"), result.Value.MtlsEndpointAliases.TokenEndpoint);
-        Assert.Equal(8443, result.Value.MtlsEndpointAliases.TokenEndpoint!.Port);
+        Assert.NotNull(result.MtlsEndpointAliases);
+        Assert.Equal(new Uri("https://mtls.example.com:8443/token"), result.MtlsEndpointAliases.TokenEndpoint);
+        Assert.Equal(8443, result.MtlsEndpointAliases.TokenEndpoint!.Port);
     }
 
     /// <summary>
@@ -217,11 +217,10 @@ public class DiscoveryControllerMtlsTests
         var baseResponse = MinimalResponse() with { TlsClientCertificateBoundAccessTokens = true };
 
         // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await FormatAsync(baseResponse);
 
         // Assert
-        Assert.NotNull(result.Value);
-        Assert.True(result.Value.TlsClientCertificateBoundAccessTokens);
+        Assert.True(result.TlsClientCertificateBoundAccessTokens);
     }
 
     /// <summary>
@@ -235,11 +234,10 @@ public class DiscoveryControllerMtlsTests
         var baseResponse = MinimalResponse();
 
         // Act
-        var result = await _formatter.FormatResponseAsync(baseResponse);
+        var result = await FormatAsync(baseResponse);
 
         // Assert
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.TlsClientCertificateBoundAccessTokens);
+        Assert.Null(result.TlsClientCertificateBoundAccessTokens);
     }
 
     private void SetupEndpointResolver()

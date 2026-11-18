@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.AspNetCore;
 
@@ -71,14 +72,5 @@ internal static class MtlsEndpointAliasing
     private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
         => TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
 
-    /// <summary>
-    /// <paramref name="original"/>'s path, exactly as resolved and still escaped, on the scheme, host and port of
-    /// <paramref name="host"/>, whose own path is not used.
-    /// </summary>
-    /// <remarks>
-    /// Joined as text rather than resolved as a reference: a resolved path opening with an empty segment is a
-    /// network-path reference to RFC 3986 section 4.2 and would name a host.
-    /// </remarks>
-    private static Uri? Rebase(Uri? original, Uri host)
-        => original is null ? null : new Uri(host.GetLeftPart(UriPartial.Authority) + original.AbsolutePath);
+    private static Uri? Rebase(Uri? original, Uri host) => original?.OnAuthorityOf(host);
 }

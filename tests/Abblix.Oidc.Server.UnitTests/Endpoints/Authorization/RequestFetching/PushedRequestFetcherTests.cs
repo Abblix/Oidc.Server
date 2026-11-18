@@ -78,6 +78,50 @@ public class PushedRequestFetcherTests
         Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
     }
 
+    /// <summary>
+    /// RFC 9101 section 6.3, which RFC 9126 section 4 applies to a pushed request: the client_id the authorization
+    /// request names and the one the pushed request carries must be identical, so a request_uri pushed by one client
+    /// is refused when another client names itself.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PushedByAnotherClient_ReturnsInvalidRequestUri()
+    {
+        var requestUri = new Uri(RequestUrn.Prefix + "pushed");
+        _storage
+            .Setup(s => s.TryGetAsync(TestTenant.Matched, requestUri, false))
+            .ReturnsAsync(CreateRequest());
+
+        var result = await CreateFetcher().FetchAsync(
+            SingleIssuer.Tenant,
+            new AuthorizationRequest { ClientId = "another-client", RequestUri = requestUri });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
+    }
+
+    /// <summary>
+    /// The pushing client naming itself, or a request naming no client at all, gets the pushed request back, so the
+    /// refusal above is about a different client and not about the request_uri.
+    /// </summary>
+    [Theory]
+    [InlineData(TestConstants.DefaultClientId)]
+    [InlineData(null)]
+    public async Task FetchAsync_PushedBySameClientOrNoneNamed_ReturnsPushedRequest(string? clientId)
+    {
+        var requestUri = new Uri(RequestUrn.Prefix + "pushed");
+        _storage
+            .Setup(s => s.TryGetAsync(TestTenant.Matched, requestUri, false))
+            .ReturnsAsync(CreateRequest());
+
+        var result = await CreateFetcher().FetchAsync(
+            SingleIssuer.Tenant,
+            new AuthorizationRequest { ClientId = clientId, RequestUri = requestUri });
+
+        Assert.True(result.TryGetSuccess(out var request));
+        Assert.Equal(TestConstants.DefaultClientId, request.ClientId);
+        Assert.Equal(requestUri, request.PushedRequestUri);
+    }
+
     [Fact]
     public async Task FetchAsync_FlaggedClientWithoutPushedRequest_ReturnsError()
     {
@@ -91,7 +135,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     [Fact]
@@ -117,7 +161,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -139,7 +183,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -157,7 +201,7 @@ public class PushedRequestFetcherTests
             .FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -179,6 +223,6 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 }

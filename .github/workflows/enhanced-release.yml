@@ -53,7 +53,7 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
-            echo "Error: invalid version format: $INPUT_VERSION"
+            echo "Error: invalid version format: $INPUT_VERSION" >&2
             exit 1
           fi
           VERSION="$INPUT_VERSION"
@@ -104,6 +104,63 @@ jobs:
   tests:
     needs: versioning
     uses: ./.github/workflows/test-shards.yml
+    with:
+      coverage: true
+
+  # The merged coverage per assembly, in the run summary. Nothing below needs it: the figure is
+  # informative, and a broken summary must not hold back a release.
+  coverage:
+    needs: tests
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/coverage-summary.yml
+    with:
+      projects: ${{ needs.tests.outputs.projects }}
+
+  # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
+  # against the release commit's own conformance host on each transport adapter, four jobs at once. create-release
+  # needs this job, which succeeds only when all four do, before it creates the GitHub release and the packages are
+  # published, and for a pre-release before the tag is created; a stable release's tag is pushed
+  # by hand before this workflow starts, so a failed run leaves that tag in place. The called workflow is this commit's
+  # copy, so it needs no pin, and it is passed no secret: it holds none and reads the repository only, which the
+  # workflow's contents: read grants
+  conformance:
+    needs: versioning
+    uses: ./.github/workflows/conformance.yml
+
+  # SonarQube Cloud analyses only the main branch (develop) in full here, never a release branch,
+  # so the release is judged by develop's analysis once that analysis is shown to be of this code:
+  # of develop's head, which contains this commit, with no analysed file different from it. The
+  # script refuses an open issue, a hotspot to review, an unexplained accepted issue, and an
+  # analysis of other code or missing a project. It reads the public Web API, so it holds no secret.
+  sonar-gate:
+    needs: versioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # Full history and every branch: the script checks that develop contains this commit.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: No open SonarQube Cloud issue in the release code
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          DEVELOP_HEAD=$(git rev-parse origin/develop)
+          status=0
+          python3 -I .github/scripts/sonar-release-gate.py Abblix_Oidc.Server "$RELEASE_COMMIT" "$DEVELOP_HEAD" > sonar-gate.md || status=$?
+          cat sonar-gate.md >> "$GITHUB_STEP_SUMMARY"
+          cat sonar-gate.md
+          exit "$status"
+        timeout-minutes: 3
+    timeout-minutes: 5
 
   build-and-pack:
     needs: [versioning, tests]
@@ -255,29 +312,39 @@ jobs:
           dotnet restore
           dotnet build
         timeout-minutes: 3
-      - name: Test OpenIDProviderApp runs
+      # The sample must answer its discovery document at the address its own launch profile names,
+      # which is also its issuer; any other outcome within the wait fails the step. -k: the sample
+      # serves the runner's untrusted ASP.NET Core development certificate on loopback.
+      - name: Test OpenIDProviderApp answers discovery
         run: |
           cd getting-started/OpenIDProviderApp
-          dotnet run &
+          BASE=$(python3 -c "import json; print(json.load(open('Properties/launchSettings.json', encoding='utf-8-sig'))['profiles']['https']['applicationUrl'].split(';')[0])")
+          dotnet run --launch-profile https &
           APP_PID=$!
-          for _ in {1..30}; do
-            if curl -fsS http://localhost:5000 >/dev/null 2>&1 \
-               || curl -fsS http://localhost:5000/.well-known/openid-configuration >/dev/null 2>&1; then
-              echo "App is responding"
-              break
+          for _ in {1..60}; do
+            if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
+              if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
+                echo "The discovery document at $BASE names no issuer under that address" >&2
+                kill "$APP_PID" 2>/dev/null || true
+                exit 1
+              fi
+              echo "App answers discovery at $BASE"
+              kill "$APP_PID" 2>/dev/null || true
+              exit 0
             fi
             if ! kill -0 "$APP_PID" 2>/dev/null; then
-              echo "App process died before responding"
+              echo "App process died before answering" >&2
               exit 1
             fi
             sleep 1
           done
+          echo "App did not answer discovery at $BASE within the wait" >&2
           kill "$APP_PID" 2>/dev/null || true
-
+          exit 1
         timeout-minutes: 3
     timeout-minutes: 5
   create-release:
-    needs: [versioning, build-and-pack, test-getting-started]
+    needs: [versioning, build-and-pack, test-getting-started, conformance, sonar-gate]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:
@@ -325,16 +392,16 @@ jobs:
             if [ "$(git cat-file -t "v$VERSION")" = "tag" ]; then
               echo "Tag v$VERSION exists and is annotated - using it"
             else
-              echo "Error: tag v$VERSION is lightweight (not annotated/signed)."
-              echo "Stable releases require an annotated, GPG-signed tag carrying the release notes."
-              echo "Recreate it: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              echo "Error: tag v$VERSION is lightweight (not annotated/signed)." >&2
+              echo "Stable releases require an annotated, GPG-signed tag carrying the release notes." >&2
+              echo "Recreate it: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION" >&2
               exit 1
             fi
           else
             if [ "$INPUT_PRE_RELEASE" != "true" ]; then
-              echo "Error: no tag v$VERSION found."
-              echo "A stable release must be tagged (annotated + GPG-signed) before this workflow runs."
-              echo "Create it on the release branch: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION"
+              echo "Error: no tag v$VERSION found." >&2
+              echo "A stable release must be tagged (annotated + GPG-signed) before this workflow runs." >&2
+              echo "Create it on the release branch: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION" >&2
               exit 1
             fi
             echo "Pre-release: creating annotated tag v$VERSION"
@@ -405,15 +472,10 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-        timeout-minutes: 3
       # global.json is the one place naming the SDK, and this job has no working copy to read it
       # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
       # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
       - name: Fetch the SDK pin
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -433,8 +495,15 @@ jobs:
           # installs that one - but it moves in one place.
           global-json-file: global.json
         timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
+          shopt -s failglob
           echo "Packages ready for publishing to GitHub Packages:"
           for pkg in nupkg/*.nupkg; do
             echo "  - $(basename "$pkg")"
@@ -473,15 +542,10 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-        timeout-minutes: 3
       # global.json is the one place naming the SDK, and this job has no working copy to read it
       # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
       # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
       - name: Fetch the SDK pin
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -501,8 +565,15 @@ jobs:
           # installs that one - but it moves in one place.
           global-json-file: global.json
         timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
+          shopt -s failglob
           echo "Packages ready for publishing to NuGet.org:"
           for pkg in nupkg/*.nupkg; do
             echo "  - $(basename "$pkg")"

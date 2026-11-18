@@ -6,8 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net.Http.Headers;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Mvc.Binders;
 using Microsoft.AspNetCore.Mvc;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
@@ -23,7 +23,11 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 /// client request but a narrow projection of it specific to the management endpoints, where the
 /// client identifier travels in the URL path - a routing concept the core deliberately
 /// does not know about.
+/// <para>Its fields are read under their own names, as the generated models' are: a query field named after the
+/// action parameter is an unrecognized parameter, not a prefix the client identifier would then be looked up under.
+/// </para>
 /// </remarks>
+[Bind(Prefix = "")]
 public record ClientAuthorizationRequest
 {
     /// <summary>
@@ -33,11 +37,11 @@ public record ClientAuthorizationRequest
     public required string ClientId { get; init; }
 
     /// <summary>
-    /// The registration_access_token from the Authorization header.
-    /// Used to authenticate client management operations per RFC 7592.
+    /// Every line of the Authorization header, carrying the registration_access_token that authenticates client
+    /// management operations per RFC 7592.
     /// </summary>
-    [FromHeader(Name = HttpRequestHeaders.Authorization)]
-    public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
+    [HeaderBinder(typeof(AuthenticationHeaderBinder), HttpRequestHeaders.Authorization)]
+    public IReadOnlyList<string>? AuthorizationHeaderLines { get; init; }
 
     /// <summary>
     /// Projects the management authorization onto the core client request model.
@@ -45,7 +49,7 @@ public record ClientAuthorizationRequest
     public Server.Model.ClientRequest ToClientRequest() => new()
     {
         ClientId = ClientId,
-        AuthorizationHeader = AuthorizationHeader,
+        AuthorizationHeaderLines = AuthorizationHeaderLines,
     };
 
     /// <summary>

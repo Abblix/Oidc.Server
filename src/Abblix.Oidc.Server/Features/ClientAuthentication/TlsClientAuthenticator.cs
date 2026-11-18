@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -29,6 +30,10 @@ public partial class TlsClientAuthenticator(
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientKeysProvider) : IClientAuthenticator
 {
+    // Only the self-signed variant is served here; tls_client_auth has its own authenticator
+    private readonly MutualTlsCredential _credential =
+        new(clientInfoProvider, ClientAuthenticationMethods.SelfSignedTlsClientAuth);
+
     /// <summary>
     /// Gets the collection of client authentication methods supported by this authenticator.
     /// </summary>
@@ -51,9 +56,9 @@ public partial class TlsClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
-    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
-    /// or certificate public key doesn't match any key in the client's JWKS.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
+    /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
+    /// whose public key matches no key in the client's JWKS.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 self_signed_tls_client_auth by:
@@ -64,41 +69,28 @@ public partial class TlsClientAuthenticator(
     /// 5. Comparing it against all keys in the client's JWKS (jwks or jwks_uri)
     /// Supports both RSA and ECDSA certificates.
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        // Require client certificate and client_id
-        var certificate = request.ClientCertificate;
-        if (certificate == null)
-            return null;
-
-        var clientId = request.ClientId;
-        if (!clientId.NotNullOrWhiteSpace())
-            return null;
-
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
-        {
-            LogClientNotFound(clientId);
-            return null;
-        }
-
-        if (!ClientAuthenticationMethods.SelfSignedTlsClientAuth.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal))
-        {
-            // We currently only support self-signed mTLS in this authenticator
-            return null;
-        }
+        if (await _credential.FindAsync(tenant, request, LogNotFound) is not (var client, var certificate))
+            return ClientAuthenticationFailures.NoCredential;
 
         // Compute certificate public key and compare against client's JWKS signing keys
         var certJwk = certificate.ToJsonWebKey();
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
             LogNoMatchingPublicKey(client.ClientId);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         LogAuthenticated(client.ClientId);
         return client;
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => _credential.FindPresentedAsync(tenant, request, LogNotFound);
+
+    private void LogNotFound(string clientId) => LogClientNotFound(clientId);
 
     /// <summary>
     /// Creates a predicate function that checks if a JWKS key matches the certificate's public key.

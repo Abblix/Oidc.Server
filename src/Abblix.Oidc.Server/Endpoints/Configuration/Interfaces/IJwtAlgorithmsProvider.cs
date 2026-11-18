@@ -19,6 +19,22 @@ public interface IJwtAlgorithmsProvider
 	IEnumerable<string> SignedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values) a JWT this server sends a client - an ID token,
+	/// a UserInfo, introspection or JARM authorization response - can be encrypted under: those the JWT creator
+	/// encrypts with, less the symmetric ones no key is derived for from the client secret. Registration accepts a
+	/// client's <c>*_encrypted_response_alg</c> from this list, and discovery advertises it for the JARM and
+	/// introspection responses. An algorithm a host registers is listed, and matched to client keys, by the same
+	/// registration (<see cref="Abblix.Jwt.EncryptionAlgorithmsProvider.CanEncrypt"/>).
+	/// </summary>
+	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) a JWT this server sends a client can be
+	/// encrypted with: those the JWT creator encrypts with.
+	/// </summary>
+	IEnumerable<string> EncryptedResponseMethodsSupported { get; }
+
+	/// <summary>
 	/// Lists the signing algorithms supported for validating signed requests and authentication.
 	/// </summary>
 	IEnumerable<string> SigningAlgorithmsSupported { get; }
@@ -51,8 +67,9 @@ public interface IJwtAlgorithmsProvider
 
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server
-	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1),
-	/// advertised via <c>request_object_encryption_alg_values_supported</c>.
+	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1). The discovery
+	/// document lists, as <c>request_object_encryption_alg_values_supported</c>, those of them a tenant's own
+	/// published encryption keys open.
 	/// </summary>
 	IEnumerable<string> RequestObjectEncryptionAlgValuesSupported { get; }
 

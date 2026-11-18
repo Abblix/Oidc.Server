@@ -23,6 +23,11 @@ namespace Abblix.Jwt.Encryption;
 /// </remarks>
 internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgorithm
 {
+	// RFC 7518 section 5.3: "Use of an IV of size 96 bits is REQUIRED with this algorithm. The requested size of the
+	// Authentication Tag output MUST be 128 bits, regardless of the key size."
+	private const int IvSizeInBytes = 96 / 8;
+	private const int TagSizeInBytes = 128 / 8;
+
 	private readonly int _keySize = GetKeySize(algorithm);
 
 	/// <inheritdoc />
@@ -40,15 +45,12 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 		if (contentEncryptionKey.Length != _keySize)
 			throw new ArgumentException($"CEK must be {_keySize} bytes for {algorithm}", nameof(contentEncryptionKey));
 
-		// Per RFC 7518 Section 5.3: Generate random 96-bit IV for AES-GCM
-		var initializationVector = CryptoRandom.GetRandomBytes(12); // 96 bits
-
-		// Per RFC 7518 Section 5.3: 128-bit authentication tag
-		var authenticationTag = new byte[16]; // 128 bits
+		var initializationVector = CryptoRandom.GetRandomBytes(IvSizeInBytes);
+		var authenticationTag = new byte[TagSizeInBytes];
 		var ciphertext = new byte[plaintext.Length];
 
 		// Per RFC 7518 Section 5.3: AES-GCM uses the CEK directly as the encryption key
-		using var aesGcm = new AesGcm(contentEncryptionKey, authenticationTag.Length);
+		using var aesGcm = new AesGcm(contentEncryptionKey, TagSizeInBytes);
 
 		// AES-GCM Encrypt: encrypts and generates authentication tag in one operation
 		aesGcm.Encrypt(
@@ -68,8 +70,11 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 		byte[] additionalAuthenticatedData,
 		[NotNullWhen(true)] out byte[]? plaintext)
 	{
-		// Check CEK length
-		if (contentEncryptionKey.Length != _keySize)
+		// The IV and the tag come from the token, so their sizes are checked rather than taken from it: a GCM instance
+		// built for a shorter tag verifies a tag cut to its first octets.
+		if (contentEncryptionKey.Length != _keySize ||
+		    encryptedData.InitializationVector.Length != IvSizeInBytes ||
+		    encryptedData.AuthenticationTag.Length != TagSizeInBytes)
 		{
 			plaintext = null;
 			return false;
@@ -78,7 +83,7 @@ internal sealed class AesGcmEncryptor(string algorithm) : IContentEncryptionAlgo
 		try
 		{
 			// Per RFC 7518 Section 5.3: AES-GCM uses the CEK directly as the encryption key
-			using var aesGcm = new AesGcm(contentEncryptionKey, encryptedData.AuthenticationTag.Length);
+			using var aesGcm = new AesGcm(contentEncryptionKey, TagSizeInBytes);
 
 			plaintext = new byte[encryptedData.Ciphertext.Length];
 

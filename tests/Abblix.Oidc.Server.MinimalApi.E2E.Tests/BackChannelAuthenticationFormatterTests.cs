@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// <remarks>
 /// The three refusal arms differ in status and in what they carry, and only one of them is reachable without
 /// an integrator-supplied device handler. A client that fails authentication is refused earlier, by the
-/// validator, and gets the plain 400 - the 401 and 403 arms belong to a device handler that refuses a request
+/// validator, and answered as the token endpoint answers it - the 401 and 403 arms belong to a device handler that refuses a request
 /// whose client already authenticated, which is why the tests in this class replace that handler rather than sending
 /// bad credentials.
 ///

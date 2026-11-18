@@ -25,6 +25,12 @@ public interface IJsonWebTokenCreator
 	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values, e.g. "A128CBC-HS256") supported for
+	/// encrypting a JWT on creation, projected from the registered content encryptors.
+	/// </summary>
+	IEnumerable<string> EncryptedResponseMethodsSupported { get; }
+
+	/// <summary>
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.
 	/// </summary>
 	/// <param name="token">The JsonWebToken object containing the payload of the JWT.</param>
@@ -50,4 +56,23 @@ public interface IJsonWebTokenCreator
 		JsonWebKey? encryptionKey = null,
 		string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
 		string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512);
+
+	/// <summary>
+	/// Issues a JWT encrypted without being signed: a JWE whose plaintext is the claims set itself (RFC 7519 section 3:
+	/// "the claims are encrypted, with the JWT Claims Set being the plaintext encrypted by the JWE"), carrying no cty.
+	/// </summary>
+	/// <remarks>
+	/// Not a nested JWT: where a specification has a JWT signed then encrypted, an unsigned one goes through
+	/// <see cref="IssueAsync"/> with no signing key and stays a JWS inside the JWE.
+	/// </remarks>
+	/// <param name="token">The JsonWebToken object containing the claims of the JWT.</param>
+	/// <param name="encryptionKey">The JsonWebKey to encrypt the JWT to.</param>
+	/// <param name="keyEncryptionAlgorithm">The JWE key management algorithm ("alg").</param>
+	/// <param name="contentEncryptionAlgorithm">The JWE content encryption algorithm ("enc").</param>
+	/// <returns>The JWE in its compact serialization.</returns>
+	Task<string> EncryptClaimsAsync(
+		JsonWebToken token,
+		JsonWebKey encryptionKey,
+		string keyEncryptionAlgorithm,
+		string contentEncryptionAlgorithm);
 }

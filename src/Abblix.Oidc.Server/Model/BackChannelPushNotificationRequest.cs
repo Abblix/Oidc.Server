@@ -15,6 +15,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <summary>
 /// Represents the token delivery payload sent to the client in push mode.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public sealed record BackChannelPushNotificationRequest : IBackChannelNotificationRequest
 {
     /// <summary>

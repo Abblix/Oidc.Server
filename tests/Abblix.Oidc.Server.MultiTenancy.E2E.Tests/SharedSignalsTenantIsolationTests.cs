@@ -18,6 +18,8 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
@@ -71,6 +73,102 @@ public sealed class SharedSignalsTenantIsolationTests
 
     /// <summary>How long a test waits for a delivery it holds to reach the receiver.</summary>
     private static readonly TimeSpan HeldFor = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A tenant held to FAPI 2.0 signs its events with an algorithm the profile permits, and a receiver verifies them
+    /// against the keys the tenant publishes: FAPI 2.0 section 5.4.1, "Authorization servers, clients, and resource
+    /// servers when creating or processing JWTs shall ... use PS256, ES256, or EdDSA (using the Ed25519 variant)
+    /// algorithms". So it does whether the deployment names the algorithms it allows or leaves them unset, which stands
+    /// for RS256 alone. The tenant held to no profile, with keys of the same algorithms and the same allowlist, signs
+    /// with its first key, RS256, as before. A key declaring no algorithm, as one taken from a certificate, signs with
+    /// whichever of those algorithms its material performs.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task AFapiTenantsEvents_AreSignedWithAnAlgorithmItsProfilePermits(
+        bool allowlistSet,
+        bool keysDeclareAlgorithm)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services.Configure<OidcOptions>(SignServiceTokensWithPs256),
+            declare: server => server
+                .AddConfiguredStreams("acme", declared)
+                .AddConfiguredStreams("globex", declared),
+            tenantAt: (id, path) => keysDeclareAlgorithm
+                ? FapiAtAcme(id, path, SigningAlgorithms.RS256, SigningAlgorithms.PS256)
+                : FapiAtAcme(id, path, (string?)null),
+            events: options =>
+            {
+                if (allowlistSet)
+                    options.AllowedSigningAlgorithms = [SigningAlgorithms.RS256, SigningAlgorithms.PS256];
+            });
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+        Assert.Equal(1, await DispatchAsync(app, "globex", ct));
+
+        var acme = ClientOf(app, Host + Acme);
+        var fapi = Assert.Single(await PollAsync(acme, Acme, ct));
+        Assert.Equal(SigningAlgorithms.PS256, AlgorithmOf(fapi));
+        Assert.True(VerifiesAgainst(fapi, await KeySetOfAsync(acme, Acme, ct), RSASignaturePadding.Pss));
+
+        var globex = ClientOf(app, Host + Globex);
+        var unprofiled = Assert.Single(await PollAsync(globex, Globex, ct));
+        Assert.Equal(SigningAlgorithms.RS256, AlgorithmOf(unprofiled));
+        Assert.True(VerifiesAgainst(unprofiled, await KeySetOfAsync(globex, Globex, ct)));
+    }
+
+    /// <summary>
+    /// A tenant held to FAPI 2.0 whose keys and the deployment's allowlist produce no algorithm the profile permits
+    /// would sign none of its events, so the server does not start: the tenant has no key of PS256 or ES256, or the
+    /// allowlist the deployment names holds neither.
+    /// </summary>
+    [Theory]
+    [InlineData(false, SigningAlgorithms.RS256)]
+    [InlineData(true, SigningAlgorithms.PS256)]
+    public async Task AFapiTenantWithoutAPermittedSigningAlgorithm_StopsTheServer(bool allowlistSet, string keyAlgorithm)
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            beforeMultiTenancy: services => services.Configure<OidcOptions>(SignServiceTokensWithPs256),
+            tenantAt: (id, path) => id == "acme" ? FapiAtAcme(id, path, keyAlgorithm) : TenantAt(id, path),
+            events: options =>
+            {
+                if (allowlistSet)
+                    options.AllowedSigningAlgorithms = [SigningAlgorithms.RS256];
+            }));
+
+        Assert.Single(refusal.Failures);
+    }
+
+    /// <summary>
+    /// The tenant <paramref name="id"/> at <paramref name="path"/>, held to FAPI 2.0 when it is acme and to no profile
+    /// otherwise, with an RSA signing key of each algorithm given, null for one declaring none.
+    /// </summary>
+    private static TenantDefinition FapiAtAcme(string id, string path, params string?[] keyAlgorithms) => new()
+    {
+        Id = id,
+        Issuer = new Uri(Host + path),
+        DefaultSecurityProfile = id == "acme" ? ClientSecurityProfile.Fapi2 : ClientSecurityProfile.None,
+        SigningKeys =
+        [
+            .. keyAlgorithms.Select(algorithm => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
+        ],
+    };
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to the same algorithms.
+    /// </summary>
+    private static void SignServiceTokensWithPs256(OidcOptions options)
+    {
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+    }
 
     /// <summary>
     /// A stream acme's receiver creates is acme's alone: globex's receiver, under the same identifier, lists none,
@@ -912,6 +1010,9 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     private static bool VerifiesAgainst(string compactToken, JsonNode keySet)
+        => VerifiesAgainst(compactToken, keySet, RSASignaturePadding.Pkcs1);
+
+    private static bool VerifiesAgainst(string compactToken, JsonNode keySet, RSASignaturePadding padding)
     {
         var parts = compactToken.Split('.');
         var signed = Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]);
@@ -926,8 +1027,14 @@ public sealed class SharedSignalsTenantIsolationTests
                     Modulus = Base64Url.DecodeFromChars(key!["n"]!.GetValue<string>()),
                     Exponent = Base64Url.DecodeFromChars(key["e"]!.GetValue<string>()),
                 });
-                return rsa.VerifyData(signed, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                return rsa.VerifyData(signed, signature, HashAlgorithmName.SHA256, padding);
             });
+    }
+
+    private static string? AlgorithmOf(string compactToken)
+    {
+        var header = Base64Url.DecodeFromChars(compactToken.Split('.')[0]);
+        return JsonNode.Parse(header)?[JwtClaimTypes.Algorithm]?.GetValue<string>();
     }
 
     private static string? KeyIdOf(string compactToken)
@@ -959,9 +1066,12 @@ public sealed class SharedSignalsTenantIsolationTests
         Uri? jwksUri = null,
         Action<IServiceCollection>? beforeMultiTenancy = null,
         Action<IServiceCollection>? afterSharedSignals = null,
-        Action<IOidcServerBuilder>? declare = null)
+        Action<IOidcServerBuilder>? declare = null,
+        Func<string, string, TenantDefinition>? tenantAt = null,
+        Action<SecurityEventsOptions>? events = null)
     {
         await TestLicense.Loaded;
+        tenantAt ??= TenantAt;
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -972,11 +1082,11 @@ public sealed class SharedSignalsTenantIsolationTests
         builder.Services.AddConsentGrantedForEveryClient();
         var server = builder.Services.AddOidcServices(options =>
         {
-            options.Tenants.Add(TenantAt("acme", Acme));
-            options.Tenants.Add(TenantAt("globex", Globex));
+            options.Tenants.Add(tenantAt("acme", Acme));
+            options.Tenants.Add(tenantAt("globex", Globex));
         });
 
-        builder.Services.AddSecurityEvents();
+        builder.Services.AddSecurityEvents(events);
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {
             Issuer = issuer,

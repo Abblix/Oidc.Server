@@ -70,9 +70,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
 ///         if (tenant == null) return;
 ///
-///         // Retrieve the stored authentication request
+///         // Retrieve the stored authentication request. A request the end user answered too late is kept
+///         // past its expiry, so a late poll can be told expired_token, and completion refuses it: an answer
+///         // after ExpiresAt has nothing left to complete
 ///         var storedRequest = await _storage.TryGetAsync(tenant, authReqId);
-///         if (storedRequest == null) return;
+///         if (storedRequest == null || storedRequest.ExpiresAt &lt;= _clock.GetUtcNow()) return;
 ///
 ///         // Create authenticated session, carrying the level the device interaction actually reached
 ///         var authSession = new AuthSession(
@@ -84,9 +86,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///             AuthContextClassRef = authenticatedLevel,
 ///         };
 ///
-///         // Carry the end user's answer on the grant. AuthorizedGrant is a positional member of the
-///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries
-///         // every other member unchanged.
+///         // Carry the end user's answer on the grant. A `with` expression replaces it and carries every
+///         // other member of the stored record unchanged.
 ///         //
 ///         // Nothing needs to touch Status - the denial below goes through DenyAsync. A host that does
 ///         // set it on its own copy changes nothing either way: completion reads the STORED record and
@@ -110,6 +111,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     {
 ///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
 ///         if (tenant == null) return;
+///
+///         // A denial after the request's expiry has nothing left to deny, and is refused as completion is
+///         var storedRequest = await _storage.TryGetAsync(tenant, authReqId);
+///         if (storedRequest == null || storedRequest.ExpiresAt &lt;= _clock.GetUtcNow()) return;
 ///
 ///         // Denial tells the client the way its delivery mode learns anything: a poll client reads
 ///         // access_denied (and a long poll is woken), a ping client is told to come and read it, a push

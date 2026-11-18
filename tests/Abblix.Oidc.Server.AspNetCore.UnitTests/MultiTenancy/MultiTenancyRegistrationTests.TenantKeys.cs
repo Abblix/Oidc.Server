@@ -224,7 +224,7 @@ public partial class MultiTenancyRegistrationTests
             () => withTheRule.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"Tenant 'acme': {HostRule}", refusal.Message, StringComparison.Ordinal);
 
-        ServiceProvider TwoSigningKeys(bool hostRule)
+        static ServiceProvider TwoSigningKeys(bool hostRule)
         {
             var services = new ServiceCollection();
             services.AddOptions<OidcOptions>();
@@ -253,7 +253,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task ATokenEncryptedToOneTenant_IsReadThere_AndByNoOther()
     {
-        TenantDefinition TenantWithKeys(string id) => new()
+        static TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
             Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
@@ -283,6 +283,7 @@ public partial class MultiTenancyRegistrationTests
                 Header = { Algorithm = SigningAlgorithms.RS256 },
                 Payload = { Subject = "user123", Issuer = acme.Issuer.OriginalString },
             },
+            client: null,
             new ServiceJwtEncryption(
                 Encrypt: true,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
@@ -296,7 +297,7 @@ public partial class MultiTenancyRegistrationTests
         // Refused by the check the server reads its own tokens with. Read with it at acme too, the token would have
         // it count acme's issuer against the license, which this suite does not lift.
         var atGlobex = await provider.GetRequiredService<IAuthServiceJwtValidator>()
-            .ValidateAsync(globex, encrypted, TokenTypePolicy.CheckedByCaller);
+            .ValidateAsync(globex, null, encrypted, TokenTypePolicy.CheckedByCaller);
         Assert.True(atGlobex.TryGetFailure(out var refusal), "Another tenant read the token.");
         Assert.Contains("decryption", refusal.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
@@ -323,7 +324,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task EachTenant_DecryptsAndSignsWithItsOwnKeysOnly()
     {
-        TenantDefinition TenantWithKeys(string id) => new()
+        static TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
             Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
@@ -385,7 +386,8 @@ public partial class MultiTenancyRegistrationTests
     /// </summary>
     private static ServiceProvider KeysInACustodian(
         IEnumerable<TenantDefinition> tenants,
-        CustodianHeldKeys? serverWideKeys = null)
+        CustodianHeldKeys? serverWideKeys = null,
+        Action<IServiceCollection>? host = null)
     {
         var custodian = new Moq.Mock<IKeyCustodian>();
         custodian
@@ -411,6 +413,7 @@ public partial class MultiTenancyRegistrationTests
             services.RequireKeyPlacement().UseKeysInCustodian();
         else
             services.RequireKeyPlacement().UseKeysInCustodian(serverWideKeys);
+        host?.Invoke(services);
         services.AddServerStorage().ServeTenants(options =>
         {
             foreach (var tenant in tenants)
@@ -523,6 +526,48 @@ public partial class MultiTenancyRegistrationTests
         var refusal = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep + "'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A key is tried on an inbound JWE only under an algorithm the host registers for it, so a custodian key published
+    /// under one the custodian serves but the host never registered, RSA1_5 without its opt-in, would open nothing:
+    /// startup refuses it, naming the algorithm, and passes it once the host opts in.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ATenantEncryptingUnderAnAlgorithmTheHostDoesNotRegister_IsRefusedAtStartup(bool optedIn)
+    {
+        using var provider = KeysInACustodian(
+            [
+                new TenantDefinition
+                {
+                    Id = "acme",
+                    Issuer = new Uri(AcmeIssuer),
+                    CustodianKeys = new CustodianHeldKeys
+                    {
+                        SigningKeyName = "acme-sign",
+                        EncryptionKeyName = "acme-encrypt",
+                        EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+                    },
+                },
+            ],
+            host: services =>
+            {
+                services.AddSingleton(Moq.Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(Moq.It.IsAny<string>())));
+                if (optedIn)
+                    services.AddRsaPkcs1KeyManagement();
+            });
+
+        if (optedIn)
+        {
+            Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+            return;
+        }
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Rsa1_5 + "'", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

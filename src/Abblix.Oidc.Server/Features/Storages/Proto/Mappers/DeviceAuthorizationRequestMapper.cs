@@ -45,6 +45,7 @@ internal static class DeviceAuthorizationRequestMapper
         if (source.AuthorizationDetails is { Count: > 0 })
             proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
 
+        proto.ClientNamedNoScope = source.ClientNamedNoScope;
         return proto;
     }
 
@@ -73,6 +74,7 @@ internal static class DeviceAuthorizationRequestMapper
             AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
+            ClientNamedNoScope = source.ClientNamedNoScope,
         };
     }
 

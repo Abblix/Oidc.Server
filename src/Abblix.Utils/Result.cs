@@ -160,10 +160,12 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
     public Result<TNewSuccess, TNewFailure> Map<TNewSuccess, TNewFailure>(
         Func<TSuccess, TNewSuccess> onSuccess,
         Func<TFailure, TNewFailure> onFailure)
-        => Match<Result<TNewSuccess, TNewFailure>>(
-            success => onSuccess(success),
-            failure => onFailure(failure)
-        );
+        => Value switch
+        {
+            TSuccess success => onSuccess(success),
+            TFailure failure => onFailure(failure),
+            _ => throw NeitherCase(),
+        };
 
     /// <summary>
     /// Determines whether the result is a success.

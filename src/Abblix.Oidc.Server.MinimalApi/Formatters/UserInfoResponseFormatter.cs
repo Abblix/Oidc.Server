@@ -6,9 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -16,10 +16,10 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.AspNetCore;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -29,29 +29,64 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Connect Core 5.3.2). On failure it returns the RFC 6750 / RFC 9449 section 7.1 challenge response that advertises both the
 /// DPoP and Bearer schemes.
 /// </summary>
+/// <param name="clock">Stamps the issue time of a UserInfo JWT.</param>
+/// <param name="clientJwtFormatter">Signs and encrypts a UserInfo JWT for its client.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="interactionIds">Decides the <c>x-fapi-interaction-id</c> the response carries.</param>
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
     ITenantAccessor tenantAccessor,
-    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
+    IFapiInteractionIdResolver interactionIds) : IUserInfoResponseFormatter<IResult>
 {
     /// <inheritdoc />
-    public Task<IResult> FormatResponseAsync(
+    public async Task<IResult> FormatResponseAsync(
         UserInfoRequest request,
         Result<UserInfoFoundResponse, OidcError> response)
-        => response.MatchAsync(
-            onSuccess: FormatSuccessAsync,
+    {
+        var result = await response.MatchAsync(
+            onSuccess: async found => PrivateWhenTokenInQuery(request, await FormatSuccessAsync(found)),
             onFailure: error => Task.FromResult(
-                error.Format(
-                    StatusCodes.Status401Unauthorized,
-                    tenantAccessor.CurrentTenant().Issuer.OriginalString,
-                    DPoPAlgorithms.Allowed,
-                    advertiseBearer: true)));
+                // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
+                // left at a protected resource is invalid_request, which SHOULD be a 400
+                FormatError(error)));
+
+        var clientProfile = response.Match(found => found.ClientInfo.SecurityProfile, error => error.SecurityProfile);
+        return interactionIds.Resolve(tenantAccessor.CurrentTenant(), clientProfile, request.FapiInteractionId) is { } id
+            ? result.WithResponse(httpResponse => httpResponse.Headers[HttpRequestHeaders.FapiInteractionId] = id)
+            : result;
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is left at a
+    /// protected resource is invalid_request, which SHOULD be a 400.
+    /// </summary>
+    private IResult FormatError(OidcError error)
+        => error.Format(
+            StatusCodes.Status400BadRequest,
+            tenantAccessor.CurrentTenant().Issuer.OriginalString,
+            DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
+            advertiseBearer: true);
+
+    /// <summary>
+    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
+    /// header with the "private" option", these being requests carrying the token in the URI query. Merged into the
+    /// Cache-Control the endpoint sends on every response, whose no-store it keeps.
+    /// </summary>
+    private static IResult PrivateWhenTokenInQuery(UserInfoRequest request, IResult result)
+        => request.AccessTokenInQuery is null
+            ? result
+            : result.WithResponse(response => response.AddPrivateCacheDirective());
 
     private async Task<IResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {
-        if (found.ClientInfo.UserInfoSignedResponseAlgorithm == SigningAlgorithms.None)
+        // OpenID Connect Core 1.0 section 5.3.2: "If the UserInfo Response is signed and/or encrypted, then the Claims
+        // are returned in a JWT" and "The response MAY be encrypted without also being signed"
+        if (found.ClientInfo is
+            { UserInfoSignedResponseAlgorithm: SigningAlgorithms.None, UserInfoEncryptedResponseAlgorithm: null })
+        {
             return Results.Json(found.User);
+        }
 
         var token = new JsonWebToken
         {
@@ -65,11 +100,28 @@ public class UserInfoResponseFormatter(
         };
 
         // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
-        var jwt = await clientJwtFormatter.FormatAsync(
-            tenantAccessor.CurrentTenant(),
+        var tenant = tenantAccessor.CurrentTenant();
+        var formatted = await clientJwtFormatter.FormatAsync(
+            tenant,
             token,
             found.ClientInfo,
-            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo));
+
+        // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
+        // for other reasons". The token's client registered userinfo_encrypted_response_alg and has no key it can be
+        // encrypted to under it, so the token cannot be answered, and a response sent in the clear would ignore what the
+        // client registered
+        if (formatted.TryGetFailure(out var refusal))
+        {
+            return FormatError(new OidcError(ErrorCodes.InvalidToken, refusal.ErrorDescription)
+            {
+                DPoPAlgorithmsAdmitted =
+                    DPoPAlgorithms.AdmittedBy(SecurityProfileRequirements.For(tenant, found.ClientInfo)),
+                PresentedScheme = found.PresentedScheme,
+            });
+        }
+
+        var jwt = formatted.GetSuccess();
 
         return Results.Content(jwt, MediaTypes.Jwt);
     }

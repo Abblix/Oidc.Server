@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -14,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -40,13 +42,17 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
         services.TryAddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
         services.AddTelemetryDecorator<IBackChannelAuthenticationRequestProcessor, ObservedBackChannelAuthenticationRequestProcessor>();
 
+        // TryAddEnumerable because the options framework resolves every registered IValidateOptions
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, BackChannelAuthenticationOptionsValidator>());
+
         return services;
     }
 
     /// <summary>
     /// Configures and registers a composite of back-channel authentication context validators
-    /// into the service collection. Validators run in sequence to verify the client, the
-    /// requested resources and scopes, the user identity hint, the requested expiry, the user
+    /// into the service collection. Validators run in sequence, for the client the handler has already
+    /// authenticated and found open to the flow, to verify the requested resources and scopes, the user identity hint, the requested expiry, the user
     /// code, and the ping-mode configuration before a CIBA request is accepted.
     /// </summary>
     /// <param name="services">The service collection to which the back-channel authentication context validators will be added.</param>
@@ -55,7 +61,6 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
     {
         // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>(),

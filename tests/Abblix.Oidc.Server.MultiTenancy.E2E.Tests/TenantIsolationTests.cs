@@ -224,7 +224,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     [Fact]
     public async Task AClientOfOneTenant_IsUnknownToTheOther()
     {
-        Dictionary<string, string> Push() => new()
+        static Dictionary<string, string> Push() => new()
         {
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
@@ -248,7 +248,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     [Fact]
     public async Task AScopeAndAResourceOfOneTenant_AreUnknownToTheOther()
     {
-        Dictionary<string, string> Push(string scope, string? resource = null)
+        static Dictionary<string, string> Push(string scope, string? resource = null)
         {
             var form = new Dictionary<string, string>
             {

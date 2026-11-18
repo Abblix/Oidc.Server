@@ -16,15 +16,20 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// so a scaled-out deployment gains one common memory by swapping the store, not the cache.
 /// </summary>
 /// <remarks>
-/// The add-if-absent underneath is probabilistic, not strict: two concurrent presenters of one
-/// identifier can both hear "new" within a single cache round trip, because
-/// <see cref="IDistributedCache"/> offers Get and Set and no compare-and-set. Each profile
-/// decides whether that is acceptable - RFC 9449 Section 11.1 accepts probabilistic replay
+/// The add-if-absent underneath is decided within one process only: it reads and writes under a
+/// per-key gate of this process, because <see cref="IDistributedCache"/> offers Get and Set and no
+/// compare-and-set, so two presenters of one identifier reaching different nodes can both hear
+/// "new". Each profile decides whether that is acceptable - RFC 9449 Section 11.1 accepts probabilistic replay
 /// defense for DPoP proofs, and RFC 8935 Section 2 lets a transmitter redeliver a SET regardless,
 /// so a lost race costs one duplicate idempotent pass. A client assertion is the one that does not
 /// read that way, since RFC 7523 Section 3 lets an authorization server reject a reused one. A
 /// deployment relying on that rejection takes a <see cref="ReplayCacheBase"/> over a store
 /// that decides and writes in one operation.
+/// <para>
+/// This is the store a receiver of security event tokens or logout tokens gets on its own. Beside
+/// the OpenID Connect server, the server's store over its entity storage serves in its place, the
+/// receiver's reservations included.
+/// </para>
 /// <para>
 /// A caller that gives a reservation back after its work failed widens the same race: when two
 /// instances both hear "new" for one identifier and one of them releases, the entry the other
@@ -49,8 +54,8 @@ public sealed class DistributedReplayCache(
     /// This is the implementation that cannot keep the base class's one demand, and it is here
     /// rather than in a strict sibling precisely because <see cref="IDistributedCache"/> offers Get
     /// and Set and nothing that decides. The helper below is add-if-absent by intent and
-    /// read-then-write by construction, which is what makes this cache probabilistic - see the
-    /// class remarks for which profiles accept that and which do not.
+    /// read-then-write by construction, under a gate only this process sees, which is why two nodes
+    /// can both win - see the class remarks for which profiles accept that and which do not.
     /// </remarks>
     protected override Task<bool> ReserveIfAbsentAsync(
         string key,

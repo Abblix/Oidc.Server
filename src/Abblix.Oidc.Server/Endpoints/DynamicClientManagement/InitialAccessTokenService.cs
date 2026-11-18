@@ -65,7 +65,9 @@ public class InitialAccessTokenService(
 
         var encoded = await serviceJwtFormatter.FormatAsync(
             tenant,
-            token, ServiceJwtEncryption.ForInitialAccessToken(options.Value));
+            token,
+            client: null,
+            ServiceJwtEncryption.ForInitialAccessToken(options.Value));
         return new EncodedJsonWebToken(token, encoded);
     }
 }

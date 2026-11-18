@@ -111,7 +111,7 @@ public class DeviceAuthorizationStorageTests
         await _storage.UpdateAsync(SingleIssuer.Tenant, reference, request, TimeSpan.FromMinutes(3));
 
         Assert.NotNull(captured);
-        Assert.Equal(TimeSpan.FromMinutes(3), captured!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(TimeSpan.FromMinutes(3), captured.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public class DeviceAuthorizationStorageTests
         // over a record only half of which it was ever shown. Without the second assertion the first is
         // green over a line that does contain the code.
         Assert.NotNull(entry.Exception);
-        Assert.Contains(UserCodeKey, entry.Exception!.Message);
+        Assert.Contains(UserCodeKey, entry.Exception.Message);
     }
 
     /// <summary>

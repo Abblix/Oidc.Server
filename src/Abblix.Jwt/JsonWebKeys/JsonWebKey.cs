@@ -5,9 +5,10 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers;
 using System.Buffers.Text;
 using System.Security.Cryptography;
-using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -113,19 +114,19 @@ public abstract record JsonWebKey
     public abstract bool HasPrivateKey { get; }
 
     /// <summary>
-    /// Builds the canonical-JSON form of this key per RFC 7638 section 3.2: the required members
-    /// for this <c>kty</c>, in lexicographic order, with no whitespace. Optional members
-    /// (<c>use</c>, <c>alg</c>, <c>kid</c>, certificate metadata) must NOT enter the form.
+    /// Writes the members of the canonical-JSON form of this key per RFC 7638 section 3.2: the required members
+    /// for this <c>kty</c>, in lexicographic order. Optional members (<c>use</c>, <c>alg</c>, <c>kid</c>, certificate
+    /// metadata) must NOT enter the form. The writer adds no whitespace and opens and closes the object itself.
     /// </summary>
-    /// <returns>The canonical-JSON string fed into the SHA-256 hash by
-    /// <see cref="ComputeJwkThumbprint"/>.</returns>
+    /// <param name="writer">The writer of the form fed into the SHA-256 hash by
+    /// <see cref="ComputeJwkThumbprint"/>.</param>
     /// <exception cref="InvalidOperationException">A member required by the concrete
     /// subtype is missing.</exception>
-    protected abstract string CanonicalJson();
+    protected abstract void WriteCanonicalMembers(Utf8JsonWriter writer);
 
     /// <summary>
     /// Computes the JWK Thumbprint of this key per RFC 7638 section 3 as the raw 32-byte SHA-256
-    /// digest of the canonical-JSON form built by <see cref="CanonicalJson"/>.
+    /// digest of the canonical-JSON form written by <see cref="WriteCanonicalMembers"/>.
     /// </summary>
     /// <remarks>
     /// The thumbprint is computed at runtime from the public-key material; it is not a
@@ -139,20 +140,16 @@ public abstract record JsonWebKey
     /// (per RFC 7638 section 3.2) is missing on this key.</exception>
     public byte[] ComputeJwkThumbprint()
     {
-        var canonical = CanonicalJson();
-        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-    }
+        var canonical = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(canonical))
+        {
+            writer.WriteStartObject();
+            WriteCanonicalMembers(writer);
+            writer.WriteEndObject();
+        }
 
-    /// <summary>
-    /// Computes the JWK Thumbprint of this key per RFC 7638 section 3 and returns the
-    /// base64url-encoded form, which is the wire shape used by DPoP <c>cnf.jkt</c> and
-    /// the <c>dpop_jkt</c> authorization-request parameter.
-    /// </summary>
-    /// <returns>The base64url-encoded SHA-256 digest of the canonical-JSON form.</returns>
-    /// <exception cref="InvalidOperationException">A required member
-    /// (per RFC 7638 section 3.2) is missing on this key.</exception>
-    public string ComputeJwkThumbprintBase64Url()
-        => Base64Url.EncodeToString(ComputeJwkThumbprint());
+        return SHA256.HashData(canonical.WrittenSpan);
+    }
 
     /// <summary>
     /// Throws if a required byte-array member is missing on the key, otherwise returns its base64url-encoded form.

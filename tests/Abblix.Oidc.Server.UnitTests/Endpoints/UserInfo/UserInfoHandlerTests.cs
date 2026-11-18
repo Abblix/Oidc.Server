@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Linq;
 using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -39,9 +40,55 @@ public class UserInfoHandlerTests
         _handler = new UserInfoHandler(_validator.Object, _processor.Object);
     }
 
+    /// <summary>
+    /// RFC 9449 section 7.1: the challenge answering a refusal names the algorithms a new proof may use, which once the
+    /// token's client is known are its profile's. A refusal of the processor's - the end user's claims not found - names
+    /// them as a refusal of the validator's does: only PS256 and ES256 for a client held to FAPI 2.0.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AProcessorRefusal_NamesTheClientsDPoPAlgorithms()
+    {
+        var userInfoRequest = CreateUserInfoRequest();
+        var validRequest = CreateValidUserInfoRequest(userInfoRequest);
+        validRequest.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
+        _validator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(validRequest);
+        _processor
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found"));
+
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(["ES256", "PS256"], error.DPoPAlgorithmsAdmitted!.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// RFC 9449 section 7.2: the challenge of the scheme the token was presented with carries the error. A refusal of
+    /// the validator's, made before any token is trusted, is stamped with that scheme as the processor's is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AValidatorRefusal_CarriesTheSchemeTheTokenWasPresentedWith()
+    {
+        var userInfoRequest = new UserInfoRequest();
+        var clientRequest = new ClientRequest
+        {
+            AuthorizationHeaderLines = [$"{TokenTypes.DPoP} token"],
+        };
+        _validator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "The token is expired"));
+
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(AccessTokenScheme.DPoP, error.PresentedScheme);
+    }
+
     private static UserInfoRequest CreateUserInfoRequest() => new()
     {
-        AccessToken = "access_token_value",
+        AccessTokenInForm = "access_token_value",
     };
 
     private static ClientRequest CreateClientRequest() => new()
@@ -108,7 +155,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Same(userInfoFound, response);
+        Assert.Equal(userInfoFound with { PresentedScheme = AccessTokenScheme.Bearer }, response);
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
@@ -136,7 +183,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
-        Assert.Equal(error, failure);
+        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure);
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
@@ -169,7 +216,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
-        Assert.Equal(error, failure);
+        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure with { DPoPAlgorithmsAdmitted = null, SecurityProfile = null });
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }

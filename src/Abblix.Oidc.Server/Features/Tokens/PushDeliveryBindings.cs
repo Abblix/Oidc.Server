@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
@@ -37,4 +39,4 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// ID Token verbatim.</param>
 /// <param name="RefreshToken">The refresh token traveling in the same notification, or
 /// <see langword="null"/> when none is sent - in which case the specification asks for no hash.</param>
-public record PushDeliveryBindings(string AuthenticationRequestId, string? RefreshToken);
+public record PushDeliveryBindings(string AuthenticationRequestId, [property: Credential] string? RefreshToken);

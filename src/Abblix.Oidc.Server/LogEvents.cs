@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server;
 /// so a class needing one more takes a second window rather than displacing anybody.
 ///
 /// The library's packages log into one process, so their numbers come from one space, and each package
-/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11099, less the two windows below;
+/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11199, less the two windows below;
 /// Abblix.Oidc.Server.AspNetCore 10500-10599; Abblix.Oidc.Server.SharedSignals 10800-10899;
 /// Abblix.Jwt.Vault 12000-12299; Abblix.Jwt.Azure 13000-13199; Abblix.SecurityEvents 14000-14199;
 /// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand. A package's window moves only in a
@@ -88,6 +88,7 @@ internal static class LogEvents
             private const int Base = 2040;
 
             public const int ClientNotFound = Base + 1;
+            public const int ClientCannotSatisfyProfile = Base + 2;
         }
 
         /// <summary>
@@ -222,9 +223,12 @@ internal static class LogEvents
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
-            public const int AudienceIsNotTheIssuerAlone = Base + 12;
+            public const int AudienceIsNotOneTheClientMayName = Base + 12;
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
             public const int TimestampUnreadable = Base + 14;
+            public const int TokenEndpointAudienceAccepted = Base + 15;
+            public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
+            public const int PushedAuthorizationRequestEndpointAudienceAccepted = Base + 17;
         }
 
         /// <summary>
@@ -314,6 +318,7 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
+            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 
@@ -396,6 +401,7 @@ internal static class LogEvents
             public const int AudienceValidationFailed = Base + 5;
             public const int TimestampsOutsideTheClientsProfile = Base + 6;
             public const int TimestampUnreadable = Base + 7;
+            public const int AlgorithmOutsideTheClientsProfile = Base + 8;
         }
 
         /// <summary>
@@ -449,6 +455,7 @@ internal static class LogEvents
             public const int SecretGenerated = Base + 1;
             public const int ValidationFailed = Base + 2;
         }
+
     }
 
     /// <summary>
@@ -552,6 +559,7 @@ internal static class LogEvents
             public const int NotPendingOnCompletion = Base + 4;
             public const int AuthenticationLevelNotTheOneRequired = Base + 5;
             public const int GrantNamesAnotherClient = Base + 6;
+            public const int ExpiredBeforeAnswered = Base + 7;
         }
 
         /// <summary>
@@ -596,6 +604,7 @@ internal static class LogEvents
         {
             private const int Base = 7050;
 
+            public const int DeliveryRefusedByProfile = Base;
             public const int GeneratingTokens = Base + 1;
             public const int TokensDelivered = Base + 2;
             public const int TokenGenerationFailed = Base + 3;
@@ -738,8 +747,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000-9119: misc - Discovery, Storage, Issuer, Session, RandomGenerator, and the stand-in provider of
-    /// user information.
+    /// Range 9000-9139: misc - Discovery, Storage, Issuer, Session, RandomGenerator, the stand-in provider of
+    /// user information, and the FAPI interaction identifier of UserInfo.
     /// </summary>
     public static class Misc
     {
@@ -755,6 +764,7 @@ internal static class LogEvents
             public const int InvalidToken = Base + 1;
             public const int SigningAlgorithmMismatch = Base + 2;
             public const int ParametersOutsideRequestObjectIgnored = Base + 3;
+            public const int RefusedByProfile = Base + 4;
         }
 
         /// <summary>
@@ -812,6 +822,18 @@ internal static class LogEvents
             private const int Base = 9100;
 
             public const int NoProviderRegistered = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Endpoints/UserInfo/FapiInteractionIdResolver.cs</c> - the FAPI 1.0 interaction identifier a protected
+        /// resource answers with and logs (sub-range 9120-9139).
+        /// </summary>
+        public static class FapiInteractionIdResolver
+        {
+            private const int Base = 9120;
+
+            public const int InteractionIdAnswered = Base + 1;
+            public const int MalformedInteractionIdReplaced = Base + 2;
         }
     }
 
@@ -930,6 +952,17 @@ internal static class LogEvents
             private const int Base = 10300;
 
             public const int SessionClientsExhausted = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/LogoutNotification/BackChannelLogoutNotifier.cs</c> - a notification not sent
+        /// (sub-range 10320-10339).
+        /// </summary>
+        public static class BackChannelLogoutNotifier
+        {
+            private const int Base = 10320;
+
+            public const int LogoutTokenNotIssued = Base;
         }
     }
 
@@ -1055,6 +1088,35 @@ internal static class LogEvents
             private const int Base = 10900;
 
             public const int RequestRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 11100-11199: <c>Features/Tokens</c>, a second window, because 5000-5099 is fully allocated.
+    /// </summary>
+    public static class TokenIssuance
+    {
+        /// <summary>
+        /// <c>Features/Tokens/AccessTokenService.cs</c> - an access token not issued for what its audience
+        /// publishes (sub-range 11100-11109).
+        /// </summary>
+        public static class AccessTokenService
+        {
+            private const int Base = 11100;
+
+            public const int AudienceKeyRefused = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/Formatters/ClientJwtFormatter.cs</c> - a JWT not issued to a client, signed or encrypted
+        /// for it (sub-range 11110-11119).
+        /// </summary>
+        public static class ClientJwtFormatter
+        {
+            private const int Base = 11110;
+
+            public const int JwtNotIssued = Base;
+            public const int SigningKeyBelowTheFloor = Base + 1;
         }
     }
 

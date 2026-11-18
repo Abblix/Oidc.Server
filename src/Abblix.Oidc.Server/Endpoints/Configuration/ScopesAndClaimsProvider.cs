@@ -9,26 +9,18 @@
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
 /// <summary>
-/// Aggregates metadata about supported scopes, claims, grants, and subject types.
+/// Aggregates metadata about supported grants and subject types.
 /// </summary>
 public sealed class ScopesAndClaimsProvider(
-	IScopeClaimsProvider scopeClaimsProvider,
 	IEnumerable<IGrantTypeInformer> grantTypeProviders,
 	ISubjectTypeConverter subjectTypeConverter) : IScopesAndClaimsProvider
 {
 	private IEnumerable<string>? _grantTypesSupported;
-
-	/// <inheritdoc />
-	public IEnumerable<string> ScopesSupported(TenantDefinition tenant) => scopeClaimsProvider.ScopesSupported(tenant);
-
-	/// <inheritdoc />
-	public IEnumerable<string> ClaimsSupported(TenantDefinition tenant) => scopeClaimsProvider.ClaimsSupported(tenant);
 
 	/// <inheritdoc />
 	public IEnumerable<string> GrantTypesSupported => _grantTypesSupported ??= ComputeGrantTypes();

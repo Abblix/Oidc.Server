@@ -70,6 +70,7 @@ public class DeviceAuthorizationRequestProcessor(
             // host's user-verification step can read it (via ValidUserCode) and thread it
             // onto the AuthorizedGrant's AuthorizationContext when approving.
             AuthorizationDetails = request.AuthorizationDetails,
+            ClientNamedNoScope = request.ClientNamedNoScope,
         };
 
         await storage.StoreAsync(tenant, deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);

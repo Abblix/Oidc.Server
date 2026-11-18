@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -102,9 +103,13 @@ public sealed record EllipticCurveJsonWebKey : JsonWebKey
     /// <inheritdoc/>
     /// <remarks>
     /// Required EC members per RFC 7638 section 3.2 in lexicographic order: <c>crv</c>,
-    /// <c>kty</c>, <c>x</c>, <c>y</c>. The interpolated <c>crv</c> identifier and the
-    /// base64url-encoded coordinates contain only characters that need no JSON escaping.
+    /// <c>kty</c>, <c>x</c>, <c>y</c>.
     /// </remarks>
-    protected override string CanonicalJson()
-        => $$"""{"crv":"{{Require(JsonWebKeyPropertyNames.Curve, Curve)}}","kty":"{{KeyType}}","x":"{{Encode(JsonWebKeyPropertyNames.EllipticCurveX, X)}}","y":"{{Encode(JsonWebKeyPropertyNames.EllipticCurveY, Y)}}"}""";
+    protected override void WriteCanonicalMembers(Utf8JsonWriter writer)
+    {
+        writer.WriteString(JsonWebKeyPropertyNames.Curve, Require(JsonWebKeyPropertyNames.Curve, Curve));
+        writer.WriteString(JsonWebKeyPropertyNames.KeyType, KeyType);
+        writer.WriteString(JsonWebKeyPropertyNames.EllipticCurveX, Encode(JsonWebKeyPropertyNames.EllipticCurveX, X));
+        writer.WriteString(JsonWebKeyPropertyNames.EllipticCurveY, Encode(JsonWebKeyPropertyNames.EllipticCurveY, Y));
+    }
 }

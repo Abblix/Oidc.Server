@@ -314,7 +314,7 @@ public class AuthorizationRequestStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -1033,7 +1033,7 @@ public class AuthorizationRequestStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -1068,7 +1068,7 @@ public class AuthorizationRequestStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>

@@ -131,7 +131,7 @@ public class SignedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg, result.ErrorDescription);
     }
 
@@ -167,7 +167,7 @@ public class SignedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
     }
 
@@ -187,7 +187,7 @@ public class SignedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationSignedResponseAlg, result.ErrorDescription);
     }
 
@@ -248,7 +248,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.IdTokenSignedResponseAlg, result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
     }
@@ -293,7 +293,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.UserInfoSignedResponseAlg, result.ErrorDescription);
     }
 
@@ -363,7 +363,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -418,7 +418,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -482,7 +482,7 @@ public class SignedResponseAlgorithmsValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>

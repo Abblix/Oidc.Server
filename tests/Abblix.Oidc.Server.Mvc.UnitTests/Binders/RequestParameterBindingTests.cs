@@ -73,10 +73,10 @@ public class RequestParameterBindingTests
     /// </summary>
     [Theory]
     [InlineData(typeof(ClientRequest), nameof(ClientRequest.DPoPProof))]
-    [InlineData(typeof(ClientRequest), nameof(ClientRequest.AuthorizationHeader))]
+    [InlineData(typeof(ClientRequest), nameof(ClientRequest.AuthorizationHeaderLines))]
     [InlineData(typeof(ClientRequest), nameof(ClientRequest.ClientCertificate))]
     [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.ClientId))]
-    [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.AuthorizationHeader))]
+    [InlineData(typeof(ClientAuthorizationRequest), nameof(ClientAuthorizationRequest.AuthorizationHeaderLines))]
     public void ParameterOutsideTheQueryAndTheFormIsNotWrapped(Type container, string property)
         => Assert.False(IsParameterBinder(BinderTypeOf(container, property)));
 

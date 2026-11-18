@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
@@ -29,7 +28,7 @@ internal static class JwsSigningInput
         signingInput = Encoding.UTF8.GetBytes($"{jwt[0]}.{jwt[1]}");
         try
         {
-            signature = Base64Url.DecodeFromChars(jwt[2]);
+            signature = JoseBase64Url.Decode(jwt[2]);
             return true;
         }
         catch (FormatException)

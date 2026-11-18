@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System.Reflection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
@@ -15,6 +17,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.RequestObject;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -25,7 +28,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
+/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
+public class RequestObjectFetchAdapter(
+    IRequestObjectFetcher requestObjectFetcher,
+    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
@@ -44,23 +50,88 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         TenantDefinition tenant,
         AuthorizationRequest request)
     {
-        var fetchResult = await requestObjectFetcher.FetchAsync(tenant, 
-            request, request.Request, client => client.RequestObjectSigningAlgorithm);
+        // A request read back from storage had its object validated and applied before it was stored, and carries what
+        // the server set on it since: the URN it is consumed under, the pages the end user was sent to, the DPoP key the
+        // code is bound to. Applying the object again would rebuild the request without them under strict processing,
+        // and would refuse an end user returning from a slow login once the object expired
+        if (request.PushedRequestUri is not null)
+            return request;
 
-        // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it
-        // stored: carried over, or a pushed request_uri is never consumed and a stored request never learns the end
-        // user was sent to log in. A response mode that is empty or whitespace alone is none, as both hosts read
-        // the same value in the query
+        // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
+        // or "request_uri" Request Object's (Section 2.1) "client_id"", and section 6.3 has a failed client ID check
+        // answered as "specified in Section 5.2 of [RFC6749]". So the client is known before the object
+        // is read, and the object is held to its profile up front
+        ClientInfo? namedClient = null;
+        if (request.Request is not null)
+        {
+            if (request.ClientId is not { Length: > 0 } clientId)
+            {
+                return ErrorFactory.ValidationError(
+                    ErrorCodes.InvalidRequest,
+                    $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
+            }
+
+            namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+        }
+
+        // Whether the object may leave its client_id to the one beside it is answered by WhyRefused on the read object,
+        // since only its header tells which specification governs it
+        var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
+            namedClient, request, request.Request, client => client.RequestObjectSigningAlgorithm, ForbiddenMembers,
+            WhyRefused);
+
+        // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
+        // parameter carrying that object, so the validated object is carried on: without it a client required to sign
+        // its request objects is refused for having sent one. A response mode that is empty or whitespace alone is
+        // none, as both hosts read the same value in the query
         return fetchResult
             .Bind(merged => ValidateMergedParameters(request, merged with
             {
-                PushedRequestUri = request.PushedRequestUri,
-                OriginRequestUri = request.OriginRequestUri,
-                Prompted = request.Prompted,
+                Request = request.Request,
                 ResponseMode = string.IsNullOrWhiteSpace(merged.ResponseMode) ? null : merged.ResponseMode,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
+
+    /// <summary>
+    /// The endpoint's own rule on the validated request object, a Template Method step: the reason it is refused, or
+    /// null. At the authorization endpoint a signed object must name its client: RFC 9101 section 6.3, "The client ID
+    /// values in the "client_id" request parameter and in the Request Object "client_id" claim MUST be identical", and
+    /// section 4 has the object contain every parameter but "request" and "request_uri". An unsecured one may leave it
+    /// out: RFC 9101 section 5 admits only "JWS signed" objects, and OpenID Connect Core 1.0 section 6.1, which admits
+    /// an unsecured one, has the client_id outside "match those in the Request Object, if present".
+    /// </summary>
+    /// <param name="requestObject">The validated request object.</param>
+    protected virtual string? WhyRefused(JsonWebToken requestObject)
+        => !UnsecuredToken.Is(requestObject) && NamesNoClient(requestObject)
+            ? NoClientNamed
+            : null;
+
+    /// <summary>
+    /// Whether the request object carries no client_id claim.
+    /// </summary>
+    protected static bool NamesNoClient(JsonWebToken requestObject)
+        => requestObject.Payload.Json[AuthorizationRequest.Parameters.ClientId] is null;
+
+    /// <summary>
+    /// The refusal of a request object that names no client where it must.
+    /// </summary>
+    protected static readonly string NoClientNamed =
+        $"The request object must include the {AuthorizationRequest.Parameters.ClientId} parameter";
+
+    /// <summary>
+    /// RFC 9101 section 4: ""request" and "request_uri" parameters MUST NOT be included in Request Objects", and
+    /// section 7 has "invalid_request_object The request parameter contains an invalid Request Object". Refused for
+    /// an object by value and for one fetched from a request_uri alike. The pushed authorization request endpoint
+    /// reads its object through this adapter too, since RFC 9126 section 2.1 step 3 has the server "Validate the pushed
+    /// request as it would an authorization request sent to the authorization endpoint" and section 3 has "The rules
+    /// for processing, signing, and encryption of the Request Object as defined in JAR [RFC9101] apply".
+    /// </summary>
+    private static readonly string[] ForbiddenMembers =
+    [
+        AuthorizationRequest.Parameters.Request,
+        AuthorizationRequest.Parameters.RequestUri,
+    ];
 
     /// <summary>
     /// The <c>prompt</c> values the request model declares supported.
@@ -86,9 +157,10 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// MUST match the ones inside the request object when the object carries them. The merge gives
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the
-    /// flow or the client identity relative to what the plain OAuth parameters declared. A prompt value outside
-    /// <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>, is
-    /// refused with invalid_request, as the same value is in the query.
+    /// flow or the client identity relative to what the plain OAuth parameters declared. Under strict processing the
+    /// object alone is bound, so an object carrying no client_id is refused here as well (RFC 9101 section 6.3). A prompt
+    /// value outside <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>,
+    /// is refused with invalid_request, as the same value is in the query.
     /// </summary>
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,

@@ -150,7 +150,7 @@ public class SessionPersistenceTests
         NextRequest();
         await _adapter.SignInAsync(Session());
 
-        Assert.Equal((true, (DateTimeOffset?)null), (_cookieProperties!.IsPersistent, _cookieProperties.ExpiresUtc));
+        Assert.Equal((true, (DateTimeOffset?)null), (_cookieProperties.IsPersistent, _cookieProperties.ExpiresUtc));
     }
 
     [Fact]

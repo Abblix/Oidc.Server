@@ -7,11 +7,15 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -19,20 +23,31 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
 /// The checks the deployment's and the issuer's policy put on a JWT Bearer assertion once its signature has
-/// been verified: its expiry, signing algorithm, token type and age, and the clock tolerance they are read with.
+/// been verified: its expiry, signing algorithm, token type, age, replay and scopes, and the clock tolerance they
+/// are read with.
 /// </summary>
 /// <remarks>
 /// Each check is one link of the handler's validation chain (Chain of Responsibility): it passes the context on
-/// or answers with the refusal.
+/// or answers with the refusal. <see cref="AuthorizationGrantServiceCollectionExtensions.AddJwtBearerGrant"/>
+/// registers it for <see cref="JwtBearerGrantHandler"/>; a host has no call to make on it.
 /// </remarks>
 /// <param name="logger">Records why an assertion was refused.</param>
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
 /// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
-internal sealed partial class JwtBearerAssertionPolicy(
-	ILogger logger,
+/// <param name="replayCache">Records each jti until its assertion expires (RFC 7523 Section 3).</param>
+/// <param name="requestInfoProvider">Names the address a replay came from and the endpoint an assertion's
+/// audience has to name.</param>
+/// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
+public sealed partial class JwtBearerAssertionPolicy(
+	ILogger<JwtBearerAssertionPolicy> logger,
 	IJwtBearerIssuerProvider issuerProvider,
-	TimeProvider timeProvider)
+	TimeProvider timeProvider,
+	IReplayCache replayCache,
+	IRequestInfoProvider requestInfoProvider,
+	ITenantCatalog catalog)
 {
+	private readonly JwtBearerAssertionParameters _parameters = new(logger, issuerProvider, requestInfoProvider, catalog);
+
 	/// <summary>
 	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
 	/// Excludes symmetric (HMAC) and 'none' algorithms for security.
@@ -62,8 +77,17 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
 	/// client that asks for a tighter window than the deployment demands.
 	/// </remarks>
-	public ClockSkew ResolveClockSkew(TenantDefinition tenant, ClientInfo clientInfo)
+	internal ClockSkew ResolveClockSkew(TenantDefinition tenant, ClientInfo clientInfo)
 		=> issuerProvider.Options.ResolveClockSkew(Profile(tenant, clientInfo));
+
+	/// <summary>
+	/// The parameters the signature, lifetime, issuer and audience of an assertion this client presents at
+	/// <paramref name="tenant"/> are validated with, read with the tolerance of the client's profile.
+	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
+	/// <param name="clientInfo">The client presenting the assertion.</param>
+	internal ValidationParameters ParametersFor(TenantDefinition tenant, ClientInfo clientInfo)
+		=> _parameters.For(tenant, ResolveClockSkew(tenant, clientInfo));
 
 	/// <summary>
 	/// The control bundle this client is held to: what the deployment demands of everyone,
@@ -78,7 +102,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// be used; the generic lifetime check treats a token with neither 'nbf' nor 'exp' as valid, so
 	/// this enforces the grant-specific MUST and is also what bounds the replay-cache entry's TTL.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateExpiration(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateExpiration(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		// Through the guarded reader rather than the accessor: the validator that ran first is
@@ -97,9 +121,10 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	}
 
 	/// <summary>
-	/// Validates that the JWT signing algorithm is in the allowed list.
+	/// Validates that the JWT signing algorithm is in the trusted issuer's allowed list. The client's security profile
+	/// bounded the algorithm already, where the assertion was validated.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var allowedAlgorithms = ctx.TrustedIssuer?.AllowedAlgorithms ?? DefaultAllowedAlgorithms;
@@ -124,7 +149,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// Section 3.11). A listed type matches in either spelling of its <c>application/</c> prefix, as RFC 7515
 	/// Section 4.1.9 makes them one type.
 	/// </remarks>
-	public Result<JwtBearerValidationContext, OidcError> ValidateTokenType(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateTokenType(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
@@ -149,7 +174,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// <summary>
 	/// Validates that the JWT is not too old based on MaxJwtAge configuration.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateJwtAge(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateJwtAge(
 		TenantDefinition tenant,
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
@@ -178,5 +203,58 @@ internal sealed partial class JwtBearerAssertionPolicy(
 
 		return new OidcError(ErrorCodes.InvalidGrant,
 			"The JWT assertion is too old. Please use a freshly issued JWT.");
+	}
+
+	/// <summary>
+	/// Validates that requested scopes are allowed for the issuer.
+	/// </summary>
+	internal Result<JwtBearerValidationContext, OidcError> ValidateScopes(
+		JwtBearerValidationContext ctx, string[]? scope)
+	{
+		if (ctx is not { TrustedIssuer.AllowedScopes: { Length: > 0 } allowedScopes} || scope is null)
+			return ctx;
+
+		var invalidScopes = scope.Except(allowedScopes).ToArray();
+		if (invalidScopes.Length == 0)
+			return ctx;
+
+		LogScopesNotAllowed(Sanitized.Values(invalidScopes), ctx.Issuer);
+
+		return new OidcError(
+			ErrorCodes.InvalidScope,
+			$"The following scopes are not allowed for this issuer: {string.Join(", ", invalidScopes)}");
+	}
+
+	/// <summary>
+	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 3).
+	/// </summary>
+	internal async Task<Result<JwtBearerValidationContext, OidcError>> ValidateReplayAsync(
+		JwtBearerValidationContext ctx, ClientInfo clientInfo)
+	{
+		var options = issuerProvider.Options;
+		if (!options.RequireJti)
+			return ctx;
+
+		var jti = ctx.Jwt.Payload.JwtId;
+		if (string.IsNullOrWhiteSpace(jti))
+		{
+			LogMissingJti(clientInfo.ClientId, ctx.Issuer);
+			return new OidcError(ErrorCodes.InvalidGrant,
+				"The JWT assertion must contain a 'jti' (JWT ID) claim for replay protection");
+		}
+
+		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
+		// ValidateExpiration guarantees is present and carries on the context) and treat "already
+		// present" as a replay. One call avoids both the lost-TTL bug of a separate mark step and
+		// the read-then-write race. An assertion carrying no expiry names no window to remember it for, so the
+		// identifier is held for the fallback the cache publishes.
+		var expiresAt = ctx.ExpiresAt ?? timeProvider.GetUtcNow() + ConfiguredReplayCache.DefaultExpiration;
+		if (!await replayCache.TryReserveAsync(jti, expiresAt))
+		{
+			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
+			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
+		}
+
+		return ctx;
 	}
 }

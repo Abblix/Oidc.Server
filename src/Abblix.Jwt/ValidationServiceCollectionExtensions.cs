@@ -25,6 +25,7 @@ internal static class ValidationServiceCollectionExtensions
         services.TryAddSingleton<JwsValidation>();
         services.TryAddSingleton<JwsHeaderChain>();
         services.TryAddSingleton<JwtClaimsChain>();
+        services.TryAddSingleton<JwePlaintextValidation>();
         services.TryAddSingleton<JweValidation>();
         return services;
     }

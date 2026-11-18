@@ -52,4 +52,8 @@ message DeviceAuthorizationRequest {
 
   // Absolute expiry (RFC 8628 section 3.2 fixed lifetime); read to cap the remaining cache TTL
   optional google.protobuf.Timestamp expires_at = 9;
+
+  // Whether the client named no scope and the request carries the default it was served with; a record
+  // stored before the field existed reads false, as a scope the client named
+  bool client_named_no_scope = 10;
 }

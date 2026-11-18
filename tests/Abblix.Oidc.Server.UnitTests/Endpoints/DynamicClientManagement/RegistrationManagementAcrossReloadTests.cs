@@ -58,7 +58,7 @@ public class RegistrationManagementAcrossReloadTests
             new ClientRequest
             {
                 ClientId = ClientId,
-                AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, tokenId),
+                AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Bearer, tokenId).ToString()],
             });
         return result.TryGetSuccess(out var request) ? request : null;
     }

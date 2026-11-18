@@ -83,6 +83,41 @@ public class SignedRequestObjectRequirementValidatorTests
         Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require a JWS signed JWT request object", so a client held to
+    /// the profile is refused plain parameters although its own flag is off - whether it names the profile itself or
+    /// inherits it from the tenant.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateAsync_Fapi1AdvancedWithPlainParameters_ReturnsError(bool namedByTheClient)
+    {
+        var context = CreateContext(requireSignedRequestObject: false);
+        var tenant = SingleIssuer.Tenant;
+        if (namedByTheClient)
+            context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        else
+            tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var result = await _validator.ValidateAsync(tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// The same client with a request object passes, so the refusal above is about the missing object.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1AdvancedWithRequestObject_Passes()
+    {
+        var context = CreateContext(requireSignedRequestObject: false, requestObject: "header.payload.signature");
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
+
     [Fact]
     public async Task ValidateAsync_UnflaggedClientWithPlainParameters_Passes()
     {

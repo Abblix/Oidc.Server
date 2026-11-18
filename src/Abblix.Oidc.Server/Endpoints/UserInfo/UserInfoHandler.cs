@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -51,6 +52,17 @@ public class UserInfoHandler(
     {
         var validationResult = await validator.ValidateAsync(tenant, userInfoRequest, clientRequest);
 
-        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
+        // RFC 9449 section 7.1: a refusal of the processor's is answered for the client the token names, as the
+        // validator's refusals are once that client is known, which the validator alone sees on a refusal of its own
+        var result = await validationResult.BindAsync(async request =>
+            (await processor.ProcessAsync(tenant, request))
+            .MapFailure(error => error.NamingTheAlgorithmsOf(tenant, request.ClientInfo) with { SecurityProfile = request.ClientInfo.SecurityProfile }));
+
+        // RFC 9449 section 7.2: every refusal, the validator's, the processor's and one made while the found response
+        // is formatted, carries its error on the challenge of the scheme the token was presented with
+        var scheme = AccessTokenPresentation.SchemeOf(userInfoRequest, clientRequest);
+        return result.Map(
+            found => found with { PresentedScheme = scheme },
+            error => error with { PresentedScheme = scheme });
     }
 }

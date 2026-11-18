@@ -56,6 +56,12 @@ services.AddSecurityEvents(options => options.Events.RegisterCaepEvents().Regist
 
 ## Transmitting
 
+Events are sent through the Shared Signals transmitter, which comes with [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals):
+
+```bash
+dotnet add package Abblix.SharedSignals
+```
+
 ```csharp
 await dispatcher.DispatchAsync(new SecurityEventDescriptor
 {

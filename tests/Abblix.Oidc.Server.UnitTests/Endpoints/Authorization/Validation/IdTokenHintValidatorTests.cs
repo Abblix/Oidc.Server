@@ -63,7 +63,22 @@ public class IdTokenHintValidatorTests
             token.Payload.Audiences = [audience];
 
         Result<JsonWebToken, string> parsed = token;
-        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, Hint)).ReturnsAsync(parsed);
+        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), Hint)).ReturnsAsync(parsed);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 "when creating or processing JWTs": the hint is processed for the client sending it, so
+    /// it is validated under that client's profile.
+    /// </summary>
+    [Fact]
+    public async Task TheHint_IsValidatedForTheRequestingClient()
+    {
+        var context = Context();
+        SetupParsed();
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        _hintParser.Verify(p => p.ParseAsync(TestTenant.Matched, context.ClientInfo, Hint), Times.Once);
     }
 
     /// <summary>
@@ -105,7 +120,7 @@ public class IdTokenHintValidatorTests
     {
         var context = Context();
         Result<JsonWebToken, string> refused = "The id token hint is not an ID Token";
-        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, Hint)).ReturnsAsync(refused);
+        _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), Hint)).ReturnsAsync(refused);
 
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

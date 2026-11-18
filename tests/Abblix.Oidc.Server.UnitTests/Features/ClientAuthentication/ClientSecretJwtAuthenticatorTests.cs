@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -27,6 +29,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -41,6 +44,8 @@ public class ClientSecretJwtAuthenticatorTests
     private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
     private const string IssuerIdentifier = "https://issuer.example.com";
+    private const string TokenEndpoint = IssuerIdentifier + "/connect/token";
+    private const string AnotherRecipient = "https://another.example.com";
 
     private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri(IssuerIdentifier) }.ToTenant();
 
@@ -60,10 +65,11 @@ public class ClientSecretJwtAuthenticatorTests
 
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
             _clock,
-            _replayCache.Object);
+            _replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
     }
 
     /// <summary>
@@ -84,7 +90,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -105,7 +111,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -126,7 +132,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -147,7 +153,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -195,7 +201,74 @@ public class ClientSecretJwtAuthenticatorTests
             ClientAssertion = jwt,
         });
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The exception a host gives a client that still names the token endpoint, as OpenID Connect Core 1.0 section 9
+    /// recommends, holds for a client signing with its secret as for one signing with its key: the token endpoint URL
+    /// on the issuer's host is accepted for a client allowed it and refused for any other, and the same URL beside
+    /// another recipient is accepted only from a client allowed arrays too.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { TokenEndpoint }, true)]
+    [InlineData(ClientAssertionAudiences.Issuer, new[] { TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { AnotherRecipient, TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray, new[] { AnotherRecipient, TokenEndpoint }, true)]
+    public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedInTheFormsTheClientIsAllowed(
+        ClientAssertionAudiences audiences, string[] audience, bool accepted)
+    {
+        const string jwt = "valid.jwt.token";
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }],
+            ClientAssertionAudiences = audiences,
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, audience, "jti-token-endpoint", _clock.GetUtcNow().AddMinutes(5));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience is [var only]
+            ? only
+            : new JsonArray([.. audience.Select(member => (JsonNode?)member)]);
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(ClientId).ToArrayAsync();
+                return await parameters.ValidateIssuer!(ClientId)
+                    ? token
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(clientInfo);
+
+        _replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var endpointResolver = new Mock<IOidcEndpointResolver>();
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(new Uri(TokenEndpoint));
+        var services = new ServiceCollection();
+        services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
+
+        var authenticator = new ClientSecretJwtAuthenticator(
+            Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
+            new ProfiledJwtValidator(_tokenValidator.Object),
+            _clientInfoProvider.Object,
+            _clock,
+            _replayCache.Object,
+            services.BuildServiceProvider(validateScopes: true));
+
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        });
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -254,8 +327,8 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
 
         _replayCache.Verify(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()), Times.Once);
     }
@@ -306,7 +379,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
         _replayCache.Verify(
             r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
@@ -361,8 +434,8 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -389,7 +462,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -442,7 +515,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -495,7 +568,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -549,7 +622,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
 
         // A rejected assertion is never recorded in the replay cache.
         _replayCache.Verify(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()), Times.Never);

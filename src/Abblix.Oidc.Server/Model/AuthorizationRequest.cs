@@ -264,6 +264,16 @@ public record AuthorizationRequest
 	public Uri? OriginRequestUri { get; init; }
 
 	/// <summary>
+	/// Whether the client named no scope, so the scope the request carries is the default the server served it with
+	/// (RFC 6749 section 3.3), set by the server and kept with the request it stores for each page. A scope the client
+	/// never named is not refused at the token endpoint when narrowing to the token's resources leaves none of it.
+	/// Kept off the wire, so no client can claim it. A request stored before this member existed reads false, as a
+	/// scope the client named.
+	/// </summary>
+	[JsonIgnore]
+	public bool ClientNamedNoScope { get; init; }
+
+	/// <summary>
 	/// Specifies the resource for which the access token is requested.
 	/// As defined in RFC 8707, this parameter is used to request access tokens with a specific scope for a particular
 	/// resource.

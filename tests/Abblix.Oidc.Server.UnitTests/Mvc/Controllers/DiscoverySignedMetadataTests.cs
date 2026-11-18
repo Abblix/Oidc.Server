@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Microsoft.AspNetCore.Mvc;
+using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -43,7 +46,7 @@ public class DiscoverySignedMetadataTests
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 5, 19, 10, 0, 0, TimeSpan.Zero));
     private readonly OidcOptions _oidcOptions;
     private readonly ConfigurationResponseFormatter _formatter;
-    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
 
     public DiscoverySignedMetadataTests()
     {
@@ -61,7 +64,7 @@ public class DiscoverySignedMetadataTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock),
+            new SignedMetadataProvider(new ProfiledJwtIssuer(_jwtCreatorMock.Object, TestEncryptionAlgorithms.Every), _keysProviderMock.Object, _clock, TestSigningAlgorithms.Registered),
             SingleIssuer.Accessor);
     }
 
@@ -78,6 +81,12 @@ public class DiscoverySignedMetadataTests
         SubjectTypesSupported = ["public"],
     };
 
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
+
     /// <summary>
     /// When the opt-in flag is off, the discovery document carries no <c>signed_metadata</c>
     /// and the signing pipeline is never touched (safe-by-default).
@@ -87,10 +96,8 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = false;
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.SignedMetadata);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Null(result.SignedMetadata);
         _jwtCreatorMock.Verify(
             c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(),
                 It.IsAny<string>(), It.IsAny<string>()),
@@ -116,9 +123,9 @@ public class DiscoverySignedMetadataTests
                 (_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(SignedJws);
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+        var result = await FormatAsync(MinimalResponse());
 
-        Assert.Equal(SignedJws, result.Value!.SignedMetadata);
+        Assert.Equal(SignedJws, result.SignedMetadata);
         Assert.Null(capturedEncryptionKey);
     }
 
@@ -143,7 +150,7 @@ public class DiscoverySignedMetadataTests
         await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(capturedToken);
-        var payload = capturedToken!.Payload.Json;
+        var payload = capturedToken.Payload.Json;
 
         Assert.Equal(Issuer, (string?)payload["iss"]);
         Assert.Equal(Issuer, (string?)payload["issuer"]);
@@ -186,7 +193,7 @@ public class DiscoverySignedMetadataTests
         _oidcOptions.Discovery.SignedMetadata = true;
         _keysProviderMock
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig" } }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock

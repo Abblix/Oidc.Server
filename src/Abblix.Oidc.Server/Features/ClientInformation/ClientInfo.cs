@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -129,12 +130,15 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Defines the response types that the client is permitted to use, or null when the client does not
     /// state them and the default in <see cref="EffectiveResponseTypes"/> applies.
-    /// This controls how tokens are issued in response to an authorization request.
+    /// This controls how tokens are issued in response to an authorization request. An empty list closes
+    /// the authorization endpoint to the client and leaves every other endpoint and grant as they are: it
+    /// is the shape of a resource server that only introspects tokens, or of a client of the client
+    /// credentials, CIBA or device grant.
     /// </summary>
     /// <remarks>
     /// Null and empty mean different things. Null is "not stated", and the default applies. An empty
-    /// list is stated: it allows nothing, and it is how a client is switched off without being removed
-    /// from the registry.
+    /// list is stated, and the default does not apply: the client may use none of the values this
+    /// property lists.
     ///
     /// Null rather than a defaulted value on purpose, so that a registry kept in configuration says what
     /// the client may do and nothing else. The .NET configuration binder adds to a collection a property
@@ -175,8 +179,8 @@ public record ClientInfo(string ClientId)
     /// <see cref="Abblix.Oidc.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
     /// <c>query</c> on a crafted request, nor by omitting the parameter to inherit the flow default. The
     /// restriction is applied on top of, and after, the flow-compatibility check. When <c>null</c> or empty (the
-    /// default) it imposes no per-client restriction. There is no registered DCR metadata parameter for it, so
-    /// the list is host-side configuration only.
+    /// default) it imposes no per-client restriction. A dynamically registered client sets it with the
+    /// <c>response_modes</c> metadata of FAPI 2.0 Message Signing section 5.3.3.
     /// </summary>
     public string[]? AllowedResponseModes { get; set; }
 
@@ -185,6 +189,23 @@ public record ClientInfo(string ClientId)
     /// with <c>prompt=consent</c> to receive it. Disabled by default.
     /// </summary>
     public OfflineAccess OfflineAccess { get; set; }
+
+    /// <summary>
+    /// Lets this client receive the offline access it is allowed from an authorization request whose response carries
+    /// an access token through the user agent, as with the <c>code token</c> and <c>code id_token token</c> response
+    /// types. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 section 17.4: "this specification mandates ignoring the offline access request when the
+    /// Access Token is transmitted through the User Agent", since an access token exposed there could be used to
+    /// reach the UserInfo endpoint and should not be one that enables offline access. A client built on servers that
+    /// issued the refresh token anyway keeps working while it moves to a response type returning the access token from
+    /// the token endpoint alone. Granted by the host, never through dynamic client registration, and no wider than
+    /// <see cref="OfflineAccess"/> allows. An update of a dynamically registered client (RFC 7592) builds the client
+    /// anew, so it takes <see cref="Common.Configuration.NewClientOptions.AllowOfflineAccessWithUserAgentAccessToken"/>
+    /// again, replacing whatever the host set on that one client.
+    /// </remarks>
+    public bool AllowOfflineAccessWithUserAgentAccessToken { get; set; } = false;
 
     /// <summary>
     /// The set of JSON Web Keys used by the client, typically for signing request objects and decrypting
@@ -345,6 +366,44 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientIntrospection { get; set; } = false;
 
     /// <summary>
+    /// What this client's authentication assertions may name as their audience, and in which form: the issuer identifier
+    /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
+    /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), the backchannel authentication
+    /// endpoint URL CIBA Core 1.0 section 7.1 names
+    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), the pushed authorization request
+    /// endpoint URL RFC 9126 section 2 named before RFC 10070 section 5 replaced it
+    /// (<see cref="ClientAssertionAudiences.PushedAuthorizationRequestEndpoint"/>), an array holding any of them beside
+    /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or several of these.
+    /// </summary>
+    /// <remarks>
+    /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
+    /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
+    /// Token Endpoint", or to RFC 7523's array, does not meet. A value beyond
+    /// <see cref="ClientAssertionAudiences.Issuer"/> departs from that MUST for the one client granted it, while every
+    /// other client stays held to the rule. Section 6 of that RFC permits no such departure: it only warns that such
+    /// clients "may not interoperate with authorization servers that strictly enforce the updated requirements", which
+    /// is why a host may choose it.
+    /// <para>
+    /// A value left unset, zero, reads as <see cref="ClientAssertionAudiences.Issuer"/>, so a host that stores its
+    /// clients itself and has no value for this one holds the client to the rule. A configured set without
+    /// <see cref="ClientAssertionAudiences.Issuer"/>, or naming a value the enumeration does not define, is refused at
+    /// startup, and one beyond the issuer alone is refused for a client held to FAPI 2.0, at startup and when the
+    /// client authenticates.
+    /// </para>
+    /// <para>
+    /// This is granted by the host, never through dynamic client registration. An update of a dynamically registered
+    /// client (RFC 7592) builds the client anew, so it takes
+    /// <see cref="Common.Configuration.NewClientOptions.ClientAssertionAudiences"/> again, replacing whatever the host
+    /// set on that one client.
+    /// </para>
+    /// </remarks>
+    public ClientAssertionAudiences ClientAssertionAudiences
+    {
+        get => field.ByDefault(ClientAssertionAudiences.Issuer);
+        set => field = value.ByDefault(ClientAssertionAudiences.Issuer);
+    } = ClientAssertionAudiences.Issuer;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 section 2.3 / OIDC Core section 9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
@@ -386,9 +445,9 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// RFC 8705 section 3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
     /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
-    /// request arrives over mutual TLS - independently of the client authentication method, which
-    /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
-    /// already get.
+    /// request arrives over mutual TLS, independently of the client authentication method. A client
+    /// authenticating with mutual TLS without it gets no certificate binding, unless its security profile
+    /// issues certificate-bound tokens only.
     /// </summary>
     public bool TlsClientCertificateBoundAccessTokens { get; set; } = false;
 
@@ -396,8 +455,9 @@ public record ClientInfo(string ClientId)
     /// A named security profile this client asks to be held to, ON TOP of whatever the deployment
     /// demands of every client. <see cref="ClientSecurityProfile.Fapi2"/> forces the FAPI 2.0
     /// control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization Requests,
-    /// sender-constrained tokens, code-only responses) and prevents the individual toggles above
-    /// from weakening it.
+    /// sender-constrained tokens, code-only responses), <see cref="ClientSecurityProfile.Fapi1Advanced"/> the
+    /// FAPI 1.0 Advanced one (signed request objects and only their parameters, sender-constrained tokens), and
+    /// either prevents the individual toggles above from weakening it.
     ///
     /// It can only tighten. <see cref="ClientSecurityProfile.None"/> names no controls of its
     /// own and therefore changes nothing where the deployment names some: a server-wide profile is
@@ -408,6 +468,10 @@ public record ClientInfo(string ClientId)
     ///
     /// <c>null</c> (the default) states no preference and leaves the client on
     /// <see cref="MultiTenancy.TenantDefinition.DefaultSecurityProfile"/> alone.
+    ///
+    /// Set by the host, never through dynamic client registration. An update of a dynamically registered client
+    /// (RFC 7592) keeps it, as it keeps every other member the registration metadata cannot carry, and is judged
+    /// under it.
     /// </summary>
     public ClientSecurityProfile? SecurityProfile { get; set; }
 

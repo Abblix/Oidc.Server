@@ -32,7 +32,7 @@ public class PrivateKeyJwtAuthenticator(
     IReplayCache replayCache,
     IServiceProvider serviceProvider,
     TimeProvider timeProvider)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider, serviceProvider)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -56,13 +56,13 @@ public class PrivateKeyJwtAuthenticator(
     protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
         TenantDefinition tenant, string jwt)
     {
-        using var scope = serviceProvider.CreateScope();
+        using var scope = Services.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
 
         // Stated rather than left to the default, because the requirements are this method's and not the
         // validator's, which also reads request objects: the base class judges the type and the audience after
         // validation, by RFC 10070 section 4.
         return await tokenValidator.ValidateAsync(
-            tenant, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
+            tenant, client: null, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
     }
 }

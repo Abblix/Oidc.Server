@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
@@ -19,6 +20,12 @@ namespace Abblix.Oidc.Server.AspNetCore;
 public static class CookieOptionsExtensions
 {
     /// <summary>Converts core <see cref="Common.CookieOptions"/> to ASP.NET Core's <see cref="CookieOptions"/>.</summary>
+    [SuppressMessage("Security", "S2092:Creating cookies without the \"secure\" flag is security-sensitive",
+        Justification = "A faithful mapping: Secure is whatever the caller's options set, and the server's cookies " +
+                        "decide it where they are built.")]
+    [SuppressMessage("Security", "S3330:Creating cookies without the \"HttpOnly\" flag is security-sensitive",
+        Justification = "A faithful mapping: the check-session cookie has to stay readable by the " +
+                        "check_session_iframe script (SessionManagementService), so HttpOnly is the caller's to set.")]
     public static CookieOptions ConvertOptions(this Common.CookieOptions options) => new()
     {
         Domain = options.Domain,

@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -47,27 +49,22 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// before issuing an access token.
 /// </remarks>
 /// <param name="jwtValidator">Validates JWT assertions including signature verification and claims validation.</param>
-/// <param name="issuerProvider">Provides comprehensive JWT Bearer functionality including trusted issuers, keys, and replay protection.</param>
-/// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
+/// <param name="issuerProvider">Provides the trusted issuers, their keys and the JWT Bearer settings.</param>
+/// <param name="requestInfoProvider">Names the address a granted request came from, for the record of the grant.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
-/// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
+/// <param name="assertionPolicy">Holds a verified assertion to the deployment's and the issuer's policy: expiry,
+/// algorithm, token type, age, replay and scopes, and names the parameters its signature is verified with.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
-	IJsonWebTokenValidator jwtValidator,
+	ProfiledJwtValidator jwtValidator,
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
 	TimeProvider timeProvider,
-	ITenantCatalog catalog) : IAuthorizationGrantHandler
+	JwtBearerAssertionPolicy assertionPolicy) : IAuthorizationGrantHandler
 {
-	private readonly JwtBearerAssertionPolicy _assertionPolicy =
-		new(logger, issuerProvider, timeProvider);
-
-	private readonly JwtBearerAssertionParameters _assertionParameters =
-		new(logger, issuerProvider, requestInfoProvider, catalog);
-
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
 	/// </summary>
@@ -97,12 +94,12 @@ public partial class JwtBearerGrantHandler(
 		return ValidateAssertionParameter(request, clientInfo)
 			.BindAsync(assertion => ValidateJwtAsync(tenant, assertion, clientInfo))
 			.BindAsync(jwt => ValidateSubjectAsync(tenant, jwt, clientInfo))
-			.Bind(ctx => _assertionPolicy.ValidateExpiration(ctx, clientInfo))
-			.Bind(ctx => _assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
-			.Bind(ctx => _assertionPolicy.ValidateTokenType(ctx, clientInfo))
-			.Bind(ctx => _assertionPolicy.ValidateJwtAge(tenant, ctx, clientInfo))
-			.BindAsync(ctx => ValidateReplayProtectionAsync(ctx, clientInfo))
-			.Bind(ctx => ValidateScopes(ctx, request.Scope))
+			.Bind(ctx => assertionPolicy.ValidateExpiration(ctx, clientInfo))
+			.Bind(ctx => assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
+			.Bind(ctx => assertionPolicy.ValidateTokenType(ctx, clientInfo))
+			.Bind(ctx => assertionPolicy.ValidateJwtAge(tenant, ctx, clientInfo))
+			.BindAsync(ctx => assertionPolicy.ValidateReplayAsync(ctx, clientInfo))
+			.Bind(ctx => assertionPolicy.ValidateScopes(ctx, request.Scope))
 			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, request.Resources, clientInfo)));
 	}
 
@@ -135,8 +132,9 @@ public partial class JwtBearerGrantHandler(
 	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(TenantDefinition tenant, [Credential] string assertion, ClientInfo clientInfo)
 	{
 		var validationResult = await jwtValidator.ValidateAsync(
+			SecurityProfileRequirements.For(tenant, clientInfo),
 			assertion,
-			_assertionParameters.For(tenant, _assertionPolicy.ResolveClockSkew(tenant, clientInfo)));
+			assertionPolicy.ParametersFor(tenant, clientInfo));
 
 		return validationResult.MapFailure(failure =>
 		{
@@ -165,57 +163,6 @@ public partial class JwtBearerGrantHandler(
 		var trustedIssuer = await issuerProvider.GetTrustedIssuerAsync(tenant, issuer);
 
 		return new JwtBearerValidationContext(jwt, subject, issuer, trustedIssuer);
-	}
-
-	/// <summary>
-	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 3).
-	/// </summary>
-	private async Task<Result<JwtBearerValidationContext, OidcError>> ValidateReplayProtectionAsync(
-		JwtBearerValidationContext ctx, ClientInfo clientInfo)
-	{
-		var options = issuerProvider.Options;
-		if (!options.RequireJti)
-			return ctx;
-
-		var jti = ctx.Jwt.Payload.JwtId;
-		if (string.IsNullOrWhiteSpace(jti))
-		{
-			LogMissingJti(clientInfo.ClientId, ctx.Issuer);
-			return new OidcError(ErrorCodes.InvalidGrant,
-				"The JWT assertion must contain a 'jti' (JWT ID) claim for replay protection");
-		}
-
-		// Single atomic reserve-and-check: record the jti keyed to the assertion's own 'exp' (which
-		// ValidateExpiration guarantees is present and carries on the context) and treat "already
-		// present" as a replay. One call avoids both the lost-TTL bug of a separate mark step and
-		// the read-then-write race.
-		if (await issuerProvider.IsReplayedAsync(jti, ctx.ExpiresAt))
-		{
-			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
-			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");
-		}
-
-		return ctx;
-	}
-
-	/// <summary>
-	/// Validates that requested scopes are allowed for the issuer.
-	/// </summary>
-	private Result<JwtBearerValidationContext, OidcError> ValidateScopes(
-		JwtBearerValidationContext ctx, string[]? scope)
-	{
-		if (ctx is not { TrustedIssuer.AllowedScopes: { Length: > 0 } allowedScopes} || scope is null)
-			return ctx;
-
-		var invalidScopes = scope.Except(allowedScopes).ToArray();
-		if (invalidScopes.Length == 0)
-			return ctx;
-
-		LogScopesNotAllowed(Sanitized.Values(invalidScopes), ctx.Issuer);
-
-		return new OidcError(
-			ErrorCodes.InvalidScope,
-			$"The following scopes are not allowed for this issuer: {string.Join(", ", invalidScopes)}");
 	}
 
 	/// <summary>

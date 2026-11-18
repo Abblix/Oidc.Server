@@ -17,7 +17,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>The Shared Signals endpoints as route handlers. For a transmitter: configuration discovery, stream management, subject management, verification and poll delivery. For a receiver: the push intake a transmitter posts to. Each validates through the Shared Signals and Security Events cores before handing on, declares the statuses it answers, and needs no MVC framework in the host. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>The Shared Signals endpoints as route handlers. For a transmitter: configuration discovery, stream management, subject management, verification and poll delivery. For a receiver: the push intake a transmitter posts to. Each validates through the Shared Signals and Security Events cores before handing on, declares the statuses it answers, and needs no MVC framework in the host. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

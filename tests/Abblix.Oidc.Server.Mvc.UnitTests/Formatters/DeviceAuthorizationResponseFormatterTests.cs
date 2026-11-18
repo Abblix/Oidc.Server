@@ -7,10 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
+using Moq;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
@@ -34,7 +36,7 @@ public class DeviceAuthorizationResponseFormatterTests
             Interval = TimeSpan.FromSeconds(5),
         };
 
-        var result = await new DeviceAuthorizationResponseFormatter().FormatResponseAsync(
+        var result = await new DeviceAuthorizationResponseFormatter(Mock.Of<ITenantAccessor>()).FormatResponseAsync(
             new DeviceAuthorizationRequest(),
             completed);
 

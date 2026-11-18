@@ -9,6 +9,7 @@
 #if !MINIMAL_API_TRANSPORT
 
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using System.Net.Mime;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
@@ -62,6 +63,49 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             parameter.Name == TokenRequest.Parameters.Code && parameter.Source == BindingSource.Form);
         Assert.Contains(token.ParameterDescriptions, parameter =>
             parameter.Name == HeaderNames.Authorization && parameter.Source == BindingSource.Header);
+    }
+
+    /// <summary>
+    /// The Authorization header is one field holding one set of credentials (RFC 9110 section 11.6.2), so it is
+    /// described as a string wherever the library reads it, never as a list a generated client would join with commas.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "connect/token")]
+    [InlineData("POST", "connect/register")]
+    [InlineData("GET", "connect/register/{clientId}")]
+    [InlineData("PUT", "connect/register/{clientId}")]
+    [InlineData("DELETE", "connect/register/{clientId}")]
+    public void TheAuthorizationHeaderIsDescribedAsOneString(string method, string path)
+    {
+        var operation = Single(Descriptions(Factory.Services), method, path);
+
+        var parameter = Assert.Single(operation.ParameterDescriptions, parameter =>
+            parameter.Name == HeaderNames.Authorization);
+        Assert.Equal(BindingSource.Header, parameter.Source);
+        Assert.Equal(typeof(string), parameter.Type);
+        // Open registration takes no initial access token, so a generated client must be free to omit the header
+        Assert.False(parameter.IsRequired);
+    }
+
+    /// <summary>
+    /// The client metadata is read as JSON alone, which the description says, although a body of another media type is
+    /// taken in too, so it is refused only once its token passes.
+    /// </summary>
+    private const string TextJson = "text/json";
+
+    [Theory]
+    [InlineData("POST", "connect/register")]
+    [InlineData("PUT", "connect/register/{clientId}")]
+    public void AClientMetadataRequestIsDescribedWithAJsonBody(string method, string path)
+    {
+        var operation = Single(Descriptions(Factory.Services), method, path);
+
+        Assert.Contains(operation.SupportedRequestFormats, format => format.MediaType == MediaTypeNames.Application.Json);
+
+        // The JSON reader also takes text/json, which only the declared media type leaves out
+        Assert.DoesNotContain(operation.SupportedRequestFormats, format => format.MediaType == TextJson);
+        var body = Assert.Single(operation.ParameterDescriptions, parameter => parameter.Source == BindingSource.Body);
+        Assert.Equal(typeof(ClientRegistrationRequest), body.Type);
     }
 
     [Fact]

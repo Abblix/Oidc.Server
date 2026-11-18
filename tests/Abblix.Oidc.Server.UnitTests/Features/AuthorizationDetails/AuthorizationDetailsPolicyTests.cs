@@ -391,23 +391,6 @@ public class AuthorizationDetailsPolicyTests
     }
 
     [Fact]
-    public async Task ApplyGrantedAsync_without_an_override_asks_the_request_time_question()
-    {
-        // The granted phase is a distinct question, not a weaker one: a type that does not enrich
-        // answers the same way in both phases, so the anti-escalation re-check keeps biting for
-        // every validator written before this member existed.
-        var sp = BuildProvider(registerValidators: services => services
-            .AddAuthorizationDetailValidator<RejectingValidator>("payment_initiation"));
-        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-
-        var result = await composite.ApplyGrantedAsync(SingleIssuer.Tenant, raw, raw, TestClient, TestContext.Current.CancellationToken);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Contains(RejectingValidator.Reason, error.ErrorDescription);
-    }
-
-    [Fact]
     public async Task ApplyGrantedAsync_uses_the_overridden_granted_phase()
     {
         // RFC 9396 section 7.1 enrichment: the same entry that must be refused from a client is the one the
@@ -515,31 +498,6 @@ public class AuthorizationDetailsPolicyTests
     }
 
     [Fact]
-    public async Task ApplyGrantedAsync_falls_back_to_ApplyAsync_when_a_policy_does_not_override_it()
-    {
-        // The default member is what makes this addition non-breaking, and the shipped composite
-        // overrides it - so nothing would notice if the default stopped deferring and started
-        // accepting everything. A host that implements the interface itself is the case it protects.
-        IAuthorizationDetailsPolicy policy = new RefusingPolicy();
-
-        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-
-        var result = await policy.ApplyGrantedAsync(
-            SingleIssuer.Tenant,
-            granted, granted, TestClient, TestContext.Current.CancellationToken);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
-
-        // Forwarded, not merely reached: a default that called ApplyAsync with nothing would take the
-        // "no entries" exit and answer success for every granted set, and a policy that ignores its
-        // arguments cannot tell the two apart.
-        var refusing = (RefusingPolicy)policy;
-        Assert.Same(granted, refusing.LastRaw);
-        Assert.Same(TestClient, refusing.LastClient);
-    }
-
-    [Fact]
     public async Task ApplyGrantedAsync_still_applies_the_rules_the_type_did_not_exempt()
     {
         // An enrichable type exempts the field the server fills in, and nothing else. Its other rules
@@ -566,7 +524,7 @@ public class AuthorizationDetailsPolicyTests
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<ServedTenantOnlyValidator>("payment_initiation"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        JsonArray Raw() => new(new JsonObject { ["type"] = "payment_initiation" });
+        static JsonArray Raw() => new(new JsonObject { ["type"] = "payment_initiation" });
 
         var requested = await composite.ApplyAsync(SingleIssuer.Tenant, Raw(), TestClient, TestContext.Current.CancellationToken);
         var granted = await composite.ApplyGrantedAsync(
@@ -614,6 +572,14 @@ public class AuthorizationDetailsPolicyTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     private sealed class PaymentValidator : IAuthorizationDetailValidator
@@ -624,6 +590,14 @@ public class AuthorizationDetailsPolicyTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     private sealed class AccountValidator : IAuthorizationDetailValidator
@@ -634,6 +608,14 @@ public class AuthorizationDetailsPolicyTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     private sealed class RejectingValidator : IAuthorizationDetailValidator
@@ -647,6 +629,14 @@ public class AuthorizationDetailsPolicyTests
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>
@@ -710,30 +700,6 @@ public class AuthorizationDetailsPolicyTests
         }
     }
 
-    /// <summary>
-    /// A host's own policy: it implements the interface and knows nothing of the granted phase, which
-    /// is the shape the default member exists for.
-    /// </summary>
-    private sealed class RefusingPolicy : IAuthorizationDetailsPolicy
-    {
-        public const string Reason = "refused by the host's own policy";
-
-        public JsonArray? LastRaw { get; private set; }
-
-        public ClientInfo? LastClient { get; private set; }
-
-        public Task<Result<JsonArray, OidcError>> ApplyAsync(
-            TenantDefinition tenant,
-            JsonArray? raw, ClientInfo client, CancellationToken token)
-        {
-            LastRaw = raw;
-            LastClient = client;
-
-            return Task.FromResult<Result<JsonArray, OidcError>>(
-                new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
-        }
-    }
-
     private sealed class InvocationCounter
     {
         public int Count { get; private set; }
@@ -753,6 +719,14 @@ public class AuthorizationDetailsPolicyTests
                 amount["amount"] = "200.00";
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>Scenario 2: enforce a per-transaction client-tier cap of 1000.</summary>
@@ -774,6 +748,14 @@ public class AuthorizationDetailsPolicyTests
             }
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>Scenario 4: dedupe + lowercase actions for canonical output.</summary>
@@ -794,6 +776,14 @@ public class AuthorizationDetailsPolicyTests
             }
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     private sealed class CountingValidator(InvocationCounter counter) : IAuthorizationDetailValidator
@@ -809,6 +799,14 @@ public class AuthorizationDetailsPolicyTests
             counter.Increment();
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     // ───────────────────────────────────────────────────────────────────────
@@ -840,7 +838,7 @@ public class AuthorizationDetailsPolicyTests
         Assert.Equal("Payment transfer", descriptor.Title);
         Assert.Equal("Transfer 500 EUR to IBAN DE02 ...", descriptor.Summary);
         Assert.NotNull(descriptor.Details);
-        Assert.Contains(descriptor.Details!,
+        Assert.Contains(descriptor.Details,
             kv => kv.Key == "Amount" && kv.Value == "500.00 EUR");
     }
 
@@ -864,5 +862,13 @@ public class AuthorizationDetailsPolicyTests
                     new KeyValuePair<string, string>("Amount", "500.00 EUR"),
                     new KeyValuePair<string, string>("Beneficiary IBAN", "DE02 ..."),
                 ]));
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 }

@@ -6,6 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Common.Constants;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -34,7 +38,61 @@ public class BackChannelLogoutNotifierTests
     {
         _logoutTokenService = new Mock<ILogoutTokenService>(MockBehavior.Strict);
         _logoutTokenSender = new Mock<ILogoutTokenSender>(MockBehavior.Strict);
-        _notifier = new BackChannelLogoutNotifier(_logoutTokenService.Object, _logoutTokenSender.Object);
+        _notifier = new BackChannelLogoutNotifier(
+            _logoutTokenService.Object, _logoutTokenSender.Object, NullLogger<BackChannelLogoutNotifier>.Instance);
+    }
+
+    /// <summary>
+    /// A client whose key set its profile leaves nothing in to encrypt to cannot be sent a logout token it can read,
+    /// and one sent in the clear is one its profile forbids (FAPI 1.0 Part 2 section 8.6.1), so the notification is
+    /// not sent and the server goes on, rather than failing the logout as a server error.
+    /// </summary>
+    [Fact]
+    public async Task NotifyClientAsync_ALogoutTokenTheClientCannotBeSent_IsNotSent()
+    {
+        var clientInfo = CreateClientInfoWithBackChannelLogout();
+        var logoutContext = CreateLogoutContext();
+        _logoutTokenService
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
+            .ReturnsAsync(new Abblix.Oidc.Server.Common.OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
+
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
+
+        _logoutTokenSender.Verify(
+            s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A logout token not sent is recorded as information, whatever the cause: the formatter that refused it has
+    /// already logged the cause at its level, and this record adds what that one cannot - that the user's logout did
+    /// not reach this client - without raising the same failure twice.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Information)]
+    [InlineData(null, LogLevel.Information)]
+    public async Task NotifyClientAsync_ALogoutTokenNotIssued_IsRecordedAsInformation(
+        ClientJwtRefusalCause? cause, LogLevel expected)
+    {
+        var clientInfo = CreateClientInfoWithBackChannelLogout();
+        var logoutContext = CreateLogoutContext();
+        var refusal = cause is { } named
+            ? new ClientJwtRefusal(named, "cannot be signed")
+            : new Abblix.Oidc.Server.Common.OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to");
+        _logoutTokenService
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
+            .ReturnsAsync(refusal);
+        var loggers = new RecordingLoggerFactory();
+        var notifier = new BackChannelLogoutNotifier(
+            _logoutTokenService.Object, _logoutTokenSender.Object, loggers.CreateLogger<BackChannelLogoutNotifier>());
+
+        await notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
+
+        var entry = Assert.Single(
+            loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.LogoutNotification.BackChannelLogoutNotifier.LogoutTokenNotIssued);
+        Assert.Equal(expected, entry.Level);
     }
 
     private static ClientInfo CreateClientInfo(BackChannelLogoutOptions? backChannelLogout)
@@ -764,7 +822,7 @@ public class BackChannelLogoutNotifierTests
         var clientInfo = CreateClientInfoWithBackChannelLogout();
         var logoutContext = CreateLogoutContext();
         var logoutToken = CreateLogoutToken();
-        var tcs = new TaskCompletionSource<EncodedJsonWebToken>();
+        var tcs = new TaskCompletionSource<Abblix.Utils.Result<EncodedJsonWebToken, Abblix.Oidc.Server.Common.OidcError>>();
 
         _logoutTokenService
             .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))

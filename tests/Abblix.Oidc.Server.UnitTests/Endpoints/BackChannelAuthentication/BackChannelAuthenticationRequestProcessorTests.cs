@@ -47,6 +47,12 @@ public class BackChannelAuthenticationRequestProcessorTests
     private const string Approved = "user-who-approved";
     private const string ClientId = "ciba-client";
 
+    /// <summary>
+    /// Not the default, so a retention written with the default as a constant is told apart from one read from the
+    /// settings.
+    /// </summary>
+    private static readonly TimeSpan MaximumExpiry = TimeSpan.FromMinutes(7);
+
     private readonly Mock<IBackChannelRequestStorage> _storage = new();
     private readonly Mock<IUserDeviceAuthenticationHandler> _handler = new(MockBehavior.Strict);
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter = new(MockBehavior.Strict);
@@ -55,7 +61,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     public BackChannelAuthenticationRequestProcessorTests()
     {
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.SetupGet(o => o.Value).Returns(new OidcOptions());
+        options.SetupGet(o => o.Value).Returns(
+            new OidcOptions { BackChannelAuthentication = { MaximumExpiry = MaximumExpiry } });
 
         // A public client, so the session's subject is what the client sees. The pairwise direction is the
         // shared comparison's own business and is covered where it lives.
@@ -76,7 +83,11 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     private ValidBackChannelAuthenticationRequest Request(
-        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null)
+        string? hintedSubject,
+        string? claimsJson = null,
+        JsonArray? authorizationDetails = null,
+        bool namesScope = true,
+        TimeSpan? expiresIn = null)
     {
         var hint = hintedSubject is null
             ? null
@@ -89,7 +100,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             new BackChannelAuthenticationValidationContext(
                 new WireRequest
                 {
-                    Scope = [Scopes.OpenId],
+                    Scope = namesScope ? [Scopes.OpenId] : [],
                     Claims = claimsJson is null
                         ? null
                         : JsonSerializer.Deserialize<RequestedClaims>(claimsJson),
@@ -98,7 +109,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             {
                 ClientInfo = new ClientInfo(ClientId),
                 Scope = [new ScopeDefinition(Scopes.OpenId)],
-                ExpiresIn = TimeSpan.FromMinutes(5),
+                ExpiresIn = expiresIn ?? TimeSpan.FromMinutes(5),
                 IdToken = hint,
                 AuthorizationDetails = authorizationDetails,
             });
@@ -281,6 +292,28 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     /// <summary>
+    /// The scope validator serves a request naming no scope with the client's default without rewriting the
+    /// request, so the stored grant reads whether the client named one from the request as it was sent.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task TheStoredGrant_SaysWhetherTheClientNamedAScope(bool namesScope, bool expected)
+    {
+        HostAuthenticates(Approved);
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, namesScope: namesScope));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expected, stored?.AuthorizedGrant.Context.ClientNamedNoScope);
+    }
+
+    /// <summary>
     /// A request that named nobody is accepted whoever approved, which is the ordinary CIBA case.
     /// </summary>
     /// <remarks>
@@ -356,6 +389,35 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A request is kept past its expiry for the same time whatever lifetime it was given, the longest lifetime the
+    /// server grants any request, so a late poll is answered expired_token (CIBA Core 1.0 section 11) however short
+    /// the requested expiry was.
+    /// </summary>
+    /// <remarks>
+    /// A client in ping mode polls when notified, and none need be sent for an expired request, so it may come long
+    /// after a short expiry has passed. A window proportional to the lifetime left such a request a few seconds.
+    /// </remarks>
+    [Theory]
+    [InlineData(10)]
+    [InlineData(300)]
+    public async Task ARequestIsKeptPastItsExpiryForTheLongestLifetimeGranted(int expiresInSeconds)
+    {
+        HostAuthenticates(Approved);
+
+        var expiresIn = TimeSpan.FromSeconds(expiresInSeconds);
+        TimeSpan? keptFor = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest _, TimeSpan retention) => keptFor = retention)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, expiresIn: expiresIn));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expiresIn + MaximumExpiry, keptFor);
     }
 
     /// <summary>

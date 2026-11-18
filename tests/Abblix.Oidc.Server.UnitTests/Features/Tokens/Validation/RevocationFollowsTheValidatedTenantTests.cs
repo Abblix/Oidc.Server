@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -116,7 +117,7 @@ public class RevocationFollowsTheValidatedTenantTests
                 async (_, parameters) =>
                 {
                     if (parameters.ValidateIssuer != null)
-                        await parameters.ValidateIssuer(token.Payload.Issuer!);
+                        await parameters.ValidateIssuer(token.Payload.Issuer);
 
                     return token;
                 }));
@@ -132,18 +133,20 @@ public class RevocationFollowsTheValidatedTenantTests
                     ? new JwtValidationError(JwtError.TokenRevoked, "Cut off")
                     : null);
 
-        var validator = new AuthServiceJwtValidator(
-            inner.Object,
+        IAuthServiceJwtValidator validator = new AuthServiceJwtValidator(
+            new ProfiledJwtValidator(inner.Object),
             SingleIssuer.LicensedCatalog,
             Mock.Of<IAuthServiceKeysProvider>(),
             new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())));
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
+            TestOidcOptions.Defaults(),
+            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>());
 
         // The request served at a tenant, as tenant resolution leaves it, around the validation
         using var request = TenantScope.Enter(servedAt);
-        return await validator.ValidateAsync(Validated, "jwt", TokenTypePolicy.CheckedByCaller);
+        return await validator.ValidateAsync(Validated, null, "jwt", TokenTypePolicy.CheckedByCaller);
 
         JsonWebTokenStatus StatusOf(TenantDefinition tenant, string id)
         {

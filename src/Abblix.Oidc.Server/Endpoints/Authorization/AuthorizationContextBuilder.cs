@@ -94,6 +94,7 @@ internal sealed class AuthorizationContextBuilder(IConsentConstraintEnforcer con
             CodeChallengeMethod = model.CodeChallengeMethod,
             ProofKeyThumbprint = model.ProofKeyThumbprint,
             AuthorizationDetails = emittedAuthorizationDetails,
+            ClientNamedNoScope = model.ClientNamedNoScope,
         };
     }
 

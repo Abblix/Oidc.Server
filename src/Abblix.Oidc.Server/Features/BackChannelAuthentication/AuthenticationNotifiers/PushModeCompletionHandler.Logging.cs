@@ -27,9 +27,8 @@ partial class PushModeCompletionHandler
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.TokenGenerationFailed,
-        Level = LogLevel.Error,
         Message = "Failed to generate tokens for CIBA push mode, auth_req_id: {AuthReqId}, Error: {ErrorCode}")]
-    private partial void LogTokenGenerationFailed(Fingerprint AuthReqId, string ErrorCode);
+    private partial void LogTokenGenerationFailed(LogLevel level, Fingerprint AuthReqId, string ErrorCode);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,
@@ -86,6 +85,15 @@ partial class PushModeCompletionHandler
         Message = "A revocation refused the grant completing auth_req_id {AuthReqId} of client {ClientId}, so the " +
                   "client was sent access_denied and no tokens were issued")]
     private partial void LogGrantRevoked(Fingerprint AuthReqId, string ClientId);
+
+    // Warning: the host raised the tenant's or the client's profile while the request was pending, and the client
+    // has to move to the poll or ping mode
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.DeliveryRefusedByProfile,
+        Level = LogLevel.Warning,
+        Message = "The security profile of client {ClientId} does not admit the push mode, so the request " +
+                  "auth_req_id {AuthReqId} was answered with transaction_failed and no tokens were issued")]
+    private partial void LogDeliveryRefusedByProfile(Fingerprint AuthReqId, string ClientId);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.RevocationCheckFaulted,

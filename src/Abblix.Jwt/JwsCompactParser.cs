@@ -5,30 +5,30 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Buffers.Text;
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
 
 /// <summary>
-/// The first link of the JWS validation chain: reads the header and the payload of a compact JWS into a token.
+/// Reads the header and the payload of a compact JWS into a token, as RFC 7515 section 5.2 has a recipient decode and
+/// parse them, and verifies nothing: the first link of the JWS validation chain, and the one reading a consumer that
+/// judges a token's claims before its signature starts from.
 /// </summary>
-internal static class JwsCompactParser
+public static class JwsCompactParser
 {
     /// <summary>
-    /// Parses JWS string parts into header, payload, and signature.
+    /// The token the first two of <paramref name="jwtParts"/> (header and payload) hold, or
+    /// <see cref="JwtError.MalformedToken"/> when either is not strict base64url of a JSON object in UTF-8 without a
+    /// repeated member name.
     /// </summary>
+    /// <param name="jwtParts">The dot-separated parts of a compact JWS.</param>
     public static Result<JsonWebToken, JwtValidationError> Parse(string[] jwtParts)
     {
         byte[] headerPart, payloadPart;
         try
         {
-            headerPart = Base64Url.DecodeFromChars(jwtParts[0]);
-            payloadPart = Base64Url.DecodeFromChars(jwtParts[1]);
+            headerPart = JoseBase64Url.Decode(jwtParts[0]);
+            payloadPart = JoseBase64Url.Decode(jwtParts[1]);
         }
         catch
         {
@@ -37,14 +37,14 @@ internal static class JwsCompactParser
                 "Invalid JWT format: base64url decoding failed");
         }
 
-        if (!TryParseJsonObject(headerPart, out var headerObject))
+        if (!JoseJson.TryParseObject(headerPart, out var headerObject))
         {
             return new JwtValidationError(
                 JwtError.MalformedToken,
                 "Invalid JWS header: must be a JSON object");
         }
 
-        if (!TryParseJsonObject(payloadPart, out var payloadObject))
+        if (!JoseJson.TryParseObject(payloadPart, out var payloadObject))
         {
             return new JwtValidationError(
                 JwtError.MalformedToken,
@@ -59,28 +59,4 @@ internal static class JwsCompactParser
 
         return token;
     }
-
-    private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
-    {
-        try
-        {
-            var json = Encoding.UTF8.GetString(jwtPart);
-            jsonObject = JsonNode.Parse(json, documentOptions: RejectRepeatedMemberNames) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            jsonObject = null;
-        }
-        return jsonObject is not null;
-    }
-
-    /// <summary>
-    /// Makes the parser itself reject a repeated member name, which is the first of the two options
-    /// RFC 7519 Section 4 and RFC 7515 Section 4 allow a recipient. It reports the repetition as a
-    /// <see cref="JsonException"/> at parse time, alongside every other malformed-JSON verdict.
-    /// </summary>
-    private static readonly JsonDocumentOptions RejectRepeatedMemberNames = new()
-    {
-        AllowDuplicateProperties = false,
-    };
 }

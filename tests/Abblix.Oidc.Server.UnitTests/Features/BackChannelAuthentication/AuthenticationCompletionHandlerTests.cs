@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Microsoft.Extensions.Time.Testing;
 using System;
@@ -85,7 +86,7 @@ public partial class AuthenticationCompletionHandlerTests
             new AuthorizedGrant(
                 new AuthSession(UserId, "stored_session", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             Status = present,
         };
@@ -95,13 +96,19 @@ public partial class AuthenticationCompletionHandlerTests
 
     private static readonly DateTimeOffset ApprovedAt = new(2024, 1, 15, 11, 30, 0, TimeSpan.Zero);
 
+    /// <summary>
+    /// The expiry of a stored request still waiting for its answer: later than both clocks the handlers here read,
+    /// <see cref="ApprovedAt"/> and the system's.
+    /// </summary>
+    private static DateTimeOffset StillPendingUntil => TimeProvider.System.GetUtcNow().AddHours(1);
+
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             new FakeTimeProvider(ApprovedAt), null);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            _notificationService.Object, new FakeTimeProvider(ApprovedAt));
+            _notificationService.Object, new FakeTimeProvider(ApprovedAt), null);
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
@@ -220,6 +227,41 @@ public partial class AuthenticationCompletionHandlerTests
             _expiresIn);
 
         Assert.Equal(hostSetIt ? hostMoment : ApprovedAt, stored);
+    }
+
+    /// <summary>
+    /// Whether the client named a scope is read from the record the server stored, so a host completing with a
+    /// context it built from scratch, which carries no such fact, does not change it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CompleteAuthenticationAsync_KeepsWhetherTheClientNamedAScope_FromTheStoredRecord(
+        bool clientNamedNoScope)
+    {
+        var authSession = new AuthSession(UserId, "session_123", ApprovedAt.AddHours(-1), "backchannel");
+        StoredRecordIs(new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                authSession,
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null) { ClientNamedNoScope = clientNamedNoScope }),
+            TimeProvider.System.GetUtcNow().AddMinutes(5)));
+        var rebuiltByTheHost = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5));
+
+        BackChannelAuthenticationRequest? written = null;
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+            .Callback((TenantDefinition _, string _, BackChannelAuthenticationRequest request, TimeSpan _) => written = request)
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
+            AuthReqId,
+            rebuiltByTheHost,
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            _expiresIn);
+
+        Assert.Equal(clientNamedNoScope, written?.AuthorizedGrant.Context.ClientNamedNoScope);
     }
 
     /// <summary>
@@ -552,6 +594,48 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Verify(
             s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId),
             Times.Once);
+    }
+
+    /// <summary>
+    /// Tokens a push request cannot be issued are recorded with the request they were for: as information where the
+    /// formatter refused a JWT for the client, since it has already logged the cause at its level, and as an error for
+    /// any other failure to issue, which nothing else logs. The client is told the transaction failed either way.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Information)]
+    [InlineData(null, LogLevel.Error)]
+    public async Task CompleteAuthenticationAsync_PushMode_TokensNotIssued_AreRecordedWithTheRequest(
+        ClientJwtRefusalCause? cause, LogLevel expected)
+    {
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+            ClientNotificationEndpoint = _notificationEndpoint,
+            ClientNotificationToken = NotificationToken,
+        };
+        StoredRecordIs(request);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push };
+        OidcError error = cause is { } named
+            ? new ClientJwtRefusal(named, "cannot be signed")
+            : new OidcError(ErrorCodes.InvalidRequest, "Token generation failed");
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync((Result<TokenIssued, OidcError>)error);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+        var loggers = new RecordingLoggerFactory();
+
+        await CreatePushModeHandler(logger: loggers.CreateLogger<PushModeCompletionHandler>())
+            .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
+
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed);
+        var entry = Assert.Single(
+            loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.PushModeCompletionHandler.TokenGenerationFailed);
+        Assert.Equal(expected, entry.Level);
     }
 
     /// <summary>
@@ -971,7 +1055,7 @@ public partial class AuthenticationCompletionHandlerTests
                     AuthContextClassRef = authenticated,
                 },
                 new AuthorizationContext(ClientId, [Scopes.OpenId], EssentialAcr(required))),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             ClientNotificationToken = NotificationToken,
         };
@@ -1042,7 +1126,7 @@ public partial class AuthenticationCompletionHandlerTests
             new AuthorizedGrant(
                 new AuthSession(authenticated, "session_1", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             RequestedSubjects = requested is null ? null : [requested],
             ClientNotificationToken = NotificationToken,

@@ -18,6 +18,8 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -52,13 +54,56 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
+    }
+
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so credentials under the Basic scheme
+    /// in another case authenticate the client the same way.
+    /// </summary>
+    [Fact]
+    public async Task ValidAuthentication_UnderTheSchemeInAnotherCase_ShouldAuthenticate()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(CreateClientInfo(ClientSecret));
+        var valid = PrepareValidRequest(ClientId, ClientSecret);
+        var request = valid with
+        {
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(
+                TokenTypes.Basic.ToLowerInvariant(),
+                valid.AuthorizationHeader!.Parameter).ToString()],
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     protected override ClientRequest PrepareMissingPrimaryCredentialRequest()
     {
         return new ClientRequest();
+    }
+
+    /// <summary>
+    /// Credentials that are not base64 are the client's malformed request, not a fault of the server: the client is
+    /// simply not authenticated by this method, so the caller answers invalid_client (RFC 6749 section 5.2).
+    /// </summary>
+    [Fact]
+    public async Task CredentialsThatAreNotBase64_AreNotAuthenticated()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var request = new ClientRequest
+        {
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!").ToString()],
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     protected override ClientRequest PrepareWrongFormatRequest()
@@ -68,7 +113,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials).ToString()]
         };
     }
 
@@ -79,7 +124,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -90,7 +135,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -101,7 +146,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -119,14 +164,14 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic).ToString()]
         };
 
         // Act
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -145,13 +190,32 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
 
         // Act
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// An Authorization header of another scheme, or one that does not parse, is still an attempt to authenticate
+    /// through the header, which RFC 6749 section 5.2 answers with 401: a credential presented and refused.
+    /// </summary>
+    [Theory]
+    [InlineData("Bearer abc")]
+    [InlineData("Basic ,")]
+    public async Task AnAuthorizationHeaderThisMethodCannotRead_IsAPresentedCredentialRefused(string line)
+    {
+        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { AuthorizationHeaderLines = [line] });
+
+        Assert.True(result.TryGetFailure(out var failure));
+        Assert.IsNotType<UnauthenticatedCallerError>(failure);
+        Assert.Equal(ErrorCodes.InvalidClient, failure.Error);
     }
 }

@@ -23,31 +23,45 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// and RFC 6750 Bearer Token Usage. When <see cref="OidcOptions.RequireInitialAccessToken"/> is enabled,
 /// checks JWT signature, expiration, type, and revocation status, the last through the token status check of
 /// <see cref="IAuthServiceJwtValidator"/>, which refuses a token whose identifier is recorded as revoked.
-/// Skipped for update operations and when the feature is disabled.
+/// Skipped when the feature is disabled.
 /// </summary>
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
 /// <param name="options">OIDC configuration options.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
-    IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
+    IOptionsMonitor<OidcOptions> options) : IInitialAccessTokenValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, IReadOnlyList<string>? authorizationHeaderLines)
     {
-        if (context.Operation != DynamicClientOperation.Register || !options.CurrentValue.RequireInitialAccessToken)
+        if (!options.CurrentValue.RequireInitialAccessToken)
             return null;
 
-        var header = context.Request.AuthorizationHeader;
-        if (header?.Parameter == null)
+        // RFC 7591 section 3.2.2 answers an error "appropriate to the OAuth 2.0 token type", and RFC 6750 section 3.1
+        // names a request that "uses more than one method for including an access token" an invalid_request
+        if (authorizationHeaderLines is { Count: > 1 })
+            return Common.Validation.ErrorFactory.MoreThanOneBearerAuthorizationHeader;
+
+        // RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+        // authentication is necessary or attempted using an unsupported authentication method)" gets no error code, so
+        // the typed marker has the challenge builder leave the error attributes out. A token in the query is not read
+        // here at all, so the request carrying one lacks it alike
+        var header = AuthenticationHeaderValueExtensions.FromSingleLine(authorizationHeaderLines);
+        if (header == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
+            return new MissingAuthenticationError(
                 $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
-        if (header.Scheme != TokenTypes.Bearer)
+        if (!header.HasScheme(TokenTypes.Bearer))
+            return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
+
+        // RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+        // which section 3.1 names invalid_request, rather than a token found invalid
+        if (header.Parameter == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
-                $"The scheme name '{header.Scheme}' is not supported");
+            return new BearerRequestError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
         // The audience is required and checked. An initial access token authorizes registration at this
@@ -56,6 +70,7 @@ public class InitialAccessTokenValidator(
         // the one exception to the rule every other token here follows.
         var result = await jwtValidator.ValidateAsync(
             tenant,
+            client: null,
             header.Parameter,
             TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken),
             // A token that never expires could not be revoked for good: its revocation is kept until it expires

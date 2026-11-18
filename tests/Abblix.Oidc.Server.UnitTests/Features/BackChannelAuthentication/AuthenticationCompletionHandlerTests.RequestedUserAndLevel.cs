@@ -217,7 +217,7 @@ public partial class AuthenticationCompletionHandlerTests
             new AuthorizedGrant(
                 new AuthSession(UserId, "session_1", DateTimeOffset.UnixEpoch, "test") { AuthContextClassRef = WeakLevel },
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             ClientNotificationToken = NotificationToken,
             RequiredAuthContextClassRefs = [StrongLevel],

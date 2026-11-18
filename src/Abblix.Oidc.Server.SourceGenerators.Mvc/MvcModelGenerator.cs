@@ -46,13 +46,17 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
 	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
+	private const string QueryParameterMarkerName = "QueryParameterAttribute";
+	private const string FormParameterMarkerName = "FormParameterAttribute";
 	private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
 	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
 	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
 	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
 	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
+	private const string BindAttributeName = "global::Microsoft.AspNetCore.Mvc.Bind";
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
+	private const string SplitSourceParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.SplitSourceParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
 	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
 	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
@@ -244,6 +248,11 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// living in a coverage settings file, which is both tool-independent and the only route that
 			// works here - dotnet test refuses to run at all when handed --coverage-settings.
 			_writer.AppendLine($"[{ExcludeFromCoverageAttribute}]");
+			// The model's fields are read under their own names. Without a model name of its own, MVC reads them
+			// under the action parameter's name as a prefix whenever the request carries a field of that name, so
+			// an unrecognized field "tokenRequest" would hide grant_type, which RFC 6749 section 3.2 forbids:
+			// "The authorization server MUST ignore unrecognized request parameters".
+			_writer.AppendLine($"[{BindAttributeName}(Prefix = \"\")]");
 			_writer.AppendLine($"public partial record {stub.Name}");
 			_writer.AppendLine("{");
 
@@ -313,6 +322,18 @@ public class MvcModelGenerator : IIncrementalGenerator
 						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({certificateBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
 					break;
 
+				// The property's own source overrides the action parameter's query-or-form one, so the parameter is read
+				// from this part of the request alone, and still counted like any other single-valued parameter
+				case QueryParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
+					EmitSingleSourceParameter("FromQuery", queryName);
+					break;
+
+				case FormParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string formName }]:
+					EmitSingleSourceParameter("FromForm", formName);
+					break;
+
 				default:
 					_diagnostics.Add(new DiagnosticInfo(
 						MarkerWithoutBinder, stub.Location,
@@ -324,6 +345,14 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
 			_mappedProperties.Add(property);
+		}
+
+		private void EmitSingleSourceParameter(string sourceAttribute, string wireName)
+		{
+			var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wireName, quote: true);
+			_writer.AppendLine($"\t[global::Microsoft.AspNetCore.Mvc.{sourceAttribute}(Name = {literal})]");
+			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = {literal})]");
+			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({SplitSourceParameterBinderName}))]");
 		}
 
 		private void EmitProperty(IPropertySymbol property)
@@ -555,7 +584,8 @@ public class MvcModelGenerator : IIncrementalGenerator
 			=> property.GetAttributes().FirstOrDefault(attribute =>
 				attribute.AttributeClass is
 				{
-					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
+					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName
+						or QueryParameterMarkerName or FormParameterMarkerName,
 				} attributeClass &&
 				attributeClass.ContainingNamespace.ToDisplayString() == _declarativeNamespace);
 

@@ -6,9 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common.Configuration;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -27,21 +33,42 @@ public class EncryptedResponseAlgorithmsValidatorTests
     private const string SupportedAlg = EncryptionAlgorithms.KeyManagement.RsaOaep256;
     private const string SupportedEnc = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
 
-    private readonly Mock<IJsonWebTokenValidator> _jwtValidator = new(MockBehavior.Strict);
+    private static readonly Uri JwksUri = new("https://client.example.com/jwks");
+
+    private readonly Mock<IJwtAlgorithmsProvider> _jwtAlgorithms = new(MockBehavior.Strict);
+    private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
+    private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
+    private JsonWebKey[] _tenantKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)];
     private readonly EncryptedResponseAlgorithmsValidator _validator;
 
     public EncryptedResponseAlgorithmsValidatorTests()
     {
-        _jwtValidator.Setup(v => v.EncryptionAlgorithmsSupported).Returns([SupportedAlg]);
-        _jwtValidator.Setup(v => v.EncryptionMethodsSupported).Returns([SupportedEnc]);
-        _validator = new EncryptedResponseAlgorithmsValidator(_jwtValidator.Object);
+        string[] keyManagement =
+        [
+            SupportedAlg,
+            EncryptionAlgorithms.KeyManagement.Aes128KW,
+            EncryptionAlgorithms.KeyManagement.Dir,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
+        ];
+        _jwtAlgorithms.Setup(a => a.EncryptedResponseAlgorithmsSupported).Returns(keyManagement);
+        _jwtAlgorithms.Setup(a => a.EncryptedResponseMethodsSupported).Returns([SupportedEnc]);
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(keyManagement);
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionEncValuesSupported).Returns([SupportedEnc]);
+        _serviceKeys
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, false))
+            .Returns(() => _tenantKeys.ToAsyncEnumerable());
+        _validator = new EncryptedResponseAlgorithmsValidator(
+            _jwtAlgorithms.Object,
+            _serviceKeys.Object,
+            _clientInfoProvider.Object,
+            TimeProvider.System, TestEncryptionAlgorithms.Every);
     }
 
     private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
         => new(request);
 
     private static ClientRegistrationRequest Request()
-        => new() { RedirectUris = [TestConstants.DefaultRedirectUri] };
+        => new() { RedirectUris = [TestConstants.DefaultRedirectUri], JwksUri = JwksUri };
 
     [Fact]
     public async Task ValidateAsync_WithNoAlgorithms_ShouldReturnNull()
@@ -72,6 +99,10 @@ public class EncryptedResponseAlgorithmsValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// RFC 7591 section 3.2.2: an algorithm the server does not support is a client metadata value it rejects, answered
+    /// with <c>invalid_client_metadata</c> rather than <c>invalid_request</c>.
+    /// </summary>
     [Theory]
     [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg)]
     [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg)]
@@ -93,7 +124,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(wireName, result.ErrorDescription);
     }
 
@@ -109,7 +140,307 @@ public class EncryptedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// A JWT this server sends is encrypted by issuance, a request object decrypted by the server, so each registered
+    /// algorithm is judged by the list of the side that carries it out: an algorithm only decryption knows is refused
+    /// for a response and accepted for a request object, and one only issuance knows the other way round.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg, EncryptionAlgorithms.KeyManagement.RsaOaep, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg, EncryptionAlgorithms.KeyManagement.RsaOaep, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseAlg, EncryptionAlgorithms.KeyManagement.RsaOaep, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseAlg, EncryptionAlgorithms.KeyManagement.RsaOaep, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg, EncryptionAlgorithms.KeyManagement.RsaOaep, null)]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg, EncryptionAlgorithms.KeyManagement.EcdhEs, null)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg, EncryptionAlgorithms.KeyManagement.EcdhEs, ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_AnAlgorithm_IsJudgedByTheSideThatCarriesItOut(
+        string wireName, string algorithm, string? expected)
+    {
+        _jwtAlgorithms.Setup(a => a.EncryptedResponseAlgorithmsSupported).Returns([EncryptionAlgorithms.KeyManagement.EcdhEs]);
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns([EncryptionAlgorithms.KeyManagement.RsaOaep]);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateContext(Registering(Request(), wireName, algorithm)));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// The content encryption algorithm likewise: one issuance encrypts with is accepted for a response and refused
+    /// for a request object the server cannot decrypt with it.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_AContentEncryptionAlgorithm_IsJudgedByTheSideThatCarriesItOut(
+        bool requestObject, string? expected)
+    {
+        const string onlyIssued = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
+        _jwtAlgorithms.Setup(a => a.EncryptedResponseMethodsSupported).Returns([onlyIssued]);
+        var request = requestObject
+            ? Request() with { RequestObjectEncryptionAlg = SupportedAlg, RequestObjectEncryptionEnc = onlyIssued }
+            : Request() with { IdTokenEncryptedResponseAlg = SupportedAlg, IdTokenEncryptedResponseEnc = onlyIssued };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// A request object is opened by the tenant's own published encryption keys, so its key management algorithm is
+    /// accepted only where one of them opens it - the list discovery advertises: a key declaring RSA-OAEP-256 opens that
+    /// algorithm alone (RFC 8725 section 3.1), and one declaring none opens what its material performs.
+    /// </summary>
+    [Theory]
+    [InlineData("rsa for RSA-OAEP-256", EncryptionAlgorithms.KeyManagement.RsaOaep256, null)]
+    [InlineData("rsa for RSA-OAEP-256", EncryptionAlgorithms.KeyManagement.RsaOaep, ErrorCodes.InvalidClientMetadata)]
+    [InlineData("rsa", EncryptionAlgorithms.KeyManagement.RsaOaep, null)]
+    [InlineData("rsa", EncryptionAlgorithms.KeyManagement.EcdhEs, ErrorCodes.InvalidClientMetadata)]
+    [InlineData("none", EncryptionAlgorithms.KeyManagement.RsaOaep256, ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_ARequestObjectAlgorithm_IsJudgedByWhatTheTenantsKeysOpen(
+        string keys, string algorithm, string? expected)
+    {
+        _tenantKeys = keys switch
+        {
+            "rsa for RSA-OAEP-256" =>
+                [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 }],
+            "rsa" => [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
+            "none" => [],
+            _ => throw new ArgumentOutOfRangeException(nameof(keys), keys, null),
+        };
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
+        [
+            EncryptionAlgorithms.KeyManagement.RsaOaep,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.KeyManagement.EcdhEs,
+        ]);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateContext(Request() with { RequestObjectEncryptionAlg = algorithm }));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// A symmetric key the tenant holds for its own tokens is never published, so no client can encrypt a request
+    /// object to it: a symmetric request object algorithm is refused even where the tenant holds an octet key declaring
+    /// exactly that algorithm, and even for a client whose secret the server keeps, rather than registered and every
+    /// request object encrypted under it refused.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Dir)]
+    public async Task ValidateAsync_ASymmetricRequestObjectAlgorithm_IsRefused(string algorithm)
+    {
+        _tenantKeys =
+        [
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption),
+            new OctetJsonWebKey
+            {
+                Algorithm = algorithm,
+                Usage = PublicKeyUsages.Encryption,
+                KeyValue = new byte[32],
+            },
+        ];
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns([algorithm]);
+        var request = Request() with
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            RequestObjectEncryptionAlg = algorithm,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// Dynamic Client Registration 1.0 section 2, RFC 9701 section 6 and JARM section 3 each demand the key management
+    /// algorithm wherever its content encryption algorithm is registered, so one registered alone is refused, a
+    /// supported value included; registered together they pass (the positive control).
+    /// </summary>
+    [Theory]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, true)]
+    public async Task ValidateAsync_AContentEncryptionAlgorithm_IsRefusedWithoutItsKeyManagementAlgorithm(
+        string wireName, bool withAlgorithm)
+    {
+        var alg = withAlgorithm ? SupportedAlg : null;
+        var request = wireName switch
+        {
+            ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc =>
+                Request() with { IdTokenEncryptedResponseEnc = SupportedEnc, IdTokenEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc =>
+                Request() with { UserInfoEncryptedResponseEnc = SupportedEnc, UserInfoEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc =>
+                Request() with { IntrospectionEncryptedResponseEnc = SupportedEnc, IntrospectionEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc =>
+                Request() with { RequestObjectEncryptionEnc = SupportedEnc, RequestObjectEncryptionAlg = alg },
+            ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc =>
+                Request() with { AuthorizationEncryptedResponseEnc = SupportedEnc, AuthorizationEncryptedResponseAlg = alg },
+            _ => throw new ArgumentOutOfRangeException(nameof(wireName), wireName, null),
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(withAlgorithm ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>The request registering <paramref name="algorithm"/> for the JWT <paramref name="wireName"/> names.</summary>
+    private static ClientRegistrationRequest Registering(ClientRegistrationRequest request, string wireName, string algorithm)
+        => wireName switch
+        {
+            ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg => request with { IdTokenEncryptedResponseAlg = algorithm },
+            ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg => request with { UserInfoEncryptedResponseAlg = algorithm },
+            ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseAlg => request with { IntrospectionEncryptedResponseAlg = algorithm },
+            ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseAlg => request with { AuthorizationEncryptedResponseAlg = algorithm },
+            ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg => request with { RequestObjectEncryptionAlg = algorithm },
+            _ => throw new ArgumentOutOfRangeException(nameof(wireName), wireName, null),
+        };
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 10.2: an asymmetric algorithm encrypts to "a public key used for encryption
+    /// published by the recipient in its JWK Set document", so a client registering one for a JWT this server sends,
+    /// with neither jwks nor jwks_uri, could never be sent it and is refused; a request object is encrypted by the
+    /// client to a key of this server, and is not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseAlg, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseAlg, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionAlg, null)]
+    public async Task ValidateAsync_AnAsymmetricAlgorithmWithNoKeySet_IsRefused(string wireName, string? expected)
+    {
+        var request = Registering(Request() with { JwksUri = null }, wireName, SupportedAlg);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// A key set passed by value changes only by a registration, so it is judged here: it serves the algorithm when it
+    /// holds an encryption key that carries it, and not when it is empty, holds signing keys alone, or keys of another
+    /// type or algorithm.
+    /// </summary>
+    [Theory]
+    [InlineData("rsa encryption", null)]
+    [InlineData("rsa for the algorithm", null)]
+    [InlineData("empty", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("rsa signature", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("ec encryption", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("rsa for another algorithm", ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_AnAsymmetricAlgorithmWithAKeySetByValue_IsJudgedByItsKeys(string keys, string? expected)
+    {
+        JsonWebKey[] set = keys switch
+        {
+            "rsa encryption" => [new RsaJsonWebKey { Usage = PublicKeyUsages.Encryption }],
+            "rsa for the algorithm" => [new RsaJsonWebKey { Algorithm = SupportedAlg }],
+            "empty" => [],
+            "rsa signature" => [new RsaJsonWebKey { Usage = PublicKeyUsages.Signature }],
+            "ec encryption" => [new EllipticCurveJsonWebKey { Usage = PublicKeyUsages.Encryption }],
+            "rsa for another algorithm" => [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep }],
+            _ => throw new ArgumentOutOfRangeException(nameof(keys), keys, null),
+        };
+        var request = Request() with
+        {
+            JwksUri = null,
+            Jwks = new JsonWebKeySet(set),
+            IdTokenEncryptedResponseAlg = SupportedAlg,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 10.2: a symmetric key is "derived from the client_secret value", so it is served
+    /// only where the server keeps the secret itself - for client_secret_jwt - and never for a public client ("Symmetric
+    /// encryption MUST NOT be used by public (non-confidential) Clients"); a secret kept only as its hash serves none.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, ClientAuthenticationMethods.ClientSecretJwt, null)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Dir, ClientAuthenticationMethods.ClientSecretJwt, null)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, ClientAuthenticationMethods.ClientSecretBasic, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Dir, ClientAuthenticationMethods.ClientSecretPost, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, ClientAuthenticationMethods.PrivateKeyJwt, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, ClientAuthenticationMethods.None, ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_ASymmetricAlgorithm_IsAcceptedOnlyWhereTheSecretIsKept(
+        string algorithm, string authenticationMethod, string? expected)
+    {
+        var request = Request() with
+        {
+            JwksUri = null,
+            TokenEndpointAuthMethod = authenticationMethod,
+            UserInfoEncryptedResponseAlg = algorithm,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// Section 10.2 derives a key "for the AES key wrapping or direct encryption algorithm used" and for nothing else,
+    /// so a password-based algorithm has no key, whatever the client authenticates with.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_APasswordBasedAlgorithm_IsRefused()
+    {
+        var request = Request() with
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            IdTokenEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// RFC 7592 section 2.2 keeps the client's secrets across an update, so a symmetric algorithm registered by one is
+    /// judged by the secret the stored client holds: served where it holds the secret itself, not where it holds only
+    /// the hash, nor where the update makes it a public client.
+    /// </summary>
+    [Theory]
+    [InlineData(true, ClientAuthenticationMethods.ClientSecretJwt, null)]
+    [InlineData(true, ClientAuthenticationMethods.ClientSecretBasic, null)]
+    [InlineData(false, ClientAuthenticationMethods.ClientSecretJwt, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(true, ClientAuthenticationMethods.None, ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_ASymmetricAlgorithmOnUpdate_IsJudgedByTheStoredSecret(
+        bool secretKept, string authenticationMethod, string? expected)
+    {
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
+            {
+                ClientSecrets = [new ClientSecret { Sha512Hash = [1], Value = secretKept ? "a-client-secret" : null }],
+            });
+        var request = Request() with
+        {
+            ClientId = TestConstants.DefaultClientId,
+            TokenEndpointAuthMethod = authenticationMethod,
+            AuthorizationEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.Aes128KW,
+        };
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateContext(request) with { Operation = DynamicClientOperation.Update });
+
+        Assert.Equal(expected, result?.Error);
     }
 }

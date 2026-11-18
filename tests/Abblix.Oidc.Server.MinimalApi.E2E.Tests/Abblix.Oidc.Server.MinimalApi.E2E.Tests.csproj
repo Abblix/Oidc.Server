@@ -42,4 +42,9 @@
     <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
   </ItemGroup>
 
+  <!-- Reads a WWW-Authenticate challenge by its grammar, shared with the unit tests of the adapters. -->
+  <ItemGroup>
+    <Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
+  </ItemGroup>
+
 </Project>

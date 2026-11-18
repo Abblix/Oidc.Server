@@ -226,7 +226,7 @@ public class AuthorizationCodeServiceTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -598,7 +598,7 @@ public class AuthorizationCodeServiceTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>

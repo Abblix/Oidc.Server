@@ -1,0 +1,150 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Moq;
+using Xunit;
+
+namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
+
+/// <summary>
+/// The signed discovery document is a JWS this server creates, so at a tenant held to FAPI 1.0 Advanced it is signed
+/// with an algorithm Part 2 section 8.6 names: PS256 with an RSA key declaring no algorithm, where a tenant held to no
+/// profile keeps RS256; a key declaring RS256 alone leaves nothing the profile admits, and the document is not signed.
+/// </summary>
+public class SignedMetadataAlgorithmTests
+{
+    private static Task<string?> SignedWith(ClientSecurityProfile profile, JsonWebKey key)
+        => SignedWith(profile, key, key);
+
+    private static async Task<string?> SignedWith(ClientSecurityProfile profile, JsonWebKey used, params JsonWebKey[] all)
+    {
+        var key = used;
+        string? algorithm = null;
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), key, null, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((token, _, _, _, _) => algorithm = token.Header.Algorithm)
+            .ReturnsAsync("signed");
+        var keys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => all.ToAsyncEnumerable());
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestSigningAlgorithms.Registered)
+            .SignAsync(tenant, new Abblix.Oidc.Server.Model.ConfigurationResponse
+            {
+                Issuer = tenant.Issuer.OriginalString,
+                IdTokenSigningAlgValuesSupported = [SigningAlgorithms.PS256],
+                ResponseTypesSupported = [ResponseTypes.Code],
+                SubjectTypesSupported = [SubjectTypes.Public],
+            });
+
+        return algorithm;
+    }
+
+    [Fact]
+    public async Task AnRsaKeyDeclaringNoAlgorithm_SignsPs256UnderFapi1Advanced()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        key.Algorithm = null;
+
+        Assert.Equal(SigningAlgorithms.PS256, await SignedWith(ClientSecurityProfile.Fapi1Advanced, key));
+        Assert.Equal(SigningAlgorithms.RS256, await SignedWith(ClientSecurityProfile.None, key));
+    }
+
+    [Fact]
+    public async Task AKeyDeclaringRs256Alone_IsNotUsedUnderFapi1Advanced()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.Fapi1Advanced, key));
+    }
+
+    /// <summary>
+    /// A key whose algorithm cannot be named - a curve this server has no algorithm for, and no alg declared - is
+    /// passed over at a FAPI tenant rather than ending the walk, so a later key the profile admits signs.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithoutANameableAlgorithm_IsPassedOverUnderFapi1Advanced()
+    {
+        var rs256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var unnamed = new EllipticCurveJsonWebKey { KeyId = "unnamed", Curve = "secp256k1" };
+        var ps256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            await SignedWith(ClientSecurityProfile.Fapi1Advanced, ps256, rs256, unnamed, ps256));
+    }
+
+    /// <summary>
+    /// A key declaring an algorithm its material does not perform - an elliptic-curve key declaring PS256 - is passed
+    /// over at a FAPI tenant like a key declaring nothing it can sign with, rather than handed to the signer to fail.
+    /// </summary>
+    [Fact]
+    public async Task AKeyDeclaringAnAlgorithmItsMaterialDoesNotPerform_IsPassedOverUnderFapi1Advanced()
+    {
+        var misdeclared = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.PS256 };
+        var ps256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            await SignedWith(ClientSecurityProfile.Fapi1Advanced, ps256, misdeclared, ps256));
+    }
+
+    /// <summary>
+    /// Without a profile the first key signs, so one declaring an algorithm its material does not perform is refused
+    /// before anything is signed with it.
+    /// </summary>
+    [Fact]
+    public async Task AKeyDeclaringAnAlgorithmItsMaterialDoesNotPerform_IsRefusedWithoutAProfile()
+    {
+        var misdeclared = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.PS256 };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.None, misdeclared));
+    }
+
+    /// <summary>
+    /// An RSA key below the 2048 bits RFC 7518 sections 3.3 and 3.5 require signs nothing, declared or not, so the
+    /// document is not signed with it.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(SigningAlgorithms.RS256)]
+    public async Task AnRsaKeyBelow2048Bits_IsRefused(string? declared)
+    {
+        // The key factory refuses to create one this short, so its modulus is written out: 1024 bits
+        var shortKey = new RsaJsonWebKey
+            { KeyId = "short", Algorithm = declared, Exponent = [1, 0, 1], Modulus = [0x80, .. new byte[127]] };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.None, shortKey));
+    }
+
+    /// <summary>
+    /// An elliptic-curve key declaring no algorithm signs with the ECDSA algorithm of its curve (RFC 7518 section 3.4).
+    /// </summary>
+    [Theory]
+    [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.ES256)]
+    [InlineData(EllipticCurveTypes.P384, SigningAlgorithms.ES384)]
+    [InlineData(EllipticCurveTypes.P521, SigningAlgorithms.ES512)]
+    public async Task AnEllipticCurveKeyDeclaringNoAlgorithm_SignsWithItsCurvesAlgorithm(string curve, string algorithm)
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, algorithm) with { Algorithm = null };
+
+        Assert.Equal(algorithm, await SignedWith(ClientSecurityProfile.None, key));
+    }
+}

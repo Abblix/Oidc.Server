@@ -87,6 +87,6 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
         Assert.Equal(HttpStatusCode.BadRequest, plainResponse.StatusCode);
         var responseText = await plainResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var body = JsonNode.Parse(responseText)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequestObject, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 partial class SecurityProfileClientAuthenticator
 {
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.ClientIdentifiersMismatch,
+        Level = LogLevel.Warning,
+        Message = "The credential proves the client {ClientId}, but the request names the client {Named}")]
+    private partial void LogClientIdentifiersMismatch(string ClientId, Sanitized Named);
+
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.RegistrationCannotSatisfyProfile,
         Level = LogLevel.Warning,

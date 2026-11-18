@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
@@ -54,6 +55,16 @@ public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IA
         {
             return context.InvalidRequest(
                 $"Nonce is required for the requested {Parameters.ResponseType}, as specified in OpenID Connect Core 1.0.");
+        }
+
+        // FAPI 1.0 Part 1 section 5.2.2.2, taken in by Part 2 section 5.2.2: "If the client requests the openid
+        // scope, the authorization server shall require the nonce parameter" - the scope the client names, not a
+        // default it is served
+        if (string.IsNullOrEmpty(request.Nonce) &&
+            SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile).RequireNonceWithOpenIdScope &&
+            context.ClientRequestsOpenId())
+        {
+            return context.InvalidRequest("The security profile requires a nonce with the openid scope");
         }
 
         // A nonce must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on, reject a

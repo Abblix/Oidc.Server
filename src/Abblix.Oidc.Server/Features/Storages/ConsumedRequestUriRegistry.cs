@@ -23,8 +23,8 @@ public class ConsumedRequestUriRegistry(
     TimeProvider timeProvider) : IConsumedRequestUriRegistry
 {
     /// <inheritdoc />
-    public Task MarkConsumedAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt)
-        => storage.SetAsync(
+    public Task<bool> TryConsumeAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt)
+        => storage.TrySetIfAbsentAsync(
             keyFactory.ConsumedRequestUriKey(tenant, requestUri),
             new Proto.ConsumedRequestUri { ConsumedAt = Timestamp.FromDateTimeOffset(timeProvider.GetUtcNow()) },
             new StorageOptions { AbsoluteExpiration = expiresAt });

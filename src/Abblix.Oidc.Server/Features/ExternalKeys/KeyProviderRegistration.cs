@@ -66,14 +66,15 @@ internal sealed class KeyProviderRegistration(IServiceCollection services, IOpti
     };
 
     /// <summary>
-    /// The provider the library installs for the host's key placement.
+    /// The provider the library installs for the host's key placement, whether or not a provider of the host's own
+    /// serves the keys in front of it.
     /// </summary>
     /// <remarks>
     /// No custodian at all, or one registered with the placement call forgotten, lands on the settings: that
     /// provider refuses outright in the second case, so a half-wired host cannot quietly serve local keys while
     /// believing its keys are in an HSM.
     /// </remarks>
-    private KeyProviderKind Placed => placement.Value.ChosenPlacement switch
+    public KeyProviderKind Placed => placement.Value.ChosenPlacement switch
     {
         null => KeyProviderKind.Settings,
         KeyPlacement.Custodian => KeyProviderKind.Custodian,

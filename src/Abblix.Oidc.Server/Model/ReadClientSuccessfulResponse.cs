@@ -16,6 +16,7 @@ namespace Abblix.Oidc.Server.Model;
 /// metadata value the server holds for it, as RFC 7592 section 3 requires.
 /// Unregistered metadata is omitted from the JSON per RFC 7592 section 3, not emitted as an explicit null.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public record ReadClientSuccessfulResponse : RegisteredClientMetadata
 {
     /// <summary>
@@ -39,7 +40,6 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// </summary>
     [JsonPropertyOrder(1)]
     [JsonPropertyName(Parameters.ClientId)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required string ClientId { get; init; }
 
     /// <summary>
@@ -48,7 +48,6 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// </summary>
     [JsonPropertyOrder(2)]
     [JsonPropertyName(Parameters.ClientSecret)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClientSecret { get; init; }
 
     /// <summary>
@@ -60,7 +59,6 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     [JsonPropertyOrder(3)]
     [JsonPropertyName(Parameters.ClientSecretExpiresAt)]
     [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? ClientSecretExpiresAt { get; init; }
 
     /// <summary>
@@ -69,7 +67,6 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// </summary>
     [JsonPropertyOrder(4)]
     [JsonPropertyName(Parameters.RegistrationClientUri)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RegistrationClientUri { get; init; }
 
     /// <summary>
@@ -78,7 +75,6 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// </summary>
     [JsonPropertyOrder(5)]
     [JsonPropertyName(Parameters.RegistrationAccessToken)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required string RegistrationAccessToken { get; init; }
 
     /// <summary>

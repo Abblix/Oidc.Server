@@ -389,7 +389,7 @@ public class ProtobufSerializerTests
         Assert.Equal(context.CodeChallengeMethod, result.CodeChallengeMethod);
         Assert.NotNull(result.Resources);
         Assert.Single(result.Resources);
-        Assert.Equal(context.Resources![0], result.Resources[0]);
+        Assert.Equal(context.Resources[0], result.Resources[0]);
     }
 
     [Fact]

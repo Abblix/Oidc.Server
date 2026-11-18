@@ -99,7 +99,7 @@ public class RefreshTokenSpendRaceTests
         ids.Setup(generator => generator.GenerateTokenId()).Returns(() => Guid.NewGuid().ToString("N"));
         var formatter = new Mock<IAuthServiceJwtFormatter>();
         formatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("encoded");
         var options = Options.Create(new OidcOptions());
 
