@@ -38,11 +38,11 @@ internal sealed class NativeClientsCheck : ITenantsCheck
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)));
 
         // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period character (".")
-        // SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme. A script scheme is
-        // ScriptRedirectUrisCheck's to refuse, for every client
+        // SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme. A URI that is not absolute or
+        // uses a script scheme is RedirectUrisCheck's to refuse, for every client
         foreach (var (member, uri) in redirects)
         {
-            if (uri.IsAbsoluteUri && !ScriptRedirectUrisCheck.IsScript(uri) && !RedirectUriSchemes.IsAllowed(uri))
+            if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri))
             {
                 yield return $"The native client '{client.ClientId}' has the {member} '{uri}': a native app " +
                              $"redirects to a private-use scheme based on a domain name in reverse order, such as " +
@@ -54,14 +54,15 @@ internal sealed class NativeClientsCheck : ITenantsCheck
         // Dynamic Client Registration to provision per-instance secrets", and Appendix A item 4 has a server "Not
         // assume that native app clients can keep a secret". A native app declared once in the tenant settings is one
         // registration serving every installation, so it is a public client; credentials of its own installation reach
-        // the server through dynamic registration or the registration store
+        // the server through dynamic registration or the host's client registration store
         if (client.ClientType != ClientType.Public)
         {
             yield return $"The native client '{client.ClientId}' authenticates with " +
                          $"'{client.TokenEndpointAuthMethod}': a native app declared once in the tenant settings " +
                          $"serves every installation and is a public client (RFC 8252 section 8.4), so set " +
                          $"{nameof(ClientInfo.TokenEndpointAuthMethod)} to '{ClientAuthenticationMethods.None}'; " +
-                         $"credentials of each installation go through dynamic registration.";
+                         $"credentials of each installation go through dynamic registration or the host's " +
+                         $"{nameof(ITenantClientRegistrationStore)}.";
         }
     }
 }
