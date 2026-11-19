@@ -73,9 +73,8 @@ internal static class RequestObjectProfileRules
     /// </summary>
     /// <remarks>
     /// FAPI 1.0 Part 2 section 5.2.2: the aud claim is "to be, or to be an array containing, the OP's Issuer
-    /// Identifier URL". The validator that passed the object accepted an absent aud and one naming only the endpoint
-    /// it was sent to, as RFC 9101 alone allows. Compared as the issuer is written, the way that validator compares
-    /// it.
+    /// Identifier URL". The validator that passed the object accepted an absent aud, as RFC 9101 alone allows.
+    /// Compared as the issuer is written, the way that validator compares it.
     /// </remarks>
     private static string? WhyAudienceRefused(
         SecurityProfileRequirements requirements,

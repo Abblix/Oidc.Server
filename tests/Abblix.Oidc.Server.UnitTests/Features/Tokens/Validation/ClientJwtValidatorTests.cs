@@ -1050,7 +1050,7 @@ public class ClientJwtValidatorTests
             Payload =
             {
                 Issuer = ValidClientId,
-                Audiences = [RequestUri],
+                Audiences = [Issuer],
                 Subject = ValidClientId,
                 IssuedAt = TimeProvider.System.GetUtcNow(),
                 ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),

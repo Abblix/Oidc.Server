@@ -71,8 +71,12 @@ public sealed class ClientJwtAudienceTests
         using var refused = await AuthorizeAsync(http, endpoint, $"https://{requestHost}{endpoint}");
         Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorOfAsync(refused));
 
+        // Served as far as the end-user's sign-in, the tenant's login page, since nobody is signed in
         using var served = await AuthorizeAsync(http, endpoint, Issuer);
         Assert.Null(await ErrorOfAsync(served));
+        Assert.Equal(
+            Tenant.LoginUri!.OriginalString,
+            new Uri(new Uri(Issuer), served.Headers.Location!).AbsolutePath);
     }
 
     [Theory]
