@@ -33,18 +33,9 @@ internal sealed partial class HeldMetadataDocuments(
     IOptionsMonitor<OidcOptions> options,
     TimeProvider clock)
 {
-    /// <summary>
-    /// How long the outcome of one fetch answers the lookups that follow it.
-    /// </summary>
-    /// <remarks>
-    /// An authorization request looks its client up more than once, and a refused document would otherwise be fetched
-    /// for each lookup, by anybody naming its URL. Section 6.2 lets the server "implement rate limiting or other measures
-    /// to avoid repeatedly fetching a Client ID Metadata Document URL", and this hold is that: long enough to answer the
-    /// lookups of one request, too short to serve a refusal as the client's metadata.
-    /// </remarks>
-    internal static readonly TimeSpan RepeatedLookupHold = TimeSpan.FromSeconds(1);
-
-    // One fetch of a URL for all the requests naming it at once and the lookups that follow within the hold
+    // One fetch of a URL for the lookups naming it while it runs. Its outcome answers none that starts after it ends:
+    // section 6.2 has the server "MUST NOT cache error responses", so a refused document is fetched again on the next
+    // lookup, even one of the same request
     private readonly CoalescingLoader<string, HeldMetadataDocument?> _fetches = new(clock, StringComparer.Ordinal);
 
     /// <summary>
@@ -60,7 +51,7 @@ internal sealed partial class HeldMetadataDocuments(
         if (held is not null && clock.GetUtcNow() < held.FreshUntil)
             return held;
 
-        return await _fetches.LoadAsync(clientId, _ => FetchAsync(key, clientId, url, held), RepeatedLookupHold);
+        return await _fetches.LoadAsync(clientId, _ => FetchAsync(key, clientId, url, held), TimeSpan.Zero);
     }
 
     private async Task<HeldMetadataDocument?> FetchAsync(

@@ -9,6 +9,7 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Xunit;
@@ -29,34 +30,55 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    /// <summary>
-    /// The document as one request finds it, the lookups of an earlier one being past their hold.
-    /// </summary>
-    private async Task<HeldMetadataDocument?> GetAsync()
-    {
-        var held = await LookUpAsync();
-        _services.Clock.Advance(HeldMetadataDocuments.RepeatedLookupHold);
-        return held;
-    }
-
-    private Task<HeldMetadataDocument?> LookUpAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+    private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
 
     /// <summary>
-    /// The lookups of one request share one fetch even when it fails: section 6.2 lets the server "implement rate
-    /// limiting or other measures to avoid repeatedly fetching a Client ID Metadata Document URL".
+    /// Section 6.2: the server "MUST NOT cache error responses", so a lookup starting after a fetch failed fetches
+    /// again, even one of the same authorization request.
     /// </summary>
     [Fact]
-    public async Task TheLookupsOfOneRequest_ShareOneFetch_EvenOfARefusedDocument()
+    public async Task ARefusal_IsNotServedToALookupStartingAfterIt()
     {
         _services.Origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.NotFound));
 
-        Assert.Null(await LookUpAsync());
-        Assert.Null(await LookUpAsync());
-        Assert.Equal(1, _services.Origin.RequestsTo(Url));
+        Assert.Null(await GetAsync());
+        Assert.Null(await GetAsync());
 
-        _services.Clock.Advance(HeldMetadataDocuments.RepeatedLookupHold);
-        Assert.Null(await LookUpAsync());
         Assert.Equal(2, _services.Origin.RequestsTo(Url));
+    }
+
+    /// <summary>
+    /// Lookups arriving while a fetch runs share it: one request reaches the client's server, and every lookup gets its
+    /// outcome.
+    /// </summary>
+    [Fact]
+    public async Task LookupsDuringAFetch_ShareIt()
+    {
+        using var release = new ManualResetEventSlim();
+        _services.Origin.Answer(Url, () =>
+        {
+            release.Wait(TestContext.Current.CancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var first = Task.Run(GetAsync, TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() => _services.Origin.RequestsTo(Url) == 1);
+
+        // Started on a thread of its own, so a lookup that fetches by itself instead blocks there rather than here; it is
+        // given a moment to join the fetch running before that fetch is let go
+        var second = Task.Run(GetAsync, TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        release.Set();
+
+        Assert.Null(await first);
+        Assert.Null(await second);
+        Assert.Equal(1, _services.Origin.RequestsTo(Url));
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        while (!condition())
+            await Task.Delay(TimeSpan.FromMilliseconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -65,7 +87,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
         _services.Origin.Serve(Url, Document, "max-age=60");
 
         var first = await GetAsync();
-        _services.Clock.Advance(TimeSpan.FromSeconds(58));
+        _services.Clock.Advance(TimeSpan.FromSeconds(59));
         var second = await GetAsync();
 
         Assert.Same(first, second);

@@ -23,7 +23,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -102,18 +101,12 @@ public class ClientIdMetadataDocumentTransportTests
         origin.Serve(second, $$"""{"client_id":"{{second}}"}""", "max-age=60");
         var services = ReaderServices(origin);
         services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.MaxHeldDocuments = 1);
-        var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow());
-        services.AddSingleton<TimeProvider>(clock);
 
         await using var provider = services.BuildServiceProvider();
         var documents = provider.GetRequiredService<HeldMetadataDocuments>();
 
-        // Each a request of its own, past the hold of the lookups before it
         foreach (var url in new[] { first, first, second, second })
-        {
             Assert.NotNull(await documents.GetAsync(url, new Uri(url)));
-            clock.Advance(HeldMetadataDocuments.RepeatedLookupHold);
-        }
 
         Assert.Equal(1, origin.RequestsTo(first));
         Assert.Equal(2, origin.RequestsTo(second));
