@@ -54,31 +54,33 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
     [Fact]
     public async Task LookupsDuringAFetch_ShareIt()
     {
-        using var release = new ManualResetEventSlim();
-        _services.Origin.Answer(Url, () =>
-        {
-            release.Wait(TestContext.Current.CancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.NotFound);
-        });
+        var release = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _services.Origin.AnswerAsync(Url, () => release.Task);
+        var documents = _services.Get<HeldMetadataDocuments>();
 
-        var first = Task.Run(GetAsync, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => _services.Origin.RequestsTo(Url) == 1);
+        var first = GetAsync();
+        await WaitUntilAsync(() => _services.Origin.RequestsTo(Url) == 1 && documents.LookupsAwaitingAFetch == 1);
+        var second = GetAsync();
 
-        // Started on a thread of its own, so a lookup that fetches by itself instead blocks there rather than here; it is
-        // given a moment to join the fetch running before that fetch is let go
-        var second = Task.Run(GetAsync, TestContext.Current.CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-        release.Set();
+        // The fetch is let go only once the second lookup waits on a fetch too, the one running as it began
+        await WaitUntilAsync(() => documents.LookupsAwaitingAFetch == 2);
+        release.SetResult(new HttpResponseMessage(HttpStatusCode.NotFound));
 
         Assert.Null(await first);
         Assert.Null(await second);
         Assert.Equal(1, _services.Origin.RequestsTo(Url));
     }
 
+    /// <summary>
+    /// Waits for <paramref name="condition"/>, failing the test should it not come to hold within a bound far past any
+    /// load: the bound ends a test gone wrong and never orders one going right.
+    /// </summary>
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var bound = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, deadline.Token);
         while (!condition())
-            await Task.Delay(TimeSpan.FromMilliseconds(5), TestContext.Current.CancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(5), bound.Token);
     }
 
     [Fact]

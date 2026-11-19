@@ -23,7 +23,7 @@ namespace Abblix.Tests.Shared;
 /// </summary>
 public sealed class MetadataDocumentOrigin : HttpMessageHandler
 {
-    private readonly ConcurrentDictionary<string, Func<HttpResponseMessage>> _answers = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Func<Task<HttpResponseMessage>>> _answers = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<HttpRequestMessage> _requests = new();
 
     /// <summary>
@@ -46,7 +46,14 @@ public sealed class MetadataDocumentOrigin : HttpMessageHandler
     /// <summary>
     /// Answers <paramref name="url"/> with whatever <paramref name="answer"/> builds, once per request.
     /// </summary>
-    public void Answer(string url, Func<HttpResponseMessage> answer) => _answers[url] = answer;
+    public void Answer(string url, Func<HttpResponseMessage> answer)
+        => _answers[url] = () => Task.FromResult(answer());
+
+    /// <summary>
+    /// Answers <paramref name="url"/> with whatever <paramref name="answer"/> completes with, once per request, so a test
+    /// can hold a request open without holding a thread.
+    /// </summary>
+    public void AnswerAsync(string url, Func<Task<HttpResponseMessage>> answer) => _answers[url] = answer;
 
     /// <summary>
     /// Fails every request to <paramref name="url"/> as an unreachable host does.
@@ -74,8 +81,8 @@ public sealed class MetadataDocumentOrigin : HttpMessageHandler
     {
         _requests.Enqueue(request);
         var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
-        return Task.FromResult(_answers.TryGetValue(url, out var answer)
+        return _answers.TryGetValue(url, out var answer)
             ? answer()
-            : new HttpResponseMessage(HttpStatusCode.NotFound));
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
     }
 }

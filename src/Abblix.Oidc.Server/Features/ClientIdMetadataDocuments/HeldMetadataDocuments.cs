@@ -51,8 +51,25 @@ internal sealed partial class HeldMetadataDocuments(
         if (held is not null && clock.GetUtcNow() < held.FreshUntil)
             return held;
 
-        return await _fetches.LoadAsync(clientId, _ => FetchAsync(key, clientId, url, held), TimeSpan.Zero);
+        var fetch = _fetches.LoadAsync(clientId, _ => FetchAsync(key, clientId, url, held), TimeSpan.Zero);
+        Interlocked.Increment(ref _lookupsAwaitingAFetch);
+        try
+        {
+            return await fetch;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _lookupsAwaitingAFetch);
+        }
     }
+
+    private int _lookupsAwaitingAFetch;
+
+    /// <summary>
+    /// How many lookups are waiting for a fetch at this moment, the ones sharing another's included, so a test can tell
+    /// that a lookup has joined a running fetch before letting it end.
+    /// </summary>
+    internal int LookupsAwaitingAFetch => Volatile.Read(ref _lookupsAwaitingAFetch);
 
     private async Task<HeldMetadataDocument?> FetchAsync(
         string key,
