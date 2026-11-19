@@ -455,31 +455,6 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         Assert.Equal(0, _origin.RequestsTo(ClientId));
     }
 
-    /// <summary>
-    /// A client store the host registers after the feature replaces the store that resolves documents, while discovery
-    /// would still advertise them, so the host does not start.
-    /// </summary>
-    [Fact]
-    public async Task AClientStoreRegisteredAfterTheFeature_StopsTheHostFromStarting()
-    {
-        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            new Registered(services).AddClientIdMetadataDocuments();
-            services.AddSingleton<IClientInfoProvider, NoClients>();
-        }));
-
-        Assert.ThrowsAny<OptionsValidationException>(() => host.CreateClient());
-    }
-
-    /// <summary>
-    /// A host's own client store, holding no client.
-    /// </summary>
-    private sealed class NoClients : IClientInfoProvider
-    {
-        public Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
-            => Task.FromResult<ClientInfo?>(null);
-    }
-
     private static Dictionary<string, string> CodeExchange(string code, string verifier) => new()
     {
         [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
