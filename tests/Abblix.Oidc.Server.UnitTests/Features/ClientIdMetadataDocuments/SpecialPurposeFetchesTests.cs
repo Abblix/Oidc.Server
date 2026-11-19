@@ -16,13 +16,17 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientIdMetadataDocuments;
@@ -94,6 +98,38 @@ public class SpecialPurposeFetchesTests
         Assert.Equal(1, origin.Requests);
     }
 
+    /// <summary>
+    /// A URI whose text is the strict mark and another URI after it, as <c>special-purpose:https://...</c> is, names
+    /// another document: a failed fetch of one, held for the refetch interval, does not answer a fetch of the other
+    /// under the other rule.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AUriSpellingTheStrictMark_IsHeldApartFromTheUriItNames(bool lenientFirst)
+    {
+        var inner = new FailingFetcher();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var fetcher = new CachingSecureHttpFetcherDecorator(
+            inner,
+            cache,
+            TimeSpan.FromMinutes(5),
+            Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor =>
+                monitor.CurrentValue == new SecureHttpFetchOptions { RefetchInterval = TimeSpan.FromMinutes(1) }),
+            new CoalescingLoader<string, object>(TimeProvider.System));
+
+        foreach (var strict in lenientFirst ? new[] { false, true } : [true, false])
+        {
+            using (strict ? SpecialPurposeFetches.Enter() : null)
+            {
+                await fetcher.FetchAsync<JsonWebKeySet>(
+                    strict ? new Uri(JwksUri) : new Uri("special-purpose:" + JwksUri));
+            }
+        }
+
+        Assert.Equal(2, inner.Calls);
+    }
+
     [Fact]
     public async Task OutsideAScope_TheHandlerJudgesNat64ByItsIPv4Address_AndInsideOneRefusesIt()
     {
@@ -134,6 +170,22 @@ public class SpecialPurposeFetchesTests
         });
         services.AddSecureHttpFetch();
         return services;
+    }
+
+    /// <summary>
+    /// A fetch that fails every time, counting how often it is asked.
+    /// </summary>
+    private sealed class FailingFetcher : ISecureHttpFetcher
+    {
+        private int _calls;
+
+        public int Calls => _calls;
+
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
+        {
+            Interlocked.Increment(ref _calls);
+            return Task.FromResult<Result<T, OidcError>>(new OidcError(ErrorCodes.InvalidClientMetadata, "unreachable"));
+        }
     }
 
     /// <summary>

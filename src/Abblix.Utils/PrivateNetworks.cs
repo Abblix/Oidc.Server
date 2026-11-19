@@ -67,14 +67,18 @@ public static class PrivateNetworks
     /// </summary>
     /// <remarks>
     /// Every block of the IANA IPv4 and IPv6 Special-Purpose Address Registries RFC 6890 sets up (sections 2.2.2 and
-    /// 2.2.3) is here, the ones registered after it and the ones marked globally reachable included: draft-ietf-oauth-client-id-metadata-document section 10.7
-    /// says an authorization server "MUST NOT fetch a Client ID Metadata Document URL or any URLs contained within a
-    /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]". One block is the
-    /// exception here: the well-known NAT64 prefix (RFC 6052) carries an IPv4 address and is judged by that address,
-    /// since on an IPv6-only network every public IPv4 address is reached through it, and refusing it would refuse every
-    /// fetch such a network makes. The IPv4-mapped block (RFC 4291 section 2.5.5.2) is likewise judged by the IPv4
-    /// address it names, as a dual-stack socket reaches that address over IPv4. <see cref="IsSpecialPurposeAddress"/>
-    /// refuses both, for a fetch that must hold to the registry as written.
+    /// 2.2.3) is here, the ones registered after it and the ones marked globally reachable included, the AS112 and AMT
+    /// blocks among them: draft-ietf-oauth-client-id-metadata-document section 10.7 says an authorization server "MUST
+    /// NOT fetch a Client ID Metadata Document URL or any URLs contained within a Client ID Metadata Document that
+    /// resolve to special-use IP addresses as defined in [RFC6890]". The list is one for every outbound fetch, so a
+    /// fetch made for any client is refused these blocks too, not only one made for a metadata document.
+    /// <para>
+    /// Two blocks are the exception here. The well-known NAT64 prefix (RFC 6052) carries an IPv4 address and is judged
+    /// by that address, since on an IPv6-only network every public IPv4 address is reached through it, and refusing it
+    /// would refuse every fetch such a network makes. The IPv4-mapped block (RFC 4291 section 2.5.5.2) is likewise
+    /// judged by the IPv4 address it names, as a dual-stack socket reaches that address over IPv4.
+    /// <see cref="IsSpecialPurposeAddress"/> refuses both, for a fetch that must hold to the registry as written.
+    /// </para>
     /// </remarks>
     private static readonly IPNetwork[] ReservedNetworks =
     [

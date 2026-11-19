@@ -131,10 +131,11 @@ public class CachingSecureHttpFetcherDecorator(
 
 	// Apart for a fetch made for a client resolved from its metadata document, which is held to the special-purpose
 	// registries as written: sharing a held copy or a held load would hand a key set fetched under the lenient rule to
-	// such a client, and its refusal to a registered client naming the same URI, a URI anybody can publish
+	// such a client, and its refusal to a registered client naming the same URI, a URI anybody can publish. The mark
+	// stands before the colon, so no URI makes one key the other
 	private static string CacheKey(Uri uri)
 		=> SpecialPurposeFetches.Active
-			? $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:special-purpose:{uri}"
+			? $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}.SpecialPurpose:{uri}"
 			: $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:{uri}";
 
 	// Apart from the document itself, so a held fetch lasts its interval whatever the document's lifetime; typed, since
