@@ -94,7 +94,7 @@ public class SignedMetadataProvider(
             Header = { Algorithm = algorithm },
             Payload = new JsonWebTokenPayload(payload)
             {
-                Issuer = metadata.Issuer,
+                Issuer = tenant.IssuerAsWritten(),
                 IssuedAt = clock.GetUtcNow(),
             },
         };

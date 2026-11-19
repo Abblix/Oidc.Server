@@ -44,8 +44,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 	{
 		var audienceList = audiences.Materialize();
 
-		var issuer = tenant.Issuer.OriginalString;
-		if (audienceList.Contains(issuer, StringComparer.Ordinal))
+		if (tenant.IssuerIsNamedByAny(audienceList))
 			return Task.FromResult(true);
 
 		// Resolved only once the issuer is not named, since the spellings take a dependency scope of their own
@@ -58,7 +57,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 
 		var actualAudiences = Sanitized.Values(audienceList);
 		var expectedTokenEndpoints = string.Join(", ", tokenEndpoints.Distinct(StringComparer.Ordinal));
-		LogAudienceFailed(expectedTokenEndpoints, issuer, actualAudiences);
+		LogAudienceFailed(expectedTokenEndpoints, tenant.IssuerAsWritten(), actualAudiences);
 
 		return Task.FromResult(false);
 	}

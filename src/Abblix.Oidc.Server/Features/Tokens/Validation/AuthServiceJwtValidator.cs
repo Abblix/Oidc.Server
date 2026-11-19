@@ -147,7 +147,7 @@ public class AuthServiceJwtValidator(
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
 	private Task<bool> ValidateIssuerAsync(TenantDefinition tenant, string issuer)
 	{
-		var result = issuer == tenant.Issuer.OriginalString;
+		var result = tenant.IssuerIsNamedBy(issuer);
 		if (result)
 		{
 			LicenseChecker.CheckIssuer(issuer, tenant, catalog);
@@ -179,7 +179,6 @@ public class AuthServiceJwtValidator(
 	/// </remarks>
 	private static Task<bool> ValidateAudienceAsync(TenantDefinition tenant, IEnumerable<string> audiences)
 	{
-		var issuer = tenant.Issuer.OriginalString;
-		return Task.FromResult(audiences.Contains(issuer, StringComparer.Ordinal));
+		return Task.FromResult(tenant.IssuerIsNamedByAny(audiences));
 	}
 }

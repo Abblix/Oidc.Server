@@ -210,8 +210,8 @@ public partial class RequestObjectFetcher(
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
         // Always validate lifetime (exp/nbf claims) if present
-        // RFC 9101 section 4 / OIDC Core section 6.1: the aud of a request object SHOULD be the OP - when the
-        // object carries an audience, reject values addressed to another server (a request object
+        // RFC 9101 section 4 / OIDC Core section 6.1: the aud of a request object SHOULD be the OP's issuer
+        // identifier - when the object carries an audience, it must name that issuer (a request object
         // minted for a different OP must not be replayable here); an absent aud stays accepted.
         // Only require signed tokens when RequireSignedRequestObject is true
         var validationOptions = ValidationOptions.ValidateIssuer |
@@ -282,7 +282,7 @@ public partial class RequestObjectFetcher(
                 var profileRefusal = RequestObjectProfileRules.WhyRefused(
                     profile,
                     validJwt.Token.Payload,
-                    tenant.Issuer,
+                    tenant,
                     timeProvider.GetUtcNow());
 
                 if (profileRefusal != null)

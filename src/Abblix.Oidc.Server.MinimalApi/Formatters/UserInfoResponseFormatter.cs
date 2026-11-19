@@ -64,7 +64,7 @@ public class UserInfoResponseFormatter(
     private IResult FormatError(OidcError error)
         => error.Format(
             StatusCodes.Status400BadRequest,
-            tenantAccessor.CurrentTenant().Issuer.OriginalString,
+            tenantAccessor.CurrentTenant().IssuerAsWritten(),
             DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
             advertiseBearer: true);
 

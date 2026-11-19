@@ -74,12 +74,13 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts JWT when audience matches the request URI.
-    /// Per RFC 7523 Section 3, audience must identify the authorization server (token endpoint).
-    /// Critical for preventing token misuse - ensures client JWT is intended for this server.
+    /// The address the token arrived at is not an audience this server identifies itself with, so RFC 7519 section
+    /// 4.1.3 has the token rejected: the server identifies itself by its issuer identifier, the value RFC 9101 section
+    /// 4 says a signed request object's aud "should be", and the address is spelled with whatever host the request
+    /// names, so it would match a token signed for another server reached by the same path.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithMatchingAudience_ShouldReturnSuccess()
+    public async Task ValidateAsync_TheRequestAddressAsAudience_IsRefused()
     {
         // Arrange
         var token = CreateValidToken();
@@ -110,9 +111,8 @@ public class ClientJwtValidatorTests
         // Assert
         Assert.NotNull(capturedParams);
 
-        // Verify audience validation callback accepts request URI
-        var audienceValidationResult = await capturedParams.ValidateAudience!([RequestUri]);
-        Assert.True(audienceValidationResult);
+        Assert.False(await capturedParams.ValidateAudience!([RequestUri]));
+        Assert.True(await capturedParams.ValidateAudience([Issuer]));
     }
 
     /// <summary>
@@ -180,10 +180,10 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts JWT when audience matches the issuer identifier.
-    /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, the authorization server's
-    /// issuer identifier is an acceptable audience value in addition to the token endpoint URL.
-    /// This ensures compatibility with clients that use the issuer ID as the audience.
+    /// Verifies that ValidateAsync accepts JWT when audience matches the issuer identifier: for a signed request
+    /// object, RFC 9101 section 4 says "The value of "aud" should be the value of the authorization server (AS)
+    /// "issuer"" and OpenID Connect Core 1.0 section 6.1 "The aud value SHOULD be or include the OP's Issuer
+    /// Identifier URL".
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithIssuerAsAudience_ShouldReturnSuccess()
@@ -223,7 +223,7 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects JWT when audience matches neither request URI nor issuer.
+    /// Verifies that ValidateAsync rejects JWT when audience is not the issuer.
     /// Prevents token substitution attacks where client JWT from one server is used on another.
     /// </summary>
     [Fact]
@@ -263,14 +263,16 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// The audience is compared with the request address as written, as RFC 7519 section 4.1.3 compares
-    /// StringOrURI values, so a spelling of the same address in another case or with its default port is refused.
+    /// The audience is compared with the issuer identifier as written, as RFC 7519 section 4.1.3 compares
+    /// StringOrURI values, so a spelling of the same identifier in another case, with its default port or with a
+    /// trailing slash is refused.
     /// </summary>
     [Theory]
-    [InlineData("https://AUTH.example.com/token")]
-    [InlineData("HTTPS://auth.example.com/token")]
-    [InlineData("https://auth.example.com:443/token")]
-    public async Task ValidateAsync_TheRequestAddressSpelledOtherwise_IsRefused(string audience)
+    [InlineData("https://AUTH.example.com")]
+    [InlineData("HTTPS://auth.example.com")]
+    [InlineData("https://auth.example.com:443")]
+    [InlineData("https://auth.example.com/")]
+    public async Task ValidateAsync_TheIssuerSpelledOtherwise_IsRefused(string audience)
     {
         ValidationParameters? capturedParams = null;
         _tokenValidator
@@ -281,18 +283,18 @@ public class ClientJwtValidatorTests
         await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.False(await capturedParams!.ValidateAudience!([audience]));
-        Assert.True(await capturedParams.ValidateAudience([RequestUri]));
+        Assert.True(await capturedParams.ValidateAudience([Issuer]));
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts JWT when one of multiple audiences matches request URI.
+    /// Verifies that ValidateAsync accepts JWT when one of multiple audiences is the issuer identifier.
     /// Per RFC 7519 Section 4.1.3, audience can be array - validation passes if any value matches.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithMultipleAudiencesOneMatching_ShouldReturnSuccess()
     {
         // Arrange
-        var audiences = new[] { "https://other.com", RequestUri, "https://another.com" };
+        var audiences = new[] { "https://other.com", Issuer, "https://another.com" };
         var token = CreateValidToken();
         var clientInfo = CreateClientInfo(ValidClientId);
 
@@ -1051,7 +1053,7 @@ public class ClientJwtValidatorTests
             Payload =
             {
                 Issuer = ValidClientId,
-                Audiences = [RequestUri],
+                Audiences = [Issuer],
                 Subject = ValidClientId,
                 IssuedAt = TimeProvider.System.GetUtcNow(),
                 ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),

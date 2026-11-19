@@ -72,7 +72,7 @@ public class AuthorizationResponseEncoder(
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	private string? IssuerOf(TenantDefinition tenant) => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? tenant.Issuer.OriginalString
+		? tenant.IssuerAsWritten()
 		: null;
 
 	/// <summary>

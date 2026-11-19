@@ -63,7 +63,7 @@ public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor
             // with a challenge).
             AuthorizationError error => new OidcError(error.Error, error.ErrorDescription).Format(
                 StatusCodes.Status400BadRequest,
-                tenantAccessor.CurrentTenant().Issuer.OriginalString),
+                tenantAccessor.CurrentTenant().IssuerAsWritten()),
 
             _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
         };

@@ -52,7 +52,7 @@ public class IntrospectionResponseJwtBuilder(
             {
                 // RFC 9701 section 5: iss, aud and iat MUST be included; sub and exp SHOULD NOT be
                 IssuedAt = timeProvider.GetUtcNow(),
-                Issuer = tenant.Issuer.OriginalString,
+                Issuer = tenant.IssuerAsWritten(),
                 Audiences = [client.ClientId],
 
                 // The object is cloned because it is otherwise still parented to the introspected token's payload

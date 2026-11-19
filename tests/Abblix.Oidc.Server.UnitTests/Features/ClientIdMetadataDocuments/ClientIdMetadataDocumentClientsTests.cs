@@ -36,7 +36,9 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     private static readonly TenantDefinition Tenant = new()
     {
         Id = "tenant",
-        Issuer = new Uri("https://issuer.example.com/"),
+        // Under a path, so a client_id naming it passes the path rule and only the server rule refuses it; written in
+        // mixed case with its default port, so the client_id that names it is its normalized spelling
+        Issuer = new Uri("https://Issuer.Example.com:443/tenants/acme"),
         Resources = [new ResourceDefinition(new Uri("https://api.example.com/orders"))],
     };
 
@@ -91,7 +93,7 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     /// or to the identifier of any authorization server or resource server it has a trust relationship with".
     /// </summary>
     [Theory]
-    [InlineData("https://issuer.example.com/")]
+    [InlineData("https://issuer.example.com/tenants/acme")]
     [InlineData("https://api.example.com/orders")]
     [InlineData("https://trusted-issuer.example.com/jwt")]
     public async Task AUrlNamingAServerThisOneTrusts_IsUnknown_WithoutAFetch(string clientId)

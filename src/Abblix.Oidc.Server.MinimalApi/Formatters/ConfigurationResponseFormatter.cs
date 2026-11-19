@@ -67,7 +67,7 @@ public class ConfigurationResponseFormatter : IConfigurationResponseFormatter<IR
 
         var modelResponse = new ModelResponse
         {
-            Issuer = response.Issuer.OriginalString,
+            Issuer = _tenantAccessor.CurrentTenant().IssuerAsWritten(),
 
             JwksUri = Resolve(OidcEndpoints.Keys),
 

@@ -142,7 +142,7 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckLicense(
-					tenant.Issuer.OriginalString,
+					tenant.IssuerAsWritten(),
 					tenant,
 					catalog,
 					authContext.ClientId),

@@ -294,9 +294,9 @@ public sealed record SecurityProfileRequirements
     /// <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
-    /// Narrower than what the server accepts without it: an object naming no audience, or only the endpoint it was
-    /// sent to, passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the server. The issuer
-    /// identifier is the one value that names this server whichever endpoint the object reaches.
+    /// Narrower than what the server accepts without it: an object carrying an audience must name the issuer either
+    /// way, but one naming no audience passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the
+    /// server. This requirement adds that the claim is present.
     /// </remarks>
     public bool RequireIssuerAudienceInRequestObject { get; init; }
 

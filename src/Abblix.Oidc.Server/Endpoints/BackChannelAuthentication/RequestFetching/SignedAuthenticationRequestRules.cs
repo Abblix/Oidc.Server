@@ -10,6 +10,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
@@ -36,11 +37,12 @@ internal static class SignedAuthenticationRequestRules
     /// Why the signed authentication request falls short of section 7.1.1, or null when it does not.
     /// </summary>
     /// <param name="token">The validated request object.</param>
-    /// <param name="issuer">The issuer identifier of the tenant the request reached, compared as it is written, the
-    /// way the request object's validator compares it.</param>
+    /// <param name="tenant">The tenant the request reached, whose issuer identifier the audience must name, as
+    /// <see cref="TenantIssuerNaming"/> answers for the request object's validator too.</param>
     /// <param name="asymmetricAlgorithms">The asymmetric signing algorithms the server advertises for this request,
     /// the only ones its signature may use.</param>
-    public static string? WhyRefused(JsonWebToken token, Uri issuer, IEnumerable<string> asymmetricAlgorithms)
+    public static string? WhyRefused(
+        JsonWebToken token, TenantDefinition tenant, IEnumerable<string> asymmetricAlgorithms)
     {
         if (!asymmetricAlgorithms.Contains(token.Header.Algorithm, StringComparer.Ordinal))
             return "The signed authentication request must be secured with an asymmetric signature";
@@ -54,7 +56,7 @@ internal static class SignedAuthenticationRequestRules
         if (missing != null)
             return $"The signed authentication request must carry the {missing} claim";
 
-        return token.Payload.Audiences.Contains(issuer.OriginalString, StringComparer.Ordinal)
+        return tenant.IssuerIsNamedByAny(token.Payload.Audiences)
             ? null
             : "The signed authentication request must name the issuer identifier as its audience";
     }

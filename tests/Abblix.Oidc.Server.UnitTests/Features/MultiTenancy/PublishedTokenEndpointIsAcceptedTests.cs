@@ -65,6 +65,14 @@ public class PublishedTokenEndpointIsAcceptedTests
     /// The token_endpoint member of the discovery document the MVC transport formats over <paramref name="resolver"/>.
     /// </summary>
     private static async Task<Uri> PublishedTokenEndpointAsync(IOidcEndpointResolver resolver, TestIssuer issuer)
+        => Assert.IsType<Uri>((await PublishedDocumentAsync(resolver, issuer)).TokenEndpoint);
+
+    /// <summary>
+    /// The discovery document the MVC transport formats for <paramref name="issuer"/> over <paramref name="resolver"/>,
+    /// from a handler response naming <paramref name="responseIssuer"/>, the tenant's own issuer where none is given.
+    /// </summary>
+    internal static async Task<ModelResponse> PublishedDocumentAsync(
+        IOidcEndpointResolver resolver, TestIssuer issuer, Uri? responseIssuer = null)
     {
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions
@@ -84,13 +92,12 @@ public class PublishedTokenEndpointIsAcceptedTests
 
         var result = Assert.IsType<ObjectResult>(await formatter.FormatResponseAsync(new EndpointResponse
         {
-            Issuer = issuer.Issuer,
+            Issuer = responseIssuer ?? issuer.Issuer,
             ResponseTypesSupported = [ResponseTypes.Code],
             IdTokenSigningAlgValuesSupported = [SigningAlgorithms.RS256],
             SubjectTypesSupported = [SubjectTypes.Public],
         }));
-        var document = Assert.IsType<ModelResponse>(result.Value);
-        return Assert.IsType<Uri>(document.TokenEndpoint);
+        return Assert.IsType<ModelResponse>(result.Value);
     }
 
     /// <summary>

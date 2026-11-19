@@ -36,6 +36,6 @@ public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevo
 
             // RFC 7009 section 2.2.1 defers to RFC 6749 section 5.2 for error semantics:
             // invalid_client -> 401 with a Basic challenge, other errors -> 400.
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().IssuerAsWritten()));
     }
 }
