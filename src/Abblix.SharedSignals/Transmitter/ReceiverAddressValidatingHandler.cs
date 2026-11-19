@@ -30,7 +30,10 @@ public sealed class ReceiverAddressValidatingHandler(ReceiverAddressPolicy addre
     {
         if (addressPolicy.RejectionOfName(requestUri) is { } rejection)
         {
-            throw new OutboundAddressRefusedException($"Refusing push delivery to '{requestUri}': {rejection}.");
+            // Scheme, host and port only: the refusal is logged on every pass, and a receiver may carry a secret in
+            // the path or the query of its endpoint
+            var origin = requestUri.GetLeftPart(UriPartial.Authority);
+            throw new OutboundAddressRefusedException($"Refusing push delivery to '{origin}': {rejection}.");
         }
 
         return Task.CompletedTask;

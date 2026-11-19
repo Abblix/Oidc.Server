@@ -103,4 +103,38 @@ public class PushDeliveryAddressTests
             !permitted,
             log.Entries.Any(entry => entry.EventId == LogEvents.Transmitter.ReceiverAddressRefused));
     }
+
+    /// <summary>
+    /// The logged refusal names where the receiver is, not its whole endpoint: a secret a receiver carries in the
+    /// query or the path of its endpoint never reaches the operator's log, which is written on every pass.
+    /// </summary>
+    [Fact]
+    public async Task TheLoggedRefusal_CarriesNoPartOfTheEndpointBeyondItsOrigin()
+    {
+        const string secret = "s3cr3t-webhook-token";
+        var endpoint = new Uri($"https://169.254.169.254/{secret}/events?token={secret}");
+        var options = new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" };
+        var log = new RecordingLogger<PushDeliverySender>();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSingleton<ISecurityEventTokenSigner, NamingSigner>();
+        services.AddSecurityEvents();
+        services.AddSharedSignalsTransmitter(options);
+        services.AddSingleton<ILogger<PushDeliverySender>>(log);
+        await using var provider = services.BuildServiceProvider();
+
+        var outbox = provider.GetRequiredService<IEventOutbox>();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), cancellationToken);
+
+        await provider.GetRequiredService<PushDeliverySender>().SendPendingAsync(StreamTo(endpoint), cancellationToken);
+
+        var refusal = Assert.Single(
+            log.Entries.Zip(log.Exceptions),
+            entry => entry.First.EventId == LogEvents.Transmitter.ReceiverAddressRefused);
+        var logged = $"{refusal.First.Message} {refusal.Second}";
+        Assert.DoesNotContain(secret, logged, StringComparison.Ordinal);
+    }
 }

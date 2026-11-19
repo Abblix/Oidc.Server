@@ -26,8 +26,10 @@ public static class PushDeliveryTransport
     /// <para>
     /// The client's primary handler is <see cref="ReceiverAddressValidatingHandler"/>, the one place a receiver's
     /// address is judged at delivery. A host adds its own handlers with <c>AddHttpMessageHandler</c>, which places them
-    /// above it; replacing the primary handler (<c>ConfigurePrimaryHttpMessageHandler</c>) removes it, and deliveries
-    /// then reach whatever address a receiver configured.
+    /// above it; replacing the primary handler removes it, and deliveries then reach whatever address a receiver
+    /// configured. Both <c>ConfigurePrimaryHttpMessageHandler</c> and <c>UseSocketsHttpHandler</c> replace it, the
+    /// second because it puts a plain <see cref="SocketsHttpHandler"/> in place of any primary handler of another
+    /// type.
     /// </para>
     /// </remarks>
     public const string HttpClientName = nameof(PushDeliverySender);

@@ -17,8 +17,12 @@ namespace Abblix.Tests.Shared;
 internal sealed class RecordingLogger<T> : ILogger<T>
 {
     private readonly List<(LogLevel Level, int EventId, string Message)> _entries = [];
+    private readonly List<Exception?> _exceptions = [];
 
     public IReadOnlyList<(LogLevel Level, int EventId, string Message)> Entries => _entries;
+
+    /// <summary>The exception each entry carried, in the order of <see cref="Entries"/>.</summary>
+    public IReadOnlyList<Exception?> Exceptions => _exceptions;
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -30,5 +34,8 @@ internal sealed class RecordingLogger<T> : ILogger<T>
         TState state,
         Exception? exception,
         Func<TState, Exception?, string> formatter)
-        => _entries.Add((logLevel, eventId.Id, formatter(state, exception)));
+    {
+        _entries.Add((logLevel, eventId.Id, formatter(state, exception)));
+        _exceptions.Add(exception);
+    }
 }
