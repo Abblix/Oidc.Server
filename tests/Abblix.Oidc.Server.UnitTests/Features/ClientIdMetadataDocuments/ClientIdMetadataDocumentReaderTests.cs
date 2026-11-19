@@ -376,6 +376,7 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("sector_identifier_uri", "\"https://[2002:808:808::]/sector\"")]
     [InlineData("request_uris", """["https://192.0.2.1/request"]""")]
     [InlineData("backchannel_logout_uri", "\"https://[::ffff:0:a00:1]/logout\"")]
+    [InlineData("jwks_uri", "\"https://[::ffff:808:808]/jwks\"")]
     public void AUriADocumentMayNotHold_IsRefused(string member, string value)
     {
         var document = Document();

@@ -175,8 +175,8 @@ public class PrivateNetworksTests
         => Assert.Equal(expected, PrivateNetworks.IsPrivateOrReservedAddress(IPAddress.Parse(address)));
 
     /// <summary>
-    /// The registry reading of RFC 6890 refuses every block it lists, the NAT64 prefix whatever it carries, and is
-    /// otherwise the same judgement.
+    /// The registry reading of RFC 6890 refuses every block it lists, the NAT64 prefix and the IPv4-mapped block
+    /// whatever they carry, and is otherwise the same judgement.
     /// </summary>
     [Theory]
     [InlineData("64:ff9b::808:808", true)]
@@ -185,7 +185,8 @@ public class PrivateNetworksTests
     [InlineData("10.0.0.1", true)]
     [InlineData("8.8.8.8", false)]
     [InlineData("2001:4860:4860::8888", false)]
-    [InlineData("::ffff:8.8.8.8", false)]
+    [InlineData("::ffff:8.8.8.8", true)]
+    [InlineData("::1:ffff:808:808", false)]
     public void ASpecialPurposeAddress_IsEveryBlockOfTheRegistry(string address, bool expected)
         => Assert.Equal(expected, PrivateNetworks.IsSpecialPurposeAddress(IPAddress.Parse(address)));
 }

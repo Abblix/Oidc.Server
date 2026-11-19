@@ -72,8 +72,9 @@ public static class PrivateNetworks
     /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]". One block is the
     /// exception here: the well-known NAT64 prefix (RFC 6052) carries an IPv4 address and is judged by that address,
     /// since on an IPv6-only network every public IPv4 address is reached through it, and refusing it would refuse every
-    /// fetch such a network makes. <see cref="IsSpecialPurposeAddress"/> refuses it too, for a fetch that must hold to
-    /// the registry as written.
+    /// fetch such a network makes. The IPv4-mapped block (RFC 4291 section 2.5.5.2) is likewise judged by the IPv4
+    /// address it names, as a dual-stack socket reaches that address over IPv4. <see cref="IsSpecialPurposeAddress"/>
+    /// refuses both, for a fetch that must hold to the registry as written.
     /// </remarks>
     private static readonly IPNetwork[] ReservedNetworks =
     [
@@ -210,7 +211,8 @@ public static class PrivateNetworks
 
     /// <summary>
     /// Whether <paramref name="address"/> is in any block of the special-purpose address registries (RFC 6890 sections
-    /// 2.2.2 and 2.2.3), the well-known NAT64 prefix among them whatever IPv4 address it carries.
+    /// 2.2.2 and 2.2.3), the well-known NAT64 prefix and the IPv4-mapped block among them whatever IPv4 address they
+    /// carry.
     /// </summary>
     /// <param name="address">The address a fetch would reach.</param>
     /// <remarks>
@@ -219,7 +221,7 @@ public static class PrivateNetworks
     /// <see cref="IsPrivateOrReservedAddress"/>, which lets an IPv6-only network reach public addresses through NAT64.
     /// </remarks>
     public static bool IsSpecialPurposeAddress(IPAddress address)
-        => IsPrivateOrReservedAddress(address) || Nat64WellKnownPrefix.Contains(address);
+        => IsPrivateOrReservedAddress(address) || address.IsIPv4MappedToIPv6 || Nat64WellKnownPrefix.Contains(address);
 
     /// <summary>
     /// The IPv4 address an IPv6 address of the well-known NAT64 prefix carries, or null for any other.
