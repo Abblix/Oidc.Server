@@ -87,8 +87,8 @@ internal sealed partial class TenantCreations(
         if (_creations.TryGetValue(TenantKey.SpaceOf(tenant), out var creation))
         {
             creation.Tenant = tenant;
-            creation.Issuers = Moved(creation.Issuers, tenant.Issuer.OriginalString, _readAt);
-            creation.EverServedAt = creation.EverServedAt.Add(tenant.Issuer.OriginalString);
+            creation.Issuers = Moved(creation.Issuers, tenant.IssuerAsWritten(), _readAt);
+            creation.EverServedAt = creation.EverServedAt.Add(tenant.IssuerAsWritten());
         }
 
         var former = _lastServed.GetValueOrDefault(tenant.Id);

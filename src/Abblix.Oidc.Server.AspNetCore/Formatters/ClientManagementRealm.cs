@@ -24,5 +24,5 @@ internal static class ClientManagementRealm
     /// <param name="error">The refusal the challenge answers.</param>
     /// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm.</param>
     public static string? Of(OidcError error, ITenantAccessor tenantAccessor)
-        => error is MissingAuthenticationError ? tenantAccessor.CurrentTenant().Issuer.OriginalString : null;
+        => error is MissingAuthenticationError ? tenantAccessor.CurrentTenant().IssuerAsWritten() : null;
 }

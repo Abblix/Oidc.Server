@@ -35,6 +35,6 @@ public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor
             // Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401).
             onFailure: error => error.Format(
                 StatusCodes.Status400BadRequest,
-                tenantAccessor.CurrentTenant().Issuer.OriginalString)));
+                tenantAccessor.CurrentTenant().IssuerAsWritten())));
     }
 }
