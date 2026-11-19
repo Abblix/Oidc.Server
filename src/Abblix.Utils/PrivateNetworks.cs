@@ -66,8 +66,8 @@ public static class PrivateNetworks
     /// knows loopback, and the IPv6 unspecified address is a single address rather than a network.
     /// </summary>
     /// <remarks>
-    /// Every block of the IPv4 and IPv6 special-purpose address registries (RFC 6890 sections 2.2.2 and 2.2.3) is
-    /// here, the ones marked globally reachable included: draft-ietf-oauth-client-id-metadata-document section 10.7
+    /// Every block of the IANA IPv4 and IPv6 Special-Purpose Address Registries RFC 6890 sets up (sections 2.2.2 and
+    /// 2.2.3) is here, the ones registered after it and the ones marked globally reachable included: draft-ietf-oauth-client-id-metadata-document section 10.7
     /// says an authorization server "MUST NOT fetch a Client ID Metadata Document URL or any URLs contained within a
     /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]". One block is the
     /// exception here: the well-known NAT64 prefix (RFC 6052) carries an IPv4 address and is judged by that address,
@@ -99,8 +99,17 @@ public static class PrivateNetworks
         IPNetwork.Parse("198.51.100.0/24"),
         IPNetwork.Parse("203.0.113.0/24"),
 
+        // AS112-v4 (RFC 7535)
+        IPNetwork.Parse("192.31.196.0/24"),
+
+        // AMT (RFC 7450)
+        IPNetwork.Parse("192.52.193.0/24"),
+
         // 6to4 relay anycast (RFC 3068), deprecated by RFC 7526
         IPNetwork.Parse("192.88.99.0/24"),
+
+        // Direct Delegation AS112 Service (RFC 7534)
+        IPNetwork.Parse("192.175.48.0/24"),
 
         // Benchmarking (RFC 2544)
         IPNetwork.Parse("198.18.0.0/15"),
@@ -124,12 +133,21 @@ public static class PrivateNetworks
         // Discard-only (RFC 6666)
         IPNetwork.Parse("100::/64"),
 
+        // Dummy IPv6 prefix (RFC 9780)
+        IPNetwork.Parse("100:0:0:1::/64"),
+
         // IETF protocol assignments, Teredo and benchmarking among them (RFC 2928)
         IPNetwork.Parse("2001::/23"),
 
-        // Documentation (RFC 3849)
+        // Documentation (RFC 3849 and RFC 9637)
         IPNetwork.Parse("2001:db8::/32"),
+        IPNetwork.Parse("3fff::/20"),
 
+        // Direct Delegation AS112 Service (RFC 7534)
+        IPNetwork.Parse("2620:4f:8000::/48"),
+
+        // Segment Routing (SRv6) SIDs (RFC 9602)
+        IPNetwork.Parse("5f00::/16"),
 
         // Link-local
         IPNetwork.Parse("fe80::/10"),
