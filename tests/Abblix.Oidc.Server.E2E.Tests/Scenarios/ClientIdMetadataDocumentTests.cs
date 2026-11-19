@@ -482,6 +482,31 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// A ping or push notification could not be held to the rule section 10.7 sets, so the delivery mode and the
+    /// notification endpoint go with the backchannel grant, and a public client asking for them still resolves: the
+    /// registration checks would refuse a client authenticating with none that kept a mode.
+    /// </summary>
+    [Theory]
+    [InlineData("ping")]
+    [InlineData("push")]
+    public async Task ADocumentAskingForBackchannelNotifications_ResolvesWithoutThem(string mode)
+    {
+        var document = PublicClientDocument();
+        document[RegistrationMembers.BackChannelTokenDeliveryMode] = mode;
+        document[RegistrationMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/ciba";
+        Serve(document);
+
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(ClientId, challenge));
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, CodeExchange(code, verifier));
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
     /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
     /// strings it generates do not start with https://", so a registrant cannot take a document's URL.
     /// </summary>
