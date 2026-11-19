@@ -30,9 +30,9 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="dispatcher">Mints and enqueues the framework's own signals.</param>
 /// <param name="options">The deployment's one-time decisions.</param>
 /// <param name="addressPolicy">
-/// Judges the delivery address a receiver proposes. The same policy the sender consults, deliberately:
-/// an address refused at delivery is refused for a reason that was already true when the receiver named
-/// it, and answering 201 to a stream that can never be delivered to tells the receiver nothing it can
+/// Judges the delivery address a receiver proposes. The same policy the delivery guard consults, deliberately:
+/// an address refused at delivery for what it says as written was already refused for it when the receiver
+/// named it, and answering 201 to a stream that can never be delivered to tells the receiver nothing it can
 /// act on - the refusal then lives only in the transmitter's log.</param>
 /// <param name="pollEndpoints">Where a poll stream is polled - this transmitter's own address, and the
 /// one member of a stream's delivery it supplies rather than receives.</param>

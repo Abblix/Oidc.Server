@@ -48,6 +48,7 @@
     </ItemGroup>
   <ItemGroup>
     <Compile Include="../Shared/LoopbackOrigin.cs" Link="Shared/LoopbackOrigin.cs" />
+    <Compile Include="../Shared/RecordingLogger.cs" Link="Shared/RecordingLogger.cs" />
   </ItemGroup>
 
 </Project>

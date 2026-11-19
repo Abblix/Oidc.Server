@@ -16,6 +16,8 @@ namespace Abblix.Utils.UnitTests;
 /// Unit tests for <see cref="AddressValidatingHttpMessageHandler"/>, the message-handler half of protecting a
 /// request whose address came from outside.
 /// </summary>
+[SuppressMessage("Minor Code Smell", "S1313:IP addresses should not be hardcoded",
+    Justification = "The addresses are the values the guard under test judges; none of them is reached.")]
 public class AddressValidatingHttpMessageHandlerTests
 {
     /// <summary>A public address, which no rule refuses.</summary>
@@ -68,9 +70,6 @@ public class AddressValidatingHttpMessageHandlerTests
 
         public LoopbackOrigin? Origin { get; init; }
 
-        /// <summary>An address family a socket cannot be opened for, as on a host with it switched off.</summary>
-        public AddressFamily? Unsupported { get; init; }
-
         protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
         {
             Judged.Add(requestUri);
@@ -87,9 +86,6 @@ public class AddressValidatingHttpMessageHandlerTests
         {
             lock (Dialed)
                 Dialed.Add(endpoint);
-
-            if (endpoint.AddressFamily == Unsupported)
-                throw new NotSupportedException("This protocol version is not supported.");
 
             var origin = Origin ?? throw new SocketException((int)SocketError.ConnectionRefused);
             var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
@@ -383,30 +379,6 @@ public class AddressValidatingHttpMessageHandlerTests
 
         Assert.Empty(handler.Dialed);
         Assert.Equal(0, origin.Connections);
-    }
-
-    /// <summary>
-    /// An address the host cannot open a socket for - its family unsupported here - gives way to the next answer
-    /// rather than failing the request.
-    /// </summary>
-    [Fact]
-    public async Task AnAddressOfAnUnsupportedFamily_GivesWayToTheNextAnswer()
-    {
-        using var origin = new LoopbackOrigin();
-        var unsupported = IPAddress.Parse("2001:4860:4860::8888");
-        var handler = new Recording(new Resolver([unsupported, PublicAddress]).ResolveAsync)
-        {
-            Origin = origin,
-            Unsupported = AddressFamily.InterNetworkV6,
-        };
-        using var invoker = new HttpMessageInvoker(handler);
-
-        using var response = await GetAsync(invoker, $"http://dual.example.com:{origin.Port}/");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(
-            [new IPEndPoint(unsupported, origin.Port), new IPEndPoint(PublicAddress, origin.Port)],
-            handler.Dialed);
     }
 
     /// <summary>

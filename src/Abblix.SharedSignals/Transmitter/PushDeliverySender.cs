@@ -8,6 +8,7 @@
 
 using System.Net;
 using Abblix.SecurityEvents.Delivery;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
@@ -151,6 +152,13 @@ public sealed partial class PushDeliverySender(
             try
             {
                 response = await SendAsync(push, token, cancellationToken);
+            }
+            catch (HttpRequestException exception) when (OutboundAddressRefusedException.IsRefusal(exception))
+            {
+                // The guard refused the receiver's address: reported here, held like any failure before an answer,
+                // since an operator can put the configuration right and the events are still owed
+                LogReceiverAddressRefused(exception, stream.StreamId);
+                return PushTransmission.Failed(exception);
             }
             catch (HttpRequestException exception)
             {

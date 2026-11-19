@@ -41,6 +41,7 @@ public class ForwardProxyAddressTests
     [InlineData("http://proxy.example.com:3128/path")]
     [InlineData("http://proxy.example.com:3128/?query=1")]
     [InlineData("http://proxy.example.com:3128/#fragment")]
+    [InlineData("socks5://proxy.example.com")]
     public void AnAddressThatCannotNameAProxy_IsRefused(string proxy)
         => Assert.NotNull(ForwardProxyAddress.WhyRefused(new Uri(proxy)));
 

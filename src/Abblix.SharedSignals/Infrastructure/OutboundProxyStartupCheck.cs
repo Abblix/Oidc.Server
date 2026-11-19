@@ -20,12 +20,12 @@ namespace Abblix.SharedSignals.Infrastructure;
 /// by <see cref="ForwardProxyAddress.WhyRefused"/>, rather than at the first delivery.
 /// </summary>
 /// <remarks>
-/// The transmitter's decisions are an instance in the container rather than options, so the check rides the options
-/// pipeline's startup validation through a marker of its own, and judges the instance the container holds - the one
-/// the delivery guard is built from, a host's own registration included.
+/// The proxy is not options but part of the address policy the delivery guard is built from, so the check rides the
+/// options pipeline's startup validation through a marker of its own and judges that policy's proxy - a host's own
+/// policy registration included.
 /// </remarks>
-/// <param name="transmitter">The transmitter's decisions as the container holds them.</param>
-internal sealed class OutboundProxyStartupCheck(SharedSignalsTransmitterOptions transmitter)
+/// <param name="policy">The address policy as the container holds it, whose proxy the delivery guard uses.</param>
+internal sealed class OutboundProxyStartupCheck(ReceiverAddressPolicy policy)
     : IValidateOptions<OutboundProxyStartupCheck.Marker>
 {
     /// <summary>
@@ -47,7 +47,7 @@ internal sealed class OutboundProxyStartupCheck(SharedSignalsTransmitterOptions 
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, Marker options)
     {
-        if (transmitter.OutboundProxy is { } proxy && ForwardProxyAddress.WhyRefused(proxy) is { } refusal)
+        if (policy.OutboundProxy is { } proxy && ForwardProxyAddress.WhyRefused(proxy) is { } refusal)
         {
             return ValidateOptionsResult.Fail(
                 $"{nameof(SharedSignalsTransmitterOptions)}.{nameof(SharedSignalsTransmitterOptions.OutboundProxy)}: " +

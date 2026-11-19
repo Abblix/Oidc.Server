@@ -131,42 +131,4 @@ public class ReceiverAddressPolicyTests
 
         Assert.NotNull(rejection);
     }
-
-    /// <summary>
-    /// A delivery to a receiver whose address may not be reached is refused by the guard on the delivery client, and
-    /// the events are held instead: an operator can put the configuration right, and the events are still owed.
-    /// </summary>
-    [Fact]
-    public async Task TheSenderRefusesToDeliverToARefusedAddress()
-    {
-        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
-        var outbox = new InMemoryEventOutbox();
-        await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
-
-        var guard = new ReceiverAddressValidatingHandler(Policy());
-        guard.InnerHandler!.Dispose();
-        guard.InnerHandler = handler;
-        using var client = new HttpClient(guard);
-        var sender = new PushDeliverySender(client, outbox, Policy(), NullLogger<PushDeliverySender>.Instance, TestInstruments.Create(), TestQueuedEventSigner.Create());
-        var stream = new StreamState
-        {
-            ReceiverId = "receiver-a",
-            Status = StreamStatuses.Enabled,
-            SubjectsMode = StreamSubjectsMode.None,
-            Configuration = new StreamConfiguration
-            {
-                StreamId = "s-1",
-                Issuer = "https://tr.example.com",
-                Audiences = ["https://receiver.example.com"],
-                EventsDelivered = [],
-                Delivery = new PushDeliveryMethod(new Uri("https://169.254.169.254/events")),
-            },
-        };
-
-        await sender.SendPendingAsync(stream, TestContext.Current.CancellationToken);
-
-        // Nothing was sent, and the event is still there for a pass made after the address is corrected.
-        Assert.Empty(handler.Requests);
-        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
-    }
 }

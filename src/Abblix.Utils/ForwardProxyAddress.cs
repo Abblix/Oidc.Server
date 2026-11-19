@@ -42,6 +42,10 @@ public static class ForwardProxyAddress
         if (proxy.AbsolutePath != "/" || proxy.Query.Length > 0 || proxy.Fragment.Length > 0)
             return $"the proxy address '{proxy}' must carry no path, query or fragment";
 
+        // A SOCKS scheme has no default port, so without one the transport refuses every request
+        if (proxy.Port < 0)
+            return $"the proxy address '{proxy}' must name a port";
+
         return null;
     }
 }

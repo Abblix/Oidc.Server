@@ -237,9 +237,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
             {
                 return await DialAsync(new IPEndPoint(address, endpoint.Port), cancellationToken);
             }
-            catch (Exception exception) when (exception is SocketException or NotSupportedException)
+            catch (SocketException exception)
             {
-                // An address this host cannot reach - its family unsupported here among them - gives way to the next
+                // An address this host cannot reach - its family switched off here among them - gives way to the next
                 failures.Add(exception);
             }
         }

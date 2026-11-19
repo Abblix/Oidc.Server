@@ -18,13 +18,15 @@ using System.Threading.Tasks;
 namespace Abblix.Tests.Shared;
 
 /// <summary>
-/// An HTTP/1.1 origin on the IPv4 and IPv6 loopback that answers every request with one status, 200 unless told
+/// An HTTP/1.1 origin on the IPv4 loopback that answers every request with one status, 200 unless told
 /// otherwise, and keeps the connection open, counting the connections it accepted and recording the first line of
 /// every request it answered - which is how it serves as a forward proxy too, whose requests name their target.
 /// </summary>
 /// <remarks>
 /// A real socket rather than a handler standing in for the transport, because what is under test is the connection
-/// the transport makes: which address it goes to and which later requests it carries.
+/// the transport makes: which address it goes to and which later requests it carries. It listens on the loopback
+/// alone, because a listener bound to every interface makes the machine's firewall ask about each test host it runs
+/// under.
 /// </remarks>
 internal sealed class LoopbackOrigin : IDisposable
 {
@@ -41,8 +43,7 @@ internal sealed class LoopbackOrigin : IDisposable
     public LoopbackOrigin(string status = "200 OK", string headers = "")
     {
         _response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\n{headers}Content-Length: 0{EndOfHeaders}");
-        _listener = new TcpListener(IPAddress.IPv6Any, 0);
-        _listener.Server.DualMode = true;
+        _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
         _ = AcceptAsync();
     }

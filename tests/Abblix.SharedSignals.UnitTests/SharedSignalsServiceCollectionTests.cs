@@ -150,6 +150,23 @@ public class SharedSignalsServiceCollectionTests
     }
 
     /// <summary>
+    /// The proxy judged at startup is the one the delivery guard uses: that of the address policy the container
+    /// holds, which a host may register itself with decisions of its own.
+    /// </summary>
+    [Fact]
+    public async Task AnUnusableProxyOfAHostsOwnAddressPolicy_IsRefusedAtStartup()
+    {
+        var services = SecurityEventsBase();
+        services.AddSingleton(new ReceiverAddressPolicy(
+            TransmitterOptions with { OutboundProxy = new Uri("ftp://proxy.example.com") }));
+        services.AddSharedSignalsTransmitter(TransmitterOptions);
+        using var provider = services.BuildServiceProvider();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(() => provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// The Security Events core plus the two deployment-knowledge seams a real host wires with
     /// keys - faked here, because these tests measure wiring, not cryptography.
     /// </summary>
