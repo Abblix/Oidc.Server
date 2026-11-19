@@ -290,7 +290,20 @@ public class ClientIdMetadataDocumentReaderTests
             Document("""{"grant_types":["refresh_token"],"response_types":[]}"""),
             CreateReader(allowedGrantTypes: [GrantTypes.AuthorizationCode]));
 
+    /// <summary>
+    /// A null where a type belongs names none, so it is dropped as an unsupported one is rather than failing the request.
+    /// </summary>
+    [Fact]
+    public void ANullGrantOrResponseType_IsDropped()
+    {
+        var metadata = Read(Document("""{"grant_types":[null,"authorization_code"],"response_types":[null,"code"]}"""));
+
+        Assert.Equal([GrantTypes.AuthorizationCode], metadata.GrantTypes);
+        Assert.Equal([[ResponseTypes.Code]], metadata.ResponseTypes);
+    }
+
     [Theory]
+    [InlineData("""{"response_types":[null]}""")]
     [InlineData("""{"grant_types":["urn:example:unknown"]}""")]
     [InlineData("""{"response_types":["token"]}""")]
     public void ADocumentOfNoSupportedGrantOrResponseType_IsRefused(string json) => Refused(Document(json));

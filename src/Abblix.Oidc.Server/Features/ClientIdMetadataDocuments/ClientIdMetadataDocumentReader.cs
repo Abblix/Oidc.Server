@@ -285,9 +285,12 @@ internal sealed class ClientIdMetadataDocumentReader(
             .Select(builder => builder.ResponseType)
             .ToHashSet(StringComparer.Ordinal);
 
-        // A combination is supported when every part of it is; an empty one names nothing and is left for the
-        // registration checks to refuse
-        return declared.Where(combination => combination.All(supportedParts.Contains)).ToArray();
+        // A combination is supported when every part of it is, and a null names none; an empty one names nothing and is
+        // left for the registration checks to refuse
+        return declared
+            .Where(combination => combination is not null &&
+                                  combination.All(part => part is not null && supportedParts.Contains(part)))
+            .ToArray();
     }
 
     /// <summary>
