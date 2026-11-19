@@ -56,14 +56,13 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
     {
         var release = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         _services.Origin.AnswerAsync(Url, () => release.Task);
-        var documents = _services.Get<HeldMetadataDocuments>();
 
         var first = GetAsync();
-        await WaitUntilAsync(() => _services.Origin.RequestsTo(Url) == 1 && documents.LookupsAwaitingAFetch == 1);
-        var second = GetAsync();
+        await WaitUntilAsync(() => _services.Origin.RequestsTo(Url) == 1);
 
-        // The fetch is let go only once the second lookup waits on a fetch too, the one running as it began
-        await WaitUntilAsync(() => documents.LookupsAwaitingAFetch == 2);
+        // A lookup joins the running fetch before it returns, so by now the second shares the first's, or has reached
+        // the origin with a fetch of its own
+        var second = GetAsync();
         release.SetResult(new HttpResponseMessage(HttpStatusCode.NotFound));
 
         Assert.Null(await first);
