@@ -166,6 +166,45 @@ public sealed class SingleTenantWithoutTheCallTests
     }
 
     /// <summary>
+    /// Without the call the one tenant is served on whatever name the request uses, an internal service name and port
+    /// included, and its discovery document still publishes every endpoint on the issuer's scheme, host and port: the
+    /// address a client is sent to, and the one the JWT bearer grant and client authentication accept, is the issuer's,
+    /// never the name the document happened to be fetched by.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentFetchedByAnInternalName_PublishesEveryEndpointOnTheIssuersAuthority()
+    {
+        await using var app = await StartAsync([Tenant("acme", Host)]);
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(InternalName);
+
+        using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var document = await ReadJsonAsync(response);
+        Assert.All(PublishedEndpoints, member =>
+        {
+            var published = document[member]?.GetValue<string>();
+            Assert.NotNull(published);
+            Assert.StartsWith(Host + "/", published, StringComparison.Ordinal);
+        });
+    }
+
+    // A name the host is reached by inside its own network, which no client outside it can resolve
+    private const string InternalName = "https://oidc-svc:8080";
+
+    // The endpoints a host enabling the base set publishes in its discovery document
+    private static readonly string[] PublishedEndpoints =
+    [
+        ConfigurationResponse.Parameters.JwksUri,
+        ConfigurationResponse.Parameters.AuthorizationEndpoint,
+        ConfigurationResponse.Parameters.TokenEndpoint,
+        ConfigurationResponse.Parameters.UserInfoEndpoint,
+        ConfigurationResponse.Parameters.EndSessionEndpoint,
+        ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint,
+    ];
+
+    /// <summary>
     /// Without the call a tenant scope the host enters takes precedence over the one tenant, since the work it wraps
     /// was addressed to another tenant on purpose, and the request is the one tenant's again once the scope ends.
     /// </summary>
