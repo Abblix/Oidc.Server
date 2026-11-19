@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Tests.Shared;
@@ -429,6 +430,55 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
 
         Assert.Equal(authenticated, response.IsSuccessStatusCode);
         Assert.Equal(authenticated, _origin.RequestsTo(jwksUri) > 0);
+    }
+
+    /// <summary>
+    /// Section 10.7 asks the same of "any URLs contained within a Client ID Metadata Document", so the sector identifier
+    /// a document names is fetched under that rule while the document is judged, and the client stands or falls with
+    /// it: one whose host answers with the NAT64 prefix leaves the client unknown, though it carries a public address.
+    /// </summary>
+    [Theory]
+    [InlineData("2001:4860:4860::8888", true)]
+    [InlineData("64:ff9b::808:808", false)]
+    public async Task ADocumentsSectorIdentifier_IsFetchedOnlyFromAnAddressNoSpecialPurposeBlockHolds(
+        string resolved,
+        bool accepted)
+    {
+        const string sectorUri = "https://sector.client.example.com/redirects.json";
+        var document = PublicClientDocument();
+        document[RegistrationMembers.SubjectType] = SubjectTypes.Pairwise;
+        document[RegistrationMembers.SectorIdentifierUri] = sectorUri;
+        Serve(document);
+        _origin.Serve(sectorUri, new JsonArray(TestConstants.RedirectUri).ToJsonString());
+
+        // The server's own SSRF validation over the sector identifier fetch, with the name answering as the row says
+        await using var host = CreateHost(configureServices: services =>
+        {
+            services.PostConfigure<TestTenantSettings>(tenant =>
+                tenant.PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+            services.AddHttpClient(SecureFetchTransport.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+                {
+                    var guard = new SsrfValidatingHttpMessageHandler(
+                        serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+                        serviceProvider.GetRequiredService<ISecureUriValidator>(),
+                        (_, _) => Task.FromResult(new[] { IPAddress.Parse(resolved) }));
+                    guard.InnerHandler!.Dispose();
+                    guard.InnerHandler = _origin;
+                    return guard;
+                });
+        });
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(accepted, response.StatusCode != HttpStatusCode.BadRequest);
+        if (!accepted)
+            Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
+        Assert.Equal(accepted, _origin.RequestsTo(sectorUri) > 0);
     }
 
     /// <summary>

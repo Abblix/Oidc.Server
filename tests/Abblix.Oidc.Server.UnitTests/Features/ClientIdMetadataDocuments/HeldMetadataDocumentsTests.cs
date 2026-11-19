@@ -12,6 +12,9 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientIdMetadataDocuments;
@@ -31,6 +34,38 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
     public void Dispose() => _services.Dispose();
 
     private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+
+    /// <summary>
+    /// Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use IP
+    /// addresses as defined in [RFC6890]". A document whose host answers with the NAT64 prefix is not fetched, though
+    /// it carries a public address, while one answering with a public address is.
+    /// </summary>
+    [Theory]
+    [InlineData("2001:4860:4860::8888", true)]
+    [InlineData("64:ff9b::808:808", false)]
+    public async Task ADocument_IsFetchedOnlyFromAnAddressNoSpecialPurposeBlockHolds(string resolved, bool fetched)
+    {
+        MetadataDocumentServices? documents = null;
+        using var services = documents = new MetadataDocumentServices(collection => collection
+            .AddHttpClient(ClientIdMetadataDocumentTransport.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+            {
+                // The server's own SSRF validation, with the name answering as the row says
+                var guard = new SsrfValidatingHttpMessageHandler(
+                    provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+                    provider.GetRequiredService<ISecureUriValidator>(),
+                    (_, _) => Task.FromResult(new[] { IPAddress.Parse(resolved) }));
+                guard.InnerHandler!.Dispose();
+                guard.InnerHandler = documents!.Origin;
+                return guard;
+            }));
+        services.Origin.Serve(Url, Document);
+
+        var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+
+        Assert.Equal(fetched, held is not null);
+        Assert.Equal(fetched ? 1 : 0, services.Origin.RequestsTo(Url));
+    }
 
     /// <summary>
     /// Section 6.2: the server "MUST NOT cache error responses", so a lookup starting after a fetch failed fetches
