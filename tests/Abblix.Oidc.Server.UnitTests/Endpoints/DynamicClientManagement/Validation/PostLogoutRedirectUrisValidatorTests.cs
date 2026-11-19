@@ -472,4 +472,25 @@ public class PostLogoutRedirectUrisValidatorTests
         // Assert
         Assert.Null(result);
     }
+
+    /// <summary>
+    /// RFC 8252 section 8.4 has a private-use scheme without a period rejected, and the javascript, data and vbscript
+    /// schemes carry none: the rule of the redirect URIs, held for the URIs the user agent is sent to after logout.
+    /// </summary>
+    [Theory]
+    [InlineData("myapp:/logout")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html,logout")]
+    [InlineData("vbscript:msgbox(1)")]
+    public async Task ValidateAsync_NativeClientWithSchemeWithoutPeriod_ShouldReturnError(string uri)
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri(uri)],
+            applicationType: ApplicationTypes.Native);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
 }

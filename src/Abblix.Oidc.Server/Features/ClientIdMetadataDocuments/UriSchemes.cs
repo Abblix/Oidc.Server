@@ -53,7 +53,7 @@ internal static class UriSchemes
 
         foreach (var (member, uri) in redirects)
         {
-            if (uri is not { IsAbsoluteUri: true } || !IsRedirectScheme(uri))
+            if (uri is not { IsAbsoluteUri: true } || !RedirectUriSchemes.IsAllowed(uri))
                 return $"its {member} holds a URI of a scheme it may not use";
         }
 
@@ -105,16 +105,5 @@ internal static class UriSchemes
         }
 
         return null;
-    }
-
-    private static bool IsRedirectScheme(Uri uri)
-    {
-        if (uri.Scheme == Uri.UriSchemeHttps)
-            return true;
-
-        if (uri.Scheme == Uri.UriSchemeHttp)
-            return LoopbackHosts.IsNativeLoopbackHost(uri);
-
-        return uri.Scheme.Contains('.');
     }
 }

@@ -17,7 +17,8 @@ namespace Abblix.Oidc.Server.Conformance.TestHost;
 /// <remarks>
 /// The server requires PKCE of a client that states nothing, while the OpenID Connect Core plans send a plain
 /// authorization code request and registration metadata has no standard member to ask for PKCE. A client that
-/// states <c>pkce_required</c> keeps what it stated.
+/// states <c>pkce_required</c> keeps what it stated. A native or public client uses PKCE whatever this sets
+/// (<see cref="ClientInfo.EffectivePkceRequired"/>); the certification plans register confidential clients only.
 /// </remarks>
 public sealed class PkceOptionalForRegisteredClients(IClientInfoManager inner) : IClientInfoManager
 {

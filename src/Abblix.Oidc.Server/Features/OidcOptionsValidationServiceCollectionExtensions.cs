@@ -9,7 +9,6 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -71,24 +70,7 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, FingerprintKeyValidator>());
 
-        // Refuse a tenant whose clients, resources or keys the server could not serve, wherever it enters the
-        // server, instead of failing every request that meets the contradiction without naming it
-        services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<ITenantsCheck, SecurityProfileCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ClientSecretsCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ClientIdsCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ClientOfflineAccessCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ClientAssertionAudiencesCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, RefreshTokenReusePolicyCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, PairwiseClientsCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ResourceDefinitionsCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, DefaultResourceIndicatorCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ServiceTokenEncryptionKeysCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ProfileSigningKeysCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ProfileServiceTokensCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, ClockSkewCeilingCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, BackChannelClientAuthenticationCheck>(),
-        ]);
+        services.AddTenantSettingsChecks();
 
         return services;
     }

@@ -90,10 +90,25 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                         return ErrorFactory.InvalidRedirectUri(
                             $"Native Clients MUST only register http: {Parameters.RedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1], which accept any port");
 
-                    // Native Clients MUST only register redirect_uris using custom URI schemes
+                    // OpenID Connect Dynamic Client Registration 1.0 section 2: "Native Clients MUST only register
+                    // redirect_uris using custom URI schemes or loopback URLs using the http scheme", and "The
+                    // Authorization Server MUST verify that all the registered redirect_uris conform". The claimed https
+                    // redirect RFC 8252 section 7.2 offers a native app is "indistinguishable to the authorization server
+                    // from a regular web-based client redirect URI", so the refusal names the registration serving it
                     case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
                         return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes");
+                            $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes or "
+                            + $"http loopback URLs; register a claimed https redirect URI as '{Parameters.ApplicationType}' "
+                            + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
+                            + $"{ClientAuthenticationMethods.None}");
+
+                    // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period
+                    // character (".") SHOULD be rejected". The javascript, data and vbscript schemes carry none, and a
+                    // response posted to one of them would run in this server's origin
+                    case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri):
+                        return ErrorFactory.InvalidRedirectUri(
+                            $"Native Clients MUST only register {Parameters.RedirectUris} using a private-use URI "
+                            + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");
 
                     // Any other case of Web or Native application types is correct
                     case ApplicationTypes.Web:
