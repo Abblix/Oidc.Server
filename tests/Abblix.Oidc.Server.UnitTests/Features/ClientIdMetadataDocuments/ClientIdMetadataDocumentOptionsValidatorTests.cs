@@ -55,6 +55,22 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
     public void AFetchTimeoutOfNoLength_IsRefused(int seconds)
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { FetchTimeout = TimeSpan.FromSeconds(seconds) }));
 
+    /// <summary>
+    /// The timeout reaches the HTTP client, which refuses one past int.MaxValue milliseconds where the fetch is made,
+    /// so it is refused at startup instead.
+    /// </summary>
+    [Theory]
+    [InlineData(int.MaxValue, true)]
+    [InlineData(int.MaxValue + 1L, false)]
+    public void AFetchTimeoutPastTheClientsLimit_IsRefused(long milliseconds, bool accepted)
+        => Assert.Equal(
+            accepted,
+            Valid(new ClientIdMetadataDocumentOptions
+            {
+                FetchTimeout = TimeSpan.FromMilliseconds(milliseconds),
+                MaximumCacheDuration = TimeSpan.FromHours(1),
+            }));
+
     [Fact]
     public void ANegativeMinimum_IsRefused()
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MinimumCacheDuration = TimeSpan.FromSeconds(-1) }));

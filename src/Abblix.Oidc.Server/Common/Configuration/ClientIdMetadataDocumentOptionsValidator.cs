@@ -25,6 +25,8 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
 {
     private const string Section = nameof(OidcOptions.ClientIdMetadataDocuments);
 
+    private static readonly TimeSpan MaxFetchTimeout = TimeSpan.FromMilliseconds(int.MaxValue);
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
     {
@@ -58,6 +60,14 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
         {
             return $"{Section}.{nameof(settings.FetchTimeout)} is {settings.FetchTimeout}, so every fetch of a document " +
                    "would end before it began. Set it to how long a fetch may take.";
+        }
+
+        // The HTTP client takes a timeout of at most int.MaxValue milliseconds, and refuses a longer one where the
+        // first document is fetched
+        if (settings.FetchTimeout > MaxFetchTimeout)
+        {
+            return $"{Section}.{nameof(settings.FetchTimeout)} is {settings.FetchTimeout}, longer than the " +
+                   $"{MaxFetchTimeout} an HTTP client can wait. Set it to how long a fetch may take.";
         }
 
         return null;
