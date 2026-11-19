@@ -371,7 +371,12 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("initiate_login_uri", "\"http://client.example.com/login\"")]
     [InlineData("jwks_uri", "\"http://client.example.com/jwks\"")]
     [InlineData("request_uris", """["http://client.example.com/request"]""")]
-    public void AUriOfASchemeADocumentMayNotUse_IsRefused(string member, string value)
+    // Section 10.7 holds "any URLs contained within a Client ID Metadata Document" to the special-purpose registries
+    [InlineData("jwks_uri", "\"https://[64:ff9b::808:808]/jwks\"")]
+    [InlineData("sector_identifier_uri", "\"https://[2002:808:808::]/sector\"")]
+    [InlineData("request_uris", """["https://192.0.2.1/request"]""")]
+    [InlineData("backchannel_logout_uri", "\"https://[::ffff:0:a00:1]/logout\"")]
+    public void AUriADocumentMayNotHold_IsRefused(string member, string value)
     {
         var document = Document();
         document[member] = JsonNode.Parse(value);
@@ -395,6 +400,15 @@ public class ClientIdMetadataDocumentReaderTests
 
         Assert.NotNull(Read(document));
         Refused(document, CreateReader(allowedDestinations: [new Uri("https://internal.example.com/")]));
+    }
+
+    [Theory]
+    [InlineData("jwks_uri", "\"https://[2001:4860:4860::8888]/jwks\"")]
+    public void AUriNamingAPublicAddress_IsKept(string member, string value)
+    {
+        var document = Document();
+        document[member] = JsonNode.Parse(value);
+        Assert.NotNull(Read(document));
     }
 
     [Theory]

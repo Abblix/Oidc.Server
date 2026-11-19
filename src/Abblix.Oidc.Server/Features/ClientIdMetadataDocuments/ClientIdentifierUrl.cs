@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
@@ -64,6 +66,11 @@ internal static class ClientIdentifierUrl
         {
             return "it is not written in the form it is requested in";
         }
+
+        // Section 10.7 holds the URL to the special-purpose address registries as written, the NAT64 prefix included
+        // whatever IPv4 address it carries; a name is judged when it is resolved, by the transport's own validation
+        if (IPAddress.TryParse(parsed.Host, out var literal) && PrivateNetworks.IsSpecialPurposeAddress(literal))
+            return "it names a special-purpose address";
 
         url = parsed;
         return null;

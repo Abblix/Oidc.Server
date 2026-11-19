@@ -63,7 +63,11 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
 
         services.AddSsrfHttpClient(ClientIdMetadataDocumentTransport.HttpClientName, (serviceProvider, client) =>
             client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value
-                .ClientIdMetadataDocuments.FetchTimeout);
+                .ClientIdMetadataDocuments.FetchTimeout)
+            // The registry as written: the NAT64 prefix is refused whatever it carries
+            .ConfigurePrimaryHttpMessageHandler(serviceProvider => new ClientIdMetadataDocumentGuard(
+                serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+                serviceProvider.GetRequiredService<ISecureUriValidator>()));
 
         // The registration checks a document passes take the host's limits on a new client, which dynamic registration
         // registers the same way when the host opens it

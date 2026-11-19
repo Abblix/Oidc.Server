@@ -52,6 +52,13 @@ public class SsrfValidatingHttpMessageHandler(
     private readonly ResolveHostDelegate _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
 
     /// <summary>
+    /// Whether this handler refuses to reach <paramref name="address"/>: a private or reserved one
+    /// (<see cref="PrivateNetworks.IsPrivateOrReservedAddress"/>) unless a derived handler holds a stricter rule.
+    /// </summary>
+    /// <param name="address">An address the request's host is, or resolves to.</param>
+    protected virtual bool IsRefusedAddress(IPAddress address) => PrivateNetworks.IsPrivateOrReservedAddress(address);
+
+    /// <summary>
     /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,
     /// hostname and IP-literal rules, then a DNS re-resolution that catches rebinding. The base handler owns the
     /// no-redirect, no-decompression transport and calls this once per send.
@@ -76,30 +83,41 @@ public class SsrfValidatingHttpMessageHandler(
         // would let the URI pass and then refuse it here, one line before the request. There is no rebinding
         // to defend against either - the permission names the host, and an attacker who could change what it
         // resolves to already owns the name.
-        if (options.Value.BlockPrivateNetworks &&
-            !SecureUriValidator.IsAllowedDestination(uri, options.Value.AllowedDestinations) &&
-            !IPAddress.TryParse(uri.Host, out _))
+        if (!options.Value.BlockPrivateNetworks ||
+            SecureUriValidator.IsAllowedDestination(uri, options.Value.AllowedDestinations))
         {
-            IPAddress[] addresses;
-            try
-            {
-                addresses = await _resolveHost(uri.Host, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                throw new HttpRequestException(
-                    $"SSRF protection: Unable to resolve hostname '{uri.Host}' immediately before request",
-                    ex);
-            }
+            return;
+        }
 
-            var privateAddress = addresses.FirstOrDefault(PrivateNetworks.IsPrivateOrReservedAddress);
-            if (privateAddress != null)
-            {
-                throw new HttpRequestException(
-                    $"SSRF protection: DNS rebinding detected. Hostname '{uri.Host}' resolved to private/internal address {privateAddress} " +
-                    $"immediately before HTTP request. This may indicate a DNS rebinding attack where the hostname resolved to " +
-                    $"a public IP during initial validation but now resolves to a private IP.");
-            }
+        // A literal is judged once more by this handler's own rule, which a stricter one may narrow beyond the shared
+        // validator's
+        if (IPAddress.TryParse(uri.Host, out var literal))
+        {
+            if (IsRefusedAddress(literal))
+                throw new HttpRequestException($"SSRF protection: Address {literal} may not be reached");
+
+            return;
+        }
+
+        IPAddress[] addresses;
+        try
+        {
+            addresses = await _resolveHost(uri.Host, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            throw new HttpRequestException(
+                $"SSRF protection: Unable to resolve hostname '{uri.Host}' immediately before request",
+                ex);
+        }
+
+        var privateAddress = addresses.FirstOrDefault(IsRefusedAddress);
+        if (privateAddress != null)
+        {
+            throw new HttpRequestException(
+                $"SSRF protection: DNS rebinding detected. Hostname '{uri.Host}' resolved to private/internal address {privateAddress} " +
+                $"immediately before HTTP request. This may indicate a DNS rebinding attack where the hostname resolved to " +
+                $"a public IP during initial validation but now resolves to a private IP.");
         }
     }
 }

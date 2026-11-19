@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
@@ -94,6 +96,12 @@ internal static class UriSchemes
         {
             if (uri is not null && SecureUriValidator.IsAllowedDestination(uri, allowedDestinations))
                 return $"its {member} is a destination the host allows for its own services";
+
+            // Section 10.7 holds "any URLs contained within a Client ID Metadata Document" to the registry as written,
+            // so an address it lists is refused here, the NAT64 prefix whatever it carries. A name is resolved when it
+            // is fetched, by the shared validation of that fetch
+            if (uri is not null && IPAddress.TryParse(uri.Host, out var literal) && PrivateNetworks.IsSpecialPurposeAddress(literal))
+                return $"its {member} names the special-purpose address {literal}";
         }
 
         return null;

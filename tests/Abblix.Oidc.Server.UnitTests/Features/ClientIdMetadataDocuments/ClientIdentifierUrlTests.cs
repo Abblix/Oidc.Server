@@ -52,6 +52,11 @@ public class ClientIdentifierUrlTests
     [InlineData("https://client.example.com/clients%2f..%2fother")]
     [InlineData("https://client.example.com/clients%5C..%5Cother")]
     [InlineData("https://client.example.com/clients/..other/metadata.json")]
+    // Section 10.7 holds the URL to the special-purpose registries as written, NAT64 and 6to4 whatever they carry
+    [InlineData("https://[64:ff9b::808:808]/metadata.json")]
+    [InlineData("https://[2002:808:808::]/metadata.json")]
+    [InlineData("https://[::ffff:0:808:808]/metadata.json")]
+    [InlineData("https://192.0.2.1/metadata.json")]
     // "SHOULD NOT contain a query component", refused as this server's choice
     [InlineData("https://client.example.com/metadata.json?tenant=a")]
     // "MUST NOT contain a fragment component"
