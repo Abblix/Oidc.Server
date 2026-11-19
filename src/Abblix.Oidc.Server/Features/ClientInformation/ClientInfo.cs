@@ -81,7 +81,8 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Indicates whether the client is to use Proof Key for Code Exchange (PKCE) in the authorization code flow,
-    /// enhancing security for public clients.
+    /// enhancing security for public clients. A native app and a public client use PKCE whatever this states, as
+    /// <see cref="EffectivePkceRequired"/> answers.
     /// </summary>
     public bool? PkceRequired { get; set; } = true;
 
