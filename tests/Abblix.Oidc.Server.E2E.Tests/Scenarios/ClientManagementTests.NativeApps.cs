@@ -10,9 +10,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
@@ -178,6 +184,47 @@ public partial class ClientManagementTests
         });
 
         Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// A host declaring a native client that authenticates with a shared secret does not start, since RFC 8252 section
+    /// 8.5 has such a secret not accepted "as proof of the client's identity", and the refusal names the client; the
+    /// same client declared public, with PKCE, starts and is served.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false)]
+    [InlineData(ClientAuthenticationMethods.None, true)]
+    public async Task A_host_declaring_a_native_client_starts_only_when_the_client_is_public(
+        string authMethod, bool starts)
+    {
+        const string clientId = "declared-native-app";
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.Clients =
+                [
+                    .. tenant.Clients,
+                    new ClientInfo(clientId)
+                    {
+                        ApplicationType = ApplicationTypes.Native,
+                        TokenEndpointAuthMethod = authMethod,
+                        ClientSecrets = [new ClientSecret { Sha256Hash = new byte[32] }],
+                        RedirectUris = [new Uri(PrivateUseRedirectUri)],
+                    },
+                ])));
+        var createClient = () => host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+
+        if (!starts)
+        {
+            var exception = Assert.Throws<OptionsValidationException>(createClient);
+            Assert.Contains(exception.Failures, failure => failure.Contains($"'{clientId}'"));
+            return;
+        }
+
+        await FetchDiscoveryAsync(createClient());
     }
 
     /// <summary>
