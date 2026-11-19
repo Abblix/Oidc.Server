@@ -32,7 +32,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// RFC 10070 section 4 restricts to the issuer identifier alone.
 /// </remarks>
 /// <param name="logger">The logger used for recording validation activities and outcomes.</param>
-/// <param name="requestInfoProvider">Provides information about the current request, including the request URI.</param>
+/// <param name="requestInfoProvider">Names the address a token whose audience is refused arrived at; no audience is
+/// taken from it.</param>
 /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
 /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
@@ -212,23 +213,33 @@ public partial class ClientJwtValidator(
 
     /// <summary>
     /// Validates the audience of a JWT the client sent other than a client authentication assertion - a request
-    /// object, a login hint token - by checking that it names either the request URI or the authorization
-    /// server's issuer identifier. The server's own client authenticators validate an assertion without this
-    /// check and judge its audience in <c>JwtAssertionAuthenticatorBase</c>.
+    /// object, a login hint token - by checking that it names the authorization server's issuer identifier, as
+    /// written. The server's own client authenticators validate an assertion without this check and judge its
+    /// audience in <c>JwtAssertionAuthenticatorBase</c>.
     /// </summary>
-    /// <param name="tenant">The tenant whose issuer identifier is an audience the assertion may name.</param>
+    /// <remarks>
+    /// The issuer alone, because that is the value the specifications give a request object: RFC 9101 section 4 has
+    /// its aud "be the value of the authorization server (AS) "issuer"", OpenID Connect Core 1.0 section 6.1 has it
+    /// "be or include the OP's Issuer Identifier URL", RFC 9126 section 3 applies those rules to a pushed one, and
+    /// CIBA Core 1.0 section 7.1.1 has a signed authentication request's audience "contain the value of the Issuer
+    /// Identifier for the OP". None names an endpoint URL. Nothing compared is taken from the request: a host serving
+    /// one tenant answers on whatever host a request names, so an address built on it would match an object a client
+    /// signed for another server reached by the same path. The request's address is only logged, so a refusal shows
+    /// where the object arrived.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose issuer identifier is the audience the token must name.</param>
     /// <param name="audiences">The collection of audiences to validate against valid audience values.</param>
     /// <returns>A task that returns whether the audience is valid.</returns>
     private Task<bool> ValidateAudience(TenantDefinition tenant, IEnumerable<string> audiences)
     {
-        var requestUri = requestInfoProvider.RequestUri.OriginalString;
         var issuer = tenant.Issuer.OriginalString;
 
         var materializedAudiences = audiences.Materialize();
-        var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);
+        var result = materializedAudiences.Contains(issuer, StringComparer.Ordinal);
         if (!result)
         {
-            LogAudienceValidationFailed(Sanitized.Values(materializedAudiences), requestUri, issuer);
+            LogAudienceValidationFailed(
+                Sanitized.Values(materializedAudiences), requestInfoProvider.RequestUri.OriginalString, issuer);
         }
 
         return Task.FromResult(result);
