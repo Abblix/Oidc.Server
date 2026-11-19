@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -93,13 +94,51 @@ public class RedirectUrisCheckTests
     }
 
     /// <summary>
+    /// A redirection endpoint URI written with a fragment, for each kind of client and in both lists.
+    /// </summary>
+    public static TheoryData<string, string, bool> UrisWithAFragment()
+    {
+        var data = new TheoryData<string, string, bool>();
+        var rows =
+            from applicationType in (string[])[ApplicationTypes.Web, ApplicationTypes.Native]
+            from postLogout in (bool[])[false, true]
+            let uri = applicationType == ApplicationTypes.Web
+                ? "https://app.example.com/cb#section"
+                : "com.example.app:/cb#section"
+            select (uri, applicationType, postLogout);
+
+        foreach (var (uri, applicationType, postLogout) in rows)
+            data.Add(uri, applicationType, postLogout);
+
+        return data;
+    }
+
+    /// <summary>
+    /// RFC 6749 section 3.1.2: "The endpoint URI MUST NOT include a fragment component". The post-logout redirect URIs
+    /// are held to it as well, as dynamic registration holds them.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UrisWithAFragment))]
+    public void AClient_RedirectingToAUriWithAFragment_IsRefusedOnceByThisCheck(
+        string uri,
+        string applicationType,
+        bool postLogout)
+    {
+        var client = Bound(uri, applicationType, postLogout);
+
+        Assert.Contains($"'{ClientId}'", Assert.Single(Check(client)));
+        Assert.Empty(NativeCheck(client));
+    }
+
+    /// <summary>
     /// Among every check the server runs on a tenant's settings, a client otherwise accepted is refused exactly once
-    /// for a URI that is not absolute, and no check fails on it, so a tenant read from a store is dropped with the
-    /// refusal logged rather than failing the read.
+    /// for a URI that is not absolute or includes a fragment, and no check fails on it, so a tenant read from a store
+    /// is dropped with the refusal logged rather than failing the read.
     /// </summary>
     [Theory]
     [MemberData(nameof(NotAbsoluteUris))]
-    public void EverySettingsCheck_OnAUriThatIsNotAbsolute_RefusesOnceWithoutFailing(
+    [MemberData(nameof(UrisWithAFragment))]
+    public void EverySettingsCheck_OnARefusedUri_RefusesOnceWithoutFailing(
         string uri,
         string applicationType,
         bool postLogout)
@@ -116,10 +155,74 @@ public class RedirectUrisCheckTests
     /// </summary>
     [Theory]
     [MemberData(nameof(NotAbsoluteUris))]
-    public async Task Registration_OfAUriThatIsNotAbsolute_IsRefused(
+    [MemberData(nameof(UrisWithAFragment))]
+    public async Task Registration_OfARefusedUri_IsRefused(
         string uri,
         string applicationType,
         bool postLogout)
+    {
+        var context = RegistrationOf(uri, applicationType, postLogout);
+
+        var error = postLogout
+            ? await new PostLogoutRedirectUrisValidator().ValidateAsync(SingleIssuer.Tenant, context)
+            : await new RedirectUrisValidator().ValidateAsync(SingleIssuer.Tenant, context);
+
+        var expected = postLogout ? ErrorCodes.InvalidClientMetadata : ErrorCodes.InvalidRedirectUri;
+        Assert.Equal(expected, Assert.IsType<OidcError>(error).Error);
+    }
+
+    /// <summary>
+    /// The registration check of every URI member refuses a value that is not absolute as well.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(NotAbsoluteUris))]
+    public async Task Registration_OfAUriThatIsNotAbsolute_IsRefusedAsAStoredUri(
+        string uri,
+        string applicationType,
+        bool postLogout)
+    {
+        var context = RegistrationOf(uri, applicationType, postLogout);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata,
+            Assert.IsType<OidcError>(await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, context)).Error);
+    }
+
+    /// <summary>
+    /// A refusal shows the value with every control, format and whitespace character but a space percent-encoded, so
+    /// a value carrying one cannot break or hide inside the logged line, whichever check refuses it and whether the
+    /// value parses as absolute or not.
+    /// </summary>
+    [Theory]
+    [InlineData("java\tscript:alert(1)", ApplicationTypes.Web)]
+    [InlineData("java\nscript:alert(1)", ApplicationTypes.Web)]
+    [InlineData("\u0001javascript:alert(1)", ApplicationTypes.Web)]
+    [InlineData("javascript:alert(1)\ny", ApplicationTypes.Web)]
+    [InlineData("javascript:alert(1)​y", ApplicationTypes.Web)]
+    [InlineData("https://app.example.com/cb#a\nb", ApplicationTypes.Web)]
+    [InlineData("myapp:/cb\ny", ApplicationTypes.Native)]
+    [InlineData("myapp:/cb​y", ApplicationTypes.Native)]
+    public void ARefusal_ShowsNoInvisibleCharacter(string uri, string applicationType)
+    {
+        var client = Bound(uri, applicationType, postLogout: false);
+
+        var refusal = Assert.Single(AllChecks(client)).Message;
+
+        Assert.DoesNotContain(refusal, IsInvisible);
+    }
+
+    /// <summary>
+    /// A value carrying nothing to encode is shown as the settings spell it.
+    /// </summary>
+    [Fact]
+    public void ARefusal_ShowsAPlainValueAsWritten()
+        => Assert.Contains("'/callback'", Assert.Single(Check(Bound("/callback", ApplicationTypes.Web, postLogout: false))));
+
+    private static bool IsInvisible(char character)
+        => char.IsControl(character)
+           || char.GetUnicodeCategory(character) == UnicodeCategory.Format
+           || (char.IsWhiteSpace(character) && character != ' ');
+
+    private static ClientRegistrationValidationContext RegistrationOf(string uri, string applicationType, bool postLogout)
     {
         var member = postLogout
             ? ClientRegistrationRequest.Parameters.PostLogoutRedirectUris
@@ -134,16 +237,7 @@ public class RedirectUrisCheckTests
             [other] = new[] { applicationType == ApplicationTypes.Web ? "https://app.example.com/cb" : "com.example.app:/cb" },
         });
         var request = JsonSerializer.Deserialize<ClientRegistrationRequest>(body)!;
-        var context = new ClientRegistrationValidationContext(request);
-
-        var error = postLogout
-            ? await new PostLogoutRedirectUrisValidator().ValidateAsync(SingleIssuer.Tenant, context)
-            : await new RedirectUrisValidator().ValidateAsync(SingleIssuer.Tenant, context);
-
-        var expected = postLogout ? ErrorCodes.InvalidClientMetadata : ErrorCodes.InvalidRedirectUri;
-        Assert.Equal(expected, Assert.IsType<OidcError>(error).Error);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata,
-            Assert.IsType<OidcError>(await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, context)).Error);
+        return new ClientRegistrationValidationContext(request);
     }
 
     /// <summary>

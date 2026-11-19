@@ -38,14 +38,15 @@ internal sealed class NativeClientsCheck : ITenantsCheck
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)));
 
         // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period character (".")
-        // SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme. A URI that is not absolute or
-        // uses a script scheme is RedirectUrisCheck's to refuse, for every client
+        // SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme. A URI that is not absolute,
+        // includes a fragment or uses a script scheme is RedirectUrisCheck's to refuse, for every client
         foreach (var (member, uri) in redirects)
         {
             if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri))
             {
-                yield return $"The native client '{client.ClientId}' has the {member} '{uri}': a native app " +
-                             $"redirects to a private-use scheme based on a domain name in reverse order, such as " +
+                yield return $"The native client '{client.ClientId}' has the {member} " +
+                             $"'{RedirectUrisCheck.Shown(uri)}': a native app redirects to a private-use scheme " +
+                             $"based on a domain name in reverse order, such as " +
                              $"com.example.app (RFC 8252 section 7.1), to https, or to http on a loopback host.";
             }
         }
