@@ -1,0 +1,111 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+// Spelled out rather than left to ImplicitUsings, because this file is compiled into suites that do not enable it.
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Abblix.Tests.Shared;
+
+/// <summary>
+/// An HTTP/1.1 origin on the IPv4 and IPv6 loopback that answers every request with one status, 200 unless told
+/// otherwise, and keeps the connection open, counting the connections it accepted and the requests it answered.
+/// </summary>
+/// <remarks>
+/// A real socket rather than a handler standing in for the transport, because what is under test is the connection
+/// the transport makes: which address it goes to and which later requests it carries.
+/// </remarks>
+internal sealed class LoopbackOrigin : IDisposable
+{
+    private const string EndOfHeaders = "\r\n\r\n";
+
+    private readonly TcpListener _listener;
+    private readonly CancellationTokenSource _stop = new();
+    private readonly byte[] _response;
+    private int _connections;
+    private int _requests;
+
+    /// <param name="status">The status line's code and reason, such as <c>302 Found</c>.</param>
+    /// <param name="headers">Further header lines, each ending in CRLF.</param>
+    public LoopbackOrigin(string status = "200 OK", string headers = "")
+    {
+        _response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\n{headers}Content-Length: 0{EndOfHeaders}");
+        _listener = new TcpListener(IPAddress.IPv6Any, 0);
+        _listener.Server.DualMode = true;
+        _listener.Start();
+        _ = AcceptAsync();
+    }
+
+    public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+    public int Connections => Volatile.Read(ref _connections);
+
+    public int Requests => Volatile.Read(ref _requests);
+
+    private async Task AcceptAsync()
+    {
+        while (!_stop.IsCancellationRequested)
+        {
+            Socket socket;
+            try
+            {
+                socket = await _listener.AcceptSocketAsync(_stop.Token);
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or SocketException
+                                                  or ObjectDisposedException)
+            {
+                return;
+            }
+
+            Interlocked.Increment(ref _connections);
+            _ = ServeAsync(socket);
+        }
+    }
+
+    private async Task ServeAsync(Socket socket)
+    {
+        await using var stream = new NetworkStream(socket, ownsSocket: true);
+        var buffer = new byte[8192];
+        var received = new StringBuilder();
+        try
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                var read = await stream.ReadAsync(buffer, _stop.Token);
+                if (read == 0)
+                    return;
+
+                received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+
+                // A request carries no body here, so its end is the blank line after its headers
+                int end;
+                while ((end = received.ToString().IndexOf(EndOfHeaders, StringComparison.Ordinal)) >= 0)
+                {
+                    received.Remove(0, end + EndOfHeaders.Length);
+                    Interlocked.Increment(ref _requests);
+                    await stream.WriteAsync(_response, _stop.Token);
+                }
+            }
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or IOException)
+        {
+            // The origin is stopping, or the client went away
+        }
+    }
+
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _listener.Stop();
+        _stop.Dispose();
+    }
+}

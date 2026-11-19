@@ -42,7 +42,7 @@ public static class SecureHttpFetchServiceCollectionExtensions
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
     /// - Blocking requests to internal TLDs (.local, .internal, etc.)
     /// - DNS resolution and blocking of private/reserved IP address ranges
-    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - One resolution per connection, judged and then connected to, so DNS rebinding reaches nothing new
     /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
     /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
     ///

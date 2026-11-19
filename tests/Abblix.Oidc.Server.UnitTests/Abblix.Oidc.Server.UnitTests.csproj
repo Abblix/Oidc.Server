@@ -123,4 +123,8 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/LoopbackOrigin.cs" Link="Shared/LoopbackOrigin.cs" />
+  </ItemGroup>
+
 </Project>

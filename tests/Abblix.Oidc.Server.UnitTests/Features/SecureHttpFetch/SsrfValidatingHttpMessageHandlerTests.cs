@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Tests.Shared;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -25,11 +26,10 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 /// </summary>
 /// <remarks>
 /// A row judges an address and nothing else, so it neither opens a socket nor resolves a name: the decision is
-/// driven directly, and the addresses a name stands for are supplied. A row that judges a name without saying what
-/// it resolves to gets a resolution that refuses, so reaching a live one fails that row instead of spending its
-/// time on the network. The rows named for the send path are the exception: they go through a send, over a
-/// transport that counts rather than connects, because the decision and the send being wired together is a
-/// property of its own and nothing else holds it.
+/// driven through a send over a transport that counts rather than connects, and the addresses a name stands for are
+/// supplied. A row that judges a name without saying what it resolves to gets a resolution that refuses, so reaching
+/// a live one fails that row instead of spending its time on the network. That the connection is then made to the
+/// address judged is the base handler's promise, held in its own suite.
 /// </remarks>
 public class SsrfValidatingHttpMessageHandlerTests
 {
@@ -53,6 +53,9 @@ public class SsrfValidatingHttpMessageHandlerTests
         private Judge(IOptions<SecureHttpFetchOptions> options, ResolveHostDelegate resolveHost)
             : base(options, new SecureUriValidator(options, NullLogger<SecureUriValidator>.Instance), resolveHost)
         {
+            // The transport the handler built for itself is released here, the last moment anything holds it
+            InnerHandler!.Dispose();
+            InnerHandler = new CountingTransport();
         }
 
         public static Judge Under(SecureHttpFetchOptions options, ResolveHostDelegate? resolveHost = null)
@@ -61,7 +64,14 @@ public class SsrfValidatingHttpMessageHandlerTests
             return new Judge(accessor, resolveHost ?? RefusesToResolve);
         }
 
-        public Task OfAsync(string url) => GuardAsync(new Uri(url), TestContext.Current.CancellationToken);
+        public async Task OfAsync(string url)
+        {
+            using var invoker = new HttpMessageInvoker(this, disposeHandler: false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var response = await invoker.SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        public OutboundAddressRule RuleFor(string url) => AddressRuleFor(new Uri(url));
     }
 
     private static ResolveHostDelegate Standing(params IPAddress[] addresses)
@@ -217,7 +227,7 @@ public class SsrfValidatingHttpMessageHandlerTests
         => await RefusedBecauseAsync(
             Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = true }, Standing(PrivateAddress)),
             "https://example.com/api",
-            "DNS rebinding detected");
+            $"stands for the address {PrivateAddress}");
 
     /// <summary>
     /// One internal address among public ones is enough to refuse, because the connection picks among them and
@@ -230,7 +240,7 @@ public class SsrfValidatingHttpMessageHandlerTests
                 new SecureHttpFetchOptions { BlockPrivateNetworks = true },
                 Standing(PublicAddress, PrivateAddress)),
             "https://example.com/api",
-            "DNS rebinding detected");
+            $"stands for the address {PrivateAddress}");
 
     /// <summary>
     /// A name that cannot be resolved is refused rather than handed on, because the transport would resolve it
@@ -309,7 +319,7 @@ public class SsrfValidatingHttpMessageHandlerTests
     [Fact]
     public async Task Allows_TheLocalhostName_WhenBlockingIsOff()
         => await PassesAsync(
-            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }),
+            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }, Standing(PrivateAddress)),
             "https://localhost/api");
 
     /// <summary>
@@ -339,7 +349,7 @@ public class SsrfValidatingHttpMessageHandlerTests
     [Fact]
     public async Task Allows_TheLocalTopLevelDomain_WhenBlockingIsOff()
         => await PassesAsync(
-            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }),
+            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }, Standing(PrivateAddress)),
             "https://myserver.local/api");
 
     /// <summary>
@@ -349,18 +359,17 @@ public class SsrfValidatingHttpMessageHandlerTests
     [Fact]
     public async Task Allows_ASingleLabelName_WhenBlockingIsOff()
         => await PassesAsync(
-            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }),
+            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }, Standing(PrivateAddress)),
             "https://intranet/api");
 
     /// <summary>
-    /// A public name passes with the protection off, and is not resolved on the way: with nothing to refuse,
-    /// resolving would make every such request wait on a network the deployment opted out of. The resolution this
-    /// row gets refuses, so reaching one would fail the row rather than pass it.
+    /// A name standing for a private address passes with the protection off: it is resolved once, as every name is,
+    /// since that answer is the one the connection is made to, and nothing in it is refused.
     /// </summary>
     [Fact]
-    public async Task Allows_APublicName_WhenBlockingIsOff_WithoutResolvingIt()
+    public async Task Allows_ANameStandingForAPrivateAddress_WhenBlockingIsOff()
         => await PassesAsync(
-            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }),
+            Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = false }, Standing(PrivateAddress)),
             "https://example.com/api");
 
     /// <summary>
@@ -374,7 +383,8 @@ public class SsrfValidatingHttpMessageHandlerTests
             {
                 AllowedSchemes = [Uri.UriSchemeHttps],
                 BlockPrivateNetworks = false,
-            }),
+            },
+            Standing(PublicAddress)),
             "https://example.com/api");
 
     /// <summary>
@@ -404,7 +414,8 @@ public class SsrfValidatingHttpMessageHandlerTests
             {
                 AllowedSchemes = [Uri.UriSchemeHttp, Uri.UriSchemeHttps],
                 BlockPrivateNetworks = false,
-            }),
+            },
+            Standing(PublicAddress)),
             "http://example.com/api");
 
     /// <summary>
@@ -435,28 +446,30 @@ public class SsrfValidatingHttpMessageHandlerTests
             {
                 AllowedSchemes = [],
                 BlockPrivateNetworks = false,
-            }),
+            },
+            Standing(PublicAddress)),
             "http://example.com/api");
 
     /// <summary>
-    /// A named destination has to be honored by the DNS re-resolution here, not only by the synchronous
-    /// policy the validator applies.
+    /// A named destination has to be honored by the address rule its connection is made by, not only by the
+    /// synchronous policy the validator applies.
     /// </summary>
     /// <remarks>
     /// The name is one this deployment reaches at a loopback address, so a permission that reached only the
     /// validator would pass validation and then be refused one line before the request goes out. Every test of
     /// <see cref="SecureUriValidator"/> stays green in that state, which is what makes this the test worth
-    /// having: the two refusals are separate, and a permission has to clear both. The resolution this row gets
-    /// refuses, which says the rest of it: a named destination is not resolved at all.
+    /// having: the two refusals are separate, and a permission has to clear both.
     /// </remarks>
     [Fact]
-    public async Task Allows_ANamedDestination_WithoutResolvingIt()
+    public async Task Allows_ANamedDestination_StandingForALoopbackAddress()
         => await PassesAsync(
-            Judge.Under(new SecureHttpFetchOptions
-            {
-                BlockPrivateNetworks = true,
-                AllowedDestinations = [new Uri("http://localhost:5002")],
-            }),
+            Judge.Under(
+                new SecureHttpFetchOptions
+                {
+                    BlockPrivateNetworks = true,
+                    AllowedDestinations = [new Uri("http://localhost:5002")],
+                },
+                Standing(IPAddress.Loopback)),
             "http://localhost:5002/health");
 
     /// <summary>
@@ -476,6 +489,48 @@ public class SsrfValidatingHttpMessageHandlerTests
             }),
             "https://169.254.169.254/latest/meta-data",
             "IP address '169.254.169.254' is private/internal");
+
+    /// <summary>
+    /// The well-known NAT64 prefix carrying a public IPv4 address is judged by that address outside a metadata
+    /// document client's scope, and refused inside one, through the same send.
+    /// </summary>
+    [Fact]
+    public async Task ANameBehindNat64_IsRefusedOnlyInsideASpecialPurposeScope()
+    {
+        var judge = Judge.Under(
+            new SecureHttpFetchOptions { BlockPrivateNetworks = true },
+            Standing(IPAddress.Parse("64:ff9b::808:808")));
+
+        await PassesAsync(judge, "https://example.com/api");
+        using (SpecialPurposeFetches.Enter())
+            await RefusedBecauseAsync(judge, "https://example.com/api", "stands for the address 64:ff9b::808:808");
+    }
+
+    /// <summary>
+    /// The rule each request is connected by: the strict one inside a metadata document client's scope, the lenient
+    /// one outside it, and none for a destination the host named or with the blocking off, in either.
+    /// </summary>
+    /// <remarks>
+    /// The rule also chooses which connections a request may ride, so a request held to the strict rule never reuses
+    /// one opened under the lenient rule; that half is held in the base handler's suite.
+    /// </remarks>
+    [Theory]
+    [InlineData(true, "https://example.com/api", false, OutboundAddressRule.NoPrivateOrReserved)]
+    [InlineData(true, "https://example.com/api", true, OutboundAddressRule.NoSpecialPurpose)]
+    [InlineData(true, "http://localhost:5002/health", true, OutboundAddressRule.Unrestricted)]
+    [InlineData(true, "http://localhost:5002/other", true, OutboundAddressRule.NoSpecialPurpose)]
+    [InlineData(false, "https://example.com/api", true, OutboundAddressRule.Unrestricted)]
+    public void TheRuleARequestIsConnectedBy(bool block, string url, bool strict, OutboundAddressRule expected)
+    {
+        var judge = Judge.Under(new SecureHttpFetchOptions
+        {
+            BlockPrivateNetworks = block,
+            AllowedDestinations = [new Uri("http://localhost:5002/health")],
+        });
+
+        using (strict ? SpecialPurposeFetches.Enter() : null)
+            Assert.Equal(expected, judge.RuleFor(url));
+    }
 
     /// <summary>
     /// The send judges the address of the request it is about to make. The decision and the send are two halves of
@@ -508,6 +563,39 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(1, transport.Requests);
+    }
+
+    /// <summary>
+    /// The connection is made to the address the send resolved, and the name is not resolved again for it: a name
+    /// answering one address to the check and another to the socket would otherwise reach whatever the second answer
+    /// says, past everything the first was judged by.
+    /// </summary>
+    /// <remarks>
+    /// The real transport, to an origin on the loopback the host named, under a name the system resolver knows
+    /// nothing of: the request arrives only if the socket connects to the answer this handler was given, and a
+    /// second resolution fails the row by name.
+    /// </remarks>
+    [Fact]
+    public async Task TheConnection_IsMadeToTheAddressTheSendResolved()
+    {
+        using var origin = new LoopbackOrigin();
+        var url = $"http://rebind.invalid:{origin.Port}/jwks";
+        var accessor = Options.Create(new SecureHttpFetchOptions { AllowedDestinations = [new Uri(url)] });
+        var answers = 0;
+        using var handler = new SsrfValidatingHttpMessageHandler(
+            accessor,
+            new SecureUriValidator(accessor, NullLogger<SecureUriValidator>.Instance),
+            (_, _) => Interlocked.Increment(ref answers) == 1
+                ? Task.FromResult(new[] { IPAddress.Loopback })
+                : throw new InvalidOperationException("The name was resolved a second time."));
+        using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
+
+        using var response = await invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, url), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, origin.Requests);
+        Assert.Equal(1, answers);
     }
 
     /// <summary>
