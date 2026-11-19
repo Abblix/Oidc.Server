@@ -80,20 +80,28 @@ public class PrivateNetworksTests
     [Theory]
     [InlineData("::", true)]
     [InlineData("::1", true)]
-    [InlineData("::2", false)]
+    // IPv4-compatible (RFC 4291 section 2.5.5.1, deprecated) and IPv4-translated (RFC 2765) addresses
+    [InlineData("::2", true)]
+    [InlineData("::808:808", true)]
+    [InlineData("::ffff:ffff", true)]
+    [InlineData("::1:0:0", false)]
+    [InlineData("::ffff:0:808:808", true)]
+    [InlineData("::ffff:0:ffff:ffff", true)]
+    [InlineData("::ffff:1:0:0", false)]
     [InlineData("64:ff9a:ffff:ffff:ffff:ffff:ffff:ffff", false)]
     [InlineData("64:ff9b::", true)]
     [InlineData("64:ff9b::7f00:1", true)]
-    // NAT64 (RFC 6052 section 2.2) and 6to4 (RFC 3056 section 2) carry an IPv4 address, judged as itself: a host on an
-    // IPv6-only network reaches every public address through them
+    // NAT64 (RFC 6052 section 2.2) carries an IPv4 address, judged as itself: a host on an IPv6-only network reaches
+    // every public address through it
     [InlineData("64:ff9b::808:808", false)]
     [InlineData("64:ff9b::a00:1", true)]
     [InlineData("64:ff9b::a9fe:a9fe", true)]
     [InlineData("64:ff9b::c000:201", true)]
-    [InlineData("2002:808:808::", false)]
-    [InlineData("2002:808:808:1::1", false)]
+    // 6to4 is refused whatever IPv4 address it names, which says nothing of the relay a packet passes
+    [InlineData("2002:808:808::", true)]
+    [InlineData("2002:808:808:1::1", true)]
     [InlineData("2002:a00:1::", true)]
-    [InlineData("2002:c0a8:101::", true)]
+    [InlineData("2001:ffff:ffff::", false)]
     // The local-use NAT64 prefix (RFC 8215) translates to whatever the network chooses, so nothing tells what it reaches
     [InlineData("64:ff9b:1::", true)]
     [InlineData("64:ff9b:1:ffff::1", true)]
@@ -137,4 +145,19 @@ public class PrivateNetworksTests
     [InlineData("::ffff:8.8.8.8", false)]
     public void IPv6Address_IsJudgedByItsRange(string address, bool expected)
         => Assert.Equal(expected, PrivateNetworks.IsPrivateOrReservedAddress(IPAddress.Parse(address)));
+
+    /// <summary>
+    /// The registry reading of RFC 6890 refuses every block it lists, the NAT64 prefix whatever it carries, and is
+    /// otherwise the same judgement.
+    /// </summary>
+    [Theory]
+    [InlineData("64:ff9b::808:808", true)]
+    [InlineData("64:ff9b::a00:1", true)]
+    [InlineData("2002:808:808::", true)]
+    [InlineData("10.0.0.1", true)]
+    [InlineData("8.8.8.8", false)]
+    [InlineData("2001:4860:4860::8888", false)]
+    [InlineData("::ffff:8.8.8.8", false)]
+    public void ASpecialPurposeAddress_IsEveryBlockOfTheRegistry(string address, bool expected)
+        => Assert.Equal(expected, PrivateNetworks.IsSpecialPurposeAddress(IPAddress.Parse(address)));
 }
