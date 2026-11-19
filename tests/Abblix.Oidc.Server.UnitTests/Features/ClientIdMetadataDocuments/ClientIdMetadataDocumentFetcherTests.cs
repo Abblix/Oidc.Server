@@ -166,26 +166,28 @@ public class ClientIdMetadataDocumentFetcherTests
     [InlineData(false)]
     public async Task ADocumentLongerThanTheLimit_IsRefused(bool declaresLength)
     {
-        _settings.MaxDocumentSize = 64;
-        var body = $$"""{"client_id":"{{Url}}","client_name":"{{new string('x', 64)}}"}""";
-        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = declaresLength
-                ? new StringContent(body, Encoding.UTF8, "application/json")
-                : new UnsizedContent(body),
-        });
+        // A valid document padded with whitespace, so only its length can refuse it: one byte fewer allowed than it has
+        var body = Document + new string(' ', 256);
+        _settings.MaxDocumentSize = Encoding.UTF8.GetByteCount(body) - 1;
+        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(body, declaresLength) });
 
         Assert.False((await FailedAsync()).MayPass);
     }
 
-    [Fact]
-    public async Task ADocumentOfExactlyTheLimit_IsRead()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADocumentOfExactlyTheLimit_IsRead(bool declaresLength)
     {
-        _settings.MaxDocumentSize = Encoding.UTF8.GetByteCount(Document);
-        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new UnsizedContent(Document) });
+        var body = Document + new string(' ', 256);
+        _settings.MaxDocumentSize = Encoding.UTF8.GetByteCount(body);
+        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(body, declaresLength) });
 
         Assert.NotNull((await FetchedAsync()).Content);
     }
+
+    private static HttpContent Body(string body, bool declaresLength)
+        => declaresLength ? new StringContent(body, Encoding.UTF8, "application/json") : new UnsizedContent(body);
 
     /// <summary>
     /// Section 6.2: the server "SHOULD respect HTTP cache headers", "SHOULD enforce a maximum effective cache duration
