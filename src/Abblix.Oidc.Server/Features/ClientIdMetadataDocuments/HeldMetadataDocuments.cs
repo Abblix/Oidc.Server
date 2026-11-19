@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,7 +64,9 @@ internal sealed partial class HeldMetadataDocuments(
         var settings = options.CurrentValue.ClientIdMetadataDocuments;
         var fetchedAt = clock.GetUtcNow();
 
-        var fetched = await fetcher.FetchAsync(url);
+        Result<FetchedDocument, MetadataDocumentFailure> fetched;
+        using (SpecialPurposeFetches.Enter())
+            fetched = await fetcher.FetchAsync(url);
         var result = fetched.TryGetSuccess(out var document)
             ? (await ReadAsync(clientId, document)).MapSuccess(
                 metadata => new HeldMetadataDocument(metadata, fetchedAt + document.Lifetime))

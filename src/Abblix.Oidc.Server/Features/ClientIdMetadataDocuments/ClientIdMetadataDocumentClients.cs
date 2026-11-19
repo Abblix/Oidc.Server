@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -136,6 +137,9 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         await using var scope = scopes.CreateAsyncScope();
         var validator = ActivatorUtilities.CreateInstance<ClientIdMetadataDocumentValidator>(scope.ServiceProvider);
 
+        // The checks fetch what the document names, its sector identifier among them, on the document's behalf
+        using var strict = SpecialPurposeFetches.Enter();
+
         // A copy, since a check may complete the metadata it judges and the document is shared by every tenant
         var judged = await validator.ValidateAsync(tenant, metadata with { });
         if (!judged.TryGetSuccess(out var context))
@@ -146,7 +150,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
 
         // Built as a newly registered client is, with the host's defaults for what the metadata leaves unnamed. No
         // secret: section 4.1 leaves a document none
-        return new ClientInfoBuilder(clientId, context.Request)
+        var client = new ClientInfoBuilder(clientId, context.Request)
             .WithSectorIdentifier(context.SectorIdentifier)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
@@ -156,5 +160,9 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .Build();
+
+        // Every later fetch of the client's URIs is held to the registries as written (section 10.7)
+        client.ResolvedFromMetadataDocument = true;
+        return client;
     }
 }

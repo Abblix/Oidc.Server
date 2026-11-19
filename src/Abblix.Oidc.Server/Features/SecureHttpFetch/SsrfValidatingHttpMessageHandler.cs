@@ -53,10 +53,14 @@ public class SsrfValidatingHttpMessageHandler(
 
     /// <summary>
     /// Whether this handler refuses to reach <paramref name="address"/>: a private or reserved one
-    /// (<see cref="PrivateNetworks.IsPrivateOrReservedAddress"/>) unless a derived handler holds a stricter rule.
+    /// (<see cref="PrivateNetworks.IsPrivateOrReservedAddress"/>), or for a fetch made on behalf of a client resolved from
+    /// its metadata document any special-purpose one (<see cref="PrivateNetworks.IsSpecialPurposeAddress"/>).
     /// </summary>
     /// <param name="address">An address the request's host is, or resolves to.</param>
-    protected virtual bool IsRefusedAddress(IPAddress address) => PrivateNetworks.IsPrivateOrReservedAddress(address);
+    protected virtual bool IsRefusedAddress(IPAddress address)
+        => SpecialPurposeFetches.Active
+            ? PrivateNetworks.IsSpecialPurposeAddress(address)
+            : PrivateNetworks.IsPrivateOrReservedAddress(address);
 
     /// <summary>
     /// Applies comprehensive SSRF validation immediately before the request leaves: the synchronous scheme,

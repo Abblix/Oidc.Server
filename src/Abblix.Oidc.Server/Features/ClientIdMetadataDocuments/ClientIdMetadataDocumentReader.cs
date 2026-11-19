@@ -122,6 +122,12 @@ internal sealed class ClientIdMetadataDocumentReader(
         if (UriSchemes.WhyRefused(metadata, fetchOptions.CurrentValue.AllowedDestinations) is { } schemes)
             return MetadataDocumentFailure.Terminal(schemes);
 
+        // A ping or push notification is posted from the stored backchannel authentication request, where the client
+        // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
+        // for; a client resolved from its document polls instead
+        if (metadata.BackChannelTokenDeliveryMode is BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push)
+            return MetadataDocumentFailure.Terminal("it asks for backchannel notifications, which such a client does not get");
+
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))

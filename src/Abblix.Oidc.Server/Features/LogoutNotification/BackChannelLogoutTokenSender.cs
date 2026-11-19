@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -45,7 +46,11 @@ public partial class BackChannelLogoutTokenSender(
         };
 
         using var content = new FormUrlEncodedContent(parameters);
-        using var response = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
+        HttpResponseMessage sent;
+        using (SpecialPurposeFetches.For(clientInfo))
+            sent = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
+
+        using var response = sent;
 
         LogRequestSent(logoutToken.Token.Payload.JwtId, logoutOptions.Uri, response.StatusCode);
 

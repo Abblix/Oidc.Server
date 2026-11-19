@@ -428,6 +428,16 @@ public class ClientIdMetadataDocumentReaderTests
     public void ADocumentTurningPkceOff_StillRequiresIt(string json)
         => Assert.True(Read(Document(json)).PkceRequired);
 
+    [Theory]
+    [InlineData("ping")]
+    [InlineData("push")]
+    public void ADocumentAskingForBackchannelNotifications_IsRefused(string mode)
+        => Refused(Document($$"""{"backchannel_token_delivery_mode":"{{mode}}","backchannel_client_notification_endpoint":"https://client.example.com/ciba"}"""));
+
+    [Fact]
+    public void ADocumentPollingForBackchannelTokens_IsKept()
+        => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
+
     [Fact]
     public void ANamedApplicationType_IsKept()
         => Assert.Equal(

@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -40,9 +41,12 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
 
     private readonly MetadataDocumentOrigin _origin = new();
 
-    private WebApplicationFactory<Program> CreateHost(Action<OidcOptions>? configure = null)
+    private WebApplicationFactory<Program> CreateHost(
+        Action<OidcOptions>? configure = null,
+        Action<IServiceCollection>? configureServices = null)
         => Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
+            configureServices?.Invoke(services);
             new Registered(services).AddClientIdMetadataDocuments();
 
             // The client's own web server, standing behind the published transport in place of the network
@@ -379,6 +383,52 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
 
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, form);
         Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// Section 10.7: the server "MUST NOT fetch ... any URLs contained within a Client ID Metadata Document that resolve
+    /// to special-use IP addresses as defined in [RFC6890]". A key set whose host answers with the NAT64 prefix is not
+    /// fetched for a document client, though it carries a public address, while one answering with a public address is.
+    /// </summary>
+    [Theory]
+    [InlineData("2001:4860:4860::8888", true)]
+    [InlineData("64:ff9b::808:808", false)]
+    public async Task ADocumentsKeySet_IsFetchedOnlyFromAnAddressNoSpecialPurposeBlockHolds(string resolved, bool authenticated)
+    {
+        const string jwksUri = "https://keys.client.example.com/jwks.json";
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var document = PublicClientDocument();
+        document[RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt;
+        document[RegistrationMembers.JwksUri] = jwksUri;
+        Serve(document);
+        _origin.Serve(jwksUri, JsonSerializer.Serialize(new JsonWebKeySet([key.Sanitize(includePrivateKeys: false)])));
+
+        // The server's own SSRF validation over the key set fetch, with the name answering as the row says
+        await using var host = CreateHost(configureServices: services => services
+            .AddHttpClient(SecureFetchTransport.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+            {
+                var guard = new SsrfValidatingHttpMessageHandler(
+                    serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+                    serviceProvider.GetRequiredService<ISecureUriValidator>(),
+                    (_, _) => Task.FromResult(new[] { IPAddress.Parse(resolved) }));
+                guard.InnerHandler!.Dispose();
+                guard.InnerHandler = _origin;
+                return guard;
+            }));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(ClientId, challenge));
+        var form = CodeExchange(code, verifier);
+        form[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+        form[ClientRequest.Parameters.ClientAssertion] =
+            await ClientSecretJwtAssertion.IssueWithKeyAsync(ClientId, key, discovery.Issuer.OriginalString);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
+
+        Assert.Equal(authenticated, response.IsSuccessStatusCode);
+        Assert.Equal(authenticated, _origin.RequestsTo(jwksUri) > 0);
     }
 
     /// <summary>
