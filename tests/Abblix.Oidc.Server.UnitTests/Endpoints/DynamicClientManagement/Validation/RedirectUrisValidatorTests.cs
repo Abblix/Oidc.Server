@@ -590,4 +590,45 @@ public class RedirectUrisValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
     }
+
+    /// <summary>
+    /// RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period character (".")
+    /// SHOULD be rejected." A scheme with no period is no reversed domain name, and the javascript, data and vbscript
+    /// schemes carry none either: a response posted to one of them would run in this server's origin.
+    /// </summary>
+    [Theory]
+    [InlineData("myapp:/callback")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html,callback")]
+    [InlineData("vbscript:msgbox(1)")]
+    public async Task ValidateAsync_NativeClientWithSchemeWithoutPeriod_ShouldReturnError(string uri)
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri(uri)],
+            grantTypes: [GrantTypes.AuthorizationCode],
+            applicationType: ApplicationTypes.Native);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+    }
+
+    /// <summary>
+    /// A web client is held to https, so a script scheme never reaches it either.
+    /// </summary>
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("com.example.app:/callback")]
+    public async Task ValidateAsync_WebClientWithNonHttpsScheme_ShouldReturnError(string uri)
+    {
+        var context = CreateContext(
+            redirectUris: [new Uri(uri)],
+            grantTypes: [GrantTypes.AuthorizationCode]);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+    }
 }

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
@@ -71,6 +72,14 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                     // Native Clients MUST only register redirect_uris using custom URI schemes
                     return ErrorFactory.InvalidClientMetadata(
                         $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes");
+
+                case ApplicationTypes.Native when !UriSchemes.IsRedirectScheme(uri):
+                    // The rule RFC 8252 section 8.4 sets for a redirect URI, "any private-use URI scheme that doesn't
+                    // contain a period character (".") SHOULD be rejected", held for this URI the user agent is sent to
+                    // as well: the javascript, data and vbscript schemes carry no period
+                    return ErrorFactory.InvalidClientMetadata(
+                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using a private-use URI "
+                        + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");
 
                 case ApplicationTypes.Native:
                     break;

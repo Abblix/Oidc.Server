@@ -107,7 +107,16 @@ internal static class UriSchemes
         return null;
     }
 
-    private static bool IsRedirectScheme(Uri uri)
+    /// <summary>
+    /// Whether the user agent may be sent to <paramref name="uri"/>: an https URI, an http URI to a loopback host, or a
+    /// private-use scheme carrying a period, which RFC 8252 section 8.4 asks for "At a minimum".
+    /// </summary>
+    /// <remarks>
+    /// Dynamic registration holds a native client's redirect URIs to this rule, and startup a configured native
+    /// client's, so the three readers judge a scheme alike.
+    /// </remarks>
+    /// <param name="uri">An absolute URI.</param>
+    internal static bool IsRedirectScheme(Uri uri)
     {
         if (uri.Scheme == Uri.UriSchemeHttps)
             return true;
