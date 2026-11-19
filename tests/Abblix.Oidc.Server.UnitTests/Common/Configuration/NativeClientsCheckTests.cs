@@ -53,9 +53,9 @@ public class NativeClientsCheckTests
     }
 
     /// <summary>
-    /// RFC 8252 section 8.4 has native apps public except with per-instance secrets, which a client the host declares
-    /// for every installation cannot have, and Appendix A item 4 has a server "Not assume that native app clients can
-    /// keep a secret": a native app the host declares authenticates with none, whatever credential it would ship.
+    /// RFC 8252 section 8.4 has native apps public except with per-instance secrets, and Appendix A item 4 has a server
+    /// "Not assume that native app clients can keep a secret": a native app declared once in the tenant settings serves
+    /// every installation, so it authenticates with none, whatever method it names.
     /// </summary>
     [Theory]
     [InlineData(ClientAuthenticationMethods.ClientSecretBasic)]

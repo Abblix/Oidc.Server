@@ -29,6 +29,13 @@ internal sealed class ScriptRedirectUrisCheck : ITenantsCheck
         "vbscript",
     };
 
+    /// <summary>
+    /// Whether <paramref name="uri"/> uses a scheme the user agent runs as script, which this check refuses for every
+    /// client, so another check of a client's redirect URIs leaves it to this one.
+    /// </summary>
+    /// <param name="uri">A redirect or post-logout redirect URI.</param>
+    internal static bool IsScript(Uri uri) => uri.IsAbsoluteUri && ScriptSchemes.Contains(uri.Scheme);
+
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
         => TenantRefusal.EachOf(tenants, tenant => tenant.Clients.SelectMany(Failures));
@@ -38,7 +45,7 @@ internal sealed class ScriptRedirectUrisCheck : ITenantsCheck
             .Select(uri => (Member: nameof(ClientInfo.RedirectUris), Uri: uri))
             .Concat(client.PostLogoutRedirectUris
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)))
-            .Where(redirect => redirect.Uri.IsAbsoluteUri && ScriptSchemes.Contains(redirect.Uri.Scheme))
+            .Where(redirect => IsScript(redirect.Uri))
             .Select(redirect =>
                 $"The client '{client.ClientId}' has the {redirect.Member} '{redirect.Uri}' of the " +
                 $"{redirect.Uri.Scheme} scheme, which runs as script in this server's origin when a response is " +

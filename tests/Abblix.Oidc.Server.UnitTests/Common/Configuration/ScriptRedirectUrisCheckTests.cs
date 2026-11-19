@@ -56,6 +56,27 @@ public class ScriptRedirectUrisCheckTests
             PostLogoutRedirectUris = [new Uri(uri)],
         }));
 
+    /// <summary>
+    /// A native app redirecting to a script scheme is refused once, by this check: the native redirect rule leaves
+    /// script schemes to it.
+    /// </summary>
+    [Fact]
+    public void ANativeApp_RedirectingToAScriptScheme_IsRefusedOnce()
+    {
+        var client = new ClientInfo(ClientId)
+        {
+            ApplicationType = ApplicationTypes.Native,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+            RedirectUris = [new Uri("javascript:alert(1)")],
+        };
+        var tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com"), Clients = [client] };
+
+        var refusals = new ScriptRedirectUrisCheck().Check([tenant], new OidcOptions())
+            .Concat(new NativeClientsCheck().Check([tenant], new OidcOptions()));
+
+        Assert.Contains($"'{ClientId}'", Assert.Single(refusals).Message);
+    }
+
     private static string[] Check(ClientInfo client)
     {
         var tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com"), Clients = [client] };
