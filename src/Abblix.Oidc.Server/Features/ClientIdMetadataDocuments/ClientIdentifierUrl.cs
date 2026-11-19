@@ -23,6 +23,9 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 internal static class ClientIdentifierUrl
 {
     private static readonly string HttpsPrefix = Uri.UriSchemeHttps + Uri.SchemeDelimiter;
+    private const string EncodedSlash = "%2F";
+    private const string EncodedBackslash = "%5C";
+    private const string DoubleDot = "..";
 
     /// <summary>
     /// Why <paramref name="clientId"/> is not a Client Identifier URL this server fetches, or null when it is one.
@@ -48,18 +51,8 @@ internal static class ClientIdentifierUrl
         if (clientId.Contains('?'))
             return "it carries a query";
 
-        var authorityEnd = clientId.IndexOf('/', HttpsPrefix.Length);
-        var authority = authorityEnd < 0
-            ? clientId[HttpsPrefix.Length..]
-            : clientId[HttpsPrefix.Length..authorityEnd];
-
-        // Section 3: "MUST NOT contain a userinfo component"
-        if (authority.Contains('@'))
-            return "it carries user information";
-
-        // Section 3: "MUST contain a path component other than /"
-        if (authorityEnd < 0 || clientId.Length == authorityEnd + 1)
-            return "its path is empty or /";
+        if (WhyAuthorityOrPathRefused(clientId) is { } refusal)
+            return refusal;
 
         // Section 3 has the URL carry no "single-dot or double-dot path components", and the document is fetched from
         // the identifier itself (section 4: the client_id "MUST also match the URL that the authorization server used
@@ -75,6 +68,31 @@ internal static class ClientIdentifierUrl
         url = parsed;
         return null;
     }
+
+    private static string? WhyAuthorityOrPathRefused(string clientId)
+    {
+        var authorityEnd = clientId.IndexOf('/', HttpsPrefix.Length);
+        var authority = authorityEnd < 0
+            ? clientId[HttpsPrefix.Length..]
+            : clientId[HttpsPrefix.Length..authorityEnd];
+
+        // Section 3: "MUST NOT contain a userinfo component"
+        if (authority.Contains('@'))
+            return "it carries user information";
+
+        // Section 3: "MUST contain a path component other than /"
+        if (authorityEnd < 0 || clientId.Length == authorityEnd + 1)
+            return "its path is empty or /";
+
+        // A slash or backslash in encoded form, or a segment starting with two dots, is read by some servers as a step
+        // out of the path: past an allow-list's prefix, to a document the prefix does not name
+        return MayStepOut(clientId[authorityEnd..]) ? "its path may step out of itself" : null;
+    }
+
+    private static bool MayStepOut(string path)
+        => path.Contains(EncodedSlash, StringComparison.OrdinalIgnoreCase) ||
+           path.Contains(EncodedBackslash, StringComparison.OrdinalIgnoreCase) ||
+           path.Split('/').Any(segment => segment.StartsWith(DoubleDot, StringComparison.Ordinal));
 
     /// <summary>
     /// Whether <paramref name="clientId"/> starts with one of <paramref name="allowedPrefixes"/>, or no list is set.

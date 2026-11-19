@@ -113,7 +113,9 @@ public class ConfigurationResponseFormatter(
 			AuthorizationResponseIssParameterSupported = response.AuthorizationResponseIssParameterSupported,
 
 			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
+#pragma warning disable ABX9001 // The flag of the experimental Client ID Metadata Documents, copied onto the wire
 			ClientIdMetadataDocumentSupported = response.ClientIdMetadataDocumentSupported,
+#pragma warning restore ABX9001
 		};
 
 		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);

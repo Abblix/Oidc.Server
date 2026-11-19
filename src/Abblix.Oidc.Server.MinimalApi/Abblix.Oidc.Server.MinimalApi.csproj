@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <!-- The discovery formatter copies the experimental client_id_metadata_document_supported member (ABX9001) onto the wire. -->
-        <NoWarn>$(NoWarn);ABX9001</NoWarn>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>

@@ -45,6 +45,13 @@ public class ClientIdentifierUrlTests
     [InlineData("https://client.example.com/a/../metadata.json")]
     [InlineData("https://client.example.com/./metadata.json")]
     [InlineData("https://client.example.com/a/%2e%2e/metadata.json")]
+    // An encoded slash or backslash, or a segment starting with two dots, which a server behind the URL may read as a
+    // step out of the path an allow-list names
+    [InlineData("https://client.example.com/clients/..%2Fother/metadata.json")]
+    [InlineData("https://client.example.com/clients%2F..%2Fother")]
+    [InlineData("https://client.example.com/clients%2f..%2fother")]
+    [InlineData("https://client.example.com/clients%5C..%5Cother")]
+    [InlineData("https://client.example.com/clients/..other/metadata.json")]
     // "SHOULD NOT contain a query component", refused as this server's choice
     [InlineData("https://client.example.com/metadata.json?tenant=a")]
     // "MUST NOT contain a fragment component"
