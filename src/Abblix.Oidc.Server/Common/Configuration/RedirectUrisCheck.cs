@@ -51,7 +51,8 @@ internal sealed class RedirectUrisCheck : ITenantsCheck
 
     /// <summary>
     /// <paramref name="uri"/> as a refusal shows it: as the settings spell it, with each control, format or whitespace
-    /// character other than a space percent-encoded, so the value cannot break or hide inside the logged line.
+    /// character other than a space percent-encoded, so the value cannot break or hide inside the logged line, and each
+    /// percent sign too, so an encoding the settings spell out is told from one this method adds.
     /// </summary>
     /// <param name="uri">A redirect or post-logout redirect URI, or null for an empty settings value.</param>
     internal static string Shown(Uri? uri)
@@ -60,7 +61,7 @@ internal sealed class RedirectUrisCheck : ITenantsCheck
         var shown = new StringBuilder(value.Length);
         foreach (var rune in value.EnumerateRunes())
         {
-            if (IsInvisible(rune))
+            if (IsInvisible(rune) || rune.Value == '%')
                 shown.Append(Uri.EscapeDataString(rune.ToString()));
             else
                 shown.Append(rune.ToString());

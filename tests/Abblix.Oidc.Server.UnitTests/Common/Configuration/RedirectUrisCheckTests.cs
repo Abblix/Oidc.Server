@@ -197,10 +197,13 @@ public class RedirectUrisCheckTests
     [InlineData("java\nscript:alert(1)", ApplicationTypes.Web)]
     [InlineData("\u0001javascript:alert(1)", ApplicationTypes.Web)]
     [InlineData("javascript:alert(1)\ny", ApplicationTypes.Web)]
-    [InlineData("javascript:alert(1)​y", ApplicationTypes.Web)]
+    [InlineData("javascript:alert(1)\u200By", ApplicationTypes.Web)]
     [InlineData("https://app.example.com/cb#a\nb", ApplicationTypes.Web)]
     [InlineData("myapp:/cb\ny", ApplicationTypes.Native)]
-    [InlineData("myapp:/cb​y", ApplicationTypes.Native)]
+    [InlineData("myapp:/cb\u200By", ApplicationTypes.Native)]
+    [InlineData("javascript:alert(1)\u2028y", ApplicationTypes.Web)]
+    [InlineData("javascript:alert(1)\u00A0y", ApplicationTypes.Web)]
+    [InlineData("myapp:/cb\u2029y", ApplicationTypes.Native)]
     public void ARefusal_ShowsNoInvisibleCharacter(string uri, string applicationType)
     {
         var client = Bound(uri, applicationType, postLogout: false);
@@ -211,11 +214,29 @@ public class RedirectUrisCheckTests
     }
 
     /// <summary>
-    /// A value carrying nothing to encode is shown as the settings spell it.
+    /// A value carrying nothing to encode is shown as the settings spell it, an absolute one too, not in the canonical
+    /// form the parsed URI would print.
+    /// </summary>
+    [Theory]
+    [InlineData("/callback")]
+    [InlineData("HTTPS://App.Example.com/cb#section")]
+    [InlineData("JavaScript:alert(1)")]
+    public void ARefusal_ShowsAPlainValueAsWritten(string uri)
+        => Assert.Contains($"'{uri}'", Assert.Single(Check(Bound(uri, ApplicationTypes.Web, postLogout: false))));
+
+    /// <summary>
+    /// A percent sign the value carries is encoded as well, so an encoded newline the settings spell out is not shown
+    /// the way an encoded raw newline is.
     /// </summary>
     [Fact]
-    public void ARefusal_ShowsAPlainValueAsWritten()
-        => Assert.Contains("'/callback'", Assert.Single(Check(Bound("/callback", ApplicationTypes.Web, postLogout: false))));
+    public void ARefusal_TellsAnEncodedNewlineFromARawOne()
+    {
+        var spelled = Assert.Single(Check(Bound("/cb%0Ax", ApplicationTypes.Web, postLogout: false)));
+        var raw = Assert.Single(Check(Bound("/cb\nx", ApplicationTypes.Web, postLogout: false)));
+
+        Assert.Contains("'/cb%250Ax'", spelled);
+        Assert.Contains("'/cb%0Ax'", raw);
+    }
 
     private static bool IsInvisible(char character)
         => char.IsControl(character)
