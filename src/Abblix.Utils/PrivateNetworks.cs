@@ -69,8 +69,9 @@ public static class PrivateNetworks
     /// Every block of the IPv4 and IPv6 special-purpose address registries (RFC 6890 sections 2.2.2 and 2.2.3) is
     /// here, the ones marked globally reachable included: draft-ietf-oauth-client-id-metadata-document section 10.7
     /// says an authorization server "MUST NOT fetch a Client ID Metadata Document URL or any URLs contained within a
-    /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]", and the NAT64
-    /// and 6to4 prefixes carry an IPv4 address inside them, a private one as readily as any other.
+    /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]". The well-known
+    /// NAT64 prefix and 6to4 are the exception: each carries an IPv4 address, and is judged by that address, since on an
+    /// IPv6-only network every public IPv4 address is reached through NAT64.
     /// </remarks>
     private static readonly IPNetwork[] ReservedNetworks =
     [
@@ -105,8 +106,9 @@ public static class PrivateNetworks
         // Multicast 224.0.0.0/4 and the reserved 240.0.0.0/4 above it
         IPNetwork.Parse("224.0.0.0/3"),
 
-        // IPv4-IPv6 translation, the NAT64 well-known prefix (RFC 6052)
-        IPNetwork.Parse("64:ff9b::/96"),
+        // Local-use IPv4-IPv6 translation (RFC 8215), whose mapping each network chooses, so its address says nothing
+        // of where it leads. The well-known NAT64 prefix is judged by the IPv4 address it carries instead
+        IPNetwork.Parse("64:ff9b:1::/48"),
 
         // Discard-only (RFC 6666)
         IPNetwork.Parse("100::/64"),
@@ -117,8 +119,6 @@ public static class PrivateNetworks
         // Documentation (RFC 3849)
         IPNetwork.Parse("2001:db8::/32"),
 
-        // 6to4 (RFC 3056)
-        IPNetwork.Parse("2002::/16"),
 
         // Link-local
         IPNetwork.Parse("fe80::/10"),
@@ -167,10 +167,40 @@ public static class PrivateNetworks
         if (address.IsIPv4MappedToIPv6)
             address = address.MapToIPv4();
 
+        // NAT64 and 6to4 carry an IPv4 address too, and reach whatever it names, so they are judged by it
+        if (EmbeddedIPv4(address) is { } embedded)
+            return IsPrivateOrReservedAddress(embedded);
+
         return !IsInternetProtocolAddress(address)
             || IPAddress.IsLoopback(address)
             || address.Equals(IPAddress.IPv6Any)
             || ReservedNetworks.Any(network => network.Contains(address));
+    }
+
+    private static readonly IPNetwork Nat64WellKnownPrefix = IPNetwork.Parse("64:ff9b::/96");
+    private static readonly IPNetwork SixToFour = IPNetwork.Parse("2002::/16");
+
+    /// <summary>
+    /// The IPv4 address an IPv6 address of the well-known NAT64 prefix or of 6to4 carries, or null for any other.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6052 section 2.2 places the IPv4 address of a /96 prefix in the last 32 bits, as in its example
+    /// 64:ff9b::192.0.2.33; RFC 3056 section 2 builds a 6to4 prefix as 2002:V4ADDR::/48, the IPv4 address in the 32 bits
+    /// after the first 16.
+    /// </remarks>
+    private static IPAddress? EmbeddedIPv4(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+            return null;
+
+        var bytes = address.GetAddressBytes();
+        if (Nat64WellKnownPrefix.Contains(address))
+            return new IPAddress(bytes.AsSpan(12, 4));
+
+        if (SixToFour.Contains(address))
+            return new IPAddress(bytes.AsSpan(2, 4));
+
+        return null;
     }
 
     /// <summary>

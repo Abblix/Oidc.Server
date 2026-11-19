@@ -84,6 +84,19 @@ public class PrivateNetworksTests
     [InlineData("64:ff9a:ffff:ffff:ffff:ffff:ffff:ffff", false)]
     [InlineData("64:ff9b::", true)]
     [InlineData("64:ff9b::7f00:1", true)]
+    // NAT64 (RFC 6052 section 2.2) and 6to4 (RFC 3056 section 2) carry an IPv4 address, judged as itself: a host on an
+    // IPv6-only network reaches every public address through them
+    [InlineData("64:ff9b::808:808", false)]
+    [InlineData("64:ff9b::a00:1", true)]
+    [InlineData("64:ff9b::a9fe:a9fe", true)]
+    [InlineData("64:ff9b::c000:201", true)]
+    [InlineData("2002:808:808::", false)]
+    [InlineData("2002:808:808:1::1", false)]
+    [InlineData("2002:a00:1::", true)]
+    [InlineData("2002:c0a8:101::", true)]
+    // The local-use NAT64 prefix (RFC 8215) translates to whatever the network chooses, so nothing tells what it reaches
+    [InlineData("64:ff9b:1::", true)]
+    [InlineData("64:ff9b:1:ffff::1", true)]
     [InlineData("64:ff9b::ffff:ffff", true)]
     [InlineData("64:ff9b::1:0:0", false)]
     [InlineData("ff::", false)]
