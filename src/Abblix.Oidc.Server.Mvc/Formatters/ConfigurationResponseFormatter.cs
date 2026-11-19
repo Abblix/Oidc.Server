@@ -43,7 +43,7 @@ public class ConfigurationResponseFormatter(
 
 		var mvcResponse = new ModelResponse
 		{
-			Issuer = response.Issuer.OriginalString,
+			Issuer = tenantAccessor.CurrentTenant().IssuerAsWritten(),
 
 			JwksUri = Resolve(OidcEndpoints.Keys),
 

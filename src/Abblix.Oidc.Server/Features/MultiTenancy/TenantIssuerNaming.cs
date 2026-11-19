@@ -15,6 +15,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// takes a token for one this server issued asks it, so none of them can accept a spelling another refuses. The
 /// tokens and responses that carry the issuer take its spelling from here too, so what this server writes is what it
 /// accepts.
+/// <para>
+/// One comparison deliberately stays outside: <see cref="TenantIssuers.Same"/>, which reads scheme and host without
+/// regard to case, answers whether an issuer of a token another party wrote is one of this server's tenants, for the
+/// JWT bearer grant and software statements. It only refuses - a wider match refuses more - so it must not be folded
+/// into this owner, whose answer accepts.
+/// </para>
 /// </summary>
 /// <remarks>
 /// One spelling, the identifier exactly as written, which is the one discovery publishes as <c>issuer</c> and the one

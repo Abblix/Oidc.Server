@@ -34,11 +34,15 @@ public class IssuerNamingIsOneAnswerTests
 
     private static readonly TestIssuer Issuer = new() { Issuer = new Uri(WrittenIssuer) };
 
+    /// <summary>
+    /// The handler's response names the issuer in another spelling, so the document can carry the owner's only by
+    /// taking it from the owner.
+    /// </summary>
     [Fact]
     public async Task ThePublishedIssuer_IsTheOwnersSpelling()
     {
         var document = await PublishedTokenEndpointIsAcceptedTests.PublishedDocumentAsync(
-            new Mock<IOidcEndpointResolver>().Object, Issuer);
+            new Mock<IOidcEndpointResolver>().Object, Issuer, new Uri("https://auth.example.com/tenants/acme"));
 
         Assert.Equal(Issuer.ToTenant().IssuerAsWritten(), document.Issuer);
         Assert.Equal(WrittenIssuer, document.Issuer);
