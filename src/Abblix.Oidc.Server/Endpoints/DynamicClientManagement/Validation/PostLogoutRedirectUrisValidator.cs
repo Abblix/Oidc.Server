@@ -69,9 +69,13 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                         $"Native Clients MUST only register http: {Parameters.PostLogoutRedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1]");
 
                 case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
-                    // Native Clients MUST only register redirect_uris using custom URI schemes
+                    // Native Clients MUST only register redirect_uris using custom URI schemes, and an app claiming
+                    // https URIs registers as a web client without credentials, as RedirectUrisValidator names it
                     return ErrorFactory.InvalidClientMetadata(
-                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes");
+                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes "
+                        + $"or http loopback URLs; register an app claiming https URIs as '{Parameters.ApplicationType}' "
+                        + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
+                        + $"{ClientAuthenticationMethods.None}");
 
                 case ApplicationTypes.Native when !UriSchemes.IsRedirectScheme(uri):
                     // The rule RFC 8252 section 8.4 sets for a redirect URI, "any private-use URI scheme that doesn't
