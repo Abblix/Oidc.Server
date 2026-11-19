@@ -7,6 +7,7 @@
 
 // Spelled out rather than left to ImplicitUsings, because this file is compiled into suites that do not enable it.
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -18,7 +19,8 @@ namespace Abblix.Tests.Shared;
 
 /// <summary>
 /// An HTTP/1.1 origin on the IPv4 and IPv6 loopback that answers every request with one status, 200 unless told
-/// otherwise, and keeps the connection open, counting the connections it accepted and the requests it answered.
+/// otherwise, and keeps the connection open, counting the connections it accepted and recording the first line of
+/// every request it answered - which is how it serves as a forward proxy too, whose requests name their target.
 /// </summary>
 /// <remarks>
 /// A real socket rather than a handler standing in for the transport, because what is under test is the connection
@@ -50,6 +52,9 @@ internal sealed class LoopbackOrigin : IDisposable
     public int Connections => Volatile.Read(ref _connections);
 
     public int Requests => Volatile.Read(ref _requests);
+
+    /// <summary>The request line of every request answered, in order, such as <c>GET / HTTP/1.1</c>.</summary>
+    public ConcurrentQueue<string> RequestLines { get; } = new();
 
     private async Task AcceptAsync()
     {
@@ -90,7 +95,9 @@ internal sealed class LoopbackOrigin : IDisposable
                 int end;
                 while ((end = received.ToString().IndexOf(EndOfHeaders, StringComparison.Ordinal)) >= 0)
                 {
+                    var head = received.ToString(0, end);
                     received.Remove(0, end + EndOfHeaders.Length);
+                    RequestLines.Enqueue(head.Split("\r\n")[0]);
                     Interlocked.Increment(ref _requests);
                     await stream.WriteAsync(_response, _stop.Token);
                 }

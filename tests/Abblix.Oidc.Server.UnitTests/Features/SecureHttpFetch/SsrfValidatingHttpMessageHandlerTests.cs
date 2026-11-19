@@ -599,6 +599,35 @@ public class SsrfValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
+    /// The proxy a host names in <see cref="SecureHttpFetchOptions.OutboundProxy"/> is the one the request goes
+    /// through, naming its target.
+    /// </summary>
+    [Fact]
+    public async Task TheNamedOutboundProxy_CarriesTheRequest()
+    {
+        using var proxy = new LoopbackOrigin();
+        var accessor = Options.Create(new SecureHttpFetchOptions
+        {
+            AllowedSchemes = [],
+            OutboundProxy = new Uri($"http://127.0.0.1:{proxy.Port}/"),
+        });
+        using var handler = new SsrfValidatingHttpMessageHandler(
+            accessor,
+            new SecureUriValidator(accessor, NullLogger<SecureUriValidator>.Instance),
+            Standing(PublicAddress));
+        using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
+
+        // Bounded, since a request that skipped the proxy would be dialing the target's public address
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        using var response = await invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, "http://example.com/api"), deadline.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["GET http://example.com/api HTTP/1.1"], proxy.RequestLines);
+    }
+
+    /// <summary>
     /// A client whose handler is the one under test, over a transport that counts requests instead of making
     /// them, so a row can say whether the send reached the wire.
     /// </summary>

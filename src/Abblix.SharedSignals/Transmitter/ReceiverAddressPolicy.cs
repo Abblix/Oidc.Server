@@ -92,6 +92,11 @@ public sealed class ReceiverAddressPolicy(
     internal ResolveHostDelegate ResolveHost => _resolveHost;
 
     /// <summary>
+    /// The forward proxy the operator named for deliveries, or null for none.
+    /// </summary>
+    internal Uri? OutboundProxy => options.OutboundProxy;
+
+    /// <summary>
     /// Which addresses the connection a delivery to <paramref name="endpoint"/> makes may not be made to: none for a
     /// receiver the operator named, every private or reserved one otherwise.
     /// </summary>

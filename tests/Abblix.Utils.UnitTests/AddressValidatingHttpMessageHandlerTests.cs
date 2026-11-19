@@ -54,8 +54,8 @@ public class AddressValidatingHttpMessageHandlerTests
     /// to, connects by whichever rule a row sets, and records each address a connection is made to while reaching
     /// <see cref="Origin"/> instead, so an address that is not reachable from a test can still be connected to.
     /// </summary>
-    private sealed class Recording(ResolveHostDelegate? resolveHost, string? refusal = null)
-        : AddressValidatingHttpMessageHandler(resolveHost)
+    private sealed class Recording(ResolveHostDelegate? resolveHost, string? refusal = null, Uri? proxy = null)
+        : AddressValidatingHttpMessageHandler(resolveHost, proxy)
     {
         public List<Uri> Judged { get; } = [];
 
@@ -158,6 +158,85 @@ public class AddressValidatingHttpMessageHandlerTests
         Assert.Equal(DecompressionMethods.None, transport.AutomaticDecompression);
         Assert.False(transport.UseProxy);
         Assert.NotNull(transport.ConnectCallback);
+    }
+
+    /// <summary>
+    /// A proxy named for the handler is the one its transports use, and the only one.
+    /// </summary>
+    [Fact]
+    public void TheTransportItBuilds_GoesThroughTheProxyItWasGiven()
+    {
+        var proxy = new Uri("http://proxy.example.com:3128/");
+        using var handler = new Recording(RefusesToResolve, proxy: proxy);
+        using var transport = handler.TransportFor(OutboundAddressRule.NoPrivateOrReserved);
+
+        Assert.True(transport.UseProxy);
+        Assert.Equal(proxy, Assert.IsType<WebProxy>(transport.Proxy).Address);
+    }
+
+    /// <summary>
+    /// Through a named proxy a request reaches the proxy, naming its target as a proxy is asked to, and the connection
+    /// is made to the proxy rather than to the target's answer.
+    /// </summary>
+    [Fact]
+    public async Task ThroughANamedProxy_APlainRequestReachesTheProxyNamingItsTarget()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PublicAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, "http://public.example.com/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["GET http://public.example.com/keys HTTP/1.1"], proxy.RequestLines);
+        Assert.Equal([new IPEndPoint(IPAddress.Loopback, proxy.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// Through a named proxy an HTTPS request asks the proxy for a tunnel to its target.
+    /// </summary>
+    /// <remarks>
+    /// The origin standing for the proxy answers the tunnel and then speaks no TLS, so the request fails after the
+    /// proxy was asked; what the row reads is the asking.
+    /// </remarks>
+    [Fact]
+    public async Task ThroughANamedProxy_AnHttpsRequestAsksTheProxyForATunnel()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PublicAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, "https://public.example.com/keys"), deadline.Token));
+
+        Assert.Equal(["CONNECT public.example.com:443 HTTP/1.1"], proxy.RequestLines);
+    }
+
+    /// <summary>
+    /// Through a named proxy the addresses the handler's own lookup returns are still judged: a refused one is refused
+    /// before the proxy is contacted at all.
+    /// </summary>
+    [Fact]
+    public async Task ThroughANamedProxy_ARefusedAddressIsRefusedBeforeTheProxyIsContacted()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PrivateAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+            () => GetAsync(invoker, "http://internal.example.com/keys"));
+
+        Assert.Contains($"stands for the address {PrivateAddress}", refusal.Message);
+        Assert.Equal(0, proxy.Connections);
+        Assert.Empty(handler.Dialed);
     }
 
     /// <summary>

@@ -48,7 +48,8 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 public class SsrfValidatingHttpMessageHandler(
     IOptions<SecureHttpFetchOptions> options,
     ISecureUriValidator uriValidator,
-    ResolveHostDelegate? resolveHost = null) : AddressValidatingHttpMessageHandler(resolveHost)
+    ResolveHostDelegate? resolveHost = null)
+    : AddressValidatingHttpMessageHandler(resolveHost, options.Value.OutboundProxy)
 {
     /// <summary>
     /// Applies the synchronous scheme, hostname and IP-literal rules immediately before the request leaves. The

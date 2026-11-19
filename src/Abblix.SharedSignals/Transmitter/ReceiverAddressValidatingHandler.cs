@@ -24,7 +24,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </remarks>
 /// <param name="addressPolicy">Judges the address of a delivery endpoint.</param>
 public sealed class ReceiverAddressValidatingHandler(ReceiverAddressPolicy addressPolicy)
-    : AddressValidatingHttpMessageHandler(addressPolicy.ResolveHost)
+    : AddressValidatingHttpMessageHandler(addressPolicy.ResolveHost, addressPolicy.OutboundProxy)
 {
     /// <inheritdoc />
     protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)

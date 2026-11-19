@@ -168,6 +168,23 @@ public sealed record SharedSignalsTransmitterOptions
     public IReadOnlyList<Uri> AllowedReceiverAddresses { get; init; } = [];
 
     /// <summary>
+    /// The forward proxy every push delivery goes through, such as <c>http://proxy:3128</c>; null, the default, for
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// Without it these requests use no proxy at all - not the system's and not one named by <c>HTTP_PROXY</c> or
+    /// <c>HTTPS_PROXY</c> - and each connects only to an address this server resolved and judged for that request, so
+    /// a name answering differently the next time it is asked reaches nothing new.
+    /// <para>
+    /// With it, every such request goes through this proxy. The server still resolves the target itself and refuses
+    /// it on the same rules, but the proxy resolves the name again and may connect somewhere that lookup did not
+    /// return, so the protection is what this server's own lookup sees and no more. Name one only where the proxy is
+    /// the deployment's only way out.
+    /// </para>
+    /// </remarks>
+    public Uri? OutboundProxy { get; init; }
+
+    /// <summary>
     /// How often the transmitter sweeps its push streams and delivers what is queued; null leaves
     /// the sweeping to the host.
     /// </summary>

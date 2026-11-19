@@ -35,8 +35,13 @@ namespace Abblix.Utils;
 /// Each <see cref="OutboundAddressRule"/> gets connections of its own. A connection outlives the send that opened it
 /// and carries later requests to the same host without being made again, so a connection opened under a lenient rule,
 /// or for a destination permitted outright, would otherwise carry a request whose rule refuses the address it is
-/// connected to. The transport goes through no proxy, because a proxy resolves the target itself, and the connection
-/// would then be made to the proxy rather than to anything judged here.
+/// connected to.
+/// </para>
+/// <para>
+/// No proxy the system or the environment names is used, because a proxy resolves the target itself and the
+/// connection is then made to the proxy rather than to anything judged here. A deployment whose only way out is a
+/// forward proxy names one explicitly; its requests then go through it, the addresses this handler's own resolution
+/// gives are still judged and refused as above, but the proxy may connect the target elsewhere.
 /// </para>
 /// </remarks>
 public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
@@ -45,6 +50,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         new(typeof(JudgedDestination).FullName!);
 
     private readonly ResolveHostDelegate _resolveHost;
+    private readonly Uri? _proxy;
 
     /// <summary>
     /// Builds the handler over a transport that follows no redirect, decompresses nothing and resolves every host
@@ -57,14 +63,19 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
 
     /// <summary>
     /// Builds the handler over a transport that follows no redirect, decompresses nothing and resolves every host
-    /// through <paramref name="resolveHost"/>.
+    /// through <paramref name="resolveHost"/>, going through <paramref name="proxy"/> when one is named.
     /// </summary>
     /// <param name="resolveHost">
     /// Resolves the host a request is sent to; null for <see cref="Dns.GetHostAddressesAsync(string,
-    /// CancellationToken)"/>. Its answer is the one judged and the one connected to.</param>
-    protected AddressValidatingHttpMessageHandler(ResolveHostDelegate? resolveHost)
+    /// CancellationToken)"/>. Its answer is the one judged and, without a proxy, the one connected to.</param>
+    /// <param name="proxy">
+    /// The forward proxy every request goes through, or null for none: the system's and the environment's proxy are
+    /// never used. Through a proxy the addresses this handler resolves are still judged, but the proxy resolves the
+    /// target again and may connect it elsewhere.</param>
+    protected AddressValidatingHttpMessageHandler(ResolveHostDelegate? resolveHost, Uri? proxy = null)
     {
         _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+        _proxy = proxy;
         InnerHandler = new TransportsByRule(this);
     }
 
@@ -165,9 +176,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// order the answer gave them.
     /// </summary>
     /// <remarks>
-    /// Nothing is resolved here: a second resolution is exactly the answer nobody judged. A connection asked for a host
-    /// other than the one the send judged is refused rather than made, since the addresses it carries are not that
-    /// host's.
+    /// Nothing of the target is resolved here: a second resolution is exactly the answer nobody judged. A connection
+    /// asked for a host other than the one the send judged is refused rather than made, since the addresses it carries
+    /// are not that host's. The one exception is the proxy the deployment named, which is connected to as named.
     /// </remarks>
     private async ValueTask<Stream> ConnectAsync(
         OutboundAddressRule rule,
@@ -175,6 +186,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         CancellationToken cancellationToken)
     {
         var endpoint = context.DnsEndPoint;
+        if (_proxy != null && endpoint.Port == _proxy.Port && IsSameHost(_proxy.IdnHost, endpoint.Host))
+            return await DialAnyAsync(endpoint, await ProxyAddressesAsync(endpoint.Host, cancellationToken), cancellationToken);
+
         if (!context.InitialRequestMessage.Options.TryGetValue(DestinationOfTheRequest, out var destination) ||
             destination.Rule != rule ||
             !IsSameHost(destination.Host, endpoint.Host))
@@ -183,8 +197,28 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
                 $"SSRF protection: No judged address to connect to for '{endpoint.Host}:{endpoint.Port}'");
         }
 
+        return await DialAnyAsync(endpoint, destination.Addresses, cancellationToken);
+    }
+
+    /// <summary>
+    /// The addresses of the proxy the deployment named: the operator chose it, so it is resolved as named and not
+    /// judged by any rule.
+    /// </summary>
+    private static async Task<IPAddress[]> ProxyAddressesAsync(string host, CancellationToken cancellationToken)
+        => IPAddress.TryParse(host, out var literal)
+            ? [literal]
+            : await Dns.GetHostAddressesAsync(host, cancellationToken);
+
+    /// <summary>
+    /// Connects to the first of <paramref name="addresses"/> that accepts, in the order given.
+    /// </summary>
+    private async ValueTask<Stream> DialAnyAsync(
+        DnsEndPoint endpoint,
+        IPAddress[] addresses,
+        CancellationToken cancellationToken)
+    {
         var failures = new List<Exception>();
-        foreach (var address in destination.Addresses)
+        foreach (var address in addresses)
         {
             try
             {
@@ -254,9 +288,10 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         // No automatic decompression, so a hostile response cannot spend the caller's memory on a bomb.
         AutomaticDecompression = DecompressionMethods.None,
 
-        // A proxy resolves the target on its own, and the connection below would be made to the proxy: through one,
-        // nothing this handler judged would be what the request reached.
-        UseProxy = false,
+        // Only the proxy the deployment named, never the system's or the environment's: a proxy resolves the target
+        // on its own, so through one the address this handler judged is not necessarily the one reached.
+        UseProxy = _proxy != null,
+        Proxy = _proxy != null ? new WebProxy(_proxy) { BypassProxyOnLocal = false } : null,
 
         ConnectCallback = (context, cancellationToken) => ConnectAsync(rule, context, cancellationToken),
     };

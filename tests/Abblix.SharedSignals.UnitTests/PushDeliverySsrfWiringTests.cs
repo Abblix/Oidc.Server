@@ -140,6 +140,33 @@ public class PushDeliverySsrfWiringTests
         Assert.Equal(0, probe.Requests);
     }
 
+    /// <summary>
+    /// The proxy an operator names for deliveries is the one a delivery goes through: an HTTPS receiver is asked for
+    /// through a tunnel the proxy opens.
+    /// </summary>
+    [Fact]
+    public async Task TheNamedOutboundProxy_CarriesTheDelivery()
+    {
+        using var proxy = new LoopbackOrigin();
+        var guard = new ReceiverAddressValidatingHandler(
+            new ReceiverAddressPolicy(
+                new SharedSignalsTransmitterOptions
+                {
+                    Issuer = "https://transmitter.test",
+                    OutboundProxy = new Uri($"http://127.0.0.1:{proxy.Port}/"),
+                },
+                (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") })));
+        using var invoker = new HttpMessageInvoker(guard);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+
+        // The stand-in proxy speaks no TLS inside the tunnel, so the delivery fails once the proxy was asked
+        await Assert.ThrowsAnyAsync<Exception>(() => invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Post, "https://receiver.example.com/events"), deadline.Token));
+
+        Assert.Equal(["CONNECT receiver.example.com:443 HTTP/1.1"], proxy.RequestLines);
+    }
+
     private sealed class ConnectionProbe : HttpMessageHandler
     {
         public int Requests { get; private set; }
