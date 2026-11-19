@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.RequestObject;
 
@@ -23,14 +24,14 @@ internal static class RequestObjectProfileRules
     /// </summary>
     /// <param name="requirements">The controls the client is held to.</param>
     /// <param name="payload">The request object's claims.</param>
-    /// <param name="issuer">The issuer identifier of the tenant the request object reached.</param>
+    /// <param name="tenant">The tenant the request object reached, whose issuer identifier it may name.</param>
     /// <param name="now">The instant the request object is judged at.</param>
     public static string? WhyRefused(
         SecurityProfileRequirements requirements,
         JsonWebTokenPayload payload,
-        Uri issuer,
+        TenantDefinition tenant,
         DateTimeOffset now)
-        => WhyLifetimeRefused(requirements, payload, now) ?? WhyAudienceRefused(requirements, payload, issuer);
+        => WhyLifetimeRefused(requirements, payload, now) ?? WhyAudienceRefused(requirements, payload, tenant);
 
     /// <summary>
     /// Why the request object's lifetime falls outside what the profile allows, or null when it does not or the
@@ -74,17 +75,17 @@ internal static class RequestObjectProfileRules
     /// <remarks>
     /// FAPI 1.0 Part 2 section 5.2.2: the aud claim is "to be, or to be an array containing, the OP's Issuer
     /// Identifier URL". The validator that passed the object accepted an absent aud, as RFC 9101 alone allows.
-    /// Compared as the issuer is written, the way that validator compares it.
+    /// Answered by <see cref="TenantIssuerNaming"/>, which that validator asks too.
     /// </remarks>
     private static string? WhyAudienceRefused(
         SecurityProfileRequirements requirements,
         JsonWebTokenPayload payload,
-        Uri issuer)
+        TenantDefinition tenant)
     {
         if (!requirements.RequireIssuerAudienceInRequestObject)
             return null;
 
-        return payload.Audiences.Contains(issuer.OriginalString, StringComparer.Ordinal)
+        return tenant.IssuerIsNamedByAny(payload.Audiences)
             ? null
             : "The request object must name the issuer identifier as its audience";
     }

@@ -33,7 +33,7 @@ public class InitialAccessTokenService(
         TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+        var issuer = LicenseChecker.CheckIssuer(tenant.IssuerAsWritten(), tenant, catalog);
 
         var token = new JsonWebToken
         {

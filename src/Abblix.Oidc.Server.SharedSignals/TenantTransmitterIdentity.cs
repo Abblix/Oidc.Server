@@ -26,7 +26,7 @@ internal sealed class TenantTransmitterIdentity(Func<TenantDefinition> current, 
     : ITransmitterIdentity
 {
     /// <inheritdoc />
-    public string Issuer => current().Issuer.OriginalString;
+    public string Issuer => current().IssuerAsWritten();
 
     /// <inheritdoc />
     public Uri? JwksUri => options.JwksUri is { } jwksUri ? Under(jwksUri.PathAndQuery) : null;

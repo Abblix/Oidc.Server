@@ -282,7 +282,7 @@ public partial class RequestObjectFetcher(
                 var profileRefusal = RequestObjectProfileRules.WhyRefused(
                     profile,
                     validJwt.Token.Payload,
-                    tenant.Issuer,
+                    tenant,
                     timeProvider.GetUtcNow());
 
                 if (profileRefusal != null)

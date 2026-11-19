@@ -268,7 +268,7 @@ public sealed class ConfigurationHandler(
 	/// </summary>
 	private Uri Licensed(TenantDefinition tenant)
 	{
-		LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+		LicenseChecker.CheckIssuer(tenant.IssuerAsWritten(), tenant, catalog);
 		return tenant.Issuer;
 	}
 }

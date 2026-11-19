@@ -232,14 +232,14 @@ public partial class ClientJwtValidator(
     /// <returns>A task that returns whether the audience is valid.</returns>
     private Task<bool> ValidateAudience(TenantDefinition tenant, IEnumerable<string> audiences)
     {
-        var issuer = tenant.Issuer.OriginalString;
-
         var materializedAudiences = audiences.Materialize();
-        var result = materializedAudiences.Contains(issuer, StringComparer.Ordinal);
+        var result = tenant.IssuerIsNamedByAny(materializedAudiences);
         if (!result)
         {
             LogAudienceValidationFailed(
-                Sanitized.Values(materializedAudiences), requestInfoProvider.RequestUri.OriginalString, issuer);
+                Sanitized.Values(materializedAudiences),
+                requestInfoProvider.RequestUri.OriginalString,
+                tenant.IssuerAsWritten());
         }
 
         return Task.FromResult(result);

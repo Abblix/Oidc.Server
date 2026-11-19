@@ -175,7 +175,7 @@ public partial class RevocationCutoffChecker(
     /// absence says the token came from somewhere that does not follow our conventions.
     /// </remarks>
     private static bool IsOurOwnToken(TenantDefinition tenant, JsonWebTokenPayload payload)
-        => payload.Issuer is { Length: > 0 } issuer && issuer == tenant.Issuer.OriginalString;
+        => payload.Issuer is { Length: > 0 } issuer && tenant.IssuerIsNamedBy(issuer);
 
     /// <summary>
     /// The subject a host would name when revoking, recovered from what the token carries.

@@ -66,7 +66,7 @@ internal sealed partial class TenantTransmitters(
         public Built(string space, TenantDefinition builtFrom, Func<Built, TenantTransmitter> build)
         {
             Space = space;
-            Issuer = builtFrom.Issuer.OriginalString;
+            Issuer = builtFrom.IssuerAsWritten();
             _latest = builtFrom;
             Transmitter = new Lazy<TenantTransmitter>(() => build(this));
         }
@@ -123,7 +123,7 @@ internal sealed partial class TenantTransmitters(
             : (tenant, false);
 
         var space = TenantKey.SpaceOf(tenant);
-        var issuer = builtFrom.Issuer.OriginalString;
+        var issuer = builtFrom.IssuerAsWritten();
         while (true)
         {
             var built = _built.GetValueOrDefault(space);

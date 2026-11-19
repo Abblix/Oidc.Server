@@ -156,7 +156,6 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </remarks>
     private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
-        var issuerIdentifier = tenant.Issuer.OriginalString;
         // What the client may name once its profile has narrowed the set, so the refusal logs what was applied
         var audiences = clientInfo.ClientAssertionAudiences.AdmittedBy(
             SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
@@ -164,7 +163,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         var audience = token.Payload.Json[JwtClaimTypes.Audience];
         if (audiences.HasFlag(ClientAssertionAudiences.Issuer) &&
-            Names(audience, allowArray, written => written == issuerIdentifier))
+            Names(audience, allowArray, tenant.IssuerIsNamedBy))
         {
             return true;
         }
@@ -201,7 +200,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         // Logged from the claim itself: the typed accessor skips members that are not strings, so for the issuer
         // beside such a member it would log the issuer alone next to the refusal
         LogAudienceIsNotOneTheClientMayName(
-            clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), audiences, issuerIdentifier);
+            clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), audiences, tenant.IssuerAsWritten());
         return false;
     }
 

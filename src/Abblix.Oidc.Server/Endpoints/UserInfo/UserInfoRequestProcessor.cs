@@ -61,7 +61,7 @@ public class UserInfoRequestProcessor(
 		foreach (var name in withoutValue)
 			userInfo.Remove(name);
 
-		var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+		var issuer = LicenseChecker.CheckIssuer(tenant.IssuerAsWritten(), tenant, catalog);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
 

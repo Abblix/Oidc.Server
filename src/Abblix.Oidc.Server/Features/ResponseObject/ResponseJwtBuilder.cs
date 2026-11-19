@@ -59,7 +59,7 @@ public class ResponseJwtBuilder(
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = tenant.Issuer.OriginalString,
+                Issuer = tenant.IssuerAsWritten(),
                 Audiences = [clientInfo.ClientId],
             },
         };

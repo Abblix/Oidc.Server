@@ -56,7 +56,7 @@ public class RequestObjectFetchAdapter(
         var result = await requestObjectFetcher.FetchAsync(tenant,
             client, request, request.Request, signer => signer.BackChannelAuthenticationRequestSigningAlg, [],
             token => SignedAuthenticationRequestRules.WhyRefused(
-                token, tenant.Issuer, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported));
+                token, tenant, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported));
 
         // CIBA Core 1.0 section 13: the error is "A single ASCII error code from one present in the list below", which
         // does not hold invalid_request_object, and lists invalid_request for a request that "includes an invalid

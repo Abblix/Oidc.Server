@@ -130,7 +130,7 @@ internal class AccessTokenService(
 					? latest
 					: issuedAt + clientInfo.AccessTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(
-					tenant.Issuer.OriginalString,
+					tenant.IssuerAsWritten(),
 					tenant,
 					catalog,
 					authContext.ClientId),

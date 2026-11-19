@@ -118,7 +118,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(
-					tenant.Issuer.OriginalString,
+					tenant.IssuerAsWritten(),
 					tenant,
 					catalog,
 					authContext.ClientId),
