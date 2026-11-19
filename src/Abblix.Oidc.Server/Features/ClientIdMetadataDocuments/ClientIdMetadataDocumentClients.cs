@@ -114,7 +114,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     {
         IEnumerable<string> servers =
         [
-            tenant.Issuer.OriginalString,
+            tenant.IssuerAsWritten(),
             tenant.Issuer.AbsoluteUri,
             ..(tenant.Resources ?? []).SelectMany(resource =>
                 new[] { resource.Resource.OriginalString, resource.Resource.AbsoluteUri }),
