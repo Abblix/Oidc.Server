@@ -89,9 +89,9 @@ public record JwtBearerOptions
 	/// each compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. Default is true.
 	/// </summary>
 	/// <remarks>
-	/// False once also accepted the application base URI, which for a tenant is its issuer identifier on the host the
-	/// request names: where that host is the issuer's it is the issuer, accepted either way, and where it is not it
-	/// names whatever host the caller sent, so it is no longer accepted.
+	/// False once also accepted the application base URI, the tenant's issuer path on the scheme and host the request
+	/// names. Taken from the request it names whatever host the caller sent, so it is no longer accepted: an assertion
+	/// naming that URI is refused unless it is the issuer identifier exactly as written.
 	/// </remarks>
 	public bool StrictAudienceValidation { get; set; } = true;
 
