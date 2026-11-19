@@ -223,7 +223,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (!audiences.HasFlag(grant))
             return false;
 
-        var spellings = tenant.EndpointSpellings(serviceProvider, endpoint);
+        var spellings = tenant.AcceptedSpellings(serviceProvider, endpoint);
         return Names(
             audience,
             audiences.HasFlag(ClientAssertionAudiences.AllowArray),

@@ -84,15 +84,20 @@ public record JwtBearerOptions
 	public int MaxJwtSize { get; set; } = 8192;
 
 	/// <summary>
-	/// When true, the JWT audience claim must name the token endpoint URL or the tenant's issuer identifier, each
-	/// compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. When false, the application
-	/// base URI is also accepted for compatibility with common implementations. Default is true.
+	/// No longer read: whatever its value, the JWT audience claim must name the tenant's issuer identifier or its token
+	/// endpoint URL on the issuer's scheme, host and port, each compared as written, per RFC 7523 Section 3 as RFC 10070
+	/// section 4 updates it.
 	/// </summary>
 	/// <remarks>
-	/// Set to false only if you have legacy clients that use the application base URI as audience.
-	/// Accepting the base URI widens the attack surface as JWTs intended for other endpoints
-	/// on the same server could potentially be misused.
+	/// False once also accepted the application base URI, the tenant's issuer path on the scheme and host the request
+	/// names. Taken from the request it names whatever host the caller sent, so it is no longer accepted: an assertion
+	/// naming that URI is refused unless it is the issuer identifier exactly as written. Still settable, so a
+	/// configuration naming it binds as before.
 	/// </remarks>
+	[Obsolete("No longer changes which audiences the JWT bearer grant accepts: the issuer identifier or the token " +
+		"endpoint URL on the issuer's authority, either way. Removed in the next major release.")]
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Info Code Smell", "S1133",
+		Justification = "Kept so a configuration naming it still binds; removed in the next major release.")]
 	public bool StrictAudienceValidation { get; set; } = true;
 
 	/// <summary>

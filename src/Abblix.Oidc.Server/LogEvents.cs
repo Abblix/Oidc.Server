@@ -61,7 +61,7 @@ internal static class LogEvents
             public const int GrantSucceeded = Base + 12;
             public const int IssuerNotTrusted = Base + 13;
             public const int AudienceFailedStrict = Base + 14;
-            public const int AudienceFailedPermissive = Base + 15;
+            // Base + 15 was the permissive audience refusal, no longer logged; not reused, so an old alert stays silent
             public const int MissingExpiration = Base + 16;
             public const int TokenOfAnotherKind = Base + 17;
             public const int IssuerIsServedTenant = Base + 18;

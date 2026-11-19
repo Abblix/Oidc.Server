@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -14,6 +15,8 @@ using System.Web;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -27,6 +30,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
@@ -164,6 +168,180 @@ public sealed class SingleTenantWithoutTheCallTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(Host, (await ReadJsonAsync(response))[ConfigurationResponse.Parameters.Issuer]?.GetValue<string>());
     }
+
+    /// <summary>
+    /// Without the call the one tenant is served on whatever name the request uses, an internal service name and port
+    /// included, and its discovery document still publishes every endpoint on the issuer's scheme, host and port: the
+    /// address a client is sent to, and the one the JWT bearer grant and client authentication accept, is the issuer's,
+    /// never the name the document happened to be fetched by.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentFetchedByAnInternalName_PublishesEveryEndpointOnTheIssuersAuthority()
+    {
+        await using var app = await StartAsync([Tenant("acme", Host)]);
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(InternalName);
+
+        using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var document = await ReadJsonAsync(response);
+        Assert.All(PublishedEndpoints, member =>
+        {
+            var published = document[member]?.GetValue<string>();
+            Assert.NotNull(published);
+            Assert.StartsWith(Host + "/", published, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
+    /// A client registered on a name the tenant is reached by but its issuer does not write - an internal service name
+    /// on a host without the call, another port or an upper-case host on one with it, under a tenant path or at the root
+    /// - is handed a registration_client_uri on the issuer's authority, under the tenant's path, the address discovery
+    /// publishes the registration endpoint on, and a registration access token issued by the tenant. That address is
+    /// served: the client reads, updates and deletes its registration there (RFC 7592 sections 2.1 to 2.3), and once
+    /// deleted it is no longer read.
+    /// </summary>
+    [Theory]
+    [InlineData(false, InternalName, "")]
+    [InlineData(true, "https://auth.example.com:8443", "")]
+    [InlineData(true, "https://AUTH.EXAMPLE.COM:8443", "")]
+    [InlineData(true, "https://auth.example.com:8443", "/tenants/acme")]
+    public async Task TheConfigurationEndpointHandedBack_IsOnTheIssuersAuthorityAndServed(
+        bool callsMultiTenancy, string reachedBy, string tenantPath)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var issuer = Host + tenantPath;
+        await using var app = await StartAsync(
+            [Tenant("acme", issuer)],
+            callsMultiTenancy: callsMultiTenancy,
+            services: services =>
+            {
+                services.AddDynamicClientRegistration();
+                services.Configure<OidcOptions>(options => options.RequireInitialAccessToken = false);
+            });
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(reachedBy);
+
+        using var discovery = await http.GetAsync(tenantPath + "/.well-known/openid-configuration", ct);
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        var registrationEndpoint = new Uri(
+            (await ReadJsonAsync(discovery))[ConfigurationResponse.Parameters.RegistrationEndpoint]!.GetValue<string>());
+
+        using var registered = await http.PostAsync(
+            registrationEndpoint.AbsolutePath,
+            JsonContent.Create(new JsonObject
+            {
+                [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray(RedirectUri),
+            }),
+            ct);
+        var registration = await ReadJsonAsync(registered);
+        Assert.True(registered.IsSuccessStatusCode, registration.ToJsonString());
+        var configurationEndpoint = new Uri(
+            registration[ClientRegistrationResponse.Parameters.RegistrationClientUri]!.GetValue<string>());
+        var accessToken = registration[ClientRegistrationResponse.Parameters.RegistrationAccessToken]!.GetValue<string>();
+        var clientId = registration[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        Assert.StartsWith(issuer + "/", configurationEndpoint.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(issuer, IssuerOf(accessToken));
+        // Addressed to the tenant it manages the client at, so it is honored at the address handed back
+        Assert.Equal(issuer, PayloadOf(accessToken)[IanaClaimTypes.Aud]?.GetValue<string>());
+
+        using var read = await SendAsync(http, HttpMethod.Get, configurationEndpoint, accessToken);
+        var readBody = await ReadJsonAsync(read);
+        Assert.True(read.StatusCode == HttpStatusCode.OK, readBody.ToJsonString());
+        Assert.Equal(clientId, readBody[ClientRegistrationResponse.Parameters.ClientId]?.GetValue<string>());
+        Assert.Equal(
+            configurationEndpoint.OriginalString,
+            readBody[ClientRegistrationResponse.Parameters.RegistrationClientUri]?.GetValue<string>());
+
+        using var updated = await SendAsync(
+            http,
+            HttpMethod.Put,
+            configurationEndpoint,
+            accessToken,
+            new JsonObject
+            {
+                [ClientRegistrationResponse.Parameters.ClientId] = clientId,
+                [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray(RedirectUri),
+                [ClientRegistrationRequest.Parameters.ClientName] = "renamed",
+            });
+        var updatedBody = await ReadJsonAsync(updated);
+        Assert.True(updated.StatusCode == HttpStatusCode.OK, updatedBody.ToJsonString());
+        Assert.Equal(
+            configurationEndpoint.OriginalString,
+            updatedBody[ClientRegistrationResponse.Parameters.RegistrationClientUri]?.GetValue<string>());
+        // RFC 7592 section 2.2 lets the server issue a new registration access token with the update
+        var currentToken =
+            updatedBody[ClientRegistrationResponse.Parameters.RegistrationAccessToken]?.GetValue<string>() ?? accessToken;
+
+        using var deleted = await SendAsync(http, HttpMethod.Delete, configurationEndpoint, currentToken);
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        using var readAgain = await SendAsync(http, HttpMethod.Get, configurationEndpoint, currentToken);
+        Assert.NotEqual(HttpStatusCode.OK, readAgain.StatusCode);
+    }
+
+    /// <summary>
+    /// Discovery on the Minimal API transport reads the path of each endpoint from the endpoint resolver the host
+    /// registers, the one the JWT bearer grant and client authentication read: a resolver answering a path the route
+    /// is not mapped at moves the published token endpoint there, on the issuer's authority.
+    /// </summary>
+    [Fact]
+    public async Task DiscoveryPublishesThePathTheHostsEndpointResolverAnswers()
+    {
+        await using var app = await StartAsync(
+            [Tenant("acme", Host)],
+            services: services => services.Replace(
+                ServiceDescriptor.Scoped<IOidcEndpointResolver>(_ => new TokenEndpointElsewhere())));
+        using var http = Client(app);
+
+        using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            Host + TokenEndpointElsewhere.Path,
+            (await ReadJsonAsync(response))[ConfigurationResponse.Parameters.TokenEndpoint]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A host's endpoint resolver answering the token endpoint, on a host of its own, at a path no route is mapped at,
+    /// and no other endpoint.
+    /// </summary>
+    private sealed class TokenEndpointElsewhere : IOidcEndpointResolver
+    {
+        public const string Path = "/elsewhere/token";
+
+        public Uri? Resolve(OidcEndpoints endpoint)
+            => endpoint == OidcEndpoints.Token ? new Uri("https://resolver.example.com" + Path) : null;
+    }
+
+    /// <summary>
+    /// Sends <paramref name="method"/> to <paramref name="address"/> with the registration access token, carrying
+    /// <paramref name="body"/> where one is given.
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendAsync(
+        HttpClient http, HttpMethod method, Uri address, string accessToken, JsonObject? body = null)
+    {
+        using var request = new HttpRequestMessage(method, address);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        if (body is not null)
+            request.Content = JsonContent.Create(body);
+        return await http.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    // A name the host is reached by inside its own network, which no client outside it can resolve
+    private const string InternalName = "https://oidc-svc:8080";
+
+    // The endpoints a host enabling the base set publishes in its discovery document
+    private static readonly string[] PublishedEndpoints =
+    [
+        ConfigurationResponse.Parameters.JwksUri,
+        ConfigurationResponse.Parameters.AuthorizationEndpoint,
+        ConfigurationResponse.Parameters.TokenEndpoint,
+        ConfigurationResponse.Parameters.UserInfoEndpoint,
+        ConfigurationResponse.Parameters.EndSessionEndpoint,
+        ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint,
+    ];
 
     /// <summary>
     /// Without the call a tenant scope the host enters takes precedence over the one tenant, since the work it wraps
@@ -388,10 +566,12 @@ public sealed class SingleTenantWithoutTheCallTests
         string? pathBase = null,
         bool callsMultiTenancy = false,
         bool readsTenantFirst = false,
-        Action<WebApplication>? hostEndpoints = null)
+        Action<WebApplication>? hostEndpoints = null,
+        Action<IServiceCollection>? services = null)
     {
         var app = Build(
             tenants,
+            ownTenants: services,
             pathBase: pathBase,
             callsMultiTenancy: callsMultiTenancy,
             readsTenantFirst: readsTenantFirst,
@@ -583,11 +763,13 @@ public sealed class SingleTenantWithoutTheCallTests
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
-    private static string? IssuerOf(string jwt)
+    private static string? IssuerOf(string jwt) => PayloadOf(jwt)[IanaClaimTypes.Iss]?.GetValue<string>();
+
+    private static JsonNode PayloadOf(string jwt)
     {
         var payload = jwt.Split('.')[1];
         payload += new string('=', (4 - payload.Length % 4) % 4);
         var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload.Replace('-', '+').Replace('_', '/')));
-        return JsonNode.Parse(json)?[IanaClaimTypes.Iss]?.GetValue<string>();
+        return JsonNode.Parse(json)!;
     }
 }
