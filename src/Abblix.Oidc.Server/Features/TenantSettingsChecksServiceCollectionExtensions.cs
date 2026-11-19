@@ -32,6 +32,7 @@ internal static class TenantSettingsChecksServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, SecurityProfileCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientSecretsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, NativeClientsCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ScriptRedirectUrisCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientIdsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientOfflineAccessCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientAssertionAudiencesCheck>(),

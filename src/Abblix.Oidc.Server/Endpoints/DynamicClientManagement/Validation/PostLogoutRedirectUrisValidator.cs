@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
@@ -77,7 +76,7 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                         + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
                         + $"{ClientAuthenticationMethods.None}");
 
-                case ApplicationTypes.Native when !UriSchemes.IsRedirectScheme(uri):
+                case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri):
                     // The rule RFC 8252 section 8.4 sets for a redirect URI, "any private-use URI scheme that doesn't
                     // contain a period character (".") SHOULD be rejected", held for this URI the user agent is sent to
                     // as well: the javascript, data and vbscript schemes carry no period

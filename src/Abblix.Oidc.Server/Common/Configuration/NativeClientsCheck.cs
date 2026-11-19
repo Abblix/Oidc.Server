@@ -7,90 +7,59 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UriValidation;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses a tenant declaring a client that RFC 8252, OAuth 2.0 for Native Apps, has an authorization server refuse:
-/// a redirect URI of a script scheme for any client, and for a native app a redirect URI of a private-use scheme without
-/// a period, PKCE turned off, or a shared secret as its proof of identity.
+/// Refuses a tenant declaring a native app that RFC 8252, OAuth 2.0 for Native Apps, has an authorization server
+/// refuse: one redirecting to a private-use scheme without a period or to http off the loopback host, or one
+/// authenticating at the token endpoint with any credential.
 /// </summary>
 /// <remarks>
-/// Dynamic registration holds a client registering itself to the same redirect rule, so a client the host declares is
-/// held to it too. A native app's https redirect URI is accepted here: section 7.2 offers native apps the claimed https
-/// redirect, which only the registration rule of OpenID Connect Dynamic Client Registration 1.0 section 2 refuses.
+/// A native app turning PKCE off is not refused here: the authorization endpoint holds it to PKCE whatever it states
+/// (<see cref="ClientInfo.EffectivePkceRequired"/>).
 /// </remarks>
-public sealed class NativeClientsCheck : ITenantsCheck
+internal sealed class NativeClientsCheck : ITenantsCheck
 {
-    /// <summary>
-    /// Schemes whose URI the user agent runs as content of the page that navigates to it, so a response posted to one
-    /// would run in this server's origin.
-    /// </summary>
-    private static readonly HashSet<string> ScriptSchemes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "javascript",
-        "data",
-        "vbscript",
-    };
-
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
-        => TenantRefusal.EachOf(tenants, tenant => tenant.Clients.SelectMany(Failures));
+        => TenantRefusal.EachOf(
+            tenants,
+            tenant => tenant.Clients.Where(client => client.ApplicationType == ApplicationTypes.Native).SelectMany(Failures));
 
     private static IEnumerable<string> Failures(ClientInfo client)
     {
-        var native = client.ApplicationType == ApplicationTypes.Native;
         var redirects = client.RedirectUris
             .Select(uri => (Member: nameof(ClientInfo.RedirectUris), Uri: uri))
             .Concat(client.PostLogoutRedirectUris
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)));
 
+        // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period character (".")
+        // SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme
         foreach (var (member, uri) in redirects)
         {
-            if (!uri.IsAbsoluteUri)
-                continue;
-
-            if (ScriptSchemes.Contains(uri.Scheme))
+            if (uri.IsAbsoluteUri && !RedirectUriSchemes.IsAllowed(uri))
             {
-                yield return $"The client '{client.ClientId}' has the {member} '{uri}' of the {uri.Scheme} scheme, " +
-                             $"which runs as script in this server's origin when a response is posted to it.";
-            }
-            else if (native && !UriSchemes.IsRedirectScheme(uri))
-            {
-                // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period
-                // character (".") SHOULD be rejected", and section 7.3 has loopback redirects use the http scheme
                 yield return $"The native client '{client.ClientId}' has the {member} '{uri}': a native app " +
                              $"redirects to a private-use scheme based on a domain name in reverse order, such as " +
                              $"com.example.app (RFC 8252 section 7.1), to https, or to http on a loopback host.";
             }
         }
 
-        if (!native)
-            yield break;
-
-        // RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that
-        // don't use PKCE"
-        if (client.PkceRequired is false)
-        {
-            yield return $"The native client '{client.ClientId}' has {nameof(ClientInfo.PkceRequired)} false: a " +
-                         $"native app uses PKCE (RFC 8252 section 8.1).";
-        }
-
-        // RFC 8252 section 8.5: an authorization server requiring "a statically included shared secret for native app
-        // clients MUST treat the client as a public client ... and not accept the secret as proof of the client's
-        // identity". A client the host declares is one registration shared by every installation of the app, so its
-        // secret is statically included in each copy
-        if (client.TokenEndpointAuthMethod is ClientAuthenticationMethods.ClientSecretBasic
-            or ClientAuthenticationMethods.ClientSecretPost
-            or ClientAuthenticationMethods.ClientSecretJwt)
+        // RFC 8252 section 8.4 has native apps "classified as public clients" except "when using a mechanism like
+        // Dynamic Client Registration to provision per-instance secrets", and Appendix A item 4 has a server "Not
+        // assume that native app clients can keep a secret". A client the host declares is one registration shared by
+        // every installation, so whatever credential it would present - a secret, a private key, a certificate - is
+        // shipped in each copy and proves nothing about the client
+        if (client.ClientType != ClientType.Public)
         {
             yield return $"The native client '{client.ClientId}' authenticates with " +
-                         $"'{client.TokenEndpointAuthMethod}': a secret shipped inside an app proves nothing about " +
-                         $"the client (RFC 8252 section 8.5), so set {nameof(ClientInfo.TokenEndpointAuthMethod)} " +
-                         $"to '{ClientAuthenticationMethods.None}'.";
+                         $"'{client.TokenEndpointAuthMethod}': a credential shipped in every installation of an app " +
+                         $"proves nothing about the client (RFC 8252 sections 8.4 and 8.5), so set " +
+                         $"{nameof(ClientInfo.TokenEndpointAuthMethod)} to '{ClientAuthenticationMethods.None}'.";
         }
     }
 }

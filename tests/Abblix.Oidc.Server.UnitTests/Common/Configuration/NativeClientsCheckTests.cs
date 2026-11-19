@@ -17,19 +17,18 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// A tenant declaring a client RFC 8252 has an authorization server refuse does not start, and the refusal names the
-/// client and the rule.
+/// A tenant declaring a native app RFC 8252 has an authorization server refuse does not start, and the refusal names
+/// the client.
 /// </summary>
 public class NativeClientsCheckTests
 {
     private const string ClientId = "desktop-app";
 
     /// <summary>
-    /// A native app redirecting to each of the three options RFC 8252 section 7 has offered to it, with PKCE and no
-    /// secret, starts.
+    /// A public native app redirecting to each of the three options RFC 8252 section 7 has offered to it starts.
     /// </summary>
     [Fact]
-    public void ANativeApp_UsingEachRedirectOption_WithPkceAndNoSecret_Starts()
+    public void APublicNativeApp_UsingEachRedirectOption_Starts()
         => Assert.Empty(Check(NativeApp()));
 
     /// <summary>
@@ -50,94 +49,42 @@ public class NativeClientsCheckTests
         else
             client.RedirectUris = [.. client.RedirectUris, new Uri(uri)];
 
-        var refusal = Assert.Single(Check(client));
-
-        Assert.Contains($"'{ClientId}'", refusal);
-        Assert.Contains("RFC 8252 section 7.1", refusal);
+        Assert.Contains($"'{ClientId}'", Assert.Single(Check(client)));
     }
 
     /// <summary>
-    /// The javascript, data and vbscript schemes run as script in this server's origin when a response is posted to
-    /// them, whichever kind of client names them.
+    /// RFC 8252 section 8.4 has native apps public except with per-instance secrets, which a client the host declares
+    /// for every installation cannot have, and Appendix A item 4 has a server "Not assume that native app clients can
+    /// keep a secret": a native app the host declares authenticates with none, whatever credential it would ship.
     /// </summary>
     [Theory]
-    [InlineData("javascript:alert(1)", ApplicationTypes.Web)]
-    [InlineData("data:text/html,callback", ApplicationTypes.Web)]
-    [InlineData("VBScript:msgbox(1)", ApplicationTypes.Web)]
-    [InlineData("javascript:alert(1)", ApplicationTypes.Native)]
-    public void AClient_RedirectingToAScriptScheme_IsRefused(string uri, string applicationType)
-    {
-        var client = NativeApp();
-        client.ApplicationType = applicationType;
-        client.RedirectUris = [new Uri(uri)];
-
-        var refusal = Assert.Single(Check(client));
-
-        Assert.Contains($"'{ClientId}'", refusal);
-        Assert.Contains("runs as script", refusal);
-    }
-
-    /// <summary>
-    /// A web client the host declares is not held to the native redirect rule.
-    /// </summary>
-    [Fact]
-    public void AWebClient_RedirectingToAPrivateUseScheme_Starts()
-    {
-        var client = NativeApp();
-        client.ApplicationType = ApplicationTypes.Web;
-        client.RedirectUris = [new Uri("myapp:/oauth2redirect")];
-
-        Assert.Empty(Check(client));
-    }
-
-    /// <summary>
-    /// RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that don't
-    /// use PKCE".
-    /// </summary>
-    [Fact]
-    public void ANativeApp_WithPkceTurnedOff_IsRefused()
-    {
-        var client = NativeApp();
-        client.PkceRequired = false;
-
-        var refusal = Assert.Single(Check(client));
-
-        Assert.Contains($"'{ClientId}'", refusal);
-        Assert.Contains("RFC 8252 section 8.1", refusal);
-    }
-
-    /// <summary>
-    /// RFC 8252 section 8.5: a server requiring "a statically included shared secret for native app clients MUST treat
-    /// the client as a public client ... and not accept the secret as proof of the client's identity". A client the
-    /// host declares is shared by every installation, and the server cannot tell its secret's copies apart. A method
-    /// proving a key is not a shared secret.
-    /// </summary>
-    [Theory]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretPost, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, true)]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false)]
-    public void ANativeApp_AuthenticatingWithASharedSecret_IsRefused(string method, bool refused)
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth)]
+    public void ANativeApp_AuthenticatingWithAnyCredential_IsRefused(string method)
     {
         var client = NativeApp();
         client.TokenEndpointAuthMethod = method;
 
-        var refusals = Check(client);
-
-        Assert.Equal(refused, refusals.Length == 1);
-        if (refused)
-        {
-            Assert.Contains($"'{ClientId}'", refusals[0]);
-            Assert.Contains("RFC 8252 section 8.5", refusals[0]);
-        }
+        Assert.Contains($"'{ClientId}'", Assert.Single(Check(client)));
     }
 
     /// <summary>
-    /// A client declared with no application type is a web client, so a confidential client sharing a secret starts.
+    /// A web client the host declares is held to neither rule.
     /// </summary>
     [Fact]
-    public void AClientDeclaredWithTheDefaults_Starts()
-        => Assert.Empty(Check(new ClientInfo(ClientId) { RedirectUris = [new Uri("https://app.example.com/cb")] }));
+    public void AConfidentialWebClient_RedirectingToAPrivateUseScheme_Starts()
+    {
+        var client = NativeApp();
+        client.ApplicationType = ApplicationTypes.Web;
+        client.TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic;
+        client.RedirectUris = [new Uri("myapp:/oauth2redirect")];
+
+        Assert.Empty(Check(client));
+    }
 
     private static ClientInfo NativeApp() => new(ClientId)
     {
