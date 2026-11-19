@@ -68,6 +68,7 @@ public class PrivateKeyJwtAudienceTests(TestFactory factory) : TestBase(factory)
         foreach (var audiences in new[]
                  {
                      new[] { discovery.TokenEndpoint.OriginalString },
+                     new[] { endpoint.OriginalString },
                      new[] { issuer, "https://another-server.example.com" },
                  })
         {

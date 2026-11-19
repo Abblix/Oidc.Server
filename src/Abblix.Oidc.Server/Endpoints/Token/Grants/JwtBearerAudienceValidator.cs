@@ -46,14 +46,15 @@ internal sealed partial class JwtBearerAudienceValidator(
 		var audienceList = audiences.Materialize();
 
 		var issuer = tenant.Issuer.OriginalString;
+		if (audienceList.Contains(issuer, StringComparer.Ordinal))
+			return Task.FromResult(true);
+
+		// Resolved only once the issuer is not named, since the spellings take a dependency scope of their own
 		var tokenEndpoints = serviceProvider is null
 			? []
 			: tenant.EndpointSpellings(serviceProvider, OidcEndpoints.Token);
 
-		var isValid = audienceList.Any(audience =>
-			audience == issuer || tokenEndpoints.Contains(audience, StringComparer.Ordinal));
-
-		if (isValid)
+		if (audienceList.Any(audience => tokenEndpoints.Contains(audience, StringComparer.Ordinal)))
 			return Task.FromResult(true);
 
 		var actualAudiences = Sanitized.Values(audienceList);

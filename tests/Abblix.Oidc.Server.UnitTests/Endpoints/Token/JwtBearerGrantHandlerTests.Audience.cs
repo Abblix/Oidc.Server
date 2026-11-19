@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Moq;
@@ -75,9 +76,30 @@ public partial class JwtBearerGrantHandlerTests
 		"https://AUTH.example.com/token",
 		TokenEndpointUri + "/",
 		"https://auth.example.com:443/token",
-		ApplicationUri + "/",
 		TenantIssuer + "/",
 	];
+
+	/// <summary>
+	/// For an issuer written with its default port and an upper-case host, the token endpoint is accepted on the
+	/// issuer's authority both normalized, as discovery publishes it, and as the issuer writes it, beside the issuer as
+	/// written; each is compared as written, so a third spelling of the same host, and the issuer normalized, are
+	/// refused.
+	/// </summary>
+	[Theory]
+	[InlineData("https://issuer.example.com/token", true)]
+	[InlineData("https://ISSUER.example.com:443/token", true)]
+	[InlineData(IssuerWithItsDefaultPort, true)]
+	[InlineData("https://issuer.example.com:443/token", false)]
+	[InlineData("https://issuer.example.com", false)]
+	public async Task AnIssuerWrittenWithItsDefaultPort_IsNamedEitherWayItIsWritten(string audience, bool accepted)
+	{
+		var tenant = new TestIssuer { Issuer = new Uri(IssuerWithItsDefaultPort) }.ToTenant();
+		var validateAudience = await AudienceCheckAsync(strict: true, tenant: tenant);
+
+		Assert.Equal(accepted, await validateAudience([audience]));
+	}
+
+	private const string IssuerWithItsDefaultPort = "https://ISSUER.example.com:443";
 
 	/// <summary>
 	/// A policy built without a service provider cannot resolve the token endpoint, so the issuer identifier alone
@@ -104,7 +126,7 @@ public partial class JwtBearerGrantHandlerTests
 	/// token endpoint on the request's host, or over a policy built without a way to resolve it.
 	/// </summary>
 	private static async Task<ValidationParameters.ValidateAudienceDelegate> AudienceCheckAsync(
-		bool strict, bool resolveEndpoints = true)
+		bool strict, bool resolveEndpoints = true, TenantDefinition? tenant = null)
 	{
 		var (handler, mocks) = CreateHandler(
 			tokenEndpoint: RequestTokenEndpointUri,
@@ -118,7 +140,7 @@ public partial class JwtBearerGrantHandlerTests
 			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
 
 		await handler.AuthorizeAsync(
-			SingleIssuer.Tenant,
+			tenant ?? SingleIssuer.Tenant,
 			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
 			new ClientInfo(ClientId),
 			TestContext.Current.CancellationToken);
