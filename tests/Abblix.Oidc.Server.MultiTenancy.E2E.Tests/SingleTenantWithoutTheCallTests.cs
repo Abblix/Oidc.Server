@@ -243,6 +243,8 @@ public sealed class SingleTenantWithoutTheCallTests
         var clientId = registration[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
         Assert.StartsWith(issuer + "/", configurationEndpoint.OriginalString, StringComparison.Ordinal);
         Assert.Equal(issuer, IssuerOf(accessToken));
+        // Addressed to the tenant it manages the client at, so it is honored at the address handed back
+        Assert.Equal(issuer, PayloadOf(accessToken)[IanaClaimTypes.Aud]?.GetValue<string>());
 
         using var read = await SendAsync(http, HttpMethod.Get, configurationEndpoint, accessToken);
         var readBody = await ReadJsonAsync(read);
@@ -761,11 +763,13 @@ public sealed class SingleTenantWithoutTheCallTests
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
-    private static string? IssuerOf(string jwt)
+    private static string? IssuerOf(string jwt) => PayloadOf(jwt)[IanaClaimTypes.Iss]?.GetValue<string>();
+
+    private static JsonNode PayloadOf(string jwt)
     {
         var payload = jwt.Split('.')[1];
         payload += new string('=', (4 - payload.Length % 4) % 4);
         var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload.Replace('-', '+').Replace('_', '/')));
-        return JsonNode.Parse(json)?[IanaClaimTypes.Iss]?.GetValue<string>();
+        return JsonNode.Parse(json)!;
     }
 }
