@@ -108,13 +108,14 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     /// ..., to its own issuer identifier, or to the identifier of any authorization server or resource server it has a
     /// trust relationship with", since the identifier then reads in a token or an assertion as that party's. Those are
     /// the tenant's issuer, the resources it issues tokens for and the issuers whose assertions the JWT bearer grant
-    /// accepts.
+    /// accepts. The issuer is compared in its normalized spelling alone: a client_id reaching this check is written in
+    /// the form it is requested in (<see cref="ClientIdentifierUrl"/>), so it can equal the issuer as written only
+    /// where that is the normalized spelling too.
     /// </remarks>
     private static bool NamesAServer(TenantDefinition tenant, string clientId, OidcOptions settings)
     {
         IEnumerable<string> servers =
         [
-            tenant.IssuerAsWritten(),
             tenant.Issuer.AbsoluteUri,
             ..(tenant.Resources ?? []).SelectMany(resource =>
                 new[] { resource.Resource.OriginalString, resource.Resource.AbsoluteUri }),

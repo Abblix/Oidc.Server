@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// answer accepts, so neither may be folded into it. <see cref="TenantIssuers.Same"/> reads scheme and host without
 /// regard to case to answer whether an issuer of a token another party wrote is one of this server's tenants, for the
 /// JWT bearer grant and software statements. A client identifier metadata document's URL is refused where it equals
-/// the issuer as written, taken from here, or normalized as well.
+/// the issuer normalized, the only form such a URL is fetched in.
 /// </para>
 /// </summary>
 /// <remarks>
