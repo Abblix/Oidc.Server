@@ -428,11 +428,40 @@ public class ClientIdMetadataDocumentReaderTests
     public void ADocumentTurningPkceOff_StillRequiresIt(string json)
         => Assert.True(Read(Document(json)).PkceRequired);
 
+    /// <summary>
+    /// A ping or push notification could not be held to the rule section 10.7 sets, so the backchannel grant goes with
+    /// the mode and the rest of the document is kept.
+    /// </summary>
     [Theory]
     [InlineData("ping")]
     [InlineData("push")]
-    public void ADocumentAskingForBackchannelNotifications_IsRefused(string mode)
-        => Refused(Document($$"""{"backchannel_token_delivery_mode":"{{mode}}","backchannel_client_notification_endpoint":"https://client.example.com/ciba"}"""));
+    public void ADocumentAskingForBackchannelNotifications_LosesTheBackchannelGrantAlone(string mode)
+    {
+        var metadata = Read(
+            Document($$"""
+                {"grant_types":["authorization_code","{{GrantTypes.Ciba}}"],"backchannel_token_delivery_mode":"{{mode}}",
+                 "backchannel_client_notification_endpoint":"https://client.example.com/ciba"}
+                """),
+            CreateReader(grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba], documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
+
+        Assert.Equal([GrantTypes.AuthorizationCode], metadata.GrantTypes);
+        Assert.Null(metadata.BackChannelTokenDeliveryMode);
+        Assert.Null(metadata.BackChannelClientNotificationEndpoint);
+    }
+
+    /// <summary>
+    /// A document asking for notifications and for nothing but the backchannel grant has nothing left once that goes.
+    /// </summary>
+    [Theory]
+    [InlineData("ping")]
+    [InlineData("push")]
+    public void ADocumentAskingOnlyForBackchannelNotifications_IsRefused(string mode)
+        => Refused(
+            Document($$"""
+                {"grant_types":["{{GrantTypes.Ciba}}"],"response_types":[],"backchannel_token_delivery_mode":"{{mode}}",
+                 "backchannel_client_notification_endpoint":"https://client.example.com/ciba"}
+                """),
+            CreateReader(grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba], documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
 
     [Fact]
     public void ADocumentPollingForBackchannelTokens_IsKept()
