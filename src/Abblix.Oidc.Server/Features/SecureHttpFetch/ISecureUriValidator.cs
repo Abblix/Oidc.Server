@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// <remarks>
 /// This check is deliberately DNS-free: resolving a hostname is a runtime concern (and a registration
 /// would otherwise fail for a client whose endpoint is not yet deployed). The outbound handler resolves
-/// the host once, where it connects, and judges every address of that answer, so the address judged is the
-/// address reached.
+/// the host once per send and judges every address of that answer, and its connections are made only to
+/// addresses so judged.
 /// </remarks>
 public interface ISecureUriValidator
 {

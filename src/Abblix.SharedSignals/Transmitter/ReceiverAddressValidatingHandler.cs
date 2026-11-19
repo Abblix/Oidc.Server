@@ -17,8 +17,8 @@ namespace Abblix.SharedSignals.Transmitter;
 /// The delivery endpoint comes from the receiver, so the address has to be judged on the connection the socket
 /// actually makes, not only on the URL the receiver configured. The shared base
 /// (<see cref="AddressValidatingHttpMessageHandler"/>) refuses redirects, calls the policy on the address as written
-/// before each send, and resolves the host once where it connects, refusing the connection by the rule the policy
-/// names, so the address judged is the address reached. The policy is the same one the sender consults up front, so a
+/// before each send, resolves the host once per send and judges its addresses by the rule the policy names, and
+/// makes connections only to addresses so judged. The policy is the same one the sender consults up front, so a
 /// statically bad endpoint is refused early and loudly, and a redirect or a rebinding is caught here on the request
 /// that would have carried it.
 /// </remarks>

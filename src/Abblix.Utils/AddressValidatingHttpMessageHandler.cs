@@ -25,8 +25,8 @@ namespace Abblix.Utils;
 /// and the caller decides what to do with it.
 /// </para>
 /// <para>
-/// The host is resolved once per send, every address of that answer is judged, and a connection the send opens is
-/// made to those addresses and no others. A name resolved by a check and then again by the socket can answer a public
+/// The host is resolved once per send, every address of that answer is judged, and a connection is only ever made
+/// to addresses a send judged under the same rule; a connection the send opens goes to its own answer and no other. A name resolved by a check and then again by the socket can answer a public
 /// address to the first and an internal one to the second, so a check of its own resolution judges an address the
 /// connection never uses. An address written as a literal is judged as it stands.
 /// </para>
@@ -86,7 +86,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// <returns>The rule every address the request's host stands for is judged by.</returns>
     /// <remarks>
     /// Asked on the send, in the request's own flow, so anything that flow carries can decide it. Without an override
-    /// nothing is refused, as with the transport this handler built before it judged connections.
+    /// nothing is refused.
     /// </remarks>
     protected virtual OutboundAddressRule AddressRuleFor(Uri requestUri) => OutboundAddressRule.Unrestricted;
 
@@ -104,7 +104,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
 
         // The name the transport connects to, in the form it uses: punycode for an internationalized name
         var host = requestUri.IdnHost;
-        var addresses = await AddressesOfAsync(host, cancellationToken);
+        var addresses = await AddressesOfAsync(host, rule, cancellationToken);
 
         var refused = Array.Find(addresses, address => rule.Refuses(address));
         if (refused != null)
@@ -120,7 +120,15 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// <summary>
     /// The addresses a connection to <paramref name="host"/> may use: the literal itself, or the resolver's answer.
     /// </summary>
-    private async Task<IPAddress[]> AddressesOfAsync(string host, CancellationToken cancellationToken)
+    /// <remarks>
+    /// A name that does not resolve is an SSRF refusal only under a rule that refuses something: for a destination
+    /// permitted outright it is an ordinary failure to reach it, and a caller telling the two apart by the message
+    /// would otherwise report an operator's own service as blocked.
+    /// </remarks>
+    private async Task<IPAddress[]> AddressesOfAsync(
+        string host,
+        OutboundAddressRule rule,
+        CancellationToken cancellationToken)
     {
         if (IPAddress.TryParse(host, out var literal))
             return [literal];
@@ -132,14 +140,24 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new HttpRequestException($"SSRF protection: Unable to resolve hostname '{host}'", exception);
+            throw new HttpRequestException($"{PrefixOf(rule)}Unable to resolve hostname '{host}'", exception);
         }
 
         if (addresses.Length == 0)
-            throw new HttpRequestException($"SSRF protection: Hostname '{host}' resolved to no address");
+            throw new HttpRequestException($"{PrefixOf(rule)}Hostname '{host}' resolved to no address");
 
         return addresses;
     }
+
+    /// <summary>
+    /// How a failure to resolve is introduced: as a refusal under a rule that refuses, as a plain failure otherwise.
+    /// </summary>
+    private static string PrefixOf(OutboundAddressRule rule) => rule switch
+    {
+        OutboundAddressRule.Unrestricted => string.Empty,
+        OutboundAddressRule.NoPrivateOrReserved or OutboundAddressRule.NoSpecialPurpose => "SSRF protection: ",
+        _ => throw new ArgumentOutOfRangeException(nameof(rule), rule, "An address rule this library does not know."),
+    };
 
     /// <summary>
     /// Opens a connection for the request that made the transport need one, to the addresses its send judged, in the

@@ -430,18 +430,23 @@ public class AddressValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
-    /// A name that cannot be resolved is refused as such, since there is no judged address to connect to.
+    /// A name that cannot be resolved is refused, since there is no judged address to connect to - as an SSRF refusal
+    /// under a rule that refuses something, and as a plain failure to reach a destination permitted outright.
     /// </summary>
-    [Fact]
-    public async Task ANameThatCannotBeResolved_IsRefused()
+    [Theory]
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved, true)]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose, true)]
+    [InlineData(OutboundAddressRule.Unrestricted, false)]
+    public async Task ANameThatCannotBeResolved_IsRefused(OutboundAddressRule rule, bool asSsrf)
     {
-        var handler = new Recording((_, _) => throw new SocketException((int)SocketError.HostNotFound));
+        var handler = new Recording((_, _) => throw new SocketException((int)SocketError.HostNotFound)) { Rule = rule };
         using var invoker = new HttpMessageInvoker(handler);
 
         var refusal = await Assert.ThrowsAsync<HttpRequestException>(
             () => GetAsync(invoker, "http://nowhere.example.com/"));
 
         Assert.Contains("Unable to resolve hostname 'nowhere.example.com'", refusal.Message);
+        Assert.Equal(asSsrf, refusal.Message.StartsWith("SSRF protection:", StringComparison.Ordinal));
         Assert.Empty(handler.Dialed);
     }
 
@@ -463,10 +468,14 @@ public class AddressValidatingHttpMessageHandlerTests
             VersionPolicy = policy,
         };
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
-            () => invoker.SendAsync(request, TestContext.Current.CancellationToken));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
 
-        Assert.Contains("HTTP/3", refusal.Message);
+        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+            () => invoker.SendAsync(request, deadline.Token));
+
+        // The refusal's own words: the platform's failure to reach HTTP/3 also names the protocol
+        Assert.StartsWith("SSRF protection: HTTP version", refusal.Message);
         Assert.Empty(handler.Dialed);
     }
 }

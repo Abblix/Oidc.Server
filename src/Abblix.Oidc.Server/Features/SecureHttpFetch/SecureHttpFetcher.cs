@@ -46,8 +46,8 @@ public partial class SecureHttpFetcher(
             // SSRF protection layers:
             // 1. SsrfHttpFetchValidator decorator: Validates hostnames, performs DNS resolution,
             //    blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast)
-            // 2. SsrfValidatingHttpMessageHandler: Resolves the host once where it connects and connects only to an
-            //    address it judged (prevents DNS rebinding)
+            // 2. SsrfValidatingHttpMessageHandler: Resolves the host once per send and connects only to addresses
+            //    a send judged (prevents DNS rebinding)
             // 3. Its transport: Redirects disabled (prevents redirect-based SSRF bypass)
             // 4. Response validation: Size limits, content-type checks (below)
 

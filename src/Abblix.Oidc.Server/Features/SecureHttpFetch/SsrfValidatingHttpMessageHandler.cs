@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// - Blocking common internal hostnames (localhost, internal, intranet, corp, home, lan)
 /// - Blocking internal TLDs (.local, .localhost, .internal, .intranet, .corp, .home, .lan)
 /// - Blocking single-label hostnames without dots (typically internal)
-/// - Resolution with private IP blocking (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.), done once, where the
-///   connection is made, so the address judged is the address connected to
+/// - Resolution with private IP blocking (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.), done once per send, and
+///   a connection made only to addresses a send judged under the same rule
 ///
 /// The synchronous scheme/hostname/IP-literal rules are shared with registration-time validation via
 /// <see cref="ISecureUriValidator"/>; the resolution is the base handler's connection step
@@ -35,7 +35,7 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// 1. Registration: evil.com resolves to 8.8.8.8 (public IP, passes validation)
 /// 2. The attacker's name server answers with a zero TTL, and next time with 127.0.0.1
 /// 3. A check resolving the name on its own would see 8.8.8.8 while the socket, resolving again, reached localhost
-/// 4. Here the one resolution is the connection's: 127.0.0.1 is refused, 8.8.8.8 is what the socket reaches
+/// 4. Here the send resolves once and the socket connects to that answer: 127.0.0.1 is refused, 8.8.8.8 is reached
 /// </remarks>
 /// <param name="options">The deployment's outbound fetch settings.</param>
 /// <param name="uriValidator">Applies the synchronous scheme, hostname and IP-literal rules.</param>
@@ -52,8 +52,8 @@ public class SsrfValidatingHttpMessageHandler(
 {
     /// <summary>
     /// Applies the synchronous scheme, hostname and IP-literal rules immediately before the request leaves. The
-    /// base handler owns the no-redirect, no-decompression transport, calls this once per send, and judges what the
-    /// host resolves to where it connects.
+    /// base handler owns the no-redirect, no-decompression transport, calls this once per send, and then resolves the
+    /// host and judges its addresses by <see cref="AddressRuleFor"/>.
     /// </summary>
     protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
     {
