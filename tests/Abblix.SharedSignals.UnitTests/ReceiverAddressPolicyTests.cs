@@ -131,39 +131,4 @@ public class ReceiverAddressPolicyTests
 
         Assert.NotNull(rejection);
     }
-
-    /// <summary>
-    /// The sender refuses to spend a queue on a receiver whose address it may not reach, and holds the events
-    /// instead: an operator can put the configuration right, and the events are still owed.
-    /// </summary>
-    [Fact]
-    public async Task TheSenderRefusesToDeliverToARefusedAddress()
-    {
-        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
-        var outbox = new InMemoryEventOutbox();
-        await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
-
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance, TestInstruments.Create(), TestQueuedEventSigner.Create());
-        var stream = new StreamState
-        {
-            ReceiverId = "receiver-a",
-            Status = StreamStatuses.Enabled,
-            SubjectsMode = StreamSubjectsMode.None,
-            Configuration = new StreamConfiguration
-            {
-                StreamId = "s-1",
-                Issuer = "https://tr.example.com",
-                Audiences = ["https://receiver.example.com"],
-                EventsDelivered = [],
-                Delivery = new PushDeliveryMethod(new Uri("https://169.254.169.254/events")),
-            },
-        };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sender.SendPendingAsync(stream, TestContext.Current.CancellationToken));
-
-        // Nothing was sent, and the event is still there for a pass made after the address is corrected.
-        Assert.Empty(handler.Requests);
-        Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
-    }
 }

@@ -53,6 +53,20 @@ public sealed partial class PushDeliverySender
             + "the queue is held for a later pass: {ErrorCode} - {ErrorDescription}")]
     private partial void LogReceiverObjected(string StreamId, string ErrorCode, string ErrorDescription);
 
+    /// <summary>
+    /// The delivery guard refused the receiver's address, so nothing was sent and the queue is held.
+    /// </summary>
+    /// <remarks>
+    /// Reports the guard's decision and decides nothing: the exception carries the reason, and the pass stops as it
+    /// does for any failure before the receiver answers.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = LogEvents.Transmitter.ReceiverAddressRefused,
+        Level = LogLevel.Warning,
+        Message = "The address of the receiver of stream {StreamId} was refused, so nothing was sent and the queue is "
+            + "held for a later pass")]
+    private partial void LogReceiverAddressRefused(Exception exception, string StreamId);
+
     [LoggerMessage(
         EventId = LogEvents.Transmitter.SetSigningFailed,
         Level = LogLevel.Error,

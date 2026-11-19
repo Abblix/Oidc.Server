@@ -145,4 +145,16 @@ public class SecureHttpFetchOptions
     /// because an entry permitting more than it appears to say is the failure this option exists to avoid.
     /// </remarks>
     public Uri[]? AllowedDestinations { get; set; }
+
+    /// <summary>
+    /// The forward proxy every request to a client-supplied address goes through, such as <c>http://proxy:3128</c>.
+    /// Default: null, meaning none.
+    /// </summary>
+    /// <remarks>
+    /// Without it no proxy is used, the system's and the environment's included. What holds with it and without it,
+    /// and which addresses can name a proxy (refused at startup otherwise), is stated on
+    /// <see cref="Abblix.Utils.AddressValidatingHttpMessageHandler"/>. Name one only where the proxy is the
+    /// deployment's only way out.
+    /// </remarks>
+    public Uri? OutboundProxy { get; set; }
 }

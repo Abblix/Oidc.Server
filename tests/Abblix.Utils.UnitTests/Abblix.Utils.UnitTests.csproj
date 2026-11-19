@@ -37,4 +37,8 @@
       <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/LoopbackOrigin.cs" Link="Shared/LoopbackOrigin.cs" />
+  </ItemGroup>
+
 </Project>

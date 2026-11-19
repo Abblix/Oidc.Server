@@ -62,8 +62,6 @@ public class ClientIdMetadataDocumentTransportTests
         var guard = chain.FindIndex(link => link is SsrfValidatingHttpMessageHandler);
         Assert.True(host >= 0, "the host's handler is not on the client the documents are fetched with");
         Assert.True(guard > host, "the SSRF validation is not beneath the host's handler");
-        var transport = Assert.IsType<HttpClientHandler>(((DelegatingHandler)chain[guard]).InnerHandler);
-        Assert.False(transport.AllowAutoRedirect);
     }
 
     /// <summary>

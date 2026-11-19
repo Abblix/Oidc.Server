@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// URL or any URLs contained within a Client ID Metadata Document that resolve to special-use IP addresses as defined
 /// in [RFC6890]". The validation every other fetch passes lets the NAT64 prefix reach the public IPv4 address it
 /// carries, which an IPv6-only network needs; a fetch made inside a scope opened here refuses it. The scope flows with
-/// the call into the handler that resolves the name, so the rule is decided where the address is known.
+/// the call into the outbound handler's send, which picks the rule there, in the request's own flow; the connection is
+/// then made by that rule, over connections no fetch outside such a scope shares.
 /// </remarks>
 internal static class SpecialPurposeFetches
 {

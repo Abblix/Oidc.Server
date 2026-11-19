@@ -23,6 +23,14 @@ public static class PushDeliveryTransport
     /// <c>AddHttpClient&lt;TClient&gt;</c> gives it. A delivery pass makes one attempt per pending token, so a
     /// resilience pipeline here is what turns a transient receiver failure into a retry rather than a wait for the
     /// next pass.
+    /// <para>
+    /// The client's primary handler is <see cref="ReceiverAddressValidatingHandler"/>, the one place a receiver's
+    /// address is judged at delivery. A host adds its own handlers with <c>AddHttpMessageHandler</c>, which places them
+    /// above it; replacing the primary handler removes it, and deliveries then reach whatever address a receiver
+    /// configured. Both <c>ConfigurePrimaryHttpMessageHandler</c> and <c>UseSocketsHttpHandler</c> replace it, the
+    /// second because it puts a plain <see cref="SocketsHttpHandler"/> in place of any primary handler of another
+    /// type.
+    /// </para>
     /// </remarks>
     public const string HttpClientName = nameof(PushDeliverySender);
 }

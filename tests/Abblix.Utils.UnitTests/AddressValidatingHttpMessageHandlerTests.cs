@@ -5,7 +5,10 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Sockets;
+using Abblix.Tests.Shared;
 
 namespace Abblix.Utils.UnitTests;
 
@@ -13,17 +16,59 @@ namespace Abblix.Utils.UnitTests;
 /// Unit tests for <see cref="AddressValidatingHttpMessageHandler"/>, the message-handler half of protecting a
 /// request whose address came from outside.
 /// </summary>
+[SuppressMessage("Minor Code Smell", "S1313:IP addresses should not be hardcoded",
+    Justification = "The addresses are the values the guard under test judges; none of them is reached.")]
 public class AddressValidatingHttpMessageHandlerTests
 {
+    /// <summary>A public address, which no rule refuses.</summary>
+    private static readonly IPAddress PublicAddress = IPAddress.Parse("8.8.8.8");
+
+    /// <summary>Another public address, the answer a name gives the second time it is asked.</summary>
+    private static readonly IPAddress OtherPublicAddress = IPAddress.Parse("1.1.1.1");
+
+    private static readonly IPAddress PrivateAddress = IPAddress.Parse("10.0.0.1");
+
     /// <summary>
-    /// A handler that records what it was asked to judge and under whose cancellation, and refuses whatever it is
-    /// told to.
+    /// The resolution a row gets when it has no business resolving anything.
     /// </summary>
-    private sealed class Recording(string? refusal = null) : AddressValidatingHttpMessageHandler
+    private static readonly ResolveHostDelegate RefusesToResolve = (host, _) => throw new NotSupportedException(
+        $"This test resolved '{host}'; a unit test decides an address without leaving the process.");
+
+    /// <summary>
+    /// Answers <paramref name="answers"/> in turn, the last one for every later question, recording each name asked.
+    /// </summary>
+    private sealed class Resolver(params IPAddress[][] answers)
+    {
+        private int _asked;
+
+        public List<string> Asked { get; } = [];
+
+        public Task<IPAddress[]> ResolveAsync(string host, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Asked.Add(host);
+            var answer = answers[Math.Min(_asked++, answers.Length - 1)];
+            return Task.FromResult(answer);
+        }
+    }
+
+    /// <summary>
+    /// A handler that records what it was asked to judge and under whose cancellation, refuses whatever it is told
+    /// to, connects by whichever rule a row sets, and records each address a connection is made to while reaching
+    /// <see cref="Origin"/> instead, so an address that is not reachable from a test can still be connected to.
+    /// </summary>
+    private sealed class Recording(ResolveHostDelegate? resolveHost, string? refusal = null, Uri? proxy = null)
+        : AddressValidatingHttpMessageHandler(resolveHost, proxy)
     {
         public List<Uri> Judged { get; } = [];
 
         public CancellationToken Given { get; private set; }
+
+        public OutboundAddressRule Rule { get; set; } = OutboundAddressRule.NoPrivateOrReserved;
+
+        public List<IPEndPoint> Dialed { get; } = [];
+
+        public LoopbackOrigin? Origin { get; init; }
 
         protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
         {
@@ -33,6 +78,19 @@ public class AddressValidatingHttpMessageHandlerTests
             return refusal is null
                 ? Task.CompletedTask
                 : throw new HttpRequestException(refusal);
+        }
+
+        protected override OutboundAddressRule AddressRuleFor(Uri requestUri) => Rule;
+
+        internal override async ValueTask<Stream> DialAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
+        {
+            lock (Dialed)
+                Dialed.Add(endpoint);
+
+            var origin = Origin ?? throw new SocketException((int)SocketError.ConnectionRefused);
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, origin.Port), cancellationToken);
+            return new NetworkStream(socket, ownsSocket: true);
         }
     }
 
@@ -75,27 +133,112 @@ public class AddressValidatingHttpMessageHandlerTests
         on.InnerHandler = with;
     }
 
+    private static Task<HttpResponseMessage> GetAsync(HttpMessageInvoker invoker, string url)
+        => invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, url), TestContext.Current.CancellationToken);
+
     /// <summary>
-    /// The transport this handler builds for itself follows no redirect, carries no ambient credentials and
-    /// decompresses nothing.
+    /// The transport this handler builds for every rule follows no redirect, carries no ambient credentials, keeps no
+    /// cookies, decompresses nothing, goes through no proxy and makes its connections itself.
     /// </summary>
     /// <remarks>
-    /// A followed 3xx re-sends the request to an address nothing vetted, which is the one bypass the derived
-    /// handler cannot see, and it is why the check lives on the connection rather than in front of the client. The
-    /// other two are the values the platform starts from, so stating them catches somebody setting a wrong one and
-    /// not somebody dropping the line.
+    /// A followed 3xx re-sends the request to an address nothing vetted, and a proxy resolves the target on its own,
+    /// so the connection would be made to the proxy rather than to the address judged. The others are the values
+    /// the platform starts from, so stating them catches somebody setting a wrong one and not somebody dropping the
+    /// line.
     /// </remarks>
-    [Fact]
-    public void TheTransportItBuilds_FollowsNoRedirectAndCarriesNothingOfItsOwn()
+    [Theory]
+    [InlineData(OutboundAddressRule.Unrestricted)]
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved)]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose)]
+    public void TheTransportItBuilds_FollowsNoRedirectAndCarriesNothingOfItsOwn(OutboundAddressRule rule)
     {
-        using var handler = new Recording();
-
-        var transport = Assert.IsType<HttpClientHandler>(handler.InnerHandler);
+        using var handler = new Recording(RefusesToResolve);
+        using var transport = handler.TransportFor(rule);
 
         Assert.False(transport.AllowAutoRedirect);
-        Assert.False(transport.UseDefaultCredentials);
+        Assert.Null(transport.Credentials);
         Assert.False(transport.UseCookies);
         Assert.Equal(DecompressionMethods.None, transport.AutomaticDecompression);
+        Assert.False(transport.UseProxy);
+        Assert.NotNull(transport.ConnectCallback);
+    }
+
+    /// <summary>
+    /// A proxy named for the handler is the one its transports use, and the only one.
+    /// </summary>
+    [Fact]
+    public void TheTransportItBuilds_GoesThroughTheProxyItWasGiven()
+    {
+        var proxy = new Uri("http://proxy.example.com:3128/");
+        using var handler = new Recording(RefusesToResolve, proxy: proxy);
+        using var transport = handler.TransportFor(OutboundAddressRule.NoPrivateOrReserved);
+
+        Assert.True(transport.UseProxy);
+        Assert.Equal(proxy, Assert.IsType<WebProxy>(transport.Proxy).Address);
+    }
+
+    /// <summary>
+    /// Through a named proxy a request reaches the proxy, naming its target as a proxy is asked to, and the connection
+    /// is made to the proxy rather than to the target's answer.
+    /// </summary>
+    [Fact]
+    public async Task ThroughANamedProxy_APlainRequestReachesTheProxyNamingItsTarget()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PublicAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, "http://public.example.com/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["GET http://public.example.com/keys HTTP/1.1"], proxy.RequestLines);
+        Assert.Equal([new IPEndPoint(IPAddress.Loopback, proxy.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// Through a named proxy an HTTPS request asks the proxy for a tunnel to its target.
+    /// </summary>
+    /// <remarks>
+    /// The origin standing for the proxy answers the tunnel and then speaks no TLS, so the request fails after the
+    /// proxy was asked; what the row reads is the asking.
+    /// </remarks>
+    [Fact]
+    public async Task ThroughANamedProxy_AnHttpsRequestAsksTheProxyForATunnel()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PublicAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, "https://public.example.com/keys"), deadline.Token));
+
+        Assert.Equal(["CONNECT public.example.com:443 HTTP/1.1"], proxy.RequestLines);
+    }
+
+    /// <summary>
+    /// Through a named proxy the addresses the handler's own lookup returns are still judged: a refused one is refused
+    /// before the proxy is contacted at all.
+    /// </summary>
+    [Fact]
+    public async Task ThroughANamedProxy_ARefusedAddressIsRefusedBeforeTheProxyIsContacted()
+    {
+        using var proxy = new LoopbackOrigin();
+        var handler = new Recording(
+            new Resolver([PrivateAddress]).ResolveAsync,
+            proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
+            () => GetAsync(invoker, "http://internal.example.com/keys"));
+
+        Assert.Equal(0, proxy.Connections);
+        Assert.Empty(handler.Dialed);
     }
 
     /// <summary>
@@ -104,7 +247,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task EverySend_IsJudgedOnItsOwnAddress()
     {
-        var handler = new Recording();
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync);
         var (client, transport) = Sending(handler);
 
         using (client)
@@ -121,8 +264,9 @@ public class AddressValidatingHttpMessageHandlerTests
     }
 
     /// <summary>
-    /// The check runs under the caller's cancellation, which is what lets a request nobody is waiting for any more
-    /// stop waiting rather than hold the caller for however long the check's own work would take.
+    /// The check and the resolution run under the caller's cancellation, which is what lets a request nobody is
+    /// waiting for any more stop waiting rather than hold the caller for however long the check's own work would
+    /// take.
     /// </summary>
     /// <remarks>
     /// Driven through an invoker rather than a client, because a client hands its handler a token of its own that
@@ -132,7 +276,12 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task TheCheck_RunsUnderTheCallersCancellation()
     {
-        var handler = new Recording();
+        var resolvedUnder = CancellationToken.None;
+        var handler = new Recording((_, cancellationToken) =>
+        {
+            resolvedUnder = cancellationToken;
+            return Task.FromResult<IPAddress[]>([PublicAddress]);
+        });
         Replacing(on: handler, with: new CountingTransport());
 
         using var invoker = new HttpMessageInvoker(handler);
@@ -143,6 +292,7 @@ public class AddressValidatingHttpMessageHandlerTests
         await invoker.SendAsync(request, cancellation.Token);
 
         Assert.Equal(cancellation.Token, handler.Given);
+        Assert.Equal(cancellation.Token, resolvedUnder);
     }
 
     /// <summary>
@@ -152,7 +302,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task ARefusedAddress_NeverReachesTheTransport()
     {
-        var handler = new Recording("not this address");
+        var handler = new Recording(RefusesToResolve, "not this address");
         var (client, transport) = Sending(handler);
 
         using (client)
@@ -177,7 +327,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [Fact]
     public async Task ARequestWithNoAddress_IsRefusedWithoutBeingJudged()
     {
-        var handler = new Recording();
+        var handler = new Recording(RefusesToResolve);
         var transport = new CountingTransport();
         Replacing(on: handler, with: transport);
 
@@ -192,5 +342,221 @@ public class AddressValidatingHttpMessageHandlerTests
         Assert.Equal("A request through this handler must carry a target URI.", refusal.Message);
         Assert.Empty(handler.Judged);
         Assert.Equal(0, transport.Requests);
+    }
+
+    /// <summary>
+    /// The connection is made to the address the send judged, and the name is not resolved a second time for it: a
+    /// name answering one address to the check and another to the socket is how a rebinding gets past a check.
+    /// </summary>
+    [Fact]
+    public async Task TheConnection_IsMadeToTheAnswerTheSendJudged_NotToASecondOne()
+    {
+        using var origin = new LoopbackOrigin();
+        var resolver = new Resolver([PublicAddress], [OtherPublicAddress]);
+        var handler = new Recording(resolver.ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"http://rebind.example.com:{origin.Port}/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([new IPEndPoint(PublicAddress, origin.Port)], handler.Dialed);
+        Assert.Equal(["rebind.example.com"], resolver.Asked);
+    }
+
+    /// <summary>
+    /// One refused address among the answers is enough to refuse the send, before any connection: the next connection
+    /// to the same name may take another of them.
+    /// </summary>
+    [Fact]
+    public async Task OneRefusedAddressAmongTheAnswers_RefusesTheSendBeforeAnyConnection()
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(new Resolver([PublicAddress, PrivateAddress]).ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
+            () => GetAsync(invoker, $"http://mixed.example.com:{origin.Port}/"));
+
+        Assert.Empty(handler.Dialed);
+        Assert.Equal(0, origin.Connections);
+    }
+
+    /// <summary>
+    /// The rule a row sets decides what is refused: the same private answer is connected to for a destination
+    /// permitted outright, which is what keeps the refusal above the rule's and not the handler's own.
+    /// </summary>
+    [Fact]
+    public async Task ADestinationPermittedOutright_IsConnectedToWhateverItResolvesTo()
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(new Resolver([PrivateAddress]).ResolveAsync)
+        {
+            Origin = origin,
+            Rule = OutboundAddressRule.Unrestricted,
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"http://permitted.example.com:{origin.Port}/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([new IPEndPoint(PrivateAddress, origin.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// A connection opened under one rule does not carry a request judged by another, even to the same host: the
+    /// first request's answer, permitted outright, is an address the second request's rule refuses.
+    /// </summary>
+    /// <remarks>
+    /// The second answer passes its own rule, so its send is not refused; what the row reads is whether a connection
+    /// is made for it, to its own answer, rather than the first one being reused.
+    /// </remarks>
+    [Fact]
+    public async Task AConnectionOpenedUnderOneRule_DoesNotCarryARequestJudgedByAnother()
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(new Resolver([PrivateAddress], [PublicAddress]).ResolveAsync)
+        {
+            Origin = origin,
+            Rule = OutboundAddressRule.Unrestricted,
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+        var url = $"http://shared.example.com:{origin.Port}/";
+
+        (await GetAsync(invoker, url)).Dispose();
+
+        handler.Rule = OutboundAddressRule.NoPrivateOrReserved;
+        (await GetAsync(invoker, url)).Dispose();
+
+        Assert.Equal(
+            [new IPEndPoint(PrivateAddress, origin.Port), new IPEndPoint(PublicAddress, origin.Port)],
+            handler.Dialed);
+        Assert.Equal(2, origin.Connections);
+    }
+
+    /// <summary>
+    /// The control for the row above: under one rule the connection is reused, so two connections there are the
+    /// rules kept apart and not a transport that never reuses one.
+    /// </summary>
+    [Fact]
+    public async Task UnderOneRule_TheConnectionIsReused()
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+        var url = $"http://shared.example.com:{origin.Port}/";
+
+        (await GetAsync(invoker, url)).Dispose();
+
+        (await GetAsync(invoker, url)).Dispose();
+
+        Assert.Single(handler.Dialed);
+        Assert.Equal(2, origin.Requests);
+    }
+
+    /// <summary>
+    /// An address written as a literal is judged as it stands and never resolved.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedLiteral_IsRefusedWithoutResolving()
+    {
+        var handler = new Recording(RefusesToResolve);
+        using var invoker = new HttpMessageInvoker(handler);
+
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
+            () => GetAsync(invoker, "http://169.254.169.254/latest/meta-data"));
+
+        Assert.Empty(handler.Dialed);
+    }
+
+    /// <summary>
+    /// An IPv6 literal is connected to as itself: the transport names it with brackets and the address form of the
+    /// URI without, and the connection still finds the address its send judged.
+    /// </summary>
+    [Fact]
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The origin is a plain HTTP listener on the loopback, inside the test process.")]
+    public async Task AnIPv6Literal_IsConnectedToWithoutResolving()
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(RefusesToResolve)
+        {
+            Origin = origin,
+            Rule = OutboundAddressRule.Unrestricted,
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"http://[::1]:{origin.Port}/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([new IPEndPoint(IPAddress.IPv6Loopback, origin.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// An internationalized name is resolved in the form the transport connects by, so the connection finds the
+    /// answer its send judged.
+    /// </summary>
+    [Fact]
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The origin is a plain HTTP listener on the loopback, inside the test process.")]
+    public async Task AnInternationalizedName_IsResolvedInItsAsciiForm()
+    {
+        using var origin = new LoopbackOrigin();
+        var resolver = new Resolver([PublicAddress]);
+        var handler = new Recording(resolver.ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"http://bücher.example:{origin.Port}/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["xn--bcher-kva.example"], resolver.Asked);
+        Assert.Equal([new IPEndPoint(PublicAddress, origin.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// A name that cannot be resolved is refused, since there is no judged address to connect to - as an SSRF refusal
+    /// under a rule that refuses something, and as a plain failure to reach a destination permitted outright.
+    /// </summary>
+    [Theory]
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved, typeof(OutboundAddressRefusedException))]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose, typeof(OutboundAddressRefusedException))]
+    [InlineData(OutboundAddressRule.Unrestricted, typeof(HttpRequestException))]
+    public async Task ANameThatCannotBeResolved_IsRefused(OutboundAddressRule rule, Type thrown)
+    {
+        var handler = new Recording((_, _) => throw new SocketException((int)SocketError.HostNotFound)) { Rule = rule };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        var failure = await Assert.ThrowsAnyAsync<HttpRequestException>(
+            () => GetAsync(invoker, "http://nowhere.example.com/"));
+
+        Assert.IsType(thrown, failure, exactMatch: true);
+        Assert.IsType<SocketException>(failure.InnerException);
+        Assert.Empty(handler.Dialed);
+    }
+
+    /// <summary>
+    /// A request that may go over HTTP/3 is refused: the transport makes a QUIC connection without the step that
+    /// connects to the judged address.
+    /// </summary>
+    [Theory]
+    [InlineData(3, 0, HttpVersionPolicy.RequestVersionExact)]
+    [InlineData(2, 0, HttpVersionPolicy.RequestVersionOrHigher)]
+    public async Task ARequestThatMayGoOverHttp3_IsRefused(int major, int minor, HttpVersionPolicy policy)
+    {
+        using var origin = new LoopbackOrigin();
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://quic.example.com:{origin.Port}/")
+        {
+            Version = new Version(major, minor),
+            VersionPolicy = policy,
+        };
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
+            () => invoker.SendAsync(request, deadline.Token));
+
+        Assert.Empty(handler.Dialed);
     }
 }

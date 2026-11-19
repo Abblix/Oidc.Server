@@ -239,7 +239,8 @@ public class StreamAddressAtRegistrationTests
     /// <remarks>
     /// Without it <see cref="ARegistration_DoesNotResolveTheName"/> is satisfied by a policy that stopped
     /// resolving at all, which would
-    /// remove the check that keeps a public name resolving to a private address out of the network.
+    /// remove the check that keeps a public name resolving to a private address out of the network. Asked of the
+    /// delivery guard, the one place a delivery's address is judged.
     /// </remarks>
     [Fact]
     public async Task Delivery_StillJudgesWhatTheNameResolvesTo()
@@ -247,9 +248,14 @@ public class StreamAddressAtRegistrationTests
         var policy = new ReceiverAddressPolicy(
             new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" },
             (_, _) => Task.FromResult<IPAddress[]>([IPAddress.Parse("169.254.169.254")]));
+        var guard = new ReceiverAddressValidatingHandler(policy);
+        guard.InnerHandler!.Dispose();
+        guard.InnerHandler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
+        using var client = new HttpClient(guard);
 
         Assert.Null(policy.RejectionOfName(Secure));
-        Assert.NotNull(await policy.RejectionOf(Secure, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<Abblix.Utils.OutboundAddressRefusedException>(
+            () => client.PostAsync(Secure, null, TestContext.Current.CancellationToken));
     }
 
     private static StreamManagementService Service(

@@ -168,6 +168,18 @@ public sealed record SharedSignalsTransmitterOptions
     public IReadOnlyList<Uri> AllowedReceiverAddresses { get; init; } = [];
 
     /// <summary>
+    /// The forward proxy every push delivery goes through, such as <c>http://proxy:3128</c>; null, the default, for
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// Without it no proxy is used, the system's and the environment's included. What holds with it and without it,
+    /// and which addresses can name a proxy (refused at startup otherwise), is stated on
+    /// <see cref="Abblix.Utils.AddressValidatingHttpMessageHandler"/>. Name one only where the proxy is the
+    /// deployment's only way out.
+    /// </remarks>
+    public Uri? OutboundProxy { get; init; }
+
+    /// <summary>
     /// How often the transmitter sweeps its push streams and delivers what is queued; null leaves
     /// the sweeping to the host.
     /// </summary>

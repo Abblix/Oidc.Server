@@ -50,7 +50,7 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// <returns><c>true</c> when the URI matches one of them.</returns>
     /// <remarks>
     /// Static because two separate refusals have to honour the same permission: the synchronous policy
-    /// below, and the DNS re-resolution in <see cref="SsrfValidatingHttpMessageHandler"/>. A permission
+    /// below, and the address rule <see cref="SsrfValidatingHttpMessageHandler"/> connects by. A permission
     /// honoured by only one of them passes validation and then dies at the request - which reads as a
     /// working allow-list in every test of this class, and fails only against a live service.
     /// <para>

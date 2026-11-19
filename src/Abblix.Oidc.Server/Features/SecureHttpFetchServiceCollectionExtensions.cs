@@ -42,7 +42,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
     /// - Blocking requests to internal TLDs (.local, .internal, etc.)
     /// - DNS resolution and blocking of private/reserved IP address ranges
-    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - One resolution per send, judged, with connections made only to judged addresses, so DNS rebinding
+    ///   reaches nothing new
     /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
     /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
     ///
@@ -56,8 +57,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
         this IServiceCollection services,
         Action<SecureHttpFetchOptions>? configure = null)
     {
-        // Register and configure options
-        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+        // Register and configure options, refused at startup rather than at the first fetch
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>().ValidateOnStart();
 
         if (configure != null)
         {
