@@ -95,4 +95,18 @@ public record ClientIdMetadataDocumentOptions
     /// less than it allows holding.
     /// </remarks>
     public int MaxHeldDocuments { get; set; } = 10_000;
+
+    /// <summary>
+    /// The grant types a client resolved from its document may use, or null (the default) for those an end user takes
+    /// part in: the authorization code and the refresh token.
+    /// </summary>
+    /// <remarks>
+    /// A document is anybody's, so a grant no end user approves, such as client credentials, would give whoever wrote
+    /// it tokens of its own. A document's grant types are narrowed to these, to those the server supports and to
+    /// <see cref="NewClientOptions.AllowedGrantTypes"/>. Whatever this allows, a client authenticating with
+    /// <c>none</c> is never given the client credentials, password or JWT bearer grant: RFC 6749 section 4.4 says
+    /// "The client credentials grant type MUST only be used by confidential clients". An empty list and a blank entry
+    /// are refused at startup.
+    /// </remarks>
+    public string[]? AllowedGrantTypes { get; set; }
 }

@@ -88,6 +88,7 @@ builder.Services
 
 - A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
 - `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients.
+- Such a client gets only the authorization code and refresh token grants unless you name others in `ClientIdMetadataDocuments.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
 - A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
 - The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services.
 - A redirect URI must use `https`, `http` to a loopback address, or a private-use scheme such as `com.example.app`. Every other URI in the document must use `https`.

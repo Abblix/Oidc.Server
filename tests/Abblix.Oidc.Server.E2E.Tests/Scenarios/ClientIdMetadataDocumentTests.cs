@@ -253,6 +253,35 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// RFC 6749 section 4.4: "The client credentials grant type MUST only be used by confidential clients". A document
+    /// is anybody's, so one naming no authentication method gets no token for itself, whatever grant it declares.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentAskingForClientCredentials_GetsNoToken()
+    {
+        var document = PublicClientDocument();
+        document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.ClientCredentials);
+        document[RegistrationMembers.ResponseTypes] = new JsonArray();
+        document.Remove(RegistrationMembers.RedirectUris);
+        Serve(document);
+        await using var host = CreateHost(options => options.ClientIdMetadataDocuments.AllowedGrantTypes =
+            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = ClientId,
+            [TokenRequest.Parameters.Scope] = TestConstants.ApiScope,
+            [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
     /// Section 6.1: "At the token endpoint ... the authorization server MUST return an invalid_client error".
     /// </summary>
     [Fact]

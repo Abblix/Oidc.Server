@@ -46,6 +46,14 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
                 "be held and every request would fetch its client's document again. Set it to how many may be held.");
         }
 
+        if (settings.AllowedGrantTypes is { } grantTypes && (grantTypes.Length == 0 || grantTypes.Any(string.IsNullOrWhiteSpace)))
+        {
+            return ValidateOptionsResult.Fail(
+                $"{Section}.{nameof(settings.AllowedGrantTypes)} names no grant type, or a blank one. Name the grant " +
+                "types a client resolved from its document may use, or leave it unset for the authorization code and " +
+                "the refresh token.");
+        }
+
         if (settings.MinimumCacheDuration < TimeSpan.Zero)
         {
             return ValidateOptionsResult.Fail(

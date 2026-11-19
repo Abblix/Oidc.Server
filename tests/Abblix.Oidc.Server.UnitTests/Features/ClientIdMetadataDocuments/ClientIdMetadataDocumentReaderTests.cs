@@ -35,7 +35,8 @@ public class ClientIdMetadataDocumentReaderTests
         string[]? grantTypes = null,
         string[]? responseTypeParts = null,
         string[]? allowedGrantTypes = null,
-        Uri[]? allowedDestinations = null)
+        Uri[]? allowedDestinations = null,
+        string[]? documentGrantTypes = null)
     {
         var authenticator = new Mock<IClientAuthenticator>();
         authenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(authenticationMethods ??
@@ -46,8 +47,15 @@ public class ClientIdMetadataDocumentReaderTests
         ]);
 
         var grants = new Mock<IGrantTypeInformer>();
-        grants.Setup(g => g.GrantTypesSupported)
-            .Returns(grantTypes ?? [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken]);
+        grants.Setup(g => g.GrantTypesSupported).Returns(grantTypes ??
+        [
+            GrantTypes.AuthorizationCode,
+            GrantTypes.RefreshToken,
+            GrantTypes.ClientCredentials,
+            GrantTypes.Password,
+            GrantTypes.JwtBearer,
+            GrantTypes.DeviceAuthorization,
+        ]);
 
         var builders = Array.ConvertAll(responseTypeParts ?? [ResponseTypes.Code], part =>
         {
@@ -56,7 +64,11 @@ public class ClientIdMetadataDocumentReaderTests
             return builder.Object;
         });
 
-        var options = new OidcOptions { NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes } };
+        var options = new OidcOptions
+        {
+            NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
+            ClientIdMetadataDocuments = { AllowedGrantTypes = documentGrantTypes },
+        };
         return new ClientIdMetadataDocumentReader(
             authenticator.Object,
             [grants.Object],
@@ -239,6 +251,38 @@ public class ClientIdMetadataDocumentReaderTests
             Read(
                 Document("""{"grant_types":["authorization_code","refresh_token"]}"""),
                 CreateReader(allowedGrantTypes: [GrantTypes.AuthorizationCode])).GrantTypes);
+
+    /// <summary>
+    /// A document is anybody's, so unless the host names others it gets only the grants an end user takes part in.
+    /// </summary>
+    [Fact]
+    public void ByDefault_ADocumentKeepsOnlyTheGrantsAnEndUserTakesPartIn()
+        => Assert.Equal(
+            [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
+            Read(Document("""{"grant_types":["authorization_code","client_credentials","refresh_token","urn:ietf:params:oauth:grant-type:device_code"]}""")).GrantTypes);
+
+    [Fact]
+    public void AGrantTheHostOpensToDocuments_IsKeptForAClientProvingItself()
+        => Assert.Equal(
+            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            Read(
+                Document("""{"grant_types":["authorization_code","client_credentials"],"token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks"}"""),
+                CreateReader(documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials])).GrantTypes);
+
+    /// <summary>
+    /// RFC 6749 section 4.4: "The client credentials grant type MUST only be used by confidential clients", so a client
+    /// authenticating with none loses it, and the password and JWT bearer grants, whatever the host opens.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public void AGrantForConfidentialClients_IsNeverKeptForAPublicOne(string grantType)
+        => Assert.Equal(
+            [GrantTypes.AuthorizationCode],
+            Read(
+                Document($$"""{"grant_types":["authorization_code","{{grantType}}"]}"""),
+                CreateReader(documentGrantTypes: [GrantTypes.AuthorizationCode, grantType])).GrantTypes);
 
     [Fact]
     public void ADocumentOfOnlyGrantTypesTheHostDoesNotAllow_IsRefused()

@@ -40,6 +40,15 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
     public void HoldingNoDocument_IsRefused(int count)
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MaxHeldDocuments = count }));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AGrantTypeListNamingNothing_IsRefused(bool blankEntry)
+        => Assert.False(Valid(new ClientIdMetadataDocumentOptions
+        {
+            AllowedGrantTypes = blankEntry ? ["authorization_code", " "] : [],
+        }));
+
     [Fact]
     public void ANegativeMinimum_IsRefused()
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MinimumCacheDuration = TimeSpan.FromSeconds(-1) }));

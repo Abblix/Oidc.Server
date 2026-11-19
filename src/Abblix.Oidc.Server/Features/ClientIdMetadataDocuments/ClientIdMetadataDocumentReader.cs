@@ -121,7 +121,7 @@ internal sealed class ClientIdMetadataDocumentReader(
         if (UriSchemes.WhyRefused(metadata, fetchOptions.CurrentValue.AllowedDestinations) is { } schemes)
             return MetadataDocumentFailure.Terminal(schemes);
 
-        var grantTypes = SupportedGrantTypes(metadata.GrantTypes);
+        var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes);
 
         // Section 6: the server "MUST filter the grant_types and response_types array-valued fields and find the
@@ -236,24 +236,44 @@ internal sealed class ClientIdMetadataDocumentReader(
     }
 
     /// <summary>
-    /// The grant types of <paramref name="declared"/> this server supports and the host allows a new client.
+    /// The grant types an end user takes part in, which a document client gets unless the host names others.
+    /// </summary>
+    private static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+
+    /// <summary>
+    /// The grant types that issue tokens on the client's word alone, which a client proving nothing never gets.
+    /// </summary>
+    private static readonly string[] ConfidentialGrantTypes =
+        [GrantTypes.ClientCredentials, GrantTypes.Password, GrantTypes.JwtBearer];
+
+    /// <summary>
+    /// The grant types of <paramref name="declared"/> this server supports and the host allows a document client.
     /// </summary>
     /// <remarks>
     /// A registration asking for a grant type outside <see cref="NewClientOptions.AllowedGrantTypes"/> is refused, but
     /// a document is filtered: section 6 has the server keep "the intersection of what the Client ID Metadata Document
     /// declares and what the Authorization Servers supports", and what the host allows is what it supports for such a
-    /// client, so one document can serve servers allowing different grant types.
+    /// client, so one document can serve servers allowing different grant types. A client authenticating with
+    /// <c>none</c> loses the grants RFC 6749 section 4.4 keeps for confidential clients, whatever the host allows.
     /// </remarks>
-    private string[] SupportedGrantTypes(string[] declared)
+    private string[] SupportedGrantTypes(string[] declared, string authenticationMethod)
     {
         var supported = grantTypeInformers
             .SelectMany(informer => informer.GrantTypesSupported)
             .ToHashSet(StringComparer.Ordinal);
 
-        if (options.CurrentValue.NewClientOptions.AllowedGrantTypes is { } allowed)
+        var settings = options.CurrentValue;
+        supported.IntersectWith(settings.ClientIdMetadataDocuments.AllowedGrantTypes ?? UserGrantTypes);
+
+        if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
             supported.IntersectWith(allowed);
 
-        return declared.Where(supported.Contains).Distinct(StringComparer.Ordinal).ToArray();
+        if (authenticationMethod == ClientAuthenticationMethods.None)
+            supported.ExceptWith(ConfidentialGrantTypes);
+
+        return declared.Where(grantType => grantType is not null && supported.Contains(grantType))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private string[][] SupportedResponseTypes(string[][] declared)
