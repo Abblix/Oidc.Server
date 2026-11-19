@@ -57,7 +57,11 @@ public class SsrfValidatingHttpMessageHandler(
     /// its metadata document any special-purpose one (<see cref="PrivateNetworks.IsSpecialPurposeAddress"/>).
     /// </summary>
     /// <param name="address">An address the request's host is, or resolves to.</param>
-    protected virtual bool IsRefusedAddress(IPAddress address)
+    /// <remarks>
+    /// Not open to a derived handler: one replacing it would drop the stricter rule the metadata document clients'
+    /// fetches are held to (draft-ietf-oauth-client-id-metadata-document section 10.7), with nothing to show for it.
+    /// </remarks>
+    private static bool IsRefusedAddress(IPAddress address)
         => SpecialPurposeFetches.Active
             ? PrivateNetworks.IsSpecialPurposeAddress(address)
             : PrivateNetworks.IsPrivateOrReservedAddress(address);

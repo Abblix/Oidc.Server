@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -56,6 +57,41 @@ public class SpecialPurposeFetchesTests
 
         Assert.Equal(fetched, found.Length > 0);
         Assert.Equal(fetched, origin.Reached);
+    }
+
+    /// <summary>
+    /// One key set behind NAT64, named by a registered client and by a document client in either order: the document
+    /// client is refused whether the set is already held or not, and its refusal, held for the refetch interval, does
+    /// not stand in for the registered client's fetch, so whoever publishes a document naming another client's key set
+    /// cannot cut that client off.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task AKeySetTwoKindsOfClientShare_IsServedOnlyToTheRegisteredOne(bool documentClientFirst, bool refetch)
+    {
+        var origin = new KeySetOrigin();
+        await using var provider = Services(origin).BuildServiceProvider();
+        var keys = new ClientKeysProvider(NullLogger<ClientKeysProvider>.Instance, provider);
+        var registered = new ClientInfo("registered") { JwksUri = new Uri(JwksUri) };
+        var fromDocument = new ClientInfo("https://client.example.com/metadata.json")
+        {
+            JwksUri = new Uri(JwksUri),
+            ResolvedFromMetadataDocument = true,
+        };
+
+        var found = new Dictionary<ClientInfo, int>();
+        foreach (var client in documentClientFirst ? new[] { fromDocument, registered } : [registered, fromDocument])
+        {
+            var set = await keys.GetSigningKeys(client, refetch).ToArrayAsync(TestContext.Current.CancellationToken);
+            found[client] = set.Length;
+        }
+
+        Assert.Equal(0, found[fromDocument]);
+        Assert.Equal(1, found[registered]);
+        Assert.Equal(1, origin.Requests);
     }
 
     [Fact]
@@ -110,11 +146,15 @@ public class SpecialPurposeFetchesTests
             JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256).Sanitize(includePrivateKeys: false),
         ]));
 
-        public bool Reached { get; private set; }
+        private int _requests;
+
+        public int Requests => _requests;
+
+        public bool Reached => Requests > 0;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Reached = true;
+            Interlocked.Increment(ref _requests);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(KeySet, Encoding.UTF8, "application/json"),
