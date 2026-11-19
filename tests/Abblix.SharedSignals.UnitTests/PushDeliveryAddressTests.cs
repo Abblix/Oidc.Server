@@ -106,13 +106,16 @@ public class PushDeliveryAddressTests
 
     /// <summary>
     /// The logged refusal names where the receiver is, not its whole endpoint: a secret a receiver carries in the
-    /// query or the path of its endpoint never reaches the operator's log, which is written on every pass.
+    /// user information, the path or the query of its endpoint never reaches the operator's log, which is written
+    /// on every pass.
     /// </summary>
-    [Fact]
-    public async Task TheLoggedRefusal_CarriesNoPartOfTheEndpointBeyondItsOrigin()
+    [Theory]
+    [InlineData("https://169.254.169.254/{0}/events?token={0}")]
+    [InlineData("https://{0}@169.254.169.254/events")]
+    public async Task TheLoggedRefusal_CarriesNoPartOfTheEndpointBeyondItsOrigin(string endpointFormat)
     {
         const string secret = "s3cr3t-webhook-token";
-        var endpoint = new Uri($"https://169.254.169.254/{secret}/events?token={secret}");
+        var endpoint = new Uri(string.Format(System.Globalization.CultureInfo.InvariantCulture, endpointFormat, secret));
         var options = new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" };
         var log = new RecordingLogger<PushDeliverySender>();
 
