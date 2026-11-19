@@ -42,6 +42,7 @@ Abblix OIDC Server implements the following standards for authorization and secu
 - JWT-Secured Authorization Request (JAR): [RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)
 - Pushed Authorization Requests (PAR): [RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)
 - Authorization Server Issuer Identification: [RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)
+- Client ID Metadata Document: [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)
 - Multiple Response Types: [Specification](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)
 - Form Post Response Mode: [Specification](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html)
 
@@ -60,6 +61,39 @@ Abblix OIDC Server implements the following standards for authorization and secu
 - Back-Channel Logout 1.0: [Specification](https://openid.net/specs/openid-connect-backchannel-1_0.html)
 - Client-Initiated Backchannel Authentication (CIBA): [Specification](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
 - Pairwise Pseudonymous Identifiers (PPID): [OpenID Connect Core Section 8](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)
+
+## Client ID Metadata Documents
+
+A client can use the HTTPS URL of a JSON document it publishes as its `client_id` instead of registering, which is how the MCP authorization specification expects clients and servers with no prior relationship to meet. The server fetches the document the first time the client shows up, keeps it for as long as the response's cache headers allow (within `MinimumCacheDuration` and `MaximumCacheDuration`), and checks it the way it checks a dynamic registration request. Discovery then advertises `client_id_metadata_document_supported`.
+
+Available since 3.1, the feature implements [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03), an Internet-Draft. It stays experimental until the draft becomes an RFC and may change in a minor release, so the compiler reports `ABX9001` wherever your code uses it until you suppress that diagnostic.
+
+```csharp
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Oidc.Server.MinimalApi;
+
+// Client ID Metadata Documents are experimental until the draft becomes an RFC
+#pragma warning disable ABX9001
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddOidcServices(options =>
+    {
+        // Optional: fetch documents only from URLs starting with these prefixes
+        options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://apps.example.com/"];
+    })
+    .AddClientIdMetadataDocuments();
+```
+
+- A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
+- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients.
+- Such a client gets only the authorization code and refresh token grants unless you name others in `ClientIdMetadataDocuments.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
+- A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
+- The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services. A host that sets `BlockPrivateNetworks` to false does not start with this feature on.
+- A redirect URI must use `https`, `http` to a loopback address, or a private-use scheme such as `com.example.app`. Every other URI in the document must use `https`.
+
+Nobody reviewed these clients, so the consent page is the end user's only check on them. Show the host name of the `client_id` next to the client's name. If you show its logo, fetch the image and serve it yourself rather than linking to `logo_uri` (section 10.9 of the draft). A host that grants every client everything it asks for (`AddConsentGrantedForEveryClient`) and sets no `AllowedClientIdPrefixes` does not start, because any URL could then get the user's tokens without the user being asked. Set the prefixes, or register a consent provider that asks the user. A consent your provider remembers must be keyed by the `client_id` URL and the resource together (section 10.12 of the draft), so a consent given to one client is never reused for another.
 
 ## Install
 

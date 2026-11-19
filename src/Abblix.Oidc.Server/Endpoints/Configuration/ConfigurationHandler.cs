@@ -143,6 +143,10 @@ public sealed class ConfigurationHandler(
 			AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 
 			AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
+
+			// draft-ietf-oauth-client-id-metadata-document section 8: a server publishing its metadata "MUST include"
+			// this property to signal support, and a server without support says nothing rather than false
+			ClientIdMetadataDocumentSupported = options.Value.ClientIdMetadataDocuments.Enabled ? true : null,
 		};
 	}
 

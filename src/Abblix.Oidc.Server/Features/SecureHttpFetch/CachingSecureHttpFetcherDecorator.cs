@@ -123,14 +123,20 @@ public class CachingSecureHttpFetcherDecorator(
 		// stored entry instead of the behavior it asked for.
 		if (result.TryGetSuccess(out var value) && cacheDuration > TimeSpan.Zero)
 		{
-			// Keyed on the URI alone, because one address is one document. What differs between consumers is
-			// how long it may be held, and that is fixed per instance rather than per call.
+			// Keyed on the URI and the rule it was fetched under, because one address is one document. What differs
+			// between consumers is how long it may be held, and that is fixed per instance rather than per call.
 			cache.Set(cacheKey, value, cacheDuration);
 		}
 	}
 
+	// Apart for a fetch made for a client resolved from its metadata document, which is held to the special-purpose
+	// registries as written: sharing a held copy or a held load would hand a key set fetched under the lenient rule to
+	// such a client, and its refusal to a registered client naming the same URI, a URI anybody can publish. The mark
+	// stands before the colon, so no URI makes one key the other
 	private static string CacheKey(Uri uri)
-		=> $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:{uri}";
+		=> SpecialPurposeFetches.Active
+			? $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}.SpecialPurpose:{uri}"
+			: $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:{uri}";
 
 	// Apart from the document itself, so a held fetch lasts its interval whatever the document's lifetime; typed, since
 	// one URI read as two types is two fetches; and carrying the hold, since the loader is shared by every consumer and a

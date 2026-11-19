@@ -25,45 +25,14 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     internal static IServiceCollection AddClientRegistrationContextValidators(this IServiceCollection services)
     {
-        // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
+        // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator:
+        // the checks of the request itself first, then those of the metadata it carries
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenContextValidator>(),
+            // Before the check that the client_id is free, which would fetch the document a URL names
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdentifierUrlRegistrationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>(),
-            // Server-level support gates run before the consistency check so the rejection message
-            // surfaces "this server doesn't support that" rather than the more confusing
-            // "your response_types/grant_types are inconsistent" from GrantTypeValidator.
-            // Scoped: these gates consume IEnumerable<IAuthorizationResponseBuilder> /
-            // IEnumerable<IGrantTypeInformer>, which include the scoped IdTokenResponseBuilder
-            // once EnableImplicitFlow() is called.
-            ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedResponseTypeValidator>(),
-            ServiceDescriptor.Scoped<IClientRegistrationContextValidator, SupportedGrantTypeValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, GrantTypeValidator>(),
-            // Fail-loud profile self-consistency: runs after the response/grant-type gates so an
-            // unsupported or inconsistent type is reported as such before this surfaces a
-            // profile-specific rejection.
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, HostGrantedMetadataValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelLogoutUriValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, JwksUriValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, StoredUriValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>(),
-            // After the check that a named algorithm is one this server supports at all, so a profile's narrower
-            // refusal is not reported for an algorithm the server cannot sign with in any case
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProfileSigningKeysValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, EncryptedResponseAlgorithmsValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, AuthorizationDetailsTypesValidator>()
+            ..ClientRegistrationMetadataChecks.All,
         ]);
         return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }

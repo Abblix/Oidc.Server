@@ -22,6 +22,7 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
@@ -38,7 +39,8 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// The checks are found in the compiled packages, whatever settings type they judge, so a check added later is held
 /// here without anybody extending a list. The wiring is the full server with each feature a host turns on by a call of
 /// its own: backchannel authentication, device authorization, dynamic client registration, a key custodian and a key
-/// ring sealed to it, a Shared Signals transmitter, and Shared Signals per tenant on top of it.
+/// ring sealed to it, a Shared Signals transmitter, Shared Signals per tenant on top of it, and clients resolved from
+/// their metadata documents.
 /// </remarks>
 public class SettingsChecksAreRegisteredTests
 {
@@ -76,7 +78,7 @@ public class SettingsChecksAreRegisteredTests
             JwksUri = new UriBuilder(Uri.UriSchemeHttps, "idp.example.com") { Path = ".well-known/jwks" }.Uri,
             EventsSupported = ["https://schemas.openid.net/secevent/caep/event-type/session-revoked"],
         });
-        services.AddOidcServices(_ => { }).AddSharedSignals();
+        services.AddOidcServices(_ => { }).AddSharedSignals().AddClientIdMetadataDocuments();
         var registered = services
             .Where(descriptor => IsSettingsCheck(descriptor.ServiceType))
             .Select(descriptor => descriptor.ImplementationType)

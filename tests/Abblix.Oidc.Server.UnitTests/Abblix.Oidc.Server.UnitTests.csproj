@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The suite tests the experimental Client ID Metadata Documents (ABX9001). -->
+    <NoWarn>$(NoWarn);ABX9001</NoWarn>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -53,6 +55,7 @@
         <Compile Include="..\Shared\FlakyOriginHandler.cs">
           <Link>Shared\FlakyOriginHandler.cs</Link>
         </Compile>
+        <Compile Include="../Shared/MetadataDocumentOrigin.cs" Link="Shared/MetadataDocumentOrigin.cs" />
     </ItemGroup>
   <!-- Every other project of the solution, built before this one and referenced for nothing else: the
        architecture tests read the assemblies of the whole solution, and a project this one does not

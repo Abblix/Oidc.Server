@@ -31,6 +31,13 @@ public record ClientInfo(string ClientId)
     public string ClientId { get; set; } = ClientId;
 
     /// <summary>
+    /// Whether the client was resolved from the metadata document its identifier names, so the server's fetches of
+    /// its URIs are held to the special-purpose address registries as written. Set by the server, never by
+    /// configuration.
+    /// </summary>
+    internal bool ResolvedFromMetadataDocument { get; set; }
+
+    /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from
     /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
     /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.

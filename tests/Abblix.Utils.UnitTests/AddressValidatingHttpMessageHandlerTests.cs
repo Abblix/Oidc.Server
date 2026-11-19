@@ -94,6 +94,7 @@ public class AddressValidatingHttpMessageHandlerTests
 
         Assert.False(transport.AllowAutoRedirect);
         Assert.False(transport.UseDefaultCredentials);
+        Assert.False(transport.UseCookies);
         Assert.Equal(DecompressionMethods.None, transport.AutomaticDecompression);
     }
 

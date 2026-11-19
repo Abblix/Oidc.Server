@@ -65,6 +65,21 @@ public static class PrivateNetworks
     /// The networks a server-initiated request has no business reaching, loopback aside: the framework already
     /// knows loopback, and the IPv6 unspecified address is a single address rather than a network.
     /// </summary>
+    /// <remarks>
+    /// Every block of the IANA IPv4 and IPv6 Special-Purpose Address Registries RFC 6890 sets up (sections 2.2.2 and
+    /// 2.2.3) is here, the ones registered after it and the ones marked globally reachable included, the AS112 and AMT
+    /// blocks among them: draft-ietf-oauth-client-id-metadata-document section 10.7 says an authorization server "MUST
+    /// NOT fetch a Client ID Metadata Document URL or any URLs contained within a Client ID Metadata Document that
+    /// resolve to special-use IP addresses as defined in [RFC6890]". The list is one for every outbound fetch, so a
+    /// fetch made for any client is refused these blocks too, not only one made for a metadata document.
+    /// <para>
+    /// Two blocks are the exception here. The well-known NAT64 prefix (RFC 6052) carries an IPv4 address and is judged
+    /// by that address, since on an IPv6-only network every public IPv4 address is reached through it, and refusing it
+    /// would refuse every fetch such a network makes. The IPv4-mapped block (RFC 4291 section 2.5.5.2) is likewise
+    /// judged by the IPv4 address it names, as a dual-stack socket reaches that address over IPv4.
+    /// <see cref="IsSpecialPurposeAddress"/> refuses both, for a fetch that must hold to the registry as written.
+    /// </para>
+    /// </remarks>
     private static readonly IPNetwork[] ReservedNetworks =
     [
         // "This host on this network" (0.0.0.0 routes to loopback on Linux)
@@ -81,8 +96,63 @@ public static class PrivateNetworks
         // Link-local (AWS/Azure metadata)
         IPNetwork.Parse("169.254.0.0/16"),
 
+        // IETF protocol assignments, among them DS-Lite (RFC 6890 section 2.2.2, tables 7 and 8)
+        IPNetwork.Parse("192.0.0.0/24"),
+
+        // Documentation TEST-NET-1, TEST-NET-2 and TEST-NET-3 (RFC 5737)
+        IPNetwork.Parse("192.0.2.0/24"),
+        IPNetwork.Parse("198.51.100.0/24"),
+        IPNetwork.Parse("203.0.113.0/24"),
+
+        // AS112-v4 (RFC 7535)
+        IPNetwork.Parse("192.31.196.0/24"),
+
+        // AMT (RFC 7450)
+        IPNetwork.Parse("192.52.193.0/24"),
+
+        // 6to4 relay anycast (RFC 3068), deprecated by RFC 7526
+        IPNetwork.Parse("192.88.99.0/24"),
+
+        // Direct Delegation AS112 Service (RFC 7534)
+        IPNetwork.Parse("192.175.48.0/24"),
+
+        // Benchmarking (RFC 2544)
+        IPNetwork.Parse("198.18.0.0/15"),
+
         // Multicast 224.0.0.0/4 and the reserved 240.0.0.0/4 above it
         IPNetwork.Parse("224.0.0.0/3"),
+
+        // IPv4-compatible (RFC 4291 section 2.5.5.1, deprecated) and IPv4-translated (RFC 2765) addresses, which name
+        // an IPv4 address no transition mechanism in use reaches them by; the unspecified and loopback addresses fall in
+        // the first and are refused by their own rules as well
+        IPNetwork.Parse("::/96"),
+        IPNetwork.Parse("::ffff:0:0:0/96"),
+
+        // 6to4 (RFC 3056). The IPv4 address it names says nothing of the relay a packet passes on its way there
+        IPNetwork.Parse("2002::/16"),
+
+        // Local-use IPv4-IPv6 translation (RFC 8215), whose mapping each network chooses, so its address says nothing
+        // of where it leads. The well-known NAT64 prefix is judged by the IPv4 address it carries instead
+        IPNetwork.Parse("64:ff9b:1::/48"),
+
+        // Discard-only (RFC 6666)
+        IPNetwork.Parse("100::/64"),
+
+        // Dummy IPv6 prefix (RFC 9780)
+        IPNetwork.Parse("100:0:0:1::/64"),
+
+        // IETF protocol assignments, Teredo and benchmarking among them (RFC 2928)
+        IPNetwork.Parse("2001::/23"),
+
+        // Documentation (RFC 3849 and RFC 9637)
+        IPNetwork.Parse("2001:db8::/32"),
+        IPNetwork.Parse("3fff::/20"),
+
+        // Direct Delegation AS112 Service (RFC 7534)
+        IPNetwork.Parse("2620:4f:8000::/48"),
+
+        // Segment Routing (SRv6) SIDs (RFC 9602)
+        IPNetwork.Parse("5f00::/16"),
 
         // Link-local
         IPNetwork.Parse("fe80::/10"),
@@ -131,11 +201,43 @@ public static class PrivateNetworks
         if (address.IsIPv4MappedToIPv6)
             address = address.MapToIPv4();
 
+        // The well-known NAT64 prefix carries an IPv4 address and reaches whatever it names, so it is judged by it
+        if (Nat64Embedded(address) is { } embedded)
+            return IsPrivateOrReservedAddress(embedded);
+
         return !IsInternetProtocolAddress(address)
             || IPAddress.IsLoopback(address)
             || address.Equals(IPAddress.IPv6Any)
             || ReservedNetworks.Any(network => network.Contains(address));
     }
+
+    private static readonly IPNetwork Nat64WellKnownPrefix = IPNetwork.Parse("64:ff9b::/96");
+
+    /// <summary>
+    /// Whether <paramref name="address"/> is in any block of the special-purpose address registries (RFC 6890 sections
+    /// 2.2.2 and 2.2.3), the well-known NAT64 prefix and the IPv4-mapped block among them whatever IPv4 address they
+    /// carry.
+    /// </summary>
+    /// <param name="address">The address a fetch would reach.</param>
+    /// <remarks>
+    /// For a fetch whose specification refuses the registry as written, as draft-ietf-oauth-client-id-metadata-document
+    /// section 10.7 does for a client's metadata document, rather than the judgement of
+    /// <see cref="IsPrivateOrReservedAddress"/>, which lets an IPv6-only network reach public addresses through NAT64.
+    /// </remarks>
+    public static bool IsSpecialPurposeAddress(IPAddress address)
+        => IsPrivateOrReservedAddress(address) || address.IsIPv4MappedToIPv6 || Nat64WellKnownPrefix.Contains(address);
+
+    /// <summary>
+    /// The IPv4 address an IPv6 address of the well-known NAT64 prefix carries, or null for any other.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6052 section 2.2 places the IPv4 address of a /96 prefix in the last 32 bits, as in its example
+    /// 64:ff9b::192.0.2.33.
+    /// </remarks>
+    private static IPAddress? Nat64Embedded(IPAddress address)
+        => address.AddressFamily == AddressFamily.InterNetworkV6 && Nat64WellKnownPrefix.Contains(address)
+            ? new IPAddress(address.GetAddressBytes().AsSpan(12, 4))
+            : null;
 
     /// <summary>
     /// An address of any other family cannot be judged against these ranges, so it is refused rather than trusted.

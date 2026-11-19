@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -99,8 +100,11 @@ public partial class RequestUriFetcher(
                 ErrorCodes.InvalidRequestUri, "The request URI is not allowed for the client");
         }
 
-        // SSRF validation is handled by the ISecureHttpFetcher decorator
-        var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
+        // SSRF validation is handled by the ISecureHttpFetcher decorator, to the registries as written for a client
+        // resolved from its metadata document
+        Result<string, OidcError> contentResult;
+        using (SpecialPurposeFetches.For(clientInfo))
+            contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
         return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
             // The fetched object takes the reference's place rather than standing beside it: a request kept for a

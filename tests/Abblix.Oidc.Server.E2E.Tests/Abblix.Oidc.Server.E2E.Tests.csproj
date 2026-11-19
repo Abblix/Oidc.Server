@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The suite tests the experimental Client ID Metadata Documents (ABX9001). -->
+    <NoWarn>$(NoWarn);ABX9001</NoWarn>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -37,6 +39,7 @@
   <!-- Reads a WWW-Authenticate challenge by its grammar, shared with the unit tests of the adapters. -->
   <ItemGroup>
     <Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
+    <Compile Include="../Shared/MetadataDocumentOrigin.cs" Link="Shared/MetadataDocumentOrigin.cs" />
   </ItemGroup>
 
   <!-- What a test of a host's own cache registers, shared by every suite that checks the library uses it. -->

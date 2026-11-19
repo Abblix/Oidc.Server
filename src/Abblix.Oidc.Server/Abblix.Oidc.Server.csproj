@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- The library implements Client ID Metadata Documents, so its own code reads the members it marks experimental (ABX9001) for hosts. -->
+        <NoWarn>$(NoWarn);ABX9001</NoWarn>
         <Nullable>enable</Nullable>
         <ImplicitUsings>true</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>

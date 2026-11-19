@@ -1014,6 +1014,23 @@ internal static class LogEvents
 
             public const int RegistrationEvicted = Base;
         }
+
+        /// <summary>
+        /// <c>Features/ClientIdMetadataDocuments</c> - a client resolved from the metadata document its identifier
+        /// names, or refused (sub-range 10620-10659).
+        /// </summary>
+        public static class ClientIdMetadataDocuments
+        {
+            private const int Base = 10620;
+
+            public const int IdentifierNotFetched = Base;
+            public const int IdentifierNotAllowed = Base + 1;
+            public const int IdentifierNamesAServer = Base + 2;
+            public const int FetchFailed = Base + 3;
+            public const int DocumentRefused = Base + 4;
+            public const int HeldCopyServed = Base + 5;
+            public const int ClientRefused = Base + 6;
+        }
     }
 
     /// <summary>

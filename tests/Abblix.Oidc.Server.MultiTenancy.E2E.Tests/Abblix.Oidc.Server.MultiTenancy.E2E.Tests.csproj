@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<!-- The suite registers the experimental Client ID Metadata Documents (ABX9001) among every feature a host turns on. -->
+		<NoWarn>$(NoWarn);ABX9001</NoWarn>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>false</IsPackable>
