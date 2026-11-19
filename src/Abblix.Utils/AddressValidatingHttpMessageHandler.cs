@@ -26,9 +26,10 @@ namespace Abblix.Utils;
 /// </para>
 /// <para>
 /// The host is resolved once per send, every address of that answer is judged, and a connection is only ever made
-/// to addresses a send judged under the same rule; a connection the send opens goes to its own answer and no other. A name resolved by a check and then again by the socket can answer a public
-/// address to the first and an internal one to the second, so a check of its own resolution judges an address the
-/// connection never uses. An address written as a literal is judged as it stands.
+/// to addresses a send judged under the same rule; a connection the send opens goes to its own answer and no other.
+/// A name resolved by a check and then again by the socket can answer a public address to the first and an internal
+/// one to the second, so a check of its own resolution judges an address the connection never uses. An address
+/// written as a literal is judged as it stands.
 /// </para>
 /// <para>
 /// Each <see cref="OutboundAddressRule"/> gets connections of its own. A connection outlives the send that opened it

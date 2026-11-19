@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 ///   a connection made only to addresses a send judged under the same rule
 ///
 /// The synchronous scheme/hostname/IP-literal rules are shared with registration-time validation via
-/// <see cref="ISecureUriValidator"/>; the resolution is the base handler's connection step
+/// <see cref="ISecureUriValidator"/>; the resolution is the base handler's, once per send
 /// (<see cref="AddressValidatingHttpMessageHandler"/>), judged by the rule <see cref="AddressRuleFor"/> names.
 ///
 /// Attack scenario prevented:
