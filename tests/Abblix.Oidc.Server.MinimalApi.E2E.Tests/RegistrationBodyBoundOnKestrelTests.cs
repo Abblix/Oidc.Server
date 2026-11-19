@@ -85,6 +85,9 @@ public sealed class RegistrationBodyBoundOnKestrelTests : IAsyncLifetime
         var pinned = _certificate.GetCertHash(HashAlgorithmName.SHA256);
         _client = new HttpClient(new SocketsHttpHandler
         {
+            // A request expecting 100-continue sends its body only once the server asks for it, never on a timer:
+            // a body sent to a server that has already refused it races the connection's close
+            Expect100ContinueTimeout = Timeout.InfiniteTimeSpan,
             SslOptions = new SslClientAuthenticationOptions
             {
                 RemoteCertificateValidationCallback = (_, presented, _, _) =>
@@ -146,6 +149,11 @@ public sealed class RegistrationBodyBoundOnKestrelTests : IAsyncLifetime
 
         using var request = Request(new HttpMethod(method), path);
         request.Content = Body(body);
+
+        // Kestrel closes the connection once it has answered a request whose declared length is over the bound, and a
+        // client still writing that body then fails on the write before it reads the answer. Expecting 100-continue, the client
+        // writes the body only when the server starts reading it, so a body the server refuses unread is never sent
+        request.Headers.ExpectContinue = true;
         switch (token)
         {
             case ValidToken:
