@@ -187,7 +187,10 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     {
         var endpoint = context.DnsEndPoint;
         if (_proxy != null && endpoint.Port == _proxy.Port && IsSameHost(_proxy.IdnHost, endpoint.Host))
-            return await DialAnyAsync(endpoint, await ProxyAddressesAsync(endpoint.Host, cancellationToken), cancellationToken);
+        {
+            var proxyAddresses = await ProxyAddressesAsync(endpoint.Host, cancellationToken);
+            return await DialAnyAsync(endpoint, proxyAddresses, cancellationToken);
+        }
 
         if (!context.InitialRequestMessage.Options.TryGetValue(DestinationOfTheRequest, out var destination) ||
             destination.Rule != rule ||
