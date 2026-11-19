@@ -154,7 +154,8 @@ public class DiscoverySignedMetadataTests
 
         Assert.Equal(Issuer, (string?)payload["iss"]);
         Assert.Equal(Issuer, (string?)payload["issuer"]);
-        Assert.Equal("https://example.com/token", (string?)payload["token_endpoint"]);
+        // Published on the issuer's authority, whatever host the endpoint was resolved on
+        Assert.Equal(Issuer + "/token", (string?)payload["token_endpoint"]);
         Assert.True(payload.ContainsKey("iat"));
         Assert.False(payload.ContainsKey("signed_metadata"));
         // Null-omission parity with the wire JSON: an unset optional field must be absent,

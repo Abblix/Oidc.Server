@@ -140,7 +140,6 @@ public class ConfigurationResponseFormatter(
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
-        return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(
-            new Uri(url, UriKind.Absolute), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri);
+        return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(new Uri(url, UriKind.Absolute), issuer);
     }
 }

@@ -9,6 +9,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -46,6 +47,8 @@ public sealed class JwtBearerGrantAudienceTests
 
     private const string AnotherPort = "auth.example.com:8443";
     private const string AnotherCase = "AUTH.example.com";
+    private const string MtlsBase = "https://mtls.example.com";
+    private const string MtlsHostWithAnotherPort = "mtls.example.com:8443";
 
     private static readonly RsaJsonWebKey AssertionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
@@ -93,7 +96,48 @@ public sealed class JwtBearerGrantAudienceTests
         Assert.Equal(ErrorCodes.InvalidGrant, await ErrorResponseReader.ErrorCodeOf(refused));
     }
 
-    private static async Task<WebApplication> StartAsync(bool strict)
+    /// <summary>
+    /// Discovery fetched with another port in the Host header publishes the token endpoint on the issuer's authority,
+    /// under the tenant's path, and an assertion naming the URL the document publishes is issued a token: a client
+    /// following the document and RFC 10070 section 4 case A is not refused.
+    /// </summary>
+    [Fact]
+    public async Task TheTokenEndpointDiscoveryPublishes_IsAcceptedWhateverHostTheDocumentWasFetchedOn()
+    {
+        await using var app = await StartAsync(strict: true);
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(Host);
+        using var discoveryRequest = new HttpRequestMessage(HttpMethod.Get, Acme + "/.well-known/openid-configuration");
+        discoveryRequest.Headers.Host = AnotherPort;
+
+        using var discovery = await http.SendAsync(discoveryRequest, TestContext.Current.CancellationToken);
+        discovery.EnsureSuccessStatusCode();
+        var document = JsonNode.Parse(await discovery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        var tokenEndpoint = document[ConfigurationResponse.Parameters.TokenEndpoint]!.GetValue<string>();
+        Assert.Equal(Host + Acme + TokenPath, tokenEndpoint);
+
+        using var granted = await GrantAsync(app, AnotherPort, tokenEndpoint);
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+    }
+
+    /// <summary>
+    /// A grant requested at the tenant's mutual-TLS alias, which RFC 8705 section 5 has a client doing mutual TLS use in
+    /// preference to the ordinary endpoint, may name that alias as the token endpoint URL; spelled with the port the
+    /// request names it is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(MtlsBase + Acme + TokenPath, HttpStatusCode.OK)]
+    [InlineData("https://" + MtlsHostWithAnotherPort + Acme + TokenPath, HttpStatusCode.BadRequest)]
+    public async Task TheMutualTlsAlias_IsTheTokenEndpointOnItsOwnAuthority(string audience, HttpStatusCode expected)
+    {
+        await using var app = await StartAsync(strict: true, mtlsBaseUri: new Uri(MtlsBase));
+
+        using var response = await GrantAsync(app, MtlsHostWithAnotherPort, audience);
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    private static async Task<WebApplication> StartAsync(bool strict, Uri? mtlsBaseUri = null)
     {
         await TestLicense.Loaded;
 
@@ -118,6 +162,7 @@ public sealed class JwtBearerGrantAudienceTests
             {
                 Id = "acme",
                 Issuer = new Uri(Host + Acme),
+                MtlsBaseUri = mtlsBaseUri,
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
                 Clients =
                 [

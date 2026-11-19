@@ -142,8 +142,7 @@ public class ConfigurationResponseFormatter(
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
 		       options.Value.EnabledEndpoints.HasFlag(endpoint)
-			? MtlsEndpointAliasing.OnIssuersHost(
-				endpointResolver.Resolve(endpoint), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri)
+			? MtlsEndpointAliasing.OnIssuersHost(endpointResolver.Resolve(endpoint), issuer)
 			: null;
 	}
 }

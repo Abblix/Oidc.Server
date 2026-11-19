@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -14,8 +13,9 @@ namespace Abblix.Oidc.Server.AspNetCore;
 
 /// <summary>
 /// Places a tenant's endpoints in its discovery document on the host each belongs to: the mutual-TLS aliases
-/// (RFC 8705 section 5) on the tenant's mutual-TLS host, and the ordinary endpoints on the issuer's host, whichever of
-/// the two the document was fetched on. Both transport adapters build the document through it.
+/// (RFC 8705 section 5) on the tenant's mutual-TLS host, and the ordinary endpoints on the issuer's scheme, host and
+/// port, whichever host, port or case of it the document was fetched on. Both transport adapters build the document
+/// through it.
 /// </summary>
 internal static class MtlsEndpointAliasing
 {
@@ -52,25 +52,17 @@ internal static class MtlsEndpointAliasing
     }
 
     /// <summary>
-    /// An endpoint resolved on the issuer's mutual-TLS host, where the document was fetched, moved to the issuer's
-    /// own host: a client without a certificate follows the ordinary endpoints, and only the aliases may name the host
-    /// that demands one.
+    /// An endpoint resolved for the request, its path on the issuer's scheme, host and port, as the JWT bearer grant
+    /// and client authentication spell it (<c>TenantDefinitionExtensions.EndpointSpellings</c>): a tenant is found by
+    /// its host alone, so a request naming the issuer's host with another port or case, or the tenant's mutual-TLS host,
+    /// reaches it, and an endpoint published on the request's authority would be one those checks refuse.
     /// </summary>
     /// <remarks>
-    /// The host is compared as a tenant is resolved by it, so whatever request reaches the tenant on its mutual-TLS host
-    /// is answered so. An issuer whose mutual-TLS host differs from its ordinary one only by port therefore names the
-    /// ordinary endpoints on the issuer's host on either.
+    /// The mutual-TLS host is named only by the aliases: a client without a certificate follows the ordinary endpoints.
     /// </remarks>
     /// <param name="endpoint">The endpoint as resolved for the request.</param>
     /// <param name="issuer">The issuer the document describes.</param>
-    /// <param name="mtlsBaseUri">The issuer's mutual-TLS host, or null without one.</param>
-    public static Uri? OnIssuersHost(Uri? endpoint, Uri issuer, Uri? mtlsBaseUri)
-        => endpoint is not null && mtlsBaseUri is not null && SameHost(endpoint, mtlsBaseUri)
-            ? Rebase(endpoint, issuer)
-            : endpoint;
-
-    private static bool SameHost(Uri endpoint, Uri mtlsBaseUri)
-        => TenantHost.Normalize(endpoint.Host) == TenantHost.Normalize(mtlsBaseUri.Host);
+    public static Uri? OnIssuersHost(Uri? endpoint, Uri issuer) => Rebase(endpoint, issuer);
 
     private static Uri? Rebase(Uri? original, Uri host) => original?.OnAuthorityOf(host);
 }
