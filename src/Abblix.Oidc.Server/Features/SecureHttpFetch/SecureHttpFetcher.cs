@@ -44,12 +44,11 @@ public partial class SecureHttpFetcher(
         try
         {
             // SSRF protection layers:
-            // 1. SsrfHttpFetchValidator decorator: Validates hostnames, performs DNS resolution,
-            //    blocks private/reserved IP ranges (10.x, 172.16-31.x, 192.168.x, loopback, link-local, multicast)
-            // 2. SsrfValidatingHttpMessageHandler: Resolves the host once per send and connects only to addresses
-            //    a send judged (prevents DNS rebinding)
-            // 3. Its transport: Redirects disabled (prevents redirect-based SSRF bypass)
-            // 4. Response validation: Size limits, content-type checks (below)
+            // 1. SsrfValidatingHttpMessageHandler: Refuses internal hostnames and private/reserved IP literals,
+            //    resolves the host once per send, refuses it when any address is private or reserved, and connects
+            //    only to addresses a send judged (prevents DNS rebinding)
+            // 2. Its transport: Redirects disabled (prevents redirect-based SSRF bypass)
+            // 3. Response validation: Size limits, content-type checks (below)
 
             // Use ResponseHeadersRead to validate Content-Length before downloading body
             using var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead); // NOSONAR S5144
@@ -104,9 +103,9 @@ public partial class SecureHttpFetcher(
             LogTimeout(ex, uri);
             return ErrorFactory.InvalidClientMetadata("Request timeout");
         }
-        catch (HttpRequestException ex) when (ex.Message.Contains("SSRF protection"))
+        catch (HttpRequestException ex) when (OutboundAddressRefusedException.IsRefusal(ex))
         {
-            // SSRF validation failed (from SsrfValidatingHttpMessageHandler)
+            // SSRF validation refused the request (SsrfValidatingHttpMessageHandler)
             LogSsrfProtectionBlocked(ex, uri);
             return ErrorFactory.InvalidClientMetadata("URI validation failed: Access to this resource is not allowed");
         }

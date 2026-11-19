@@ -87,7 +87,8 @@ public sealed class ReceiverAddressPolicy(
     }
 
     /// <summary>
-    /// Resolves a delivery endpoint's host; the connection a delivery makes uses this same answer.
+    /// What the delivery guard resolves a receiver's host through: its answer, judged by <see cref="AddressRuleFor"/>,
+    /// is the one a delivery's connection is made to.
     /// </summary>
     internal ResolveHostDelegate ResolveHost => _resolveHost;
 

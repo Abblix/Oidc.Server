@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -19,17 +20,24 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// query, a fragment or user information therefore permits every request to that path whatever those parts
 /// say, so accepting one would grant a permission wider than the text of the entry - the single failure this
 /// option exists to prevent. A relative entry names no host at all and can never match.
+/// <para>
+/// Refuses as well a <see cref="SecureHttpFetchOptions.OutboundProxy"/> that cannot name a forward proxy, by
+/// <see cref="ForwardProxyAddress.WhyRefused"/>.
+/// </para>
 /// </remarks>
 public class SecureHttpFetchOptionsValidator : IValidateOptions<SecureHttpFetchOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, SecureHttpFetchOptions options)
     {
-        if (options.AllowedDestinations is not { Length: > 0 } destinations)
-            return ValidateOptionsResult.Success;
-
         var failures = new List<string>();
-        foreach (var destination in destinations)
+        if (options.OutboundProxy is { } proxy && ForwardProxyAddress.WhyRefused(proxy) is { } proxyRefusal)
+        {
+            const string member = $"{nameof(SecureHttpFetchOptions)}.{nameof(SecureHttpFetchOptions.OutboundProxy)}";
+            failures.Add($"{member}: {proxyRefusal}.");
+        }
+
+        foreach (var destination in options.AllowedDestinations ?? [])
         {
             const string member = $"{nameof(SecureHttpFetchOptions)}.{nameof(SecureHttpFetchOptions.AllowedDestinations)}";
 

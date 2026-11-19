@@ -139,7 +139,7 @@ public class SpecialPurposeFetchesTests
 
         Assert.Null(await Record.ExceptionAsync(() => FetchKeySetAsync(invoker)));
         using (SpecialPurposeFetches.Enter())
-            await Assert.ThrowsAsync<HttpRequestException>(() => FetchKeySetAsync(invoker));
+            await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => FetchKeySetAsync(invoker));
 
         Assert.Null(await Record.ExceptionAsync(() => FetchKeySetAsync(invoker)));
     }

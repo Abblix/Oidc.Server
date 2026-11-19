@@ -172,16 +172,10 @@ public sealed record SharedSignalsTransmitterOptions
     /// none.
     /// </summary>
     /// <remarks>
-    /// Without it these requests use no proxy at all - not the system's and not one named by <c>HTTP_PROXY</c> or
-    /// <c>HTTPS_PROXY</c> - and their connections are made only to addresses a request judged under the same rule, so
-    /// a name answering differently the next time it is asked reaches nothing new.
-    /// <para>
-    /// With it, every such request goes through this proxy. The server still resolves the target itself and refuses
-    /// it on the same rules, but the proxy resolves the name again and may connect somewhere that lookup did not
-    /// return, so the protection is what this server's own lookup sees and no more. Name one only where the proxy is
-    /// the deployment's only way out. The server must still be able to resolve each target itself: with the proxy as
-    /// the only route and no outside name resolution, every request is refused.
-    /// </para>
+    /// Without it no proxy is used, the system's and the environment's included. What holds with it and without it,
+    /// and which addresses can name a proxy (refused at startup otherwise), is stated on
+    /// <see cref="Abblix.Utils.AddressValidatingHttpMessageHandler"/>. Name one only where the proxy is the
+    /// deployment's only way out.
     /// </remarks>
     public Uri? OutboundProxy { get; init; }
 

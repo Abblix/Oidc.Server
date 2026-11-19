@@ -38,10 +38,18 @@ namespace Abblix.Utils;
 /// connected to.
 /// </para>
 /// <para>
-/// No proxy the system or the environment names is used, because a proxy resolves the target itself and the
-/// connection is then made to the proxy rather than to anything judged here. A deployment whose only way out is a
-/// forward proxy names one explicitly; its requests then go through it, the addresses this handler's own resolution
-/// gives are still judged and refused as above, but the proxy may connect the target elsewhere.
+/// No proxy the system or the environment names is used - not the system's and not one named by <c>HTTP_PROXY</c> or
+/// <c>HTTPS_PROXY</c> - because a proxy resolves the target itself and the connection is then made to the proxy
+/// rather than to anything judged here. A deployment whose only way out is a forward proxy names one explicitly
+/// (<see cref="ForwardProxyAddress"/> says which addresses can name one; user information in it is sent as the
+/// proxy's credentials when it asks for them). Its requests then go through that proxy: the addresses this handler's
+/// own resolution gives are still judged and refused as above, before the proxy is contacted, but the proxy resolves
+/// the name again and may connect somewhere that lookup did not return, so the protection is what this server's own
+/// lookup sees and no more. The server must still be able to resolve each target itself: with the proxy as the only
+/// route and no outside name resolution, every request is refused.
+/// </para>
+/// <para>
+/// A refusal is thrown as an <see cref="OutboundAddressRefusedException"/>.
 /// </para>
 /// </remarks>
 public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
@@ -69,9 +77,8 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// Resolves the host a request is sent to; null for <see cref="Dns.GetHostAddressesAsync(string,
     /// CancellationToken)"/>. Its answer is the one judged and, without a proxy, the one connected to.</param>
     /// <param name="proxy">
-    /// The forward proxy every request goes through, or null for none: the system's and the environment's proxy are
-    /// never used. Through a proxy the addresses this handler resolves are still judged, but the proxy resolves the
-    /// target again and may connect it elsewhere.</param>
+    /// The forward proxy every request goes through, or null for none; what holds either way is stated on this
+    /// type.</param>
     protected AddressValidatingHttpMessageHandler(ResolveHostDelegate? resolveHost, Uri? proxy = null)
     {
         _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
@@ -121,7 +128,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         var refused = Array.Find(addresses, address => rule.Refuses(address));
         if (refused != null)
         {
-            throw new HttpRequestException(
+            throw new OutboundAddressRefusedException(
                 $"SSRF protection: Hostname '{host}' stands for the address {refused}, which may not be reached");
         }
 
@@ -152,24 +159,27 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new HttpRequestException($"{PrefixOf(rule)}Unable to resolve hostname '{host}'", exception);
+            throw Unresolved(rule, $"Unable to resolve hostname '{host}'", exception);
         }
 
         if (addresses.Length == 0)
-            throw new HttpRequestException($"{PrefixOf(rule)}Hostname '{host}' resolved to no address");
+            throw Unresolved(rule, $"Hostname '{host}' resolved to no address", null);
 
         return addresses;
     }
 
     /// <summary>
-    /// How a failure to resolve is introduced: as a refusal under a rule that refuses, as a plain failure otherwise.
+    /// A failure to resolve: a refusal under a rule that refuses, a plain failure to reach the destination otherwise.
     /// </summary>
-    private static string PrefixOf(OutboundAddressRule rule) => rule switch
-    {
-        OutboundAddressRule.Unrestricted => string.Empty,
-        OutboundAddressRule.NoPrivateOrReserved or OutboundAddressRule.NoSpecialPurpose => "SSRF protection: ",
-        _ => throw new ArgumentOutOfRangeException(nameof(rule), rule, "An address rule this library does not know."),
-    };
+    private static HttpRequestException Unresolved(OutboundAddressRule rule, string reason, Exception? cause)
+        => rule switch
+        {
+            OutboundAddressRule.Unrestricted => new HttpRequestException(reason, cause),
+            OutboundAddressRule.NoPrivateOrReserved or OutboundAddressRule.NoSpecialPurpose
+                => new OutboundAddressRefusedException($"SSRF protection: {reason}", cause),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(rule), rule, "An address rule this library does not know."),
+        };
 
     /// <summary>
     /// Opens a connection for the request that made the transport need one, to the addresses its send judged, in the
@@ -196,7 +206,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
             destination.Rule != rule ||
             !IsSameHost(destination.Host, endpoint.Host))
         {
-            throw new HttpRequestException(
+            throw new OutboundAddressRefusedException(
                 $"SSRF protection: No judged address to connect to for '{endpoint.Host}:{endpoint.Port}'");
         }
 
@@ -227,8 +237,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
             {
                 return await DialAsync(new IPEndPoint(address, endpoint.Port), cancellationToken);
             }
-            catch (SocketException exception)
+            catch (Exception exception) when (exception is SocketException or NotSupportedException)
             {
+                // An address this host cannot reach - its family unsupported here among them - gives way to the next
                 failures.Add(exception);
             }
         }
@@ -257,7 +268,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// </remarks>
     internal virtual async ValueTask<Stream> DialAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
     {
-        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        var socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
         try
         {
             await socket.ConnectAsync(endpoint, cancellationToken);
@@ -328,7 +339,7 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
             if (request.Version >= HttpVersion.Version30 ||
                 request.VersionPolicy == HttpVersionPolicy.RequestVersionOrHigher)
             {
-                throw new HttpRequestException(
+                throw new OutboundAddressRefusedException(
                     $"SSRF protection: HTTP version {request.Version} with policy {request.VersionPolicy} may be " +
                     "sent over HTTP/3, whose connections are not made to a judged address");
             }

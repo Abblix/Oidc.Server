@@ -84,10 +84,16 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// </summary>
     private static async Task RefusedBecauseAsync(Judge judge, string url, string reason)
     {
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => judge.OfAsync(url));
+        var exception = await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => judge.OfAsync(url));
 
         Assert.Contains(reason, exception.Message);
     }
+
+    /// <summary>
+    /// Asserts that the address is refused, by what an address resolving to a refused one is refused with.
+    /// </summary>
+    private static async Task RefusedAsync(Judge judge, string url)
+        => await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => judge.OfAsync(url));
 
     /// <summary>
     /// Asserts that the address may be reached. A refusal is reported as itself rather than as an unhandled
@@ -224,10 +230,9 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// </summary>
     [Fact]
     public async Task Refuses_ANameStandingForAnInternalAddress()
-        => await RefusedBecauseAsync(
+        => await RefusedAsync(
             Judge.Under(new SecureHttpFetchOptions { BlockPrivateNetworks = true }, Standing(PrivateAddress)),
-            "https://example.com/api",
-            $"stands for the address {PrivateAddress}");
+            "https://example.com/api");
 
     /// <summary>
     /// One internal address among public ones is enough to refuse, because the connection picks among them and
@@ -235,12 +240,11 @@ public class SsrfValidatingHttpMessageHandlerTests
     /// </summary>
     [Fact]
     public async Task Refuses_AName_WhenOneOfItsAddressesIsInternal()
-        => await RefusedBecauseAsync(
+        => await RefusedAsync(
             Judge.Under(
                 new SecureHttpFetchOptions { BlockPrivateNetworks = true },
                 Standing(PublicAddress, PrivateAddress)),
-            "https://example.com/api",
-            $"stands for the address {PrivateAddress}");
+            "https://example.com/api");
 
     /// <summary>
     /// A name that cannot be resolved is refused rather than handed on, because the transport would resolve it
@@ -503,7 +507,7 @@ public class SsrfValidatingHttpMessageHandlerTests
 
         await PassesAsync(judge, "https://example.com/api");
         using (SpecialPurposeFetches.Enter())
-            await RefusedBecauseAsync(judge, "https://example.com/api", "stands for the address 64:ff9b::808:808");
+            await RefusedAsync(judge, "https://example.com/api");
     }
 
     /// <summary>
@@ -542,7 +546,7 @@ public class SsrfValidatingHttpMessageHandlerTests
     {
         var (client, transport) = Sending(new SecureHttpFetchOptions { BlockPrivateNetworks = true });
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        var refusal = await Assert.ThrowsAsync<OutboundAddressRefusedException>(
             () => client.GetAsync(
                 "https://169.254.169.254/latest/meta-data", TestContext.Current.CancellationToken));
 

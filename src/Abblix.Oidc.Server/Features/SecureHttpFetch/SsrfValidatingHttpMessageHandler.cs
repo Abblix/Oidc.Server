@@ -63,7 +63,7 @@ public class SsrfValidatingHttpMessageHandler(
         var rejection = uriValidator.Validate(requestUri);
         if (rejection != null)
         {
-            throw new HttpRequestException($"SSRF protection: {rejection}");
+            throw new OutboundAddressRefusedException($"SSRF protection: {rejection}");
         }
 
         return Task.CompletedTask;

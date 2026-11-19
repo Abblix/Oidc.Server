@@ -31,7 +31,7 @@ public sealed class ReceiverAddressValidatingHandler(ReceiverAddressPolicy addre
     {
         if (addressPolicy.RejectionOfName(requestUri) is { } rejection)
         {
-            throw new HttpRequestException($"Refusing push delivery to '{requestUri}': {rejection}.");
+            throw new OutboundAddressRefusedException($"Refusing push delivery to '{requestUri}': {rejection}.");
         }
 
         return Task.CompletedTask;

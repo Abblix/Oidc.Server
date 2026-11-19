@@ -133,8 +133,8 @@ public class ReceiverAddressPolicyTests
     }
 
     /// <summary>
-    /// The sender refuses to spend a queue on a receiver whose address it may not reach, and holds the events
-    /// instead: an operator can put the configuration right, and the events are still owed.
+    /// A delivery to a receiver whose address may not be reached is refused by the guard on the delivery client, and
+    /// the events are held instead: an operator can put the configuration right, and the events are still owed.
     /// </summary>
     [Fact]
     public async Task TheSenderRefusesToDeliverToARefusedAddress()
@@ -143,7 +143,11 @@ public class ReceiverAddressPolicyTests
         var outbox = new InMemoryEventOutbox();
         await outbox.EnqueueAsync("receiver-a", "s-1", new OutboxItem("jti-1", "a.a.a"), TestContext.Current.CancellationToken);
 
-        var sender = new PushDeliverySender(handler.CreateClient(), outbox, Policy(), NullLogger<PushDeliverySender>.Instance, TestInstruments.Create(), TestQueuedEventSigner.Create());
+        var guard = new ReceiverAddressValidatingHandler(Policy());
+        guard.InnerHandler!.Dispose();
+        guard.InnerHandler = handler;
+        using var client = new HttpClient(guard);
+        var sender = new PushDeliverySender(client, outbox, Policy(), NullLogger<PushDeliverySender>.Instance, TestInstruments.Create(), TestQueuedEventSigner.Create());
         var stream = new StreamState
         {
             ReceiverId = "receiver-a",
@@ -159,8 +163,7 @@ public class ReceiverAddressPolicyTests
             },
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sender.SendPendingAsync(stream, TestContext.Current.CancellationToken));
+        await sender.SendPendingAsync(stream, TestContext.Current.CancellationToken);
 
         // Nothing was sent, and the event is still there for a pass made after the address is corrected.
         Assert.Empty(handler.Requests);

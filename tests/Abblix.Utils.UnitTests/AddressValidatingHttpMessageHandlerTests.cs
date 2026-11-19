@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using Abblix.Tests.Shared;
@@ -67,6 +68,9 @@ public class AddressValidatingHttpMessageHandlerTests
 
         public LoopbackOrigin? Origin { get; init; }
 
+        /// <summary>An address family a socket cannot be opened for, as on a host with it switched off.</summary>
+        public AddressFamily? Unsupported { get; init; }
+
         protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
         {
             Judged.Add(requestUri);
@@ -83,6 +87,9 @@ public class AddressValidatingHttpMessageHandlerTests
         {
             lock (Dialed)
                 Dialed.Add(endpoint);
+
+            if (endpoint.AddressFamily == Unsupported)
+                throw new NotSupportedException("This protocol version is not supported.");
 
             var origin = Origin ?? throw new SocketException((int)SocketError.ConnectionRefused);
             var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
@@ -231,10 +238,9 @@ public class AddressValidatingHttpMessageHandlerTests
             proxy: new Uri($"http://127.0.0.1:{proxy.Port}/")) { Origin = proxy };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
             () => GetAsync(invoker, "http://internal.example.com/keys"));
 
-        Assert.Contains($"stands for the address {PrivateAddress}", refusal.Message);
         Assert.Equal(0, proxy.Connections);
         Assert.Empty(handler.Dialed);
     }
@@ -372,12 +378,35 @@ public class AddressValidatingHttpMessageHandlerTests
         var handler = new Recording(new Resolver([PublicAddress, PrivateAddress]).ResolveAsync) { Origin = origin };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
             () => GetAsync(invoker, $"http://mixed.example.com:{origin.Port}/"));
 
-        Assert.Contains($"stands for the address {PrivateAddress}", refusal.Message);
         Assert.Empty(handler.Dialed);
         Assert.Equal(0, origin.Connections);
+    }
+
+    /// <summary>
+    /// An address the host cannot open a socket for - its family unsupported here - gives way to the next answer
+    /// rather than failing the request.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressOfAnUnsupportedFamily_GivesWayToTheNextAnswer()
+    {
+        using var origin = new LoopbackOrigin();
+        var unsupported = IPAddress.Parse("2001:4860:4860::8888");
+        var handler = new Recording(new Resolver([unsupported, PublicAddress]).ResolveAsync)
+        {
+            Origin = origin,
+            Unsupported = AddressFamily.InterNetworkV6,
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"http://dual.example.com:{origin.Port}/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            [new IPEndPoint(unsupported, origin.Port), new IPEndPoint(PublicAddress, origin.Port)],
+            handler.Dialed);
     }
 
     /// <summary>
@@ -461,10 +490,9 @@ public class AddressValidatingHttpMessageHandlerTests
         var handler = new Recording(RefusesToResolve);
         using var invoker = new HttpMessageInvoker(handler);
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
             () => GetAsync(invoker, "http://169.254.169.254/latest/meta-data"));
 
-        Assert.Contains("stands for the address 169.254.169.254", refusal.Message);
         Assert.Empty(handler.Dialed);
     }
 
@@ -473,6 +501,8 @@ public class AddressValidatingHttpMessageHandlerTests
     /// URI without, and the connection still finds the address its send judged.
     /// </summary>
     [Fact]
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The origin is a plain HTTP listener on the loopback, inside the test process.")]
     public async Task AnIPv6Literal_IsConnectedToWithoutResolving()
     {
         using var origin = new LoopbackOrigin();
@@ -494,6 +524,8 @@ public class AddressValidatingHttpMessageHandlerTests
     /// answer its send judged.
     /// </summary>
     [Fact]
+    [SuppressMessage("Minor Vulnerability", "S5332:Using clear-text protocols is security-sensitive",
+        Justification = "The origin is a plain HTTP listener on the loopback, inside the test process.")]
     public async Task AnInternationalizedName_IsResolvedInItsAsciiForm()
     {
         using var origin = new LoopbackOrigin();
@@ -513,19 +545,19 @@ public class AddressValidatingHttpMessageHandlerTests
     /// under a rule that refuses something, and as a plain failure to reach a destination permitted outright.
     /// </summary>
     [Theory]
-    [InlineData(OutboundAddressRule.NoPrivateOrReserved, true)]
-    [InlineData(OutboundAddressRule.NoSpecialPurpose, true)]
-    [InlineData(OutboundAddressRule.Unrestricted, false)]
-    public async Task ANameThatCannotBeResolved_IsRefused(OutboundAddressRule rule, bool asSsrf)
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved, typeof(OutboundAddressRefusedException))]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose, typeof(OutboundAddressRefusedException))]
+    [InlineData(OutboundAddressRule.Unrestricted, typeof(HttpRequestException))]
+    public async Task ANameThatCannotBeResolved_IsRefused(OutboundAddressRule rule, Type thrown)
     {
         var handler = new Recording((_, _) => throw new SocketException((int)SocketError.HostNotFound)) { Rule = rule };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        var failure = await Assert.ThrowsAnyAsync<HttpRequestException>(
             () => GetAsync(invoker, "http://nowhere.example.com/"));
 
-        Assert.Contains("Unable to resolve hostname 'nowhere.example.com'", refusal.Message);
-        Assert.Equal(asSsrf, refusal.Message.StartsWith("SSRF protection:", StringComparison.Ordinal));
+        Assert.IsType(thrown, failure, exactMatch: true);
+        Assert.IsType<SocketException>(failure.InnerException);
         Assert.Empty(handler.Dialed);
     }
 
@@ -550,11 +582,9 @@ public class AddressValidatingHttpMessageHandlerTests
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(
             () => invoker.SendAsync(request, deadline.Token));
 
-        // The refusal's own words: the platform's failure to reach HTTP/3 also names the protocol
-        Assert.StartsWith("SSRF protection: HTTP version", refusal.Message);
         Assert.Empty(handler.Dialed);
     }
 }

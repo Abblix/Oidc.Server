@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -561,5 +562,46 @@ public class SecureHttpFetcherTests
 
         Assert.True(result.TryGetSuccess(out var keySet));
         Assert.Empty(keySet.Keys);
+    }
+
+    /// <summary>
+    /// A refusal by the outbound guard is told from any other failure by its type, thrown directly or wrapped by the
+    /// transport as the connection step's own, and never by its wording: a failure merely mentioning the protection
+    /// is an ordinary one.
+    /// </summary>
+    [Theory]
+    [InlineData("refused", LogEvents.HttpFetch.SecureHttpFetcher.SsrfProtectionBlocked)]
+    [InlineData("wrapped", LogEvents.HttpFetch.SecureHttpFetcher.SsrfProtectionBlocked)]
+    [InlineData("worded", LogEvents.HttpFetch.SecureHttpFetcher.FetchFailed)]
+    public async Task FetchAsync_TellsARefusalByItsType(string thrown, int eventId)
+    {
+        Exception failure = thrown switch
+        {
+            "refused" => new OutboundAddressRefusedException("not this address"),
+            "wrapped" => new HttpRequestException(
+                "An error occurred while sending the request.", new OutboundAddressRefusedException("not this address")),
+            "worded" => new HttpRequestException("SSRF protection: words alone"),
+            _ => throw new ArgumentOutOfRangeException(nameof(thrown), thrown, "A failure this row does not know."),
+        };
+        _logger.Setup(logger => logger.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        _httpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(failure);
+
+        var result = await CreateFetcher().FetchAsync<TestModel>(new Uri("https://example.com/data"));
+
+        Assert.True(result.TryGetFailure(out _));
+        _logger.Verify(
+            logger => logger.Log(
+                LogLevel.Warning,
+                It.Is<EventId>(id => id.Id == eventId),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 }

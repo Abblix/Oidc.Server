@@ -24,7 +24,10 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </summary>
 /// <param name="httpClient">The client transmissions travel through.</param>
 /// <param name="outbox">The queues being drained.</param>
-/// <param name="addressPolicy">Judges the receiver's address before anything is sent to it.</param>
+/// <param name="addressPolicy">
+/// Not consulted: the receiver's address is judged by <see cref="ReceiverAddressValidatingHandler"/>, the guard on the
+/// delivery client, on the connection the delivery is made over, so a client built without that guard is not
+/// protected by this type.</param>
 /// <param name="logger">Carries the receiver's own reason for a refusal into this deployment's log.</param>
 /// <param name="instruments">Traces each transmission and records how the receiver answered it and how long it
 /// took.</param>
@@ -32,7 +35,9 @@ namespace Abblix.SharedSignals.Transmitter;
 public sealed partial class PushDeliverySender(
     HttpClient httpClient,
     IEventOutbox outbox,
+#pragma warning disable CS9113 // Kept so the published constructor stays as it is; the guard judges the address
     ReceiverAddressPolicy addressPolicy,
+#pragma warning restore CS9113
     ILogger<PushDeliverySender> logger,
     SharedSignalsInstruments instruments,
     QueuedEventSigner signer)
@@ -73,16 +78,6 @@ public sealed partial class PushDeliverySender(
         if (stream.Configuration.Delivery is not PushDeliveryMethod push)
         {
             return new PushDeliveryPassOutcome(0, 0);
-        }
-
-        // The receiver chose this address, so it is judged before anything is sent and on every pass: a name that
-        // was public when the stream was created can resolve inside the network by the time an event is delivered.
-        // A refusal holds the queue rather than emptying it, because the events are still owed to a receiver whose
-        // configuration an operator can put right.
-        if (await addressPolicy.RejectionOf(push.EndpointUrl, cancellationToken) is { } rejection)
-        {
-            throw new InvalidOperationException(
-                $"Refusing to deliver stream '{stream.StreamId}' to '{push.EndpointUrl}': {rejection}.");
         }
 
         IEnumerable<OutboxItem> pending = await outbox.PendingAsync(

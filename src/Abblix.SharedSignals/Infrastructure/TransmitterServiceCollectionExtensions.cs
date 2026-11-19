@@ -81,6 +81,8 @@ public static class TransmitterServiceCollectionExtensions
         services.TryAddSingleton(serviceProvider => new ReceiverAddressPolicy(
             serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>()));
         services.TryAddTransient<ReceiverAddressValidatingHandler>();
+
+        OutboundProxyStartupCheck.Register(services);
         services
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();

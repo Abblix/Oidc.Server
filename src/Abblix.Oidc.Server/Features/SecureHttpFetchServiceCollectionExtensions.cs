@@ -57,8 +57,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
         this IServiceCollection services,
         Action<SecureHttpFetchOptions>? configure = null)
     {
-        // Register and configure options
-        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+        // Register and configure options, refused at startup rather than at the first fetch
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>().ValidateOnStart();
 
         if (configure != null)
         {

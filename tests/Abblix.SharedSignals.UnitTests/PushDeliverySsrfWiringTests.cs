@@ -11,6 +11,7 @@ using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.Tests.Shared;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -110,7 +111,7 @@ public class PushDeliverySsrfWiringTests
         };
         using var client = new HttpClient(guard);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => client.GetAsync(
             new Uri("https://169.254.169.254/events"), TestContext.Current.CancellationToken));
 
         // The refusal happened before anything reached the transport.
@@ -133,10 +134,9 @@ public class PushDeliverySsrfWiringTests
         guard.InnerHandler = probe;
         using var client = new HttpClient(guard);
 
-        var refusal = await Assert.ThrowsAsync<HttpRequestException>(() => client.PostAsync(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => client.PostAsync(
             new Uri("https://receiver.example.com/events"), null, TestContext.Current.CancellationToken));
 
-        Assert.Contains("stands for the address 10.0.0.1", refusal.Message);
         Assert.Equal(0, probe.Requests);
     }
 
