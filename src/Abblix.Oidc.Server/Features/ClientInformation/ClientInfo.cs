@@ -48,7 +48,14 @@ public record ClientInfo(string ClientId)
     /// this library has never heard of still carries a credential. Enumerating the known methods here would
     /// classify every host-added one as public.
     /// </remarks>
-    public ClientType ClientType => TokenEndpointAuthMethod switch
+    public ClientType ClientType => ClientTypeOf(TokenEndpointAuthMethod);
+
+    /// <summary>
+    /// The type of a client authenticating at the token endpoint with <paramref name="tokenEndpointAuthMethod"/>, as
+    /// <see cref="ClientType"/> derives it.
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">The client's token endpoint authentication method.</param>
+    internal static ClientType ClientTypeOf(string tokenEndpointAuthMethod) => tokenEndpointAuthMethod switch
     {
         ClientAuthenticationMethods.None => ClientType.Public,
         _ => ClientType.Confidential,
@@ -79,9 +86,31 @@ public record ClientInfo(string ClientId)
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
-    /// Whether the client uses PKCE when nothing else requires it: what it states, or true when it states nothing.
+    /// Whether the client uses PKCE when nothing else requires it: always for a native app and for a public client,
+    /// otherwise what it states, or true when it states nothing.
     /// </summary>
-    public bool EffectivePkceRequired => PkceRequired ?? true;
+    /// <remarks>
+    /// The authorization endpoint asks this of every client, however it entered the server, so a client registered or
+    /// stored with <see cref="PkceRequired"/> false is held to it as a client the host declares is.
+    /// </remarks>
+    public bool EffectivePkceRequired => RequiresPkce(PkceRequired, TokenEndpointAuthMethod, ApplicationType);
+
+    /// <summary>
+    /// Whether a client stating <paramref name="pkceRequired"/> uses PKCE, as <see cref="EffectivePkceRequired"/>
+    /// answers it, so registration refuses the statement this would override.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that don't
+    /// use PKCE". RFC 9700 section 2.1.1 has "Public clients MUST use PKCE", a requirement of the client, which this
+    /// server chooses to enforce: a public client has no credential, so its code is bound to it by PKCE alone.
+    /// </remarks>
+    /// <param name="pkceRequired">What the client states about PKCE.</param>
+    /// <param name="tokenEndpointAuthMethod">The client's token endpoint authentication method.</param>
+    /// <param name="applicationType">The client's application type.</param>
+    internal static bool RequiresPkce(bool? pkceRequired, string tokenEndpointAuthMethod, string applicationType)
+        => applicationType == ApplicationTypes.Native
+           || ClientTypeOf(tokenEndpointAuthMethod) == ClientType.Public
+           || (pkceRequired ?? true);
 
     /// <summary>
     /// Indicates if the client is allowed to use the "plain" method for PKCE.

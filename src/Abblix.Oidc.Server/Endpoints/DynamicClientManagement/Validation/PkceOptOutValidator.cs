@@ -7,44 +7,35 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Refuses a registration turning PKCE off for a native app or for a client with no credentials.
+/// Refuses a registration turning PKCE off for a client the authorization endpoint holds to PKCE whatever it states.
 /// </summary>
 /// <remarks>
-/// RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that don't use
-/// PKCE", and RFC 9700 section 2.1.1: "Public clients MUST use PKCE". A registration stating <c>pkce_required</c>
-/// false would turn that refusal off for the client it registers, so it is refused where the client asks.
+/// <see cref="ClientInfo.RequiresPkce"/> decides it, for the authorization endpoint and here alike. The refusal tells
+/// the registrant at once, where an accepted <c>pkce_required</c> false would be stored, read back as true, and met
+/// again only as a refused authorization request.
 /// </remarks>
 internal sealed class PkceOptOutValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
-    /// Returns an <c>invalid_client_metadata</c> error when a native or public client states <c>pkce_required</c>
-    /// false, or <c>null</c> otherwise.
+    /// Returns an <c>invalid_client_metadata</c> error when the request states <c>pkce_required</c> false for a client
+    /// that uses PKCE regardless, or <c>null</c> otherwise.
     /// </summary>
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
-        if (request.PkceRequired is not false)
-            return null;
-
-        if (request.ApplicationType == ApplicationTypes.Native)
+        if (request.PkceRequired is false
+            && ClientInfo.RequiresPkce(false, request.TokenEndpointAuthMethod, request.ApplicationType))
         {
             return ErrorFactory.InvalidClientMetadata(
-                $"A native client uses PKCE: '{Parameters.PkceRequired}' must not be false (RFC 8252 section 8.1)");
-        }
-
-        if (request.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
-        {
-            return ErrorFactory.InvalidClientMetadata(
-                $"A public client uses PKCE: '{Parameters.PkceRequired}' must not be false "
-                + "(RFC 9700 section 2.1.1)");
+                $"A native or public client uses PKCE: '{Parameters.PkceRequired}' must not be false");
         }
 
         return null;

@@ -747,4 +747,36 @@ public class PkceValidatorTests
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("requires PKCE", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// A client that turned PKCE off still uses it when it is a native app or has no credentials, wherever it came
+    /// from: declared by the host, registered, or stored before the rule. RFC 8252 section 8.1 has a server reject a
+    /// native app's request without PKCE, and this server holds a public client to the PKCE RFC 9700 section 2.1.1 has
+    /// it use. A confidential web client keeps the opt-out.
+    /// </summary>
+    [Theory]
+    [InlineData(ApplicationTypes.Native, ClientAuthenticationMethods.None, false)]
+    [InlineData(ApplicationTypes.Native, ClientAuthenticationMethods.ClientSecretBasic, false)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.None, false)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.ClientSecretBasic, true)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.PrivateKeyJwt, true)]
+    public async Task ValidateAsync_WithoutPkceForAClientThatTurnedItOff_IsServedOnlyForAConfidentialWebClient(
+        string applicationType, string authMethod, bool served)
+    {
+        var context = CreateContext(pkceRequired: false);
+        context.ClientInfo.ApplicationType = applicationType;
+        context.ClientInfo.TokenEndpointAuthMethod = authMethod;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        if (served)
+        {
+            Assert.Null(result);
+        }
+        else
+        {
+            Assert.NotNull(result);
+            Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        }
+    }
 }

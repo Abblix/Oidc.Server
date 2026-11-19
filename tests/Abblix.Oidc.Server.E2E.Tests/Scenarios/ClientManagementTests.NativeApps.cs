@@ -97,8 +97,9 @@ public partial class ClientManagementTests
 
     /// <summary>
     /// RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that don't
-    /// use PKCE", and RFC 9700 section 2.1.1: "Public clients MUST use PKCE". A native or public client asking to go
-    /// without it is refused, on registration and on an update; a confidential web client may.
+    /// use PKCE", and this server holds a public client to the PKCE RFC 9700 section 2.1.1 has it use. The authorization
+    /// endpoint holds a native or public client to PKCE whatever it states, so asking to go without it is refused on
+    /// registration and on an update; a confidential web client may.
     /// </summary>
     [Theory]
     [InlineData(ApplicationTypes.Native, ClientAuthenticationMethods.None, false, HttpStatusCode.BadRequest)]
@@ -225,6 +226,55 @@ public partial class ClientManagementTests
         }
 
         await FetchDiscoveryAsync(createClient());
+    }
+
+    /// <summary>
+    /// The authorization endpoint holds a client the host declares to PKCE by its kind, whatever it states: a public
+    /// web client with <see cref="ClientInfo.PkceRequired"/> false is refused a code without a code_challenge, and a
+    /// confidential web client stating the same is served.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.None, false)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true)]
+    public async Task A_declared_client_turning_pkce_off_goes_without_it_only_when_confidential(
+        string authMethod, bool served)
+    {
+        const string clientId = "declared-without-pkce";
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.Clients =
+                [
+                    .. tenant.Clients,
+                    new ClientInfo(clientId)
+                    {
+                        TokenEndpointAuthMethod = authMethod,
+                        ClientSecrets = [new ClientSecret { Sha256Hash = new byte[32] }],
+                        RedirectUris = [new Uri(TestConstants.RedirectUri)],
+                        PkceRequired = false,
+                    },
+                ])));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = CodeFlowParameters(clientId, GeneratePkcePair().Challenge);
+        parameters.Remove(AuthorizationRequest.Parameters.CodeChallenge);
+        parameters.Remove(AuthorizationRequest.Parameters.CodeChallengeMethod);
+
+        var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(
+            response.StatusCode is HttpStatusCode.Found or HttpStatusCode.SeeOther,
+            $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+        var query = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query);
+        if (served)
+            Assert.NotNull(query[ResponseParameters.Code]);
+        else
+            Assert.Equal(ErrorCodes.InvalidRequest, query[ResponseParameters.Error]);
     }
 
     /// <summary>

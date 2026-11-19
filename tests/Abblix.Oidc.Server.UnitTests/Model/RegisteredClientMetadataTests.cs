@@ -190,7 +190,9 @@ public class RegisteredClientMetadataTests
         DefaultAcrValues = ["urn:example:loa:2"],
         InitiateLoginUri = new Uri("https://client.example.com/login"),
         RequestUris = [new Uri("https://client.example.com/request")],
-        PkceRequired = false,
+        // A native client uses PKCE whatever it states (ClientInfo.RequiresPkce), so its read-back is true; the false a
+        // confidential web client keeps is echoed by the end-to-end registration tests
+        PkceRequired = true,
         OfflineAccess = OfflineAccess.Disabled,
         DpopBoundAccessTokens = true,
         RequirePushedAuthorizationRequests = true,
