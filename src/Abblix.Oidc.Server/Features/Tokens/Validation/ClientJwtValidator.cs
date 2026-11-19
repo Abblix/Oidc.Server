@@ -218,12 +218,17 @@ public partial class ClientJwtValidator(
     /// audience in <c>JwtAssertionAuthenticatorBase</c>.
     /// </summary>
     /// <remarks>
-    /// The issuer alone, because that is the value the specifications give a request object: RFC 9101 section 4 has
-    /// its aud "be the value of the authorization server (AS) "issuer"", OpenID Connect Core 1.0 section 6.1 has it
-    /// "be or include the OP's Issuer Identifier URL", RFC 9126 section 3 applies those rules to a pushed one, and
-    /// CIBA Core 1.0 section 7.1.1 has a signed authentication request's audience "contain the value of the Issuer
-    /// Identifier for the OP". None names an endpoint URL. Nothing compared is taken from the request: a host serving
-    /// one tenant answers on whatever host a request names, so an address built on it would match an object a client
+    /// The refusal rests on RFC 7519 section 4.1.3: "If the principal processing the claim does not identify itself
+    /// with a value in the "aud" claim when this claim is present, then the JWT MUST be rejected". This server
+    /// identifies itself by its issuer identifier alone, the value the specifications give a signed request object:
+    /// RFC 9101 section 4, "If signed, ... The value of "aud" should be the value of the authorization server (AS)
+    /// "issuer"", OpenID Connect Core 1.0 section 6.1, "If signed, ... The aud value SHOULD be or include the OP's
+    /// Issuer Identifier URL", RFC 9126 section 3 applying the JAR rules to a pushed one, and CIBA Core 1.0 section
+    /// 7.1.1, under which a signed authentication request's "Audience claim MUST contain the value of the Issuer
+    /// Identifier for the OP". None names an endpoint URL. For a login_hint_token the issuer alone is this server's
+    /// policy, since CIBA Core 1.0 section 7.1 leaves "The particular details and security requirements for the
+    /// login_hint_token" to the deployment or profile. Nothing compared is taken from the request: a host serving one
+    /// tenant answers on whatever host a request names, so an address built on it would match an object a client
     /// signed for another server reached by the same path. The request's address is only logged, so a refusal shows
     /// where the object arrived.
     /// </remarks>
@@ -238,7 +243,7 @@ public partial class ClientJwtValidator(
         {
             LogAudienceValidationFailed(
                 Sanitized.Values(materializedAudiences),
-                requestInfoProvider.RequestUri.OriginalString,
+                Sanitized.Value(requestInfoProvider.RequestUri.OriginalString),
                 tenant.IssuerAsWritten());
         }
 

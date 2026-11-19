@@ -74,9 +74,10 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// The address the token arrived at is not an audience naming this server: RFC 9101 section 4 has a request
-    /// object's aud "be the value of the authorization server (AS) "issuer"", and the address is spelled with whatever
-    /// host the request names, so it would match a token signed for another server reached by the same path.
+    /// The address the token arrived at is not an audience this server identifies itself with, so RFC 7519 section
+    /// 4.1.3 has the token rejected: the server identifies itself by its issuer identifier, the value RFC 9101 section
+    /// 4 says a signed request object's aud "should be", and the address is spelled with whatever host the request
+    /// names, so it would match a token signed for another server reached by the same path.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_TheRequestAddressAsAudience_IsRefused()
@@ -179,8 +180,10 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts JWT when audience matches the issuer identifier, the value RFC 9101
-    /// section 4 and OpenID Connect Core 1.0 section 6.1 give a request object's aud.
+    /// Verifies that ValidateAsync accepts JWT when audience matches the issuer identifier: for a signed request
+    /// object, RFC 9101 section 4 says "The value of "aud" should be the value of the authorization server (AS)
+    /// "issuer"" and OpenID Connect Core 1.0 section 6.1 "The aud value SHOULD be or include the OP's Issuer
+    /// Identifier URL".
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithIssuerAsAudience_ShouldReturnSuccess()

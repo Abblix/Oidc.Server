@@ -37,10 +37,12 @@ using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
 /// <summary>
-/// A request object and a login_hint_token name this server by its issuer identifier: RFC 9101 section 4 has the
-/// value of a request object's aud "be the value of the authorization server (AS) "issuer"", OpenID Connect Core 1.0
-/// section 6.1 has it "be or include the OP's Issuer Identifier URL", and RFC 9126 section 3 applies the JAR rules to
-/// a pushed one. A host serving its one tenant without <c>UseMultiTenancy()</c> answers on whatever name a request
+/// A request object and a login_hint_token carrying an audience must name this server, which RFC 7519 section 4.1.3
+/// has reject a JWT whose aud it does not "identify itself with", and this server identifies itself by its issuer
+/// identifier: for a signed request object RFC 9101 section 4 says "The value of "aud" should be the value of the
+/// authorization server (AS) "issuer"", OpenID Connect Core 1.0 section 6.1 "The aud value SHOULD be or include the
+/// OP's Issuer Identifier URL", and RFC 9126 section 3 applies the JAR rules to a pushed one; for a login_hint_token,
+/// whose details CIBA Core 1.0 section 7.1 leaves to the deployment, the issuer alone is this server's policy. A host serving its one tenant without <c>UseMultiTenancy()</c> answers on whatever name a request
 /// uses, so an audience spelled from the request would match an object a client signed for another server reached by
 /// the same path; each one naming the endpoint as the request spells it is refused, and the same one naming the issuer
 /// is served, so the refusal is the audience's and not the client's or the endpoint's.
