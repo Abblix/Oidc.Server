@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -28,13 +27,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// minted for another service on the same host.
 /// </remarks>
 /// <param name="logger">Records why an assertion's audience was refused.</param>
-/// <param name="issuerProvider">Carries the audience policy, whose setting only chooses the event a refusal is
-/// logged under.</param>
 /// <param name="serviceProvider">Resolves where the transport serves the token endpoint, or null where the policy was
 /// built without it, which leaves the issuer identifier the only audience naming this server.</param>
 internal sealed partial class JwtBearerAudienceValidator(
 	ILogger logger,
-	IJwtBearerIssuerProvider issuerProvider,
 	IServiceProvider? serviceProvider)
 {
 	/// <summary>
@@ -62,14 +58,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 
 		var actualAudiences = Sanitized.Values(audienceList);
 		var expectedTokenEndpoints = string.Join(", ", tokenEndpoints.Distinct(StringComparer.Ordinal));
-		if (issuerProvider.Options.StrictAudienceValidation)
-		{
-			LogAudienceFailedStrict(expectedTokenEndpoints, issuer, actualAudiences);
-		}
-		else
-		{
-			LogAudienceFailedPermissive(expectedTokenEndpoints, issuer, actualAudiences);
-		}
+		LogAudienceFailed(expectedTokenEndpoints, issuer, actualAudiences);
 
 		return Task.FromResult(false);
 	}

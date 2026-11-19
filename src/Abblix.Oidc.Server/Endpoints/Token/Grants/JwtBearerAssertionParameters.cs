@@ -28,7 +28,7 @@ internal sealed class JwtBearerAssertionParameters(
 	IServiceProvider? serviceProvider,
 	ITenantCatalog catalog)
 {
-	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, issuerProvider, serviceProvider);
+	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, serviceProvider);
 	private readonly JwtBearerIssuerValidator _issuerValidator = new(logger, issuerProvider, catalog);
 
 	/// <summary>

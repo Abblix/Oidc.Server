@@ -656,8 +656,11 @@ public partial class JwtBearerGrantHandlerTests
 			.Returns(sessionIdFactory ?? (() => "session_123"));
 
 		var options = new JwtBearerOptions { RequireJti = requireJti ?? false };
+		// The audience tests set the obsolete setting to show that neither value changes what is accepted
+#pragma warning disable CS0618
 		if (strictAudienceValidation.HasValue)
 			options = options with { StrictAudienceValidation = strictAudienceValidation.Value };
+#pragma warning restore CS0618
 		if (maxJwtSize.HasValue)
 			options = options with { MaxJwtSize = maxJwtSize.Value };
 		if (maxJwtAge.HasValue)

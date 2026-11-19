@@ -13,16 +13,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 partial class JwtBearerAudienceValidator
 {
+	// One event for every refusal, under the id the strict policy logged it with (AudienceFailedStrict), which existing
+	// alerts are keyed on; the permissive policy's id is no longer logged
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedStrict,
 		Level = LogLevel.Warning,
 		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {Issuer} or the token endpoint as one of [{TokenEndpoint}], got {Audiences}")]
-	private partial void LogAudienceFailedStrict(string TokenEndpoint, string Issuer, Sanitized[] Audiences);
-
-	// The same refusal under the event a host setting the permissive policy has its alerts keyed on
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedPermissive,
-		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {Issuer} or the token endpoint as one of [{TokenEndpoint}], got {Audiences}")]
-	private partial void LogAudienceFailedPermissive(string TokenEndpoint, string Issuer, Sanitized[] Audiences);
+	private partial void LogAudienceFailed(string TokenEndpoint, string Issuer, Sanitized[] Audiences);
 }

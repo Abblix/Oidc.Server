@@ -106,11 +106,14 @@ public sealed class JwtBearerGrantAudienceTests
         builder.Services.AddOidcServices(options =>
         {
             options.EnabledEndpoints = OidcEndpoints.Base;
+            // The obsolete setting is set to show that neither value changes what is accepted
+#pragma warning disable CS0618
             options.JwtBearer = new JwtBearerOptions
             {
                 StrictAudienceValidation = strict,
                 TrustedIssuers = [new TrustedIssuer { Issuer = AssertionIssuer, JwksUri = new Uri(AssertionIssuer + "/jwks") }],
             };
+#pragma warning restore CS0618
             options.Tenants.Add(new TenantDefinition
             {
                 Id = "acme",
