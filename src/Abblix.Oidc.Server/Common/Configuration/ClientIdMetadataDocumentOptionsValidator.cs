@@ -32,47 +32,61 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
         if (!settings.Enabled)
             return ValidateOptionsResult.Success;
 
-        if (settings.MaxDocumentSize <= 0)
-        {
-            return ValidateOptionsResult.Fail(
-                $"{Section}.{nameof(settings.MaxDocumentSize)} is {settings.MaxDocumentSize}, so no client's " +
-                "metadata document could be read. Set it to the number of bytes a document may take, 5 KB by default.");
-        }
-
-        if (settings.MaxHeldDocuments <= 0)
-        {
-            return ValidateOptionsResult.Fail(
-                $"{Section}.{nameof(settings.MaxHeldDocuments)} is {settings.MaxHeldDocuments}, so no document could " +
-                "be held and every request would fetch its client's document again. Set it to how many may be held.");
-        }
-
-        if (settings.AllowedGrantTypes is { } grantTypes && (grantTypes.Length == 0 || grantTypes.Any(string.IsNullOrWhiteSpace)))
-        {
-            return ValidateOptionsResult.Fail(
-                $"{Section}.{nameof(settings.AllowedGrantTypes)} names no grant type, or a blank one. Name the grant " +
-                "types a client resolved from its document may use, or leave it unset for the authorization code and " +
-                "the refresh token.");
-        }
-
-        if (settings.MinimumCacheDuration < TimeSpan.Zero)
-        {
-            return ValidateOptionsResult.Fail(
-                $"{Section}.{nameof(settings.MinimumCacheDuration)} is {settings.MinimumCacheDuration}, which is no " +
-                "span of time to hold a document for. Set it to zero or more.");
-        }
-
-        if (settings.MaximumCacheDuration < settings.MinimumCacheDuration)
-        {
-            return ValidateOptionsResult.Fail(
-                $"{Section}.{nameof(settings.MaximumCacheDuration)} ({settings.MaximumCacheDuration}) is shorter than " +
-                $"{nameof(settings.MinimumCacheDuration)} ({settings.MinimumCacheDuration}), so the longest a document " +
-                "is held would be shorter than the shortest.");
-        }
+        if ((WhyLimitsRefused(settings) ?? WhyCacheBoundsRefused(settings) ?? WhyGrantTypesRefused(settings)) is { } refusal)
+            return ValidateOptionsResult.Fail(refusal);
 
         return settings.AllowedClientIdPrefixes is { } prefixes
             ? WhyPrefixesRefused(prefixes)
             : ValidateOptionsResult.Success;
     }
+
+    private static string? WhyLimitsRefused(ClientIdMetadataDocumentOptions settings)
+    {
+        if (settings.MaxDocumentSize <= 0)
+        {
+            return $"{Section}.{nameof(settings.MaxDocumentSize)} is {settings.MaxDocumentSize}, so no client's " +
+                   "metadata document could be read. Set it to the number of bytes a document may take.";
+        }
+
+        if (settings.MaxHeldDocuments <= 0)
+        {
+            return $"{Section}.{nameof(settings.MaxHeldDocuments)} is {settings.MaxHeldDocuments}, so no document could " +
+                   "be held and every request would fetch its client's document again. Set it to how many may be held.";
+        }
+
+        if (settings.FetchTimeout <= TimeSpan.Zero)
+        {
+            return $"{Section}.{nameof(settings.FetchTimeout)} is {settings.FetchTimeout}, so every fetch of a document " +
+                   "would end before it began. Set it to how long a fetch may take.";
+        }
+
+        return null;
+    }
+
+    private static string? WhyCacheBoundsRefused(ClientIdMetadataDocumentOptions settings)
+    {
+        if (settings.MinimumCacheDuration < TimeSpan.Zero)
+        {
+            return $"{Section}.{nameof(settings.MinimumCacheDuration)} is {settings.MinimumCacheDuration}, which is no " +
+                   "span of time to hold a document for. Set it to zero or more.";
+        }
+
+        if (settings.MaximumCacheDuration < settings.MinimumCacheDuration)
+        {
+            return $"{Section}.{nameof(settings.MaximumCacheDuration)} ({settings.MaximumCacheDuration}) is shorter than " +
+                   $"{nameof(settings.MinimumCacheDuration)} ({settings.MinimumCacheDuration}), so the longest a " +
+                   "document is held would be shorter than the shortest.";
+        }
+
+        return null;
+    }
+
+    private static string? WhyGrantTypesRefused(ClientIdMetadataDocumentOptions settings)
+        => settings.AllowedGrantTypes is { } grantTypes && (grantTypes.Length == 0 || grantTypes.Any(string.IsNullOrWhiteSpace))
+            ? $"{Section}.{nameof(settings.AllowedGrantTypes)} names no grant type, or a blank one. Name the grant types a " +
+              "client resolved from its document may use, or leave it unset for the authorization code and the refresh " +
+              "token."
+            : null;
 
     private static ValidateOptionsResult WhyPrefixesRefused(string[] prefixes)
     {

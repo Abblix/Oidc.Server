@@ -109,4 +109,13 @@ public record ClientIdMetadataDocumentOptions
     /// are refused at startup.
     /// </remarks>
     public string[]? AllowedGrantTypes { get; set; }
+
+    /// <summary>
+    /// The longest a fetch of a document may take, its body included. Default: 5 seconds.
+    /// </summary>
+    /// <remarks>
+    /// The fetch runs while the authorization or token request naming the client waits, and anybody can name a URL
+    /// whose server answers slowly, so this is shorter than the server's other outbound fetches take.
+    /// </remarks>
+    public TimeSpan FetchTimeout { get; set; } = TimeSpan.FromSeconds(5);
 }

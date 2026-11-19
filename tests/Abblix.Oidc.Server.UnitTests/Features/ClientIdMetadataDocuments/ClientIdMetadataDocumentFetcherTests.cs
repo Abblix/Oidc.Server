@@ -235,7 +235,7 @@ public class ClientIdMetadataDocumentFetcherTests
     [Fact]
     public async Task ABodyThatNeverArrives_EndsAtTheDeadline_AsAFailureThatMayPass()
     {
-        _transport.RequestTimeout = TimeSpan.FromMilliseconds(200);
+        _settings.FetchTimeout = TimeSpan.FromMilliseconds(200);
         _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StalledContent() });
 
         Assert.True((await FailedAsync()).MayPass);

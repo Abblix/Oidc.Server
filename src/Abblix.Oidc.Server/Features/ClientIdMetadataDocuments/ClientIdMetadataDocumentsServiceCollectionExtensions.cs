@@ -62,7 +62,8 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdMetadataDocumentOptionsValidator>());
 
         services.AddSsrfHttpClient(ClientIdMetadataDocumentTransport.HttpClientName, (serviceProvider, client) =>
-            client.Timeout = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.RequestTimeout);
+            client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value
+                .ClientIdMetadataDocuments.FetchTimeout);
 
         // The registration checks a document passes take the host's limits on a new client, which dynamic registration
         // registers the same way when the host opens it

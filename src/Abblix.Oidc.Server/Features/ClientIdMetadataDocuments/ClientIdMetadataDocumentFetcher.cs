@@ -73,7 +73,7 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
             return Refused(url, MetadataDocumentFailure.Terminal("the URL is one the host allows for its own services"));
 
         // The client's timeout ends only the wait for the headers, so the whole fetch, body included, has its own
-        using var deadline = new CancellationTokenSource(transport.RequestTimeout);
+        using var deadline = new CancellationTokenSource(settings.FetchTimeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {

@@ -29,8 +29,35 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    private Task<HeldMetadataDocument?> GetAsync()
-        => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+    /// <summary>
+    /// The document as one request finds it, the lookups of an earlier one being past their hold.
+    /// </summary>
+    private async Task<HeldMetadataDocument?> GetAsync()
+    {
+        var held = await LookUpAsync();
+        _services.Clock.Advance(HeldMetadataDocuments.RepeatedLookupHold);
+        return held;
+    }
+
+    private Task<HeldMetadataDocument?> LookUpAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+
+    /// <summary>
+    /// The lookups of one request share one fetch even when it fails: section 6.2 lets the server "implement rate
+    /// limiting or other measures to avoid repeatedly fetching a Client ID Metadata Document URL".
+    /// </summary>
+    [Fact]
+    public async Task TheLookupsOfOneRequest_ShareOneFetch_EvenOfARefusedDocument()
+    {
+        _services.Origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.NotFound));
+
+        Assert.Null(await LookUpAsync());
+        Assert.Null(await LookUpAsync());
+        Assert.Equal(1, _services.Origin.RequestsTo(Url));
+
+        _services.Clock.Advance(HeldMetadataDocuments.RepeatedLookupHold);
+        Assert.Null(await LookUpAsync());
+        Assert.Equal(2, _services.Origin.RequestsTo(Url));
+    }
 
     [Fact]
     public async Task ADocument_IsFetchedOnceWhileItsLifetimeLasts_AndAgainAfter()
@@ -38,7 +65,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
         _services.Origin.Serve(Url, Document, "max-age=60");
 
         var first = await GetAsync();
-        _services.Clock.Advance(TimeSpan.FromSeconds(59));
+        _services.Clock.Advance(TimeSpan.FromSeconds(58));
         var second = await GetAsync();
 
         Assert.Same(first, second);

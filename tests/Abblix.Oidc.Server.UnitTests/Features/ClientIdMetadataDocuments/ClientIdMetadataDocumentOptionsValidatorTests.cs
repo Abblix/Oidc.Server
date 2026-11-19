@@ -49,6 +49,12 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
             AllowedGrantTypes = blankEntry ? ["authorization_code", " "] : [],
         }));
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AFetchTimeoutOfNoLength_IsRefused(int seconds)
+        => Assert.False(Valid(new ClientIdMetadataDocumentOptions { FetchTimeout = TimeSpan.FromSeconds(seconds) }));
+
     [Fact]
     public void ANegativeMinimum_IsRefused()
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MinimumCacheDuration = TimeSpan.FromSeconds(-1) }));
