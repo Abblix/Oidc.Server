@@ -253,6 +253,25 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// RFC 9700 section 2.1.1: "Public clients MUST use PKCE", so a document cannot turn it off.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentTurningPkceOff_StillHasToUseIt()
+    {
+        var document = PublicClientDocument();
+        document[RegistrationMembers.PkceRequired] = false;
+        Serve(document);
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters.Remove(AuthorizationRequest.Parameters.CodeChallenge);
+        parameters.Remove(AuthorizationRequest.Parameters.CodeChallengeMethod);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, await AuthorizeAndExtractErrorAsync(client, discovery, parameters));
+    }
+
+    /// <summary>
     /// RFC 6749 section 4.4: "The client credentials grant type MUST only be used by confidential clients". A document
     /// is anybody's, so one naming no authentication method gets no token for itself, whatever grant it declares.
     /// </summary>

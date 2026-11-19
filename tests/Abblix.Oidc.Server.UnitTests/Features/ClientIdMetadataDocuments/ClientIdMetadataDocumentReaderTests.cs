@@ -374,6 +374,12 @@ public class ClientIdMetadataDocumentReaderTests
         Assert.NotEmpty(Read(document).RedirectUris!);
     }
 
+    [Theory]
+    [InlineData("""{"pkce_required":false}""")]
+    [InlineData("""{"pkce_required":false,"token_endpoint_auth_method":"private_key_jwt","jwks_uri":"https://client.example.com/jwks"}""")]
+    public void ADocumentTurningPkceOff_StillRequiresIt(string json)
+        => Assert.True(Read(Document(json)).PkceRequired);
+
     [Fact]
     public void ANamedApplicationType_IsKept()
         => Assert.Equal(

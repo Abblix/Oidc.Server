@@ -139,6 +139,9 @@ internal sealed class ClientIdMetadataDocumentReader(
         {
             ClientId = clientId,
             TokenEndpointAuthMethod = authenticationMethod,
+
+            // RFC 9700 section 2.1.1: "Public clients MUST use PKCE", and a document is anybody's to turn it off with
+            PkceRequired = true,
             GrantTypes = grantTypes,
             ResponseTypes = responseTypes,
             ApplicationType = document.ContainsKey(Parameters.ApplicationType)
