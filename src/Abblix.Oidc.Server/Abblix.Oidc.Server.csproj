@@ -86,6 +86,8 @@
       <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
       <InternalsVisibleTo Include="Abblix.Oidc.Server.SharedSignals" />
       <InternalsVisibleTo Include="Abblix.Oidc.Server.AspNetCore" />
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc" />
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi" />
     </ItemGroup>
 
 </Project>

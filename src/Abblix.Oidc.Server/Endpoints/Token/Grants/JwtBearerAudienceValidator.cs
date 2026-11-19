@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -52,7 +51,7 @@ internal sealed partial class JwtBearerAudienceValidator(
 		// Resolved only once the issuer is not named, since the spellings take a dependency scope of their own
 		var tokenEndpoints = serviceProvider is null
 			? []
-			: tenant.EndpointSpellings(serviceProvider, OidcEndpoints.Token);
+			: tenant.AcceptedSpellings(serviceProvider, OidcEndpoints.Token);
 
 		if (audienceList.Any(audience => tokenEndpoints.Contains(audience, StringComparer.Ordinal)))
 			return Task.FromResult(true);

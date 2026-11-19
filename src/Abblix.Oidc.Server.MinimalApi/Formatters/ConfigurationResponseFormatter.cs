@@ -35,32 +35,32 @@ public class ConfigurationResponseFormatter(
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)
     {
-        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token, response.Issuer);
-        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation, response.Issuer);
-        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection, response.Issuer);
-        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo, response.Issuer);
+        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token);
+        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation);
+        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection);
+        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo);
 
         var modelResponse = new ModelResponse
         {
             Issuer = response.Issuer.OriginalString,
 
-            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys, response.Issuer),
+            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys),
 
-            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize, response.Issuer),
+            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize),
             UserInfoEndpoint = userInfoEndpoint,
-            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession, response.Issuer),
-            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession, response.Issuer),
-            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
+            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession),
+            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession),
+            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
 
             TokenEndpoint = tokenEndpoint,
             RevocationEndpoint = revocationEndpoint,
             IntrospectionEndpoint = introspectionEndpoint,
 
-            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient, response.Issuer),
+            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient),
 
-            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication, response.Issuer),
+            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
 
-            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization, response.Issuer),
+            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization),
 
             FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
             FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -117,7 +117,7 @@ public class ConfigurationResponseFormatter(
 #pragma warning restore ABX9001
         };
 
-        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
+        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, tenantAccessor.CurrentTenant());
 
         if (options.Value.Discovery.SignedMetadata)
         {
@@ -130,9 +130,10 @@ public class ConfigurationResponseFormatter(
     /// <summary>
     /// Resolves the absolute URL for a named endpoint if endpoint path discovery is enabled and the endpoint is
     /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
-    /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
+    /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution - and
+    /// takes its address from <see cref="TenantEndpointAddresses.Published"/>.
     /// </summary>
-    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag, Uri issuer)
+    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag)
     {
         if (!options.Value.Discovery.AllowEndpointPathsDiscovery ||
             !options.Value.EnabledEndpoints.HasFlag(enablingFlag))
@@ -140,6 +141,6 @@ public class ConfigurationResponseFormatter(
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
-        return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(new Uri(url, UriKind.Absolute), issuer);
+        return url is null ? null : tenantAccessor.CurrentTenant().Published(new Uri(url, UriKind.Absolute));
     }
 }

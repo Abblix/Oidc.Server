@@ -36,32 +36,32 @@ public class ConfigurationResponseFormatter(
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
 	public async Task<ActionResult> FormatResponseAsync(EndpointResponse response)
 	{
-		var tokenEndpoint = Resolve(OidcEndpoints.Token, response.Issuer);
-		var revocationEndpoint = Resolve(OidcEndpoints.Revocation, response.Issuer);
-		var introspectionEndpoint = Resolve(OidcEndpoints.Introspection, response.Issuer);
-		var userInfoEndpoint = Resolve(OidcEndpoints.UserInfo, response.Issuer);
+		var tokenEndpoint = Resolve(OidcEndpoints.Token);
+		var revocationEndpoint = Resolve(OidcEndpoints.Revocation);
+		var introspectionEndpoint = Resolve(OidcEndpoints.Introspection);
+		var userInfoEndpoint = Resolve(OidcEndpoints.UserInfo);
 
 		var mvcResponse = new ModelResponse
 		{
 			Issuer = response.Issuer.OriginalString,
 
-			JwksUri = Resolve(OidcEndpoints.Keys, response.Issuer),
+			JwksUri = Resolve(OidcEndpoints.Keys),
 
-			AuthorizationEndpoint = Resolve(OidcEndpoints.Authorize, response.Issuer),
+			AuthorizationEndpoint = Resolve(OidcEndpoints.Authorize),
 			UserInfoEndpoint = userInfoEndpoint,
-			EndSessionEndpoint = Resolve(OidcEndpoints.EndSession, response.Issuer),
-			CheckSessionIframe = Resolve(OidcEndpoints.CheckSession, response.Issuer),
-			PushedAuthorizationRequestEndpoint = Resolve(OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
+			EndSessionEndpoint = Resolve(OidcEndpoints.EndSession),
+			CheckSessionIframe = Resolve(OidcEndpoints.CheckSession),
+			PushedAuthorizationRequestEndpoint = Resolve(OidcEndpoints.PushedAuthorizationRequest),
 
 			TokenEndpoint = tokenEndpoint,
 			RevocationEndpoint = revocationEndpoint,
 			IntrospectionEndpoint = introspectionEndpoint,
 
-			RegistrationEndpoint = Resolve(OidcEndpoints.RegisterClient, response.Issuer),
+			RegistrationEndpoint = Resolve(OidcEndpoints.RegisterClient),
 
-			BackChannelAuthenticationEndpoint = Resolve(OidcEndpoints.BackChannelAuthentication, response.Issuer),
+			BackChannelAuthenticationEndpoint = Resolve(OidcEndpoints.BackChannelAuthentication),
 
-			DeviceAuthorizationEndpoint = Resolve(OidcEndpoints.DeviceAuthorization, response.Issuer),
+			DeviceAuthorizationEndpoint = Resolve(OidcEndpoints.DeviceAuthorization),
 
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -118,7 +118,7 @@ public class ConfigurationResponseFormatter(
 #pragma warning restore ABX9001
 		};
 
-		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
+		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, tenantAccessor.CurrentTenant());
 
 		if (options.Value.Discovery.SignedMetadata)
 		{
@@ -133,16 +133,17 @@ public class ConfigurationResponseFormatter(
 	}
 
 	/// <summary>
-	/// Resolves the absolute URL of an endpoint if endpoint path discovery is enabled and the endpoint is active.
+	/// Resolves the absolute URL of an endpoint if endpoint path discovery is enabled and the endpoint is active,
+	/// its address taken from <see cref="TenantEndpointAddresses.Published"/>.
 	/// </summary>
 	/// <param name="endpoint">The endpoint flag that must be enabled for the URL to be resolved.</param>
-	/// <param name="issuer">The issuer the document describes.</param>
 	/// <returns>The absolute URI to the endpoint if discovery and endpoint are enabled; otherwise, null.</returns>
-	private Uri? Resolve(OidcEndpoints endpoint, Uri issuer)
+	private Uri? Resolve(OidcEndpoints endpoint)
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
 		       options.Value.EnabledEndpoints.HasFlag(endpoint)
-			? MtlsEndpointAliasing.OnIssuersHost(endpointResolver.Resolve(endpoint), issuer)
+			&& endpointResolver.Resolve(endpoint) is { } resolved
+			? tenantAccessor.CurrentTenant().Published(resolved)
 			: null;
 	}
 }

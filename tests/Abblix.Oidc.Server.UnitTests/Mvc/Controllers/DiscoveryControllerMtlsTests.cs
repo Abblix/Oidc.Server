@@ -31,7 +31,8 @@ public class DiscoveryControllerMtlsTests
     private readonly Mock<IOidcEndpointResolver> _endpointResolverMock;
     private readonly ConfigurationResponseFormatter _formatter;
     private readonly OidcOptions _oidcOptions;
-    private readonly TestIssuer _issuer = new();
+    // The tenant the document describes, so its issuer is the one the response names
+    private readonly TestIssuer _issuer = new() { Issuer = new Uri("https://example.com") };
 
     public DiscoveryControllerMtlsTests()
     {
