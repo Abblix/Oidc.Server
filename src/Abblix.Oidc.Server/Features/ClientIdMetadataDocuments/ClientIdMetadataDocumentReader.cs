@@ -9,6 +9,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -122,7 +123,9 @@ internal sealed class ClientIdMetadataDocumentReader(
             return MetadataDocumentFailure.Terminal(schemes);
 
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
-        var responseTypes = SupportedResponseTypes(metadata.ResponseTypes);
+        var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
+            .Where(responseType => IsServedBy(responseType, grantTypes))
+            .ToArray();
 
         // Section 6: the server "MUST filter the grant_types and response_types array-valued fields and find the
         // intersection of what the Client ID Metadata Document declares and what the Authorization Servers supports.
@@ -292,6 +295,18 @@ internal sealed class ClientIdMetadataDocumentReader(
                                   combination.All(part => part is not null && supportedParts.Contains(part)))
             .ToArray();
     }
+
+    /// <summary>
+    /// Whether the grant types kept serve <paramref name="responseType"/>: a code needs the authorization code grant,
+    /// and a token or an ID token from the authorization endpoint the implicit one, as the registration checks pair them.
+    /// </summary>
+    /// <remarks>
+    /// A response type whose grant was dropped goes with it, so the intersection section 6 keeps is consistent, and the
+    /// document is refused only when nothing is left of it.
+    /// </remarks>
+    private static bool IsServedBy(string[] responseType, string[] grantTypes)
+        => (!responseType.HasFlag(ResponseTypes.Code) || grantTypes.Contains(GrantTypes.AuthorizationCode, StringComparer.Ordinal)) &&
+           (!responseType.ReturnsTokenFromAuthorization() || grantTypes.Contains(GrantTypes.Implicit, StringComparer.Ordinal));
 
     /// <summary>
     /// The application type of a document that names none.

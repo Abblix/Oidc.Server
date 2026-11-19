@@ -284,6 +284,27 @@ public class ClientIdMetadataDocumentReaderTests
                 Document($$"""{"grant_types":["authorization_code","{{grantType}}"]}"""),
                 CreateReader(documentGrantTypes: [GrantTypes.AuthorizationCode, grantType])).GrantTypes);
 
+    /// <summary>
+    /// Section 6 keeps "the intersection" of grant and response types: a response type whose grant does not survive the
+    /// narrowing goes with it, as code id_token does with implicit, rather than the whole document being refused.
+    /// </summary>
+    [Fact]
+    public void AResponseTypeWhoseGrantIsDropped_IsDroppedWithIt()
+    {
+        var metadata = Read(
+            Document("""{"response_types":["code","code id_token"],"grant_types":["authorization_code","implicit"]}"""),
+            CreateReader(responseTypeParts: [ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token]));
+
+        Assert.Equal([GrantTypes.AuthorizationCode], metadata.GrantTypes);
+        Assert.Equal([[ResponseTypes.Code]], metadata.ResponseTypes);
+    }
+
+    [Fact]
+    public void ADocumentOfOnlyResponseTypesWhoseGrantsAreDropped_IsRefused()
+        => Refused(
+            Document("""{"response_types":["id_token"],"grant_types":["implicit","refresh_token"]}"""),
+            CreateReader(responseTypeParts: [ResponseTypes.Code, ResponseTypes.IdToken]));
+
     [Fact]
     public void ADocumentOfOnlyGrantTypesTheHostDoesNotAllow_IsRefused()
         => Refused(
