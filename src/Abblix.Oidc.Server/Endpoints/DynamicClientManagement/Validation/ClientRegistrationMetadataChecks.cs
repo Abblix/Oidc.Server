@@ -54,6 +54,7 @@ internal static class ClientRegistrationMetadataChecks
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProfileSigningKeysValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, EncryptedResponseAlgorithmsValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
+        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, PkceOptOutValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, AuthorizationDetailsTypesValidator>(),

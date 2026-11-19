@@ -1237,7 +1237,9 @@ public partial class ClientManagementTests(TestFactory factory) : TestBase(facto
             [RequestMembers.DpopBoundAccessTokens] = true,
             [RequestMembers.RequirePushedAuthorizationRequests] = true,
             [RequestMembers.RequireSignedRequestObject] = true,
-            [RequestMembers.PkceRequired] = false,
+            // A native client keeps PKCE (RFC 8252 section 8.1), so the false a confidential web client may state is
+            // echoed by Only_a_confidential_web_client_registers_without_pkce
+            [RequestMembers.PkceRequired] = true,
             [RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Disabled),
             [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
             [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenExchangeTokenTypes.AccessToken),
