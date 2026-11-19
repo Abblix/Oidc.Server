@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading.Tasks;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
@@ -35,12 +36,16 @@ public class ClientIdMetadataDocumentsWiringTests
         return services;
     }
 
-    private static string[] Refusals(IServiceCollection services)
+    /// <summary>
+    /// What the host's startup refuses, read as the host starts rather than from the options, so a check that is not
+    /// run at startup is not counted.
+    /// </summary>
+    private static async Task<string[]> Refusals(IServiceCollection services)
     {
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         try
         {
-            _ = provider.GetRequiredService<IOptions<ClientIdMetadataDocumentsWiring>>().Value;
+            await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
             return [];
         }
         catch (OptionsValidationException refusal)
@@ -50,12 +55,12 @@ public class ClientIdMetadataDocumentsWiringTests
     }
 
     [Fact]
-    public void AHostWiredAsTheFeatureNeeds_Starts()
+    public async Task AHostWiredAsTheFeatureNeeds_Starts()
     {
         var services = Hosting();
         Register(services);
 
-        Assert.Empty(Refusals(services));
+        Assert.Empty(await Refusals(services));
     }
 
     /// <summary>
@@ -63,27 +68,27 @@ public class ClientIdMetadataDocumentsWiringTests
     /// advertise them.
     /// </summary>
     [Fact]
-    public void AClientStoreRegisteredAfterTheFeature_IsRefused()
+    public async Task AClientStoreRegisteredAfterTheFeature_IsRefused()
     {
         var services = Hosting();
         Register(services);
         services.AddSingleton(Mock.Of<IClientInfoProvider>());
 
-        Assert.Equal([ClientIdMetadataDocumentsWiring.StoreReplacedMessage], Refusals(services));
+        Assert.Equal([ClientIdMetadataDocumentsWiring.StoreReplacedMessage], await Refusals(services));
     }
 
     /// <summary>
     /// Draft section 7: "The authorization response MUST include the iss parameter, as defined in [RFC9207]".
     /// </summary>
     [Fact]
-    public void AuthorizationResponsesWithoutTheIssuer_AreRefused()
+    public async Task AuthorizationResponsesWithoutTheIssuer_AreRefused()
     {
         var services = Hosting();
         Register(services);
         services.AddScoped(_ => Mock.Of<IAuthorizationMetadataProvider>(
             metadata => !metadata.AuthorizationResponseIssParameterSupported));
 
-        Assert.Equal([ClientIdMetadataDocumentsWiring.IssuerNotSentMessage], Refusals(services));
+        Assert.Equal([ClientIdMetadataDocumentsWiring.IssuerNotSentMessage], await Refusals(services));
     }
 
     /// <summary>
@@ -92,13 +97,13 @@ public class ClientIdMetadataDocumentsWiringTests
     /// down does not start with documents on.
     /// </summary>
     [Fact]
-    public void AHostReachingPrivateNetworks_IsRefused()
+    public async Task AHostReachingPrivateNetworks_IsRefused()
     {
         var services = Hosting();
         services.Configure<SecureHttpFetchOptions>(options => options.BlockPrivateNetworks = false);
         Register(services);
 
-        Assert.Equal([ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage], Refusals(services));
+        Assert.Equal([ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage], await Refusals(services));
     }
 
     private static void Register(IServiceCollection services) => new Registered(services).AddClientIdMetadataDocuments();

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
@@ -51,7 +52,7 @@ public class ConsentGrantedToAnyUrlTests
     [InlineData(Consent.HostsAfterGranted, false, true)]
     [InlineData(Consent.HostsBeforeGranted, false, true)]
     [InlineData(Consent.None, false, true)]
-    public void AHostGrantingEveryClientEverything_StartsOnlyWithAnAllowList(
+    public async Task AHostGrantingEveryClientEverything_StartsOnlyWithAnAllowList(
         Consent consent,
         bool allowList,
         bool starts)
@@ -99,16 +100,17 @@ public class ConsentGrantedToAnyUrlTests
                 throw new ArgumentOutOfRangeException(nameof(consent), consent, null);
         }
 
-        using var provider = services.BuildServiceProvider();
-        var check = () => provider.GetRequiredService<IOptions<ClientIdMetadataDocumentsWiring>>().Value;
+        // Read as the host starts, so a check that is not run at startup does not count
+        await using var provider = services.BuildServiceProvider();
+        var start = () => provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
 
         if (starts)
         {
-            Assert.NotNull(check());
+            await start();
         }
         else
         {
-            var refusal = Assert.Throws<OptionsValidationException>(check);
+            var refusal = await Assert.ThrowsAsync<OptionsValidationException>(start);
             Assert.Equal([ClientIdMetadataDocumentsWiring.ConsentGrantedToAnyUrlMessage], refusal.Failures);
         }
     }
