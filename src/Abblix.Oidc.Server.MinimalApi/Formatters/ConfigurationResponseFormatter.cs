@@ -13,6 +13,8 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
@@ -22,8 +24,9 @@ using Abblix.Oidc.Server.AspNetCore.Formatters;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Builds the OpenID Connect discovery document by enriching the core metadata with endpoint URLs resolved from the
-/// configured route templates and the current request's base URL, then returns it as a JSON <see cref="IResult"/>.
+/// Builds the OpenID Connect discovery document by enriching the core metadata with endpoint URLs, each the path
+/// <see cref="IOidcEndpointResolver"/> resolves the endpoint at on the tenant's issuer authority, taken from
+/// <see cref="TenantEndpointAddresses.Published"/>, then returns it as a JSON <see cref="IResult"/>.
 /// </summary>
 public class ConfigurationResponseFormatter(
     IOptionsSnapshot<OidcOptions> options,
@@ -35,32 +38,32 @@ public class ConfigurationResponseFormatter(
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)
     {
-        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token);
-        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation);
-        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection);
-        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo);
+        var tokenEndpoint = Resolve(OidcEndpoints.Token);
+        var revocationEndpoint = Resolve(OidcEndpoints.Revocation);
+        var introspectionEndpoint = Resolve(OidcEndpoints.Introspection);
+        var userInfoEndpoint = Resolve(OidcEndpoints.UserInfo);
 
         var modelResponse = new ModelResponse
         {
             Issuer = response.Issuer.OriginalString,
 
-            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys),
+            JwksUri = Resolve(OidcEndpoints.Keys),
 
-            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize),
+            AuthorizationEndpoint = Resolve(OidcEndpoints.Authorize),
             UserInfoEndpoint = userInfoEndpoint,
-            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession),
-            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession),
-            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
+            EndSessionEndpoint = Resolve(OidcEndpoints.EndSession),
+            CheckSessionIframe = Resolve(OidcEndpoints.CheckSession),
+            PushedAuthorizationRequestEndpoint = Resolve(OidcEndpoints.PushedAuthorizationRequest),
 
             TokenEndpoint = tokenEndpoint,
             RevocationEndpoint = revocationEndpoint,
             IntrospectionEndpoint = introspectionEndpoint,
 
-            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient),
+            RegistrationEndpoint = Resolve(OidcEndpoints.RegisterClient),
 
-            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
+            BackChannelAuthenticationEndpoint = Resolve(OidcEndpoints.BackChannelAuthentication),
 
-            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization),
+            DeviceAuthorizationEndpoint = Resolve(OidcEndpoints.DeviceAuthorization),
 
             FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
             FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -128,19 +131,23 @@ public class ConfigurationResponseFormatter(
     }
 
     /// <summary>
-    /// Resolves the absolute URL for a named endpoint if endpoint path discovery is enabled and the endpoint is
-    /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
-    /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution - and
-    /// takes its address from <see cref="TenantEndpointAddresses.Published"/>.
+    /// The address of <paramref name="endpoint"/> if endpoint path discovery is enabled and the endpoint is active:
+    /// the path the endpoint resolver answers, the one the JWT bearer grant and client authentication read, with its
+    /// address taken from <see cref="TenantEndpointAddresses.Published"/>.
     /// </summary>
-    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag)
+    /// <remarks>
+    /// The resolver is the request's own, since it is scoped; a host that registered none is answered by the default
+    /// one over the same link generator.
+    /// </remarks>
+    private Uri? Resolve(OidcEndpoints endpoint)
     {
         if (!options.Value.Discovery.AllowEndpointPathsDiscovery ||
-            !options.Value.EnabledEndpoints.HasFlag(enablingFlag))
+            !options.Value.EnabledEndpoints.HasFlag(endpoint))
             return null;
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
-        var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
-        return url is null ? null : tenantAccessor.CurrentTenant().Published(new Uri(url, UriKind.Absolute));
+        var resolver = httpContext.RequestServices.GetService<IOidcEndpointResolver>() ??
+                       new OidcEndpointResolver(httpContextAccessor, linkGenerator);
+        return resolver.Resolve(endpoint) is { } resolved ? tenantAccessor.CurrentTenant().Published(resolved) : null;
     }
 }

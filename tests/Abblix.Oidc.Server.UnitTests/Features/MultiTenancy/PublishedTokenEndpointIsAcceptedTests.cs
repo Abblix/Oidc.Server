@@ -46,11 +46,13 @@ public class PublishedTokenEndpointIsAcceptedTests
     [Fact]
     public async Task ThePublishedTokenEndpoint_IsTheGrantsCanonicalSpelling()
     {
-        var tenant = SingleIssuer.Tenant;
+        // Written with its default port and in mixed case, so the published address differs from the as-written one
+        var issuer = new TestIssuer { Issuer = new Uri("https://Auth.Example.com:443") };
+        var tenant = issuer.ToTenant();
         var resolver = new Mock<IOidcEndpointResolver>();
         resolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(ResolvedOnTheRequestsHost);
 
-        var published = await PublishedTokenEndpointAsync(resolver.Object);
+        var published = await PublishedTokenEndpointAsync(resolver.Object, issuer);
         var validateAudience = AudienceCheck(resolver.Object, tenant);
 
         Assert.Equal(tenant.Published(ResolvedOnTheRequestsHost), published);
@@ -62,7 +64,7 @@ public class PublishedTokenEndpointIsAcceptedTests
     /// <summary>
     /// The token_endpoint member of the discovery document the MVC transport formats over <paramref name="resolver"/>.
     /// </summary>
-    private static async Task<Uri> PublishedTokenEndpointAsync(IOidcEndpointResolver resolver)
+    private static async Task<Uri> PublishedTokenEndpointAsync(IOidcEndpointResolver resolver, TestIssuer issuer)
     {
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions
@@ -78,11 +80,11 @@ public class PublishedTokenEndpointIsAcceptedTests
                 new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict).Object,
                 new FakeTimeProvider(),
                 TestSigningAlgorithms.Registered),
-            SingleIssuer.Accessor);
+            SingleIssuer.AccessorOf(() => issuer));
 
         var result = Assert.IsType<ObjectResult>(await formatter.FormatResponseAsync(new EndpointResponse
         {
-            Issuer = SingleIssuer.Tenant.Issuer,
+            Issuer = issuer.Issuer,
             ResponseTypesSupported = [ResponseTypes.Code],
             IdTokenSigningAlgValuesSupported = [SigningAlgorithms.RS256],
             SubjectTypesSupported = [SubjectTypes.Public],
