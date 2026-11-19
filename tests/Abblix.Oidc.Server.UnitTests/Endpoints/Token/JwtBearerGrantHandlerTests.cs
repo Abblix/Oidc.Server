@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
@@ -39,7 +40,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// Tests cover token exchange scenarios where a client exchanges a JWT assertion from a trusted
 /// identity provider for an access token at this authorization server.
 /// </summary>
-public class JwtBearerGrantHandlerTests
+public partial class JwtBearerGrantHandlerTests
 {
 	private const string ClientId = "trusted_client_123";
 	private const string Subject = "user@example.com";
@@ -586,87 +587,6 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 10070 section 4, case A: for the authorization grant "an authorization server MAY be identified by either
-	/// its issuer identifier or its token endpoint URL", so an assertion naming either one is addressed here in both
-	/// policies, beside any other audience it names; the application URI is accepted only by the permissive policy.
-	/// Asked of the audience check the handler hands the JWT validator, since a validator double never runs it.
-	/// </summary>
-	[Theory]
-	[InlineData(true, nameof(TokenEndpointUri), true)]
-	[InlineData(true, nameof(TenantIssuer), true)]
-	[InlineData(true, nameof(ApplicationUri), false)]
-	[InlineData(false, nameof(TokenEndpointUri), true)]
-	[InlineData(false, nameof(TenantIssuer), true)]
-	[InlineData(false, nameof(ApplicationUri), true)]
-	public async Task AnAudienceNamingThisServer_IsAcceptedAsThePolicyAllows(bool strict, string named, bool accepted)
-	{
-		var validateAudience = await AudienceCheckAsync(strict);
-
-		var audience = named switch
-		{
-			nameof(TokenEndpointUri) => TokenEndpointUri,
-			nameof(TenantIssuer) => TenantIssuer,
-			nameof(ApplicationUri) => ApplicationUri,
-			_ => throw new ArgumentOutOfRangeException(nameof(named), named, null),
-		};
-
-		Assert.Equal(accepted, await validateAudience([audience]));
-		Assert.Equal(accepted, await validateAudience(["https://another-server.example.com", audience]));
-	}
-
-	/// <summary>
-	/// RFC 10070 section 4: "applications MUST compare the audience values using the Simple String Comparison method
-	/// defined in Section 6.2.1 of [RFC3986]", so the server's own addresses spelled otherwise, in another case, with
-	/// a trailing slash or a default port, are not this server.
-	/// </summary>
-	[Theory]
-	[MemberData(nameof(ThisServerSpelledOtherwise))]
-	public async Task AnAudienceSpellingThisServerOtherwise_IsRefused(string audience)
-	{
-		foreach (var strict in new[] { true, false })
-		{
-			var validateAudience = await AudienceCheckAsync(strict);
-			Assert.False(await validateAudience([audience]), $"accepted with strict={strict}");
-		}
-	}
-
-	public static TheoryData<string> ThisServerSpelledOtherwise() =>
-	[
-		"https://AUTHORIZATION-SERVER.example.com/token",
-		TokenEndpointUri + "/",
-		"https://authorization-server.example.com:443/token",
-		ApplicationUri + "/",
-		TenantIssuer + "/",
-	];
-
-	private const string TokenEndpointUri = "https://authorization-server.example.com/token";
-	private const string ApplicationUri = "https://authorization-server.example.com";
-	private static string TenantIssuer => SingleIssuer.Tenant.Issuer.OriginalString;
-
-	/// <summary>
-	/// The audience check the handler hands the JWT validator for an assertion presented at
-	/// <see cref="SingleIssuer.Tenant"/>, under the strict or the permissive policy.
-	/// </summary>
-	private static async Task<ValidationParameters.ValidateAudienceDelegate> AudienceCheckAsync(bool strict)
-	{
-		var (handler, mocks) = CreateHandler(
-			tokenEndpoint: TokenEndpointUri, applicationUri: ApplicationUri, strictAudienceValidation: strict);
-		ValidationParameters? captured = null;
-		mocks.JwtValidator
-			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
-			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
-
-		await handler.AuthorizeAsync(
-			SingleIssuer.Tenant,
-			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
-			new ClientInfo(ClientId),
-			TestContext.Current.CancellationToken);
-
-		return captured!.ValidateAudience!;
-	}
-
-	/// <summary>
 	/// The keys read again on an unfamiliar kid are the trusted issuer's, asked for past the copy held, while the keys
 	/// first returned come from the copy.
 	/// </summary>
@@ -716,7 +636,8 @@ public class JwtBearerGrantHandlerTests
 		int? maxJwtSize = null,
 		TimeSpan? maxJwtAge = null,
 		string[]? allowedAlgorithms = null,
-		string[]? allowedTokenTypes = null)
+		string[]? allowedTokenTypes = null,
+		bool resolveEndpoints = true)
 	{
 		var jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
 		var issuerProvider = new Mock<IJwtBearerIssuerProvider>(MockBehavior.Strict);
@@ -766,13 +687,31 @@ public class JwtBearerGrantHandlerTests
 
 		var logger = new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerGrantHandler>>();
 
-		var policy = new JwtBearerAssertionPolicy(
-			new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerAssertionPolicy>>().Object,
-			issuerProvider.Object,
-			timeProvider,
-			replayCache.Object,
-			requestInfoProvider.Object,
-			SingleIssuer.LicensedCatalog);
+		// The transport resolves the token endpoint on the host the request names, as a link generator does
+		var endpointResolver = new Mock<IOidcEndpointResolver>();
+		endpointResolver
+			.Setup(r => r.Resolve(OidcEndpoints.Token))
+			.Returns(new Uri(tokenEndpoint ?? "https://authorization-server.example.com/token"));
+		var services = new ServiceCollection();
+		services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
+
+		var policyLogger = new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerAssertionPolicy>>().Object;
+		var policy = resolveEndpoints
+			? new JwtBearerAssertionPolicy(
+				policyLogger,
+				issuerProvider.Object,
+				timeProvider,
+				replayCache.Object,
+				requestInfoProvider.Object,
+				SingleIssuer.LicensedCatalog,
+				services.BuildServiceProvider(validateScopes: true))
+			: new JwtBearerAssertionPolicy(
+				policyLogger,
+				issuerProvider.Object,
+				timeProvider,
+				replayCache.Object,
+				requestInfoProvider.Object,
+				SingleIssuer.LicensedCatalog);
 
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,

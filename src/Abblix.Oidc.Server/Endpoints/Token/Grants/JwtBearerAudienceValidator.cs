@@ -6,7 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
@@ -21,16 +22,20 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <remarks>
 /// RFC 10070 section 4 lets the server be identified "by either its issuer identifier or its token endpoint URL",
 /// and has the values compared "using the Simple String Comparison method defined in Section 6.2.1 of [RFC3986]",
-/// so each is compared as written. The strict policy accepts those two, the permissive one also accepts the
-/// application URI.
+/// so each is compared as written. The token endpoint URL is spelled as client authentication spells it, on the
+/// issuer's scheme, host and port and on the tenant's mutual-TLS address, never on the host the request names: a
+/// tenant is found by its host alone, port and case aside, so taken from the request the URL would match an assertion
+/// minted for another service on the same host.
 /// </remarks>
 /// <param name="logger">Records why an assertion's audience was refused.</param>
-/// <param name="issuerProvider">Carries the audience policy.</param>
-/// <param name="requestInfoProvider">Provides the token endpoint and application URIs of the current request.</param>
+/// <param name="issuerProvider">Carries the audience policy, whose setting only chooses the event a refusal is
+/// logged under.</param>
+/// <param name="serviceProvider">Resolves where the transport serves the token endpoint, or null where the policy was
+/// built without it, which leaves the issuer identifier the only audience naming this server.</param>
 internal sealed partial class JwtBearerAudienceValidator(
 	ILogger logger,
 	IJwtBearerIssuerProvider issuerProvider,
-	IRequestInfoProvider requestInfoProvider)
+	IServiceProvider? serviceProvider)
 {
 	/// <summary>
 	/// Answers whether one of the assertion's audiences names this authorization server.
@@ -42,27 +47,28 @@ internal sealed partial class JwtBearerAudienceValidator(
 	/// </returns>
 	public Task<bool> ValidateAsync(TenantDefinition tenant, IEnumerable<string> audiences)
 	{
-		var strict = issuerProvider.Options.StrictAudienceValidation;
 		var audienceList = audiences.Materialize();
 
-		var tokenEndpoint = requestInfoProvider.RequestUri.OriginalString;
 		var issuer = tenant.Issuer.OriginalString;
-		var applicationUri = requestInfoProvider.ApplicationUri.OriginalString;
+		var tokenEndpoints = serviceProvider is null
+			? []
+			: tenant.EndpointSpellings(serviceProvider, OidcEndpoints.Token);
 
 		var isValid = audienceList.Any(audience =>
-			audience == tokenEndpoint || audience == issuer || (!strict && audience == applicationUri));
+			audience == issuer || tokenEndpoints.Contains(audience, StringComparer.Ordinal));
 
 		if (isValid)
 			return Task.FromResult(true);
 
 		var actualAudiences = Sanitized.Values(audienceList);
-		if (strict)
+		var expectedTokenEndpoints = string.Join(", ", tokenEndpoints.Distinct(StringComparer.Ordinal));
+		if (issuerProvider.Options.StrictAudienceValidation)
 		{
-			LogAudienceFailedStrict(tokenEndpoint, issuer, actualAudiences);
+			LogAudienceFailedStrict(expectedTokenEndpoints, issuer, actualAudiences);
 		}
 		else
 		{
-			LogAudienceFailedPermissive(tokenEndpoint, issuer, applicationUri, actualAudiences);
+			LogAudienceFailedPermissive(expectedTokenEndpoints, issuer, actualAudiences);
 		}
 
 		return Task.FromResult(false);

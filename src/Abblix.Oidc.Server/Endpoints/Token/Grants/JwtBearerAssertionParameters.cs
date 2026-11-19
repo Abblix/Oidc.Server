@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
@@ -20,15 +19,16 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// </summary>
 /// <param name="logger">Records why an assertion's issuer or audience was refused.</param>
 /// <param name="issuerProvider">Tells the issuers trusted at the tenant and their signing keys.</param>
-/// <param name="requestInfoProvider">Provides the token endpoint and application URIs of the current request.</param>
+/// <param name="serviceProvider">Resolves where the transport serves the token endpoint, or null where the policy was
+/// built without it.</param>
 /// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
 internal sealed class JwtBearerAssertionParameters(
 	ILogger logger,
 	IJwtBearerIssuerProvider issuerProvider,
-	IRequestInfoProvider requestInfoProvider,
+	IServiceProvider? serviceProvider,
 	ITenantCatalog catalog)
 {
-	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, issuerProvider, requestInfoProvider);
+	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, issuerProvider, serviceProvider);
 	private readonly JwtBearerIssuerValidator _issuerValidator = new(logger, issuerProvider, catalog);
 
 	/// <summary>

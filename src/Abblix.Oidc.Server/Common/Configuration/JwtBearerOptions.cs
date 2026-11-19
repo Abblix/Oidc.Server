@@ -84,14 +84,14 @@ public record JwtBearerOptions
 	public int MaxJwtSize { get; set; } = 8192;
 
 	/// <summary>
-	/// When true, the JWT audience claim must name the token endpoint URL or the tenant's issuer identifier, each
-	/// compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. When false, the application
-	/// base URI is also accepted for compatibility with common implementations. Default is true.
+	/// Chooses only the log event an assertion refused for its audience is recorded under: either way the JWT audience
+	/// claim must name the tenant's issuer identifier or its token endpoint URL on the issuer's scheme, host and port,
+	/// each compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. Default is true.
 	/// </summary>
 	/// <remarks>
-	/// Set to false only if you have legacy clients that use the application base URI as audience.
-	/// Accepting the base URI widens the attack surface as JWTs intended for other endpoints
-	/// on the same server could potentially be misused.
+	/// False once also accepted the application base URI, which for a tenant is its issuer identifier on the host the
+	/// request names: where that host is the issuer's it is the issuer, accepted either way, and where it is not it
+	/// names whatever host the caller sent, so it is no longer accepted.
 	/// </remarks>
 	public bool StrictAudienceValidation { get; set; } = true;
 
