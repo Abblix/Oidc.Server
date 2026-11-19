@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -14,6 +15,7 @@ using System.Web;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -188,6 +190,40 @@ public sealed class SingleTenantWithoutTheCallTests
             Assert.NotNull(published);
             Assert.StartsWith(Host + "/", published, StringComparison.Ordinal);
         });
+    }
+
+    /// <summary>
+    /// A client registered through the internal name is handed back a registration_client_uri on the issuer's
+    /// authority, the one discovery publishes the registration endpoint on, never the name the registration came by.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteredByAnInternalName_IsHandedItsConfigurationEndpointOnTheIssuersAuthority()
+    {
+        await using var app = await StartAsync([Tenant("acme", Host)], services: services =>
+        {
+            services.AddDynamicClientRegistration();
+            services.Configure<OidcOptions>(options => options.RequireInitialAccessToken = false);
+        });
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(InternalName);
+        using var discovery = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+        var registrationEndpoint = new Uri(
+            (await ReadJsonAsync(discovery))[ConfigurationResponse.Parameters.RegistrationEndpoint]!.GetValue<string>());
+
+        using var registered = await http.PostAsync(
+            registrationEndpoint.AbsolutePath,
+            JsonContent.Create(new JsonObject
+            {
+                [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray(RedirectUri),
+                [ClientRegistrationRequest.Parameters.ClientName] = "internal-name-client",
+            }),
+            TestContext.Current.CancellationToken);
+
+        var body = await ReadJsonAsync(registered);
+        Assert.True(registered.IsSuccessStatusCode, body.ToJsonString());
+        var configurationEndpoint = body[ClientRegistrationResponse.Parameters.RegistrationClientUri]?.GetValue<string>();
+        Assert.NotNull(configurationEndpoint);
+        Assert.StartsWith(Host + "/", configurationEndpoint, StringComparison.Ordinal);
     }
 
     // A name the host is reached by inside its own network, which no client outside it can resolve
@@ -427,10 +463,12 @@ public sealed class SingleTenantWithoutTheCallTests
         string? pathBase = null,
         bool callsMultiTenancy = false,
         bool readsTenantFirst = false,
-        Action<WebApplication>? hostEndpoints = null)
+        Action<WebApplication>? hostEndpoints = null,
+        Action<IServiceCollection>? services = null)
     {
         var app = Build(
             tenants,
+            ownTenants: services,
             pathBase: pathBase,
             callsMultiTenancy: callsMultiTenancy,
             readsTenantFirst: readsTenantFirst,
