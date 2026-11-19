@@ -94,6 +94,11 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
                 wiring.IssuerSent = scope.ServiceProvider.GetService<IAuthorizationMetadataProvider>()
                     is not { AuthorizationResponseIssParameterSupported: false };
 
+                // Refused rather than ignored for this transport: the flag decides the SSRF handler every outbound
+                // client shares, and a document's URIs are fetched by the key, request and logout clients as well
+                wiring.PrivateNetworksBlocked =
+                    provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.BlockPrivateNetworks;
+
                 wiring.ConsentGrantedToAnyUrl = GrantsConsentToEveryClient(services) &&
                     provider.GetRequiredService<IOptions<OidcOptions>>().Value
                         .ClientIdMetadataDocuments.AllowedClientIdPrefixes is null;
@@ -101,6 +106,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             .Validate(wiring => wiring.StoreResolvesDocuments, ClientIdMetadataDocumentsWiring.StoreReplacedMessage)
             .Validate(wiring => wiring.IssuerSent, ClientIdMetadataDocumentsWiring.IssuerNotSentMessage)
             .Validate(wiring => !wiring.ConsentGrantedToAnyUrl, ClientIdMetadataDocumentsWiring.ConsentGrantedToAnyUrlMessage)
+            .Validate(wiring => wiring.PrivateNetworksBlocked, ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage)
             .ValidateOnStart();
 
         return builder;

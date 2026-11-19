@@ -47,6 +47,16 @@ internal sealed class ClientIdMetadataDocumentsWiring
         "end user for consent.";
 
     /// <summary>
+    /// What a host is told when it lets the server reach private networks.
+    /// </summary>
+    internal const string PrivateNetworksReachedMessage =
+        "AddClientIdMetadataDocuments() was called while SecureHttpFetchOptions.BlockPrivateNetworks is false, so any " +
+        "URL naming itself a client could have the server fetch from a private or special-use address: " +
+        "draft-ietf-oauth-client-id-metadata-document section 10.7 says the server \"MUST NOT fetch a Client ID " +
+        "Metadata Document URL or any URLs contained within a Client ID Metadata Document that resolve to special-use " +
+        "IP addresses\". Keep BlockPrivateNetworks on, and name a service of your own in AllowedDestinations instead.";
+
+    /// <summary>
     /// Whether the client store the container resolves is the one looking clients up by their documents.
     /// </summary>
     public bool StoreResolvesDocuments { get; set; }
@@ -60,4 +70,9 @@ internal sealed class ClientIdMetadataDocumentsWiring
     /// Whether every client is granted everything it asks for while a document is accepted from any URL.
     /// </summary>
     public bool ConsentGrantedToAnyUrl { get; set; }
+
+    /// <summary>
+    /// Whether the server's outbound fetches refuse private and special-use addresses.
+    /// </summary>
+    public bool PrivateNetworksBlocked { get; set; }
 }
