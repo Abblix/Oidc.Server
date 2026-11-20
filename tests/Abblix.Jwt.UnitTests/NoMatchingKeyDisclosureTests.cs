@@ -18,35 +18,43 @@ namespace Abblix.Jwt.UnitTests;
 public class NoMatchingKeyDisclosureTests
 {
     [Fact]
-    public async Task NoKeyMatches_RefusalDoesNotDependOnTheIssuersKeyCount()
+    public async Task UnknownKid_RefusalDoesNotDependOnTheIssuersKeyCount()
     {
-        var oneKey = await RefuseUnknownKid(1);
-        var threeKeys = await RefuseUnknownKid(3);
+        var header = new JsonObject { ["alg"] = SigningAlgorithms.RS256, ["kid"] = "unknown-kid" };
+
+        var oneKey = await Refuse(header, 1, keyAlgorithm: null);
+        var threeKeys = await Refuse(header, 3, keyAlgorithm: null);
 
         Assert.Equal(JwtError.InvalidToken, oneKey.Error);
-        Assert.Equal(oneKey.Error, threeKeys.Error);
-        Assert.Equal(oneKey.ErrorDescription, threeKeys.ErrorDescription);
+        Assert.Equal(oneKey, threeKeys);
     }
 
-    private static async Task<JwtValidationError> RefuseUnknownKid(int keyCount)
+    [Fact]
+    public async Task NoKid_KeysOfAnotherAlgorithm_RefusalDoesNotDependOnTheIssuersKeyCount()
+    {
+        var header = new JsonObject { ["alg"] = SigningAlgorithms.RS256 };
+
+        var oneKey = await Refuse(header, 1, SigningAlgorithms.RS384);
+        var threeKeys = await Refuse(header, 3, SigningAlgorithms.RS384);
+
+        Assert.Equal(JwtError.InvalidToken, oneKey.Error);
+        Assert.Equal(oneKey, threeKeys);
+    }
+
+    private static async Task<JwtValidationError> Refuse(JsonObject header, int keyCount, string? keyAlgorithm)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
         var signer = services.BuildServiceProvider().GetRequiredService<IJsonWebTokenSigner>();
-        var header = new JsonWebTokenHeader(new JsonObject
-        {
-            ["alg"] = SigningAlgorithms.RS256,
-            ["kid"] = "unknown-kid",
-        });
         var issuerKeys = Enumerable.Range(0, keyCount)
-            .Select(_ => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
+            .Select(_ => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, keyAlgorithm))
             .ToArray();
 
         var error = await signer.ValidateAsync(
             ["header", "payload", "signature"],
-            header,
+            new JsonWebTokenHeader(header),
             issuerKeys.ToAsyncEnumerable(),
             TestContext.Current.CancellationToken);
 
