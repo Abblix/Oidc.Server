@@ -75,7 +75,7 @@ public class TokenRequestProcessor(
 		string[] grantedScope = [..grantedContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
-		var issuesRefreshToken = mayIssueDerivedTokens && IssuesRefreshToken(clientInfo, grantedScope);
+		var issuesRefreshToken = mayIssueDerivedTokens && IssuesRefreshToken(grantedScope);
 
 		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
 			? refreshToken
@@ -151,13 +151,13 @@ public class TokenRequestProcessor(
 	/// never named does not count. The other grants naming no scope in the token request are given one by the server
 	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
 	/// a token left with none of it answers a request that asked for nothing. A token request naming only an
-	/// offline_access the client may not receive a refresh token for named none, as an authorization request naming
-	/// it does. A refresh token is minted only with
-	/// offline_access, so a refresh naming no scope keeps it and never ends with none - unless a host declares
-	/// offline_access as the scope of a resource the refreshed token does not address.
+	/// offline_access the client may not receive a refresh token for named a scope: a token left without it is
+	/// refused rather than issued with none, which the response could not tell apart from the scope requested. A
+	/// refresh token is minted only with offline_access, so a refresh naming no scope keeps it and never ends with
+	/// none - unless a host declares offline_access as the scope of a resource the refreshed token does not address.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
-		=> request.ClientInfo.ReceivableScope(request.Model.Scope) is { Length: > 0 } ||
+		=> request.Model.Scope is { Length: > 0 } ||
 		   context is { Scope.Length: > 0, ClientNamedNoScope: false } &&
 		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
@@ -182,17 +182,17 @@ public class TokenRequestProcessor(
 	}
 
 	/// <summary>
-	/// Whether a grant that may produce derived tokens adds a refresh token: one granted <c>offline_access</c>, for a
-	/// client that may receive it (<see cref="ClientInfo.MayReceiveRefreshToken"/>).
+	/// Whether a grant that may produce derived tokens adds a refresh token: one left with <c>offline_access</c> in
+	/// its granted scope.
 	/// </summary>
 	/// <remarks>
-	/// A client that may redeem a refresh token neither through the refresh token grant nor through a token exchange is
-	/// issued none: the token endpoint would refuse the token the moment the client presented it. RFC 6749 section 1.5
-	/// leaves issuing one to the server. Such a client has no <c>offline_access</c> left in the granted scope by then
-	/// (<see cref="OfflineAccessIgnoredUnlessAllowed"/>), so this check holds the issuance to the same answer.
+	/// The granted scope keeps <c>offline_access</c> only for a client allowed offline access that may receive a
+	/// refresh token (<see cref="OfflineAccessIgnoredUnlessAllowed"/>), so a client that may redeem one neither through
+	/// the refresh token grant nor through a token exchange is issued none, and RFC 6749 section 1.5 leaves issuing one
+	/// to the server.
 	/// </remarks>
-	private static bool IssuesRefreshToken(ClientInfo clientInfo, string[] grantedScope)
-		=> grantedScope.HasFlag(Scopes.OfflineAccess) && clientInfo.MayReceiveRefreshToken();
+	private static bool IssuesRefreshToken(string[] grantedScope)
+		=> grantedScope.HasFlag(Scopes.OfflineAccess);
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.
