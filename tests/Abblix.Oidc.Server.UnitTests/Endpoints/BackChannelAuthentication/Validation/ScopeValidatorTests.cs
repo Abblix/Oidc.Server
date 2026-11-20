@@ -421,6 +421,32 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A request naming no scope is served with the client's default without an offline_access the client may not
+    /// receive a refresh token for, as a request naming it would be.
+    /// </summary>
+    [Fact]
+    public async Task ADefaultCarryingOfflineAccess_IsServedWithoutItForAClientThatMayNotReceiveIt()
+    {
+        _scopeManager
+            .Setup(sm => sm.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
+            {
+                def = new ScopeDefinition(s, Array.Empty<string>());
+                return true;
+            }));
+        var context = CreateContext(
+            scopes: [],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            allowedGrantTypes: [GrantTypes.Ciba]);
+        context.ClientInfo.DefaultScope = [TestConstants.DefaultScope, Scopes.OfflineAccess];
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(TestConstants.DefaultScope, Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
     /// A request naming only an offline_access the client may not receive names no scope, so it is served with the
     /// client's default scope, or refused with invalid_scope from a client required to name one, as a request naming
     /// nothing is.
