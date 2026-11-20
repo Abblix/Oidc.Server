@@ -74,11 +74,15 @@ internal sealed partial class JwsSignatureVerifier(
         if (candidates.Length == 0)
         {
             LogNoMatchingKey(algorithm, keyId, allKeys.Length);
+
+            // The key count goes to the log only. This text reaches whoever presented the token - an
+            // unauthenticated caller of a push endpoint, for one - who could otherwise send tokens with
+            // made-up kid values to count the issuer's keys and watch a rotation leave none usable.
             return new JwtValidationError(
                 JwtError.InvalidToken,
                 keyId.HasValue()
-                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)"
-                    : $"No signing key matched header constraints: alg='{algorithm}' (issuer has {allKeys.Length} key(s), none usable)");
+                    ? $"No signing key matched header constraints: kid='{keyId}', alg='{algorithm}'"
+                    : $"No signing key matched header constraints: alg='{algorithm}'");
         }
 
         // Invalid base64 in the signature means an invalid token
