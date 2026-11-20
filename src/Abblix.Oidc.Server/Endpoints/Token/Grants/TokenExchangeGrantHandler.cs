@@ -199,28 +199,19 @@ public class TokenExchangeGrantHandler(
         ClientInfo clientInfo,
         string fieldName)
     {
-        if (tokenTypeUri is null)
+        if (tokenTypeUri is null || clientInfo.MayExchangeTokenType(tokenTypeUri))
             return null;
 
-        // Tri-state: null = no per-client constraint -- skip membership check entirely so the
-        // null-allowlist passthrough case does not NRE at .Contains().
-        switch (clientInfo.TokenExchangeAllowedSubjectTokenTypes)
+        if (clientInfo.TokenExchangeAllowedSubjectTokenTypes is { Length: 0 })
         {
-            case { Length: 0 }:
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "Client is not permitted to use the Token Exchange grant.");
-
-            // A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by
-            // their spelling rather than as equivalent addresses
-            case { Length: > 0 } allowlist when !allowlist.Any(allowed =>
-                string.Equals(allowed.OriginalString, tokenTypeUri.OriginalString, StringComparison.Ordinal)):
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "Client is not permitted to use the Token Exchange grant.");
         }
 
-        return null;
+        return new OidcError(
+            ErrorCodes.InvalidRequest,
+            $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
     }
 
     /// <summary>

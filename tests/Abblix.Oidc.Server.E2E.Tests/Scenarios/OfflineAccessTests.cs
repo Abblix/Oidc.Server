@@ -52,13 +52,21 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
     {
         private DateTimeOffset? _givenAt;
 
+        /// <summary>
+        /// The scopes the end user was last asked to consent to.
+        /// </summary>
+        public string[] Asked { get; private set; } = [];
+
         public Task<UserConsents> GetUserConsentsAsync(
             Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
-            => Task.FromResult(new UserConsents
+        {
+            Asked = [.. request.Scope.Select(scope => scope.Scope)];
+            return Task.FromResult(new UserConsents
             {
                 Granted = new ConsentDefinition(request.Scope, request.Resources),
                 GivenAt = _givenAt,
             });
+        }
 
         public void Give() => _givenAt = TimeProvider.System.GetUtcNow();
     }
@@ -89,6 +97,46 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
     public async Task OfflineAccessWithConsentPrompt_ComesBackFromTheConsentPage_AndARefreshTokenIsIssued()
     {
         var consents = new ConsentGivenOnThePage();
+
+        var tokens = await TokensWithConsentAsync(PublicClient(), consents);
+
+        Assert.Contains(Scopes.OfflineAccess, consents.Asked);
+        Assert.NotNull(tokens[TokenResponse.Parameters.RefreshToken]);
+    }
+
+    /// <summary>
+    /// A client registered without the refresh token grant - grant_types omitted, which RFC 7591 section 2 reads as
+    /// authorization_code alone, or stated without it - is issued no refresh token even with consent given: the token
+    /// endpoint would refuse it with unauthorized_client the moment the client presented it. Its offline_access is
+    /// ignored at the authorization step, so the end user is not asked to consent to it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AClientRegisteredWithoutTheRefreshGrant_IsIssuedNoRefreshToken(bool statesGrantTypes)
+    {
+        var registration = PublicClient();
+        if (statesGrantTypes)
+            registration[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode);
+        else
+            registration.Remove(RequestMembers.GrantTypes);
+
+        var consents = new ConsentGivenOnThePage();
+
+        var tokens = await TokensWithConsentAsync(registration, consents);
+
+        Assert.Contains(Scopes.OpenId, consents.Asked);
+        Assert.DoesNotContain(Scopes.OfflineAccess, consents.Asked);
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+        Assert.Null(tokens[TokenResponse.Parameters.RefreshToken]);
+    }
+
+    /// <summary>
+    /// The tokens a client registered with <paramref name="registration"/> is issued for an OpenID request for offline
+    /// access with prompt=consent, once the end user gives consent on the consent page.
+    /// </summary>
+    private async Task<JsonObject> TokensWithConsentAsync(JsonObject registration, ConsentGivenOnThePage consents)
+    {
         using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
             services => services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider>(consents))));
         var client = host.CreateClient(new WebApplicationFactoryClientOptions
@@ -97,7 +145,8 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
             BaseAddress = TestServerAddress.BaseAddress,
         });
         var discovery = await FetchDiscoveryAsync(client);
-        var clientId = await RegisterPublicClientAsync(client, discovery);
+        var registered = await RegisterClientAsync(client, discovery, registration);
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
         var (verifier, challenge) = GeneratePkcePair();
 
         var parameters = CodeFlowParameters(clientId, challenge);
@@ -118,9 +167,7 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
         var code = QueryValue(back, ResponseParameters.Code);
         Assert.NotNull(code);
 
-        var tokens = await ExchangeAsync(client, discovery, clientId, code, verifier);
-
-        Assert.NotNull(tokens[TokenResponse.Parameters.RefreshToken]);
+        return await ExchangeAsync(client, discovery, clientId, code, verifier);
     }
 
     /// <summary>

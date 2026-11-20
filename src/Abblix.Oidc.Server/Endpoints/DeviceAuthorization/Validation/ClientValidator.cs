@@ -46,7 +46,7 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
                 "The client is not authorized");
         }
 
-        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.DeviceAuthorization))
+        if (!clientInfo.MayUseGrantType(GrantTypes.DeviceAuthorization))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,

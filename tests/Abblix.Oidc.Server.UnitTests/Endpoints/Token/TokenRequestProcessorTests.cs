@@ -74,6 +74,16 @@ public partial class TokenRequestProcessorTests
         CreateAuthSession(),
         new AuthorizationContext(TestConstants.DefaultClientId, scopes, null));
 
+    /// <summary>
+    /// A client allowed offline access and the refresh token grant, so it is issued a refresh token whenever
+    /// offline_access is granted.
+    /// </summary>
+    private static ClientInfo RefreshingClient() => new(TestConstants.DefaultClientId)
+    {
+        OfflineAccess = OfflineAccess.ConsentRequired,
+        AllowedGrantTypes = CodeAndRefreshGrants,
+    };
+
     private static ValidTokenRequest CreateValidTokenRequest(string[] scopes)
     {
         var tokenRequest = CreateTokenRequest();
@@ -81,7 +91,7 @@ public partial class TokenRequestProcessorTests
         return new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
     }
@@ -486,18 +496,25 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// A client not allowed offline access has offline_access ignored however its grant came to carry it, as a
-    /// password or jwt-bearer grant takes it from the token request: the access token is issued without it and no
-    /// refresh token is.
+    /// A client not allowed offline access, or one that may not receive a refresh token, has offline_access ignored
+    /// however its grant came to carry it, as a password or jwt-bearer grant takes it from the token request: the
+    /// access token is issued without it and no refresh token is.
     /// </summary>
-    [Fact]
-    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored()
+    [Theory]
+    [InlineData(OfflineAccess.Disabled, true)]
+    [InlineData(OfflineAccess.ConsentRequired, false)]
+    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored(
+        OfflineAccess offlineAccess, bool mayReceiveRefreshToken)
     {
         const string ApiScope = "api.read";
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled },
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                OfflineAccess = offlineAccess,
+                AllowedGrantTypes = mayReceiveRefreshToken ? CodeAndRefreshGrants : [GrantTypes.AuthorizationCode],
+            },
             [],
             []);
         var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);
@@ -571,7 +588,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             new TokenRequest { GrantType = GrantTypes.TokenExchange },
             new AuthorizedGrant(authSession, authContext) { GrantId = ExistingGrantId, ExpiresNoLaterThan = subjectExpiresAt },
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -606,7 +623,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             new TokenRequest { GrantType = GrantTypes.RefreshToken },
             new RefreshTokenAuthorizedGrant(authSession, authContext, legacyRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var newRefreshToken = CreateRefreshToken();
@@ -650,7 +667,7 @@ public partial class TokenRequestProcessorTests
                 authSession,
                 new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
                 existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -885,7 +902,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             refreshTokenGrant,
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
 
@@ -947,7 +964,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
 
@@ -986,7 +1003,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -1027,7 +1044,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -1078,7 +1095,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
 
@@ -1206,6 +1223,7 @@ public partial class TokenRequestProcessorTests
         {
             TokenEndpointAuthMethod = tokenEndpointAuthMethod,
             OfflineAccess = OfflineAccess.ConsentRequired,
+            AllowedGrantTypes = CodeAndRefreshGrants,
         };
         var request = new ValidTokenRequest(tokenRequest, authorizedGrant, clientInfo, [], []);
 
@@ -1255,7 +1273,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            RefreshingClient(),
             [],
             []);
         var accessToken = CreateAccessToken();
