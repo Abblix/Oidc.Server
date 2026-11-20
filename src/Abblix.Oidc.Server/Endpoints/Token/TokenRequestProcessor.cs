@@ -24,7 +24,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
 /// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 section 5.1),
-/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11),
+/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11) and the client
+/// may use the refresh token grant that redeems it,
 /// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 section 3.1.3.3, with <c>at_hash</c>
 /// computed from the issued access token).
 /// </summary>
@@ -74,7 +75,7 @@ public class TokenRequestProcessor(
 		string[] grantedScope = [..grantedContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
-		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
+		var issuesRefreshToken = mayIssueDerivedTokens && IssuesRefreshToken(clientInfo, grantedScope);
 
 		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
 			? refreshToken
@@ -172,6 +173,18 @@ public class TokenRequestProcessor(
 
 		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };
 	}
+
+	/// <summary>
+	/// Whether a grant that may produce derived tokens adds a refresh token: one granted <c>offline_access</c>, for a
+	/// client that may use the refresh token grant.
+	/// </summary>
+	/// <remarks>
+	/// A refresh token is redeemed only by the refresh token grant, so a client not allowed that grant is issued none:
+	/// the token endpoint would refuse it with unauthorized_client the moment it presented one. RFC 6749 section 1.5
+	/// leaves issuing one to the server, so the <c>offline_access</c> granted stays in the access token's scope.
+	/// </remarks>
+	private static bool IssuesRefreshToken(ClientInfo clientInfo, string[] grantedScope)
+		=> grantedScope.HasFlag(Scopes.OfflineAccess) && clientInfo.MayUseGrantType(GrantTypes.RefreshToken);
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.

@@ -100,7 +100,7 @@ public class BackChannelAuthenticationHandler(
         // authentication method registered for its client_id". A client registered with the method "none" authenticates
         // nobody, so the flow is not open to it. Section 13: unauthorized_client, "The Client is not authorized to use
         // this authentication flow"
-        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
+        if (!clientInfo.MayUseGrantType(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");

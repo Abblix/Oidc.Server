@@ -88,6 +88,39 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task OfflineAccessWithConsentPrompt_ComesBackFromTheConsentPage_AndARefreshTokenIsIssued()
     {
+        var tokens = await TokensWithConsentAsync(PublicClient());
+
+        Assert.NotNull(tokens[TokenResponse.Parameters.RefreshToken]);
+    }
+
+    /// <summary>
+    /// A client registered without the refresh token grant - grant_types omitted, which RFC 7591 section 2 reads as
+    /// authorization_code alone, or stated without it - is issued no refresh token even with consent given: the token
+    /// endpoint would refuse it with unauthorized_client the moment the client presented it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AClientRegisteredWithoutTheRefreshGrant_IsIssuedNoRefreshToken(bool statesGrantTypes)
+    {
+        var registration = PublicClient();
+        if (statesGrantTypes)
+            registration[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode);
+        else
+            registration.Remove(RequestMembers.GrantTypes);
+
+        var tokens = await TokensWithConsentAsync(registration);
+
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+        Assert.Null(tokens[TokenResponse.Parameters.RefreshToken]);
+    }
+
+    /// <summary>
+    /// The tokens a client registered with <paramref name="registration"/> is issued for an OpenID request for offline
+    /// access with prompt=consent, once the end user gives consent on the consent page.
+    /// </summary>
+    private async Task<JsonObject> TokensWithConsentAsync(JsonObject registration)
+    {
         var consents = new ConsentGivenOnThePage();
         using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
             services => services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider>(consents))));
@@ -97,7 +130,8 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
             BaseAddress = TestServerAddress.BaseAddress,
         });
         var discovery = await FetchDiscoveryAsync(client);
-        var clientId = await RegisterPublicClientAsync(client, discovery);
+        var registered = await RegisterClientAsync(client, discovery, registration);
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
         var (verifier, challenge) = GeneratePkcePair();
 
         var parameters = CodeFlowParameters(clientId, challenge);
@@ -118,9 +152,7 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
         var code = QueryValue(back, ResponseParameters.Code);
         Assert.NotNull(code);
 
-        var tokens = await ExchangeAsync(client, discovery, clientId, code, verifier);
-
-        Assert.NotNull(tokens[TokenResponse.Parameters.RefreshToken]);
+        return await ExchangeAsync(client, discovery, clientId, code, verifier);
     }
 
     /// <summary>

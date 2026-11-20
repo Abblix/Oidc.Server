@@ -207,6 +207,14 @@ public record ClientInfo(string ClientId)
     public string[] EffectiveGrantTypes => AllowedGrantTypes ?? [GrantTypes.AuthorizationCode];
 
     /// <summary>
+    /// Whether this client may use the grant type: the one answer both the token endpoint refusing a grant with
+    /// <c>unauthorized_client</c> and the issuance of a credential only that grant redeems ask, so the server never
+    /// hands out what it then refuses.
+    /// </summary>
+    /// <param name="grantType">The grant type, as the <c>grant_type</c> parameter names it.</param>
+    internal bool MayUseGrantType(string grantType) => EffectiveGrantTypes.Contains(grantType, StringComparer.Ordinal);
+
+    /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
     /// which the authorization response is delivered. When set to a non-empty list, a request is rejected unless
     /// its effective response mode (the explicit <c>response_mode</c>, or the flow default when the parameter is

@@ -41,7 +41,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         // Ensure the client is authorized to use the requested grant type
-        if (!context.ClientInfo.EffectiveGrantTypes.Contains(context.Request.GrantType))
+        if (!context.ClientInfo.MayUseGrantType(context.Request.GrantType))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,

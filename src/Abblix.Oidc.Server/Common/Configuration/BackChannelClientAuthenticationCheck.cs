@@ -29,7 +29,7 @@ public sealed class BackChannelClientAuthenticationCheck : ITenantsCheck
     private static IEnumerable<string> Failures(IEnumerable<ClientInfo> clients)
         =>
             from client in clients
-            where client is { ClientType: ClientType.Public } && client.EffectiveGrantTypes.Contains(GrantTypes.Ciba)
+            where client is { ClientType: ClientType.Public } && client.MayUseGrantType(GrantTypes.Ciba)
             select $"Client '{client.ClientId}' may use backchannel authentication but authenticates with " +
                    $"'{client.TokenEndpointAuthMethod}'; the flow requires a client that authenticates itself.";
 }
