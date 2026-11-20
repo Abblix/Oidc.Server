@@ -496,18 +496,25 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// A client not allowed offline access has offline_access ignored however its grant came to carry it, as a
-    /// password or jwt-bearer grant takes it from the token request: the access token is issued without it and no
-    /// refresh token is.
+    /// A client not allowed offline access, or one that may not receive a refresh token, has offline_access ignored
+    /// however its grant came to carry it, as a password or jwt-bearer grant takes it from the token request: the
+    /// access token is issued without it and no refresh token is.
     /// </summary>
-    [Fact]
-    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored()
+    [Theory]
+    [InlineData(OfflineAccess.Disabled, true)]
+    [InlineData(OfflineAccess.ConsentRequired, false)]
+    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored(
+        OfflineAccess offlineAccess, bool mayReceiveRefreshToken)
     {
         const string ApiScope = "api.read";
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled, AllowedGrantTypes = CodeAndRefreshGrants },
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                OfflineAccess = offlineAccess,
+                AllowedGrantTypes = mayReceiveRefreshToken ? CodeAndRefreshGrants : [GrantTypes.AuthorizationCode],
+            },
             [],
             []);
         var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);

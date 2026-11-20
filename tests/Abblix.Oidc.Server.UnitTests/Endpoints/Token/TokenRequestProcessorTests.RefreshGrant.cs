@@ -187,8 +187,8 @@ public partial class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, clientInfo, It.IsAny<string?>(),
-                It.IsAny<DateTimeOffset?>()))
+                TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(), clientInfo,
+                It.IsAny<string?>(), It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken());
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(

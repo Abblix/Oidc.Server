@@ -150,26 +150,33 @@ public class TokenRequestProcessor(
 	/// At that step a client naming no scope is served its default, which the grant marks, so a default the client
 	/// never named does not count. The other grants naming no scope in the token request are given one by the server
 	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
-	/// a token left with none of it answers a request that asked for nothing. A refresh token is minted only with
+	/// a token left with none of it answers a request that asked for nothing. A token request naming only an
+	/// offline_access the client may not receive a refresh token for named none, as an authorization request naming
+	/// it does. A refresh token is minted only with
 	/// offline_access, so a refresh naming no scope keeps it and never ends with none - unless a host declares
 	/// offline_access as the scope of a resource the refreshed token does not address.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
-		=> request.Model.Scope is { Length: > 0 } ||
+		=> request.ClientInfo.ReceivableScope(request.Model.Scope) is { Length: > 0 } ||
 		   context is { Scope.Length: > 0, ClientNamedNoScope: false } &&
 		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
 	/// <summary>
-	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,
-	/// so no refresh token is issued to it: a grant taking its scope from the token request has no authorization
-	/// request in front of it to ignore the scope there.
+	/// The context without <c>offline_access</c> for a client not allowed offline access or one that may not receive a
+	/// refresh token (<see cref="ClientInfo.MayReceiveRefreshToken"/>), whichever grant brought it, so neither its
+	/// access token nor the response scope carries offline access the client does not get: a grant taking its scope
+	/// from the token request has no authorization request in front of it to ignore the scope there, and a token
+	/// exchange inherits it from its subject token.
 	/// </summary>
 	private static AuthorizationContext OfflineAccessIgnoredUnlessAllowed(
 		ClientInfo clientInfo,
 		AuthorizationContext authContext)
 	{
-		if (clientInfo.OfflineAccess.IsAllowed() || !authContext.Scope.HasFlag(Scopes.OfflineAccess))
+		if (!authContext.Scope.HasFlag(Scopes.OfflineAccess) ||
+		    clientInfo.OfflineAccess.IsAllowed() && clientInfo.MayReceiveRefreshToken())
+		{
 			return authContext;
+		}
 
 		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };
 	}
@@ -181,7 +188,8 @@ public class TokenRequestProcessor(
 	/// <remarks>
 	/// A client that may redeem a refresh token neither through the refresh token grant nor through a token exchange is
 	/// issued none: the token endpoint would refuse the token the moment the client presented it. RFC 6749 section 1.5
-	/// leaves issuing one to the server, so an <c>offline_access</c> granted stays in the access token's scope.
+	/// leaves issuing one to the server. Such a client has no <c>offline_access</c> left in the granted scope by then
+	/// (<see cref="OfflineAccessIgnoredUnlessAllowed"/>), so this check holds the issuance to the same answer.
 	/// </remarks>
 	private static bool IssuesRefreshToken(ClientInfo clientInfo, string[] grantedScope)
 		=> grantedScope.HasFlag(Scopes.OfflineAccess) && clientInfo.MayReceiveRefreshToken();

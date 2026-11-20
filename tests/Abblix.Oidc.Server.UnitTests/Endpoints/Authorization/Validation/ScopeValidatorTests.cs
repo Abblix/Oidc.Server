@@ -171,19 +171,23 @@ public class ScopeValidatorTests
     /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
     /// it is served the client's default on the first pass, marked as not named, and the same request read back from
     /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
-    /// the client named.
+    /// the client named. A client that may not receive a refresh token has it ignored even with prompt=consent, so the
+    /// code its consent brings carries the default, never a scope left empty at the code exchange.
     /// </summary>
     [Theory]
-    [InlineData(false, new[] { Scopes.OpenId }, true)]
-    [InlineData(true, new[] { Scopes.OfflineAccess }, false)]
+    [InlineData(false, true, new[] { Scopes.OpenId }, true)]
+    [InlineData(true, true, new[] { Scopes.OfflineAccess }, false)]
+    [InlineData(true, false, new[] { Scopes.OpenId }, true)]
     public async Task ValidateAsync_OfflineAccessAlone_IsServedAlikeOnEveryPass(
-        bool promptConsent, string[] expectedScope, bool expectedNamedNoScope)
+        bool promptConsent, bool mayReceiveRefreshToken, string[] expectedScope, bool expectedNamedNoScope)
     {
         var context = CreateContext(
             [Scopes.OfflineAccess],
             offlineAccess: OfflineAccess.ConsentRequired,
             prompt: promptConsent ? [Prompts.Consent] : null);
         context.ClientInfo.DefaultScope = [Scopes.OpenId];
+        if (!mayReceiveRefreshToken)
+            context.ClientInfo.AllowedGrantTypes = [GrantTypes.AuthorizationCode];
 
         Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal(expectedScope, context.Request.Scope);
@@ -194,6 +198,7 @@ public class ScopeValidatorTests
             offlineAccess: OfflineAccess.ConsentRequired,
             prompt: promptConsent ? [Prompts.Consent] : null);
         readBack.ClientInfo.DefaultScope = [Scopes.OpenId];
+        readBack.ClientInfo.AllowedGrantTypes = context.ClientInfo.AllowedGrantTypes;
         readBack.Request = readBack.Request with { ClientNamedNoScope = context.Request.ClientNamedNoScope };
 
         Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, readBack));

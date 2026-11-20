@@ -326,6 +326,38 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A request of a grant starting from the client alone naming only an offline_access the client may not receive a
+    /// refresh token for names no scope, as an authorization request naming it does: it is served with the client's
+    /// default, without offline_access, or refused with invalid_scope from a client required to name one.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.Password, false, null)]
+    [InlineData(GrantTypes.JwtBearer, false, null)]
+    [InlineData(GrantTypes.Password, true, ErrorCodes.InvalidScope)]
+    public async Task ARequestNamingOnlyAnOfflineAccessTheClientMayNotReceive_NamesNoScope(
+        string grantType, bool requireScope, string? expectedError)
+    {
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = grantType, Scope = [Scopes.OfflineAccess] }, new ClientRequest())
+        {
+            ClientInfo = new ClientInfo("test-client")
+            {
+                AllowedGrantTypes = [grantType],
+                AllowedScopes = ["read", Scopes.OfflineAccess],
+                DefaultScope = ["read", Scopes.OfflineAccess],
+                RequireScope = requireScope,
+            },
+        };
+        SetupScopeManagerForScopes("read", Scopes.OfflineAccess);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, error?.Error);
+        if (expectedError is null)
+            Assert.Equal("read", Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
     /// A grant carrying the scope it was granted is not given the client's default, nor refused for naming none.
     /// </summary>
     [Theory]
