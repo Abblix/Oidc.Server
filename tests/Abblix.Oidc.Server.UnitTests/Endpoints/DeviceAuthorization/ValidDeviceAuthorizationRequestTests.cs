@@ -41,17 +41,26 @@ public class ValidDeviceAuthorizationRequestTests
 
     /// <summary>
     /// The scope served is the client's default when the request names none, so the validated request says which
-    /// it was: the scope it carries cannot tell, being filled either way.
+    /// it was: the scope it carries cannot tell, being filled either way. A request naming only an offline_access the
+    /// client may not receive a refresh token for names none.
     /// </summary>
     [Theory]
-    [InlineData(null, true)]
-    [InlineData(new string[0], true)]
-    [InlineData(new[] { Scopes.OpenId }, false)]
-    public void WhetherTheClientNamedAScope_IsReadFromTheRequestAsSent(string[]? named, bool expected)
+    [InlineData(null, false, true)]
+    [InlineData(new string[0], false, true)]
+    [InlineData(new[] { Scopes.OpenId }, false, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, false, true)]
+    [InlineData(new[] { Scopes.OfflineAccess }, true, false)]
+    public void WhetherTheClientNamedAScope_IsReadFromTheRequestAsSent(
+        string[]? named, bool mayReceiveRefreshToken, bool expected)
     {
         var context = new DeviceAuthorizationValidationContext(new WireRequest { Scope = named }, new ClientRequest())
         {
-            ClientInfo = new ClientInfo("device_client"),
+            ClientInfo = new ClientInfo("device_client")
+            {
+                AllowedGrantTypes = mayReceiveRefreshToken
+                    ? [GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken]
+                    : [GrantTypes.DeviceAuthorization],
+            },
             Scope = [new ScopeDefinition(Scopes.OpenId)],
         };
 
