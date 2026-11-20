@@ -75,10 +75,8 @@ internal sealed partial class JwsSignatureVerifier(
         {
             LogNoMatchingKey(algorithm, keyId, allKeys.Length);
 
-            // The key count goes to the log only. This text reaches whoever presented the token - client
-            // registration returns it for a refused software_statement - so a caller registering with statements
-            // carrying a made-up kid would count the trusted issuers' keys, which may be published nowhere,
-            // and see each one added or retired.
+            // The key count goes to the log only: this text reaches whoever presented the token (client registration
+            // returns it for a refused software_statement), so it does not vary with the keys the server holds.
             return new JwtValidationError(
                 JwtError.InvalidToken,
                 keyId.HasValue()
