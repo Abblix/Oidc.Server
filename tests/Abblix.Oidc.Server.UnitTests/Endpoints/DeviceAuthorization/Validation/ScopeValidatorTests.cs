@@ -65,11 +65,12 @@ public class ScopeValidatorTests
     /// the end user approving on the device is not asked for it and the grant does not carry it.
     /// </summary>
     [Theory]
-    [InlineData(new[] { GrantTypes.DeviceAuthorization }, false)]
-    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, true)]
-    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.TokenExchange }, true)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization }, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization }, OfflineAccess.Disabled, false)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, OfflineAccess.ConsentRequired, true)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.TokenExchange }, OfflineAccess.ConsentRequired, true)]
     public async Task OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
-        string[] allowedGrantTypes, bool received)
+        string[] allowedGrantTypes, OfflineAccess offlineAccess, bool received)
     {
         var scopeManager = new Mock<IScopeManager>();
         scopeManager
@@ -85,7 +86,7 @@ public class ScopeValidatorTests
         {
             ClientInfo = new ClientInfo("device-client")
             {
-                OfflineAccess = OfflineAccess.ConsentRequired,
+                OfflineAccess = offlineAccess,
                 AllowedGrantTypes = allowedGrantTypes,
             },
         };
@@ -95,6 +96,43 @@ public class ScopeValidatorTests
         Assert.Null(result);
         Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
         Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
+    }
+
+    /// <summary>
+    /// A request naming only an offline_access the client may not receive names no scope, so it is served with the
+    /// client's default scope, or refused with invalid_scope from a client required to name one, as a request naming
+    /// nothing is.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidScope)]
+    public async Task OfflineAccessAlone_FromAClientThatMayNotReceiveIt_NamesNoScope(bool requireScope, string? error)
+    {
+        var scopeManager = new Mock<IScopeManager>();
+        scopeManager
+            .Setup(m => m.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
+            {
+                definition = new ScopeDefinition(scope);
+                return true;
+            }));
+        var context = new DeviceAuthorizationValidationContext(
+            new DeviceAuthorizationRequest { Scope = [Scopes.OfflineAccess] },
+            new ClientRequest { ClientId = "device-client" })
+        {
+            ClientInfo = new ClientInfo("device-client")
+            {
+                OfflineAccess = OfflineAccess.ConsentRequired,
+                AllowedGrantTypes = [GrantTypes.DeviceAuthorization],
+                DefaultScope = [Scopes.Profile],
+                RequireScope = requireScope,
+            },
+        };
+
+        var result = await new ScopeValidator(scopeManager.Object).ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(error, result?.Error);
+        Assert.Equal(requireScope ? null : Scopes.Profile, context.Scope is [var served] ? served.Scope : null);
     }
 
     /// <summary>

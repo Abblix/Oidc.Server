@@ -289,16 +289,17 @@ public class ScopeValidatorTests
     /// neither the end user's consent nor the code it brings carries it.
     /// </summary>
     [Theory]
-    [InlineData(null, false)]
-    [InlineData(new[] { GrantTypes.AuthorizationCode }, false)]
-    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, true)]
-    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.TokenExchange }, true)]
+    [InlineData(null, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, OfflineAccess.Disabled, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, OfflineAccess.ConsentRequired, true)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.TokenExchange }, OfflineAccess.ConsentRequired, true)]
     public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
-        string[]? allowedGrantTypes, bool received)
+        string[]? allowedGrantTypes, OfflineAccess offlineAccess, bool received)
     {
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccess: OfflineAccess.ConsentRequired,
+            offlineAccess: offlineAccess,
             prompt: [Prompts.Consent]);
         context.ClientInfo.AllowedGrantTypes = allowedGrantTypes;
 

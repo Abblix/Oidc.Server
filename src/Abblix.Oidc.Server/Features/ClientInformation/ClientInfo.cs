@@ -360,21 +360,25 @@ public record ClientInfo(string ClientId)
     private static readonly Uri RefreshTokenType = new(TokenExchangeTokenTypes.RefreshToken);
 
     /// <summary>
-    /// The scope a request with no consent conditions of its own, a device authorization or a backchannel
-    /// authentication request, is served with: <see cref="ScopeServedFor"/>, without an <c>offline_access</c> the
-    /// client may not receive a refresh token for (<see cref="MayReceiveRefreshToken"/>), which is ignored as if never
-    /// asked for.
+    /// The scope without an <c>offline_access</c> this client may not receive a refresh token for
+    /// (<see cref="MayReceiveRefreshToken"/>), which a device authorization or a backchannel authentication request
+    /// has ignored as if never asked for.
+    /// </summary>
+    /// <param name="scope">The scope a request names or is served with.</param>
+    internal string[] ReceivableScope(string[] scope)
+        => !scope.Contains(Scopes.OfflineAccess, StringComparer.Ordinal) || MayReceiveRefreshToken()
+            ? scope
+            : [.. scope.Where(value => value != Scopes.OfflineAccess)];
+
+    /// <summary>
+    /// The scope a device authorization or a backchannel authentication request is served with: the one it names
+    /// without an ignored <c>offline_access</c> (<see cref="ReceivableScope"/>), or else <see cref="DefaultScope"/>
+    /// likewise, or null when <see cref="RequireScope"/> refuses a request naming none. A request naming only an
+    /// ignored <c>offline_access</c> names none.
     /// </summary>
     /// <param name="requested">The scope the request names, empty when it names none.</param>
-    internal string[]? ScopeServedWithReceivableOfflineAccessFor(string[] requested)
-    {
-        if (ScopeServedFor(requested) is not { } served)
-            return null;
-
-        return !served.Contains(Scopes.OfflineAccess, StringComparer.Ordinal) || MayReceiveRefreshToken()
-            ? served
-            : [.. served.Where(scope => scope != Scopes.OfflineAccess)];
-    }
+    internal string[]? ReceivableScopeServedFor(string[] requested)
+        => ScopeServedFor(ReceivableScope(requested)) is { } served ? ReceivableScope(served) : null;
 
     /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when

@@ -157,11 +157,12 @@ public class ScopeValidatorTests
     /// ignored, so the end user authenticating on the device is not asked for it and the grant does not carry it.
     /// </summary>
     [Theory]
-    [InlineData(new[] { GrantTypes.Ciba }, false)]
-    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.RefreshToken }, true)]
-    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.TokenExchange }, true)]
+    [InlineData(new[] { GrantTypes.Ciba }, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.Ciba }, OfflineAccess.Disabled, false)]
+    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.RefreshToken }, OfflineAccess.ConsentRequired, true)]
+    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.TokenExchange }, OfflineAccess.ConsentRequired, true)]
     public async Task OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
-        string[] allowedGrantTypes, bool received)
+        string[] allowedGrantTypes, OfflineAccess offlineAccess, bool received)
     {
         _scopeManager
             .Setup(sm => sm.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
@@ -172,7 +173,7 @@ public class ScopeValidatorTests
             }));
         var context = CreateContext(
             scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
-            offlineAccess: OfflineAccess.ConsentRequired,
+            offlineAccess: offlineAccess,
             allowedGrantTypes: allowedGrantTypes);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -411,6 +412,37 @@ public class ScopeValidatorTests
             DefaultScope = [TestConstants.DefaultScope],
             RequireScope = requireScope,
         };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(error, result?.Error);
+        Assert.Equal(
+            requireScope ? null : TestConstants.DefaultScope, context.Scope is [var served] ? served.Scope : null);
+    }
+
+    /// <summary>
+    /// A request naming only an offline_access the client may not receive names no scope, so it is served with the
+    /// client's default scope, or refused with invalid_scope from a client required to name one, as a request naming
+    /// nothing is.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidScope)]
+    public async Task OfflineAccessAlone_FromAClientThatMayNotReceiveIt_NamesNoScope(bool requireScope, string? error)
+    {
+        _scopeManager
+            .Setup(sm => sm.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
+            {
+                def = new ScopeDefinition(s, Array.Empty<string>());
+                return true;
+            }));
+        var context = CreateContext(
+            scopes: [Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            allowedGrantTypes: [GrantTypes.Ciba]);
+        context.ClientInfo.DefaultScope = [TestConstants.DefaultScope];
+        context.ClientInfo.RequireScope = requireScope;
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

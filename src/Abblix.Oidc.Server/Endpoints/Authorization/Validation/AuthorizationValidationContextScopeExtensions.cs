@@ -71,9 +71,10 @@ internal static class AuthorizationValidationContextScopeExtensions
 	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
 	/// access without it (section 11). The second condition is lifted for a client the host lets keep receiving
 	/// offline access beside such a token (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>).
-	/// Section 11 leaves other conditions to the server, and offline access is also ignored for a client that may not
-	/// receive the refresh token it asks for (<see cref="ClientInfo.MayReceiveRefreshToken"/>), so the end user is not
-	/// asked to consent to what the client cannot get.
+	/// RFC 6749 section 3.3 lets the server "fully or partially ignore the scope requested by the client, based on the
+	/// authorization server policy", and offline access is also ignored for a client that may not receive the refresh
+	/// token it asks for (<see cref="ClientInfo.MayReceiveRefreshToken"/>), so the end user is not asked to consent to
+	/// what the client cannot get.
 	/// </summary>
 	public static bool OfflineAccessReceived(this AuthorizationValidationContext context)
 		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
