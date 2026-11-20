@@ -30,7 +30,7 @@ public class ResourceValidator(IResourceManager resourceManager)
     private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var request = context.Request;
-        var scope = context.ClientInfo.ScopeServedFor(request.Scope ?? []) ?? [];
+        var scope = context.ClientInfo.ScopeServedWithReceivableOfflineAccessFor(request.Scope ?? []) ?? [];
 
         var refusal = Settle(
             tenant,

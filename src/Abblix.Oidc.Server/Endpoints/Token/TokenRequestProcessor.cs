@@ -176,23 +176,15 @@ public class TokenRequestProcessor(
 
 	/// <summary>
 	/// Whether a grant that may produce derived tokens adds a refresh token: one granted <c>offline_access</c>, for a
-	/// client that may use a grant redeeming it.
+	/// client that may receive it (<see cref="ClientInfo.MayReceiveRefreshToken"/>).
 	/// </summary>
 	/// <remarks>
-	/// A refresh token is redeemed by the refresh token grant, and by a token exchange naming it as the subject token
-	/// (RFC 8693 section 3) for a client whose token types admit it, so a client allowed neither is issued none: the
-	/// token endpoint would refuse the token the moment the client presented it. RFC 6749 section 1.5 leaves issuing
-	/// one to the server, so the <c>offline_access</c> granted stays in the access token's scope.
+	/// A client that may redeem a refresh token neither through the refresh token grant nor through a token exchange is
+	/// issued none: the token endpoint would refuse the token the moment the client presented it. RFC 6749 section 1.5
+	/// leaves issuing one to the server, so an <c>offline_access</c> granted stays in the access token's scope.
 	/// </remarks>
 	private static bool IssuesRefreshToken(ClientInfo clientInfo, string[] grantedScope)
-		=> grantedScope.HasFlag(Scopes.OfflineAccess) &&
-		   (clientInfo.MayUseGrantType(GrantTypes.RefreshToken) || MayExchangeRefreshToken(clientInfo));
-
-	private static bool MayExchangeRefreshToken(ClientInfo clientInfo)
-		=> clientInfo.MayUseGrantType(GrantTypes.TokenExchange) &&
-		   clientInfo.MayExchangeTokenType(RefreshTokenType);
-
-	private static readonly Uri RefreshTokenType = new(TokenExchangeTokenTypes.RefreshToken);
+		=> grantedScope.HasFlag(Scopes.OfflineAccess) && clientInfo.MayReceiveRefreshToken();
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.

@@ -38,7 +38,8 @@ public class ScopeValidatorTests
     private BackChannelAuthenticationValidationContext CreateContext(
         string[]? scopes = null,
         OfflineAccess offlineAccess = OfflineAccess.Disabled,
-        ResourceDefinition[]? resources = null)
+        ResourceDefinition[]? resources = null,
+        string[]? allowedGrantTypes = null)
     {
         var request = new BackChannelAuthenticationRequest
         {
@@ -51,7 +52,8 @@ public class ScopeValidatorTests
         {
             ClientInfo = new ClientInfo("test-client")
             {
-                OfflineAccess = offlineAccess
+                OfflineAccess = offlineAccess,
+                AllowedGrantTypes = allowedGrantTypes ?? [GrantTypes.Ciba, GrantTypes.RefreshToken],
             },
             Resources = resources!
         };
@@ -147,6 +149,37 @@ public class ScopeValidatorTests
         Assert.Null(result);
         Assert.NotNull(context.Scope);
         Assert.Equal(2, context.Scope.Length);
+    }
+
+    /// <summary>
+    /// A backchannel authentication request receives offline_access only for a client that may receive the refresh
+    /// token it asks for, through the refresh token grant or a token exchange of it; for any other client it is
+    /// ignored, so the end user authenticating on the device is not asked for it and the grant does not carry it.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { GrantTypes.Ciba }, false)]
+    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.RefreshToken }, true)]
+    [InlineData(new[] { GrantTypes.Ciba, GrantTypes.TokenExchange }, true)]
+    public async Task OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
+        string[] allowedGrantTypes, bool received)
+    {
+        _scopeManager
+            .Setup(sm => sm.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
+            {
+                def = new ScopeDefinition(s, Array.Empty<string>());
+                return true;
+            }));
+        var context = CreateContext(
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            allowedGrantTypes: allowedGrantTypes);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Contains(context.Scope, scope => scope.Scope == TestConstants.DefaultScope);
     }
 
     /// <summary>

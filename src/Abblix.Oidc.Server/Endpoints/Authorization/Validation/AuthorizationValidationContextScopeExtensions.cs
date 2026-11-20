@@ -71,12 +71,23 @@ internal static class AuthorizationValidationContextScopeExtensions
 	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
 	/// access without it (section 11). The second condition is lifted for a client the host lets keep receiving
 	/// offline access beside such a token (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>).
+	/// Section 11 leaves other conditions to the server, and offline access is also ignored for a client that may not
+	/// receive the refresh token it asks for (<see cref="ClientInfo.MayReceiveRefreshToken"/>), so the end user is not
+	/// asked to consent to what the client cannot get.
 	/// </summary>
 	public static bool OfflineAccessReceived(this AuthorizationValidationContext context)
 		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
 		   && AccessTokenAdmitsOfflineAccess(context)
-		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
-		       || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt());
+		   && ConsentConditionsHold(context)
+		   && context.ClientInfo.MayReceiveRefreshToken();
+
+	/// <summary>
+	/// Whether the request asks for consent with <c>prompt=consent</c>, or the client is configured to receive offline
+	/// access without it: the conditions OpenID Connect Core 1.0 section 11 puts on offline access.
+	/// </summary>
+	private static bool ConsentConditionsHold(AuthorizationValidationContext context)
+		=> context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
+		   || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt();
 
 	/// <summary>
 	/// Whether the access token the response carries, if any, may sit beside offline access: one returned through the

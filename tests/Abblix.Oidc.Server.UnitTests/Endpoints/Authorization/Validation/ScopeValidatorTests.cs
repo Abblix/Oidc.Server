@@ -112,6 +112,7 @@ public class ScopeValidatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             OfflineAccess = offlineAccess,
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
         };
 
         return new AuthorizationValidationContext(request)
@@ -280,6 +281,32 @@ public class ScopeValidatorTests
         Assert.DoesNotContain(context.Scope, scope => scope.Scope == Scopes.OfflineAccess);
         Assert.DoesNotContain(Scopes.OfflineAccess, context.Request.Scope);
         Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
+    }
+
+    /// <summary>
+    /// A request with prompt=consent receives offline_access only for a client that may receive the refresh token it
+    /// asks for, through the refresh token grant or a token exchange of it; for any other client it is ignored, so
+    /// neither the end user's consent nor the code it brings carries it.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, true)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.TokenExchange }, true)]
+    public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
+        string[]? allowedGrantTypes, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: [Prompts.Consent]);
+        context.ClientInfo.AllowedGrantTypes = allowedGrantTypes;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Equal(received, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
     }
 
     /// <summary>

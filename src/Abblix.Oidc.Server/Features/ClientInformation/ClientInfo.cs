@@ -345,6 +345,38 @@ public record ClientInfo(string ClientId)
            allowlist.Any(allowed => string.Equals(allowed.OriginalString, tokenType.OriginalString, StringComparison.Ordinal));
 
     /// <summary>
+    /// Whether this client may receive a refresh token: whether it may redeem one, through the refresh token grant or
+    /// through a token exchange naming it as the subject token (RFC 8693 section 3) where its token types admit it.
+    /// </summary>
+    /// <remarks>
+    /// The one answer both the issuance of a refresh token and the authorization steps ignoring an
+    /// <c>offline_access</c> ask, so the server neither issues a refresh token the token endpoint then refuses nor has
+    /// the end user consent to offline access the client cannot receive.
+    /// </remarks>
+    internal bool MayReceiveRefreshToken()
+        => MayUseGrantType(GrantTypes.RefreshToken) ||
+           MayUseGrantType(GrantTypes.TokenExchange) && MayExchangeTokenType(RefreshTokenType);
+
+    private static readonly Uri RefreshTokenType = new(TokenExchangeTokenTypes.RefreshToken);
+
+    /// <summary>
+    /// The scope a request with no consent conditions of its own, a device authorization or a backchannel
+    /// authentication request, is served with: <see cref="ScopeServedFor"/>, without an <c>offline_access</c> the
+    /// client may not receive a refresh token for (<see cref="MayReceiveRefreshToken"/>), which is ignored as if never
+    /// asked for.
+    /// </summary>
+    /// <param name="requested">The scope the request names, empty when it names none.</param>
+    internal string[]? ScopeServedWithReceivableOfflineAccessFor(string[] requested)
+    {
+        if (ScopeServedFor(requested) is not { } served)
+            return null;
+
+        return !served.Contains(Scopes.OfflineAccess, StringComparer.Ordinal) || MayReceiveRefreshToken()
+            ? served
+            : [.. served.Where(scope => scope != Scopes.OfflineAccess)];
+    }
+
+    /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when
     /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
     /// claim, so without a constraint a client could mint a token for any target service it names.

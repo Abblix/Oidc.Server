@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
@@ -46,12 +47,54 @@ public class ScopeValidatorTests
             new DeviceAuthorizationRequest { Scope = [Scopes.OpenId, Scopes.OfflineAccess] },
             new ClientRequest { ClientId = "device-client" })
         {
-            ClientInfo = new ClientInfo("device-client") { OfflineAccess = offlineAccess },
+            ClientInfo = new ClientInfo("device-client")
+            {
+                OfflineAccess = offlineAccess,
+                AllowedGrantTypes = [GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken],
+            },
         };
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(error, result?.Error);
+    }
+
+    /// <summary>
+    /// A device authorization request receives offline_access only for a client that may receive the refresh token
+    /// it asks for, through the refresh token grant or a token exchange of it; for any other client it is ignored, so
+    /// the end user approving on the device is not asked for it and the grant does not carry it.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization }, false)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, true)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.TokenExchange }, true)]
+    public async Task OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
+        string[] allowedGrantTypes, bool received)
+    {
+        var scopeManager = new Mock<IScopeManager>();
+        scopeManager
+            .Setup(m => m.TryGet(TestTenant.Matched, It.IsAny<string>(), out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
+            {
+                definition = new ScopeDefinition(scope);
+                return true;
+            }));
+        var context = new DeviceAuthorizationValidationContext(
+            new DeviceAuthorizationRequest { Scope = [Scopes.OpenId, Scopes.OfflineAccess] },
+            new ClientRequest { ClientId = "device-client" })
+        {
+            ClientInfo = new ClientInfo("device-client")
+            {
+                OfflineAccess = OfflineAccess.ConsentRequired,
+                AllowedGrantTypes = allowedGrantTypes,
+            },
+        };
+
+        var result = await new ScopeValidator(scopeManager.Object).ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
     }
 
     /// <summary>

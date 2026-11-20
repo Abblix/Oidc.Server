@@ -56,7 +56,7 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// </returns>
 	private OidcError? Validate(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
 	{
-		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+		if (context.ClientInfo.ScopeServedWithReceivableOfflineAccessFor(context.Request.Scope) is not { } scope)
 		{
 			return new OidcError(
 				ErrorCodes.InvalidScope,
