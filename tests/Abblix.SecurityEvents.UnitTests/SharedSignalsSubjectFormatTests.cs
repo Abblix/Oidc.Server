@@ -65,6 +65,25 @@ public class SharedSignalsSubjectFormatTests
     }
 
     [Fact]
+    public void ComplexSubject_WritesOnlyTheMembersItHolds()
+    {
+        // "a JSON object that has a format field, and one or more Simple Subject Members"
+        // (SSF 1.0 Section 3.3): every other member of the written object is one the format
+        // does not describe, which RFC 9493 Section 3 forbids a Subject Identifier to carry.
+        SubjectIdentifier subject = new ComplexSubject
+        {
+            User = new EmailSubject("bar@example.com"),
+            Session = new OpaqueSubject("session-77"),
+        };
+
+        var written = JsonNode.Parse(JsonSerializer.Serialize(subject))!.AsObject();
+
+        Assert.Equal(
+            [SubjectMemberNames.Format, SubjectMemberNames.Session, SubjectMemberNames.User],
+            written.Select(member => member.Key).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void NestedComplexSubject_IsRefused_InCodeAndOnTheWire()
     {
         // "a format field, and one or more Simple Subject Members" (SSF 1.0 Section 3.3): the

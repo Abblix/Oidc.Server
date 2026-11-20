@@ -134,7 +134,10 @@ public sealed class ComplexSubject() : SubjectIdentifier(SubjectFormats.Complex)
     /// one of them - but the question can be asked here and answered where a subject enters. It is
     /// worth asking rather than shrugging at: a matcher reads an absent member as "no restriction
     /// on this field", so a subject naming none restricts nothing and stands for every event.
+    /// It is a question about the subject, not a member of it, so it is never written: Section 3.3
+    /// describes no such member, and RFC 9493 Section 3 forbids one the format does not describe.
     /// </remarks>
+    [JsonIgnore]
     public bool HasMembers
         => RegisteredMembers.Any(member => member(this) is not null) || AdditionalMembers is { Count: > 0 };
 
