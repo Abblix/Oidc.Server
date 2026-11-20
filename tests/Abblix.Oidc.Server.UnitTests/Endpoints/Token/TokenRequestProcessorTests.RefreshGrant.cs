@@ -16,10 +16,13 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 
@@ -28,48 +31,117 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 public partial class TokenRequestProcessorTests
 {
     /// <summary>
-    /// The grant types each row's client states, by name, so a row reads as the client it describes.
+    /// The clients the rows describe, each named for what it states, so a row reads as the client it is.
     /// </summary>
-    public static TheoryData<string> GrantTypeStatements => [nameof(NotStated), nameof(CodeOnly), nameof(CodeAndRefresh), nameof(CodeAndExchange)];
+    public static TheoryData<string> Clients =>
+    [
+        NotStated, CodeOnly, CodeAndRefresh, CodeAndExchange,
+        CodeAndExchangeOfAccessTokens, CodeAndExchangeForbidden,
+    ];
 
-    private static readonly string[]? NotStated = null;
-    private static readonly string[] CodeOnly = [GrantTypes.AuthorizationCode];
-    private static readonly string[] CodeAndRefresh = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
-    private static readonly string[] CodeAndExchange = [GrantTypes.AuthorizationCode, GrantTypes.TokenExchange];
+    private const string NotStated = "grant types not stated";
+    private const string CodeOnly = "authorization code only";
+    private const string CodeAndRefresh = "authorization code and refresh token";
+    private const string CodeAndExchange = "authorization code and token exchange of any token type";
+    private const string CodeAndExchangeOfAccessTokens = "authorization code and token exchange of access tokens";
+    private const string CodeAndExchangeForbidden = "authorization code and token exchange of no token type";
 
-    private static string[]? GrantTypesOf(string statement) => statement switch
+    private static readonly string[] CodeAndRefreshGrants = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    private static readonly string[] CodeAndExchangeGrants = [GrantTypes.AuthorizationCode, GrantTypes.TokenExchange];
+
+    private static ClientInfo ClientNamed(string name)
     {
-        nameof(NotStated) => NotStated,
-        nameof(CodeOnly) => CodeOnly,
-        nameof(CodeAndRefresh) => CodeAndRefresh,
-        nameof(CodeAndExchange) => CodeAndExchange,
-        _ => throw new ArgumentOutOfRangeException(nameof(statement), statement, "An unknown grant type statement."),
-    };
+        var client = new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired };
+        switch (name)
+        {
+            case NotStated:
+                return client;
+
+            case CodeOnly:
+                return client with { AllowedGrantTypes = [GrantTypes.AuthorizationCode] };
+
+            case CodeAndRefresh:
+                return client with { AllowedGrantTypes = CodeAndRefreshGrants };
+
+            case CodeAndExchange:
+                return client with { AllowedGrantTypes = CodeAndExchangeGrants };
+
+            case CodeAndExchangeOfAccessTokens:
+                return client with
+                {
+                    AllowedGrantTypes = CodeAndExchangeGrants,
+                    TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
+                };
+
+            case CodeAndExchangeForbidden:
+                return client with
+                {
+                    AllowedGrantTypes = CodeAndExchangeGrants,
+                    TokenExchangeAllowedSubjectTokenTypes = [],
+                };
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(name), name, "An unknown client.");
+        }
+    }
 
     /// <summary>
     /// A code exchange granted offline_access hands the client a refresh token exactly when the token endpoint would
-    /// accept that client presenting it, through the refresh token grant or a token exchange naming it as the subject
-    /// token: RFC 7591 section 2 has grant_types name the grant types the client can use at the token endpoint,
-    /// defaulting to authorization_code alone, so a refresh token issued past that list is one the token endpoint then
-    /// refuses with unauthorized_client. Both answers come from the same client, through the validator the token
-    /// endpoint runs and the processor that issues, so the two cannot drift apart.
+    /// take that refresh token from the client: through the refresh token grant, or through a token exchange naming
+    /// it as the subject token (RFC 8693 section 3) where the client's token types admit it. RFC 7591 section 2 has
+    /// grant_types name the grant types the client can use at the token endpoint, defaulting to authorization_code
+    /// alone, so a refresh token issued past them is one the token endpoint then refuses. The answer of the token
+    /// endpoint is read from the validator it runs and the exchange grant's own handler, so the issuance cannot drift
+    /// from either.
     /// </summary>
     [Theory]
-    [MemberData(nameof(GrantTypeStatements))]
-    public async Task ACodeExchange_IssuesARefreshToken_ExactlyWhenAGrantRedeemingItAcceptsTheClient(string statement)
+    [MemberData(nameof(Clients))]
+    public async Task ACodeExchange_IssuesARefreshToken_ExactlyWhenTheTokenEndpointTakesItFromTheClient(string name)
     {
-        var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
-        {
-            OfflineAccess = OfflineAccess.ConsentRequired,
-            AllowedGrantTypes = GrantTypesOf(statement),
-        };
+        var clientInfo = ClientNamed(name);
 
         var redeemable = await GrantAccepts(clientInfo, GrantTypes.RefreshToken) ||
-                         await GrantAccepts(clientInfo, GrantTypes.TokenExchange);
+                         await GrantAccepts(clientInfo, GrantTypes.TokenExchange) &&
+                         await ExchangeTakesRefreshTokenFrom(clientInfo);
         var refreshTokenIssued = await CodeExchangeIssuesRefreshToken(clientInfo);
 
         Assert.Equal(redeemable, refreshTokenIssued);
-        Assert.Equal(statement is nameof(CodeAndRefresh) or nameof(CodeAndExchange), refreshTokenIssued);
+        Assert.Equal(name is CodeAndRefresh or CodeAndExchange, refreshTokenIssued);
+    }
+
+    /// <summary>
+    /// Whether the token exchange grant handler takes a refresh token as this client's subject token as far as
+    /// resolving it, which is past every check of the client the handler makes before it looks at the token.
+    /// </summary>
+    private static async Task<bool> ExchangeTakesRefreshTokenFrom(ClientInfo clientInfo)
+    {
+        var resolved = false;
+        var resolver = new Mock<ISubjectTokenResolver>(MockBehavior.Strict);
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<TenantDefinition>(), clientInfo, It.IsAny<string>(), It.IsAny<Uri>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => resolved = true)
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "Not resolved in this test."));
+
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton(TokenExchangeTokenTypes.RefreshToken, resolver.Object);
+        await using var provider = services.BuildServiceProvider();
+
+        var handler = new TokenExchangeGrantHandler(
+            provider, new Mock<ISessionIdGenerator>(MockBehavior.Strict).Object, TimeProvider.System);
+        await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            new TokenRequest
+            {
+                GrantType = GrantTypes.TokenExchange,
+                SubjectToken = "refresh_token_jwt",
+                SubjectTokenType = new Uri(TokenExchangeTokenTypes.RefreshToken),
+            },
+            clientInfo,
+            TestContext.Current.CancellationToken);
+
+        return resolved;
     }
 
     /// <summary>

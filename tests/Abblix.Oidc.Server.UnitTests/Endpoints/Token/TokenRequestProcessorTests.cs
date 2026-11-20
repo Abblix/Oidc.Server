@@ -81,7 +81,7 @@ public partial class TokenRequestProcessorTests
     private static ClientInfo RefreshingClient() => new(TestConstants.DefaultClientId)
     {
         OfflineAccess = OfflineAccess.ConsentRequired,
-        AllowedGrantTypes = CodeAndRefresh,
+        AllowedGrantTypes = CodeAndRefreshGrants,
     };
 
     private static ValidTokenRequest CreateValidTokenRequest(string[] scopes)
@@ -507,7 +507,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled, AllowedGrantTypes = CodeAndRefresh },
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled, AllowedGrantTypes = CodeAndRefreshGrants },
             [],
             []);
         var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);
@@ -1216,7 +1216,7 @@ public partial class TokenRequestProcessorTests
         {
             TokenEndpointAuthMethod = tokenEndpointAuthMethod,
             OfflineAccess = OfflineAccess.ConsentRequired,
-            AllowedGrantTypes = CodeAndRefresh,
+            AllowedGrantTypes = CodeAndRefreshGrants,
         };
         var request = new ValidTokenRequest(tokenRequest, authorizedGrant, clientInfo, [], []);
 

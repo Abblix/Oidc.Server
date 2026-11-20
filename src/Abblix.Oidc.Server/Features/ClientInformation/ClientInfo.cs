@@ -332,6 +332,19 @@ public record ClientInfo(string ClientId)
     public Uri[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
+    /// Whether <see cref="TokenExchangeAllowedSubjectTokenTypes"/> admits the token type: the one answer the Token
+    /// Exchange grant refusing a token type and the issuance of a token only an exchange may redeem both ask.
+    /// </summary>
+    /// <remarks>
+    /// A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by their
+    /// spelling rather than as equivalent addresses.
+    /// </remarks>
+    /// <param name="tokenType">The token type URI, as the request names it.</param>
+    internal bool MayExchangeTokenType(Uri tokenType)
+        => TokenExchangeAllowedSubjectTokenTypes is not { } allowlist ||
+           allowlist.Any(allowed => string.Equals(allowed.OriginalString, tokenType.OriginalString, StringComparison.Ordinal));
+
+    /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when
     /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
     /// claim, so without a constraint a client could mint a token for any target service it names.
