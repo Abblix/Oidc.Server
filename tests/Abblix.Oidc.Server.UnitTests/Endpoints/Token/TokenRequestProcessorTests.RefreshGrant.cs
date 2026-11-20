@@ -30,30 +30,33 @@ public partial class TokenRequestProcessorTests
     /// <summary>
     /// The grant types each row's client states, by name, so a row reads as the client it describes.
     /// </summary>
-    public static TheoryData<string> GrantTypeStatements => [nameof(NotStated), nameof(CodeOnly), nameof(CodeAndRefresh)];
+    public static TheoryData<string> GrantTypeStatements => [nameof(NotStated), nameof(CodeOnly), nameof(CodeAndRefresh), nameof(CodeAndExchange)];
 
     private static readonly string[]? NotStated = null;
     private static readonly string[] CodeOnly = [GrantTypes.AuthorizationCode];
     private static readonly string[] CodeAndRefresh = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    private static readonly string[] CodeAndExchange = [GrantTypes.AuthorizationCode, GrantTypes.TokenExchange];
 
     private static string[]? GrantTypesOf(string statement) => statement switch
     {
         nameof(NotStated) => NotStated,
         nameof(CodeOnly) => CodeOnly,
         nameof(CodeAndRefresh) => CodeAndRefresh,
+        nameof(CodeAndExchange) => CodeAndExchange,
         _ => throw new ArgumentOutOfRangeException(nameof(statement), statement, "An unknown grant type statement."),
     };
 
     /// <summary>
-    /// A code exchange granted offline_access hands the client a refresh token exactly when the refresh grant would
-    /// accept that client: RFC 7591 section 2 has grant_types name the grant types the client can use at the token
-    /// endpoint, defaulting to authorization_code alone, so a refresh token issued past that list is one the token
-    /// endpoint then refuses with unauthorized_client. Both answers come from the same client, through the
-    /// validator the token endpoint runs and the processor that issues, so the two cannot drift apart.
+    /// A code exchange granted offline_access hands the client a refresh token exactly when the token endpoint would
+    /// accept that client presenting it, through the refresh token grant or a token exchange naming it as the subject
+    /// token: RFC 7591 section 2 has grant_types name the grant types the client can use at the token endpoint,
+    /// defaulting to authorization_code alone, so a refresh token issued past that list is one the token endpoint then
+    /// refuses with unauthorized_client. Both answers come from the same client, through the validator the token
+    /// endpoint runs and the processor that issues, so the two cannot drift apart.
     /// </summary>
     [Theory]
     [MemberData(nameof(GrantTypeStatements))]
-    public async Task ACodeExchange_IssuesARefreshToken_ExactlyWhenTheRefreshGrantAcceptsTheClient(string statement)
+    public async Task ACodeExchange_IssuesARefreshToken_ExactlyWhenAGrantRedeemingItAcceptsTheClient(string statement)
     {
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
@@ -61,17 +64,18 @@ public partial class TokenRequestProcessorTests
             AllowedGrantTypes = GrantTypesOf(statement),
         };
 
-        var refreshGrantAccepted = await RefreshGrantAccepts(clientInfo);
+        var redeemable = await GrantAccepts(clientInfo, GrantTypes.RefreshToken) ||
+                         await GrantAccepts(clientInfo, GrantTypes.TokenExchange);
         var refreshTokenIssued = await CodeExchangeIssuesRefreshToken(clientInfo);
 
-        Assert.Equal(refreshGrantAccepted, refreshTokenIssued);
-        Assert.Equal(statement == nameof(CodeAndRefresh), refreshTokenIssued);
+        Assert.Equal(redeemable, refreshTokenIssued);
+        Assert.Equal(statement is nameof(CodeAndRefresh) or nameof(CodeAndExchange), refreshTokenIssued);
     }
 
     /// <summary>
-    /// Whether the token endpoint lets this client present a refresh token, as the validator answers it.
+    /// Whether the token endpoint lets this client use the grant, as the validator answers it.
     /// </summary>
-    private static async Task<bool> RefreshGrantAccepts(ClientInfo clientInfo)
+    private static async Task<bool> GrantAccepts(ClientInfo clientInfo, string grantType)
     {
         var grantHandler = new Mock<IAuthorizationGrantHandler>(MockBehavior.Strict);
         grantHandler
@@ -80,7 +84,7 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)CreateAuthorizedGrant([Scopes.OfflineAccess]));
 
         var context = new TokenValidationContext(
-            new TokenRequest { GrantType = GrantTypes.RefreshToken, RefreshToken = "refresh_token_jwt" },
+            new TokenRequest { GrantType = grantType },
             new ClientRequest())
         {
             ClientInfo = clientInfo,
@@ -93,7 +97,7 @@ public partial class TokenRequestProcessorTests
         {
             null => true,
             { Error: ErrorCodes.UnauthorizedClient } => false,
-            _ => throw new InvalidOperationException($"The refresh grant failed for another reason: {error.Error}."),
+            _ => throw new InvalidOperationException($"The {grantType} grant failed for another reason: {error.Error}."),
         };
     }
 

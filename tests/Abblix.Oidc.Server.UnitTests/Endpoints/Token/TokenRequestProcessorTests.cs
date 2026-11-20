@@ -507,7 +507,7 @@ public partial class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             CreateTokenRequest(),
             CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
-            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled },
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled, AllowedGrantTypes = CodeAndRefresh },
             [],
             []);
         var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);

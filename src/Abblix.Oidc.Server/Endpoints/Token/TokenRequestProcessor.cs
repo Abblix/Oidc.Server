@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <summary>
 /// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 section 5.1),
 /// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11) and the client
-/// may use the refresh token grant that redeems it,
+/// may use a grant that redeems it,
 /// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 section 3.1.3.3, with <c>at_hash</c>
 /// computed from the issued access token).
 /// </summary>
@@ -176,15 +176,17 @@ public class TokenRequestProcessor(
 
 	/// <summary>
 	/// Whether a grant that may produce derived tokens adds a refresh token: one granted <c>offline_access</c>, for a
-	/// client that may use the refresh token grant.
+	/// client that may use a grant redeeming it.
 	/// </summary>
 	/// <remarks>
-	/// A refresh token is redeemed only by the refresh token grant, so a client not allowed that grant is issued none:
-	/// the token endpoint would refuse it with unauthorized_client the moment it presented one. RFC 6749 section 1.5
-	/// leaves issuing one to the server, so the <c>offline_access</c> granted stays in the access token's scope.
+	/// A refresh token is redeemed by the refresh token grant, and by a token exchange naming it as the subject token
+	/// (RFC 8693 section 3), so a client allowed neither is issued none: the token endpoint would refuse it with
+	/// unauthorized_client the moment it presented one. RFC 6749 section 1.5 leaves issuing one to the server, so the
+	/// <c>offline_access</c> granted stays in the access token's scope.
 	/// </remarks>
 	private static bool IssuesRefreshToken(ClientInfo clientInfo, string[] grantedScope)
-		=> grantedScope.HasFlag(Scopes.OfflineAccess) && clientInfo.MayUseGrantType(GrantTypes.RefreshToken);
+		=> grantedScope.HasFlag(Scopes.OfflineAccess) &&
+		   (clientInfo.MayUseGrantType(GrantTypes.RefreshToken) || clientInfo.MayUseGrantType(GrantTypes.TokenExchange));
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.
