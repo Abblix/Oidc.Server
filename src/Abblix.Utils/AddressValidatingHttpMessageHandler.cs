@@ -9,6 +9,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Abblix.Utils;
 
@@ -96,8 +97,27 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// certificates, for instance from an <c>IHttpClientFactory</c> handler builder action that finds this handler as
     /// the client's primary handler. A transport takes them when it sends its first request, so they are set before
     /// that. They change nothing of which address a connection is made to.
+    /// <para>
+    /// By default validating a certificate makes no request of its own: the chain is built without downloading a
+    /// missing issuer and without checking revocation online, because the addresses those downloads go to are named
+    /// by the certificate - that is, by whoever runs the endpoint - and the platform fetches them past this handler.
+    /// A host that needs them turns them back on by setting its own
+    /// <see cref="SslClientAuthenticationOptions.CertificateChainPolicy"/> here, for instance one with
+    /// <see cref="X509ChainPolicy.DisableCertificateDownloads"/> false; its policy is used as it is, and every address
+    /// it lets the platform fetch is then reached outside this handler's judgment.
+    /// </para>
     /// </remarks>
-    public SslClientAuthenticationOptions SslOptions { get; } = new();
+    public SslClientAuthenticationOptions SslOptions { get; } = new()
+    {
+        // A client registers an endpoint whose certificate names an internal address as its issuer's location (AIA)
+        // or its revocation list's, and the server fetches that address while validating the certificate - a request
+        // made by the platform, past every address this handler judges.
+        CertificateChainPolicy = new X509ChainPolicy
+        {
+            DisableCertificateDownloads = true,
+            RevocationMode = X509RevocationMode.NoCheck,
+        },
+    };
 
     /// <summary>
     /// Judges the request's address as written and throws when it may not be reached. Returning normally lets the

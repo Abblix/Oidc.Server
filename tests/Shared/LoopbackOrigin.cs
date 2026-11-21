@@ -128,7 +128,14 @@ internal sealed class LoopbackOrigin : IDisposable
 
         var tls = new SslStream(stream, leaveInnerStreamOpen: false);
         await tls.AuthenticateAsServerAsync(
-            new SslServerAuthenticationOptions { ServerCertificate = _certificate }, _stop.Token);
+            new SslServerAuthenticationOptions
+            {
+                // Offline, so the origin fetches nothing its certificate names while preparing to present it: a test
+                // counting what the client fetches would otherwise count the origin's own requests
+                ServerCertificateContext = SslStreamCertificateContext.Create(
+                    _certificate, additionalCertificates: null, offline: true),
+            },
+            _stop.Token);
         return tls;
     }
 
