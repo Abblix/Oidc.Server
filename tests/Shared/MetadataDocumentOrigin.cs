@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -65,16 +66,7 @@ public sealed class MetadataDocumentOrigin : HttpMessageHandler
 
     /// <summary>How many requests reached <paramref name="url"/>.</summary>
     public int RequestsTo(string url)
-    {
-        var count = 0;
-        foreach (var request in _requests)
-        {
-            if (string.Equals(request.RequestUri?.AbsoluteUri, url, StringComparison.Ordinal))
-                count++;
-        }
-
-        return count;
-    }
+        => _requests.Count(request => string.Equals(request.RequestUri?.AbsoluteUri, url, StringComparison.Ordinal));
 
     /// <inheritdoc />
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
