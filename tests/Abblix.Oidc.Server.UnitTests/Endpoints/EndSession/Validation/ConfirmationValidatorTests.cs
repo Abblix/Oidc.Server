@@ -63,8 +63,11 @@ public class ConfirmationValidatorTests
     private void SignedIn(AuthSession? session)
         => _authSessionService.Setup(s => s.AuthenticateAsync()).ReturnsAsync(session);
 
+    // A host may sign in with a sub-second instant, while an ID token states auth_time in whole seconds
+    private static readonly DateTimeOffset SignedInAt = DateTimeOffset.UnixEpoch.AddMilliseconds(400);
+
     private static AuthSession Session(string subject, string sessionId)
-        => new(subject, sessionId, DateTimeOffset.UnixEpoch, "local");
+        => new(subject, sessionId, SignedInAt, "local");
 
     private static EndSessionValidationContext CreateContext(
         string? confirmation = null,
@@ -178,7 +181,7 @@ public class ConfirmationValidatorTests
         Assert.False(await AsksTheEndUserAsync(CreateContext(
             idTokenHint: "id_token_value",
             hintSubject: CurrentSubject,
-            hintAuthenticationTime: DateTimeOffset.UnixEpoch)));
+            hintAuthenticationTime: DateTimeOffset.FromUnixTimeSeconds(SignedInAt.ToUnixTimeSeconds()))));
     }
 
     /// <summary>
@@ -193,7 +196,7 @@ public class ConfirmationValidatorTests
         Assert.True(await AsksTheEndUserAsync(CreateContext(
             idTokenHint: "id_token_value",
             hintSubject: CurrentSubject,
-            hintAuthenticationTime: DateTimeOffset.UnixEpoch.AddHours(-1))));
+            hintAuthenticationTime: SignedInAt.AddHours(-1))));
     }
 
     /// <summary>

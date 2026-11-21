@@ -19,6 +19,13 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// claim of an ID token for one use, matching a logout message to the session it ends. A client that receives no
 /// such message has nothing to match it against, so its ID token goes out without the claim, which the profiles
 /// that check ID tokens for claims they do not expect would otherwise flag.
+/// <para>
+/// The discovery metadata <c>frontchannel_logout_session_supported</c> and
+/// <c>backchannel_logout_session_supported</c> are each defined with the sentence "If supported, the sid Claim is
+/// also included in ID Tokens issued by the OP." It carries no requirement keyword, and the claim it names is
+/// OPTIONAL, so this server reads it as describing the ID tokens of the clients that use the session at logout:
+/// the server announces that it can pass the session, and states it to the clients that receive it.
+/// </para>
 /// </remarks>
 internal static class SessionIdDisclosure
 {
