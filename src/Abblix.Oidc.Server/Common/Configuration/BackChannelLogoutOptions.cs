@@ -11,7 +11,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// <summary>
 /// Back-channel logout settings for a single client, as defined by the OpenID Connect Back-Channel Logout 1.0
 /// specification. The OP delivers a signed logout token directly (server-to-server) to the configured endpoint
-/// when an end-session occurs, bypassing the user agent.
+/// when an end-session occurs, bypassing the user agent. The logout token names the session it ends, so the ID
+/// tokens issued to a client with these settings carry the <c>sid</c> claim to match it against.
 /// </summary>
 /// <param name="Uri">The client's back-channel logout endpoint that receives the logout token.</param>
 /// <param name="RequiresSessionId">

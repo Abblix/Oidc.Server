@@ -498,9 +498,11 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         };
     }
 
+    // Read from the access token, which names the session for every client: the ID token does so only for a
+    // client registered for session-based logout, and this one is not.
     private static string SessionOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sid]!.GetValue<string>();
     }
 
