@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -69,13 +68,10 @@ public class ConfirmationValidator(
     /// the end user instead, which is the outcome the same sentence puts under MUST, and which keeps a logout
     /// working for somebody whose hint is merely stale.
     /// <para>
-    /// The session identifier is compared when the hint carries one. OpenID Connect Core 1.0 section 2 makes
-    /// <c>sid</c> optional in an ID token, and this server states it only to a client told the session at logout, so
-    /// a hint without it is tied to the session by its <c>auth_time</c>, which every ID token this server issues
-    /// carries: the same person's token from an earlier sign-in would otherwise end the current session unasked. A
-    /// re-authentication within the session moves its sign-in, so such a hint issued before it is asked about too,
-    /// which section 2 permits and which errs toward asking.
-    /// The subject travels through the same conversion the authorization endpoint
+    /// A hint without a session identifier is always asked about. This server states <c>sid</c> only to a client
+    /// told the session at logout, and nothing else in an ID token says which session it belongs to, so such a hint
+    /// cannot be shown to belong to the current one: the same person's token from an earlier session would otherwise
+    /// end this session unasked. The subject travels through the same conversion the authorization endpoint
     /// applies to its own hint, so a pairwise client's pseudonym is compared against the pseudonym this client
     /// would see rather than against the real subject.
     /// </para>
@@ -85,17 +81,8 @@ public class ConfirmationValidator(
         if (context.IdToken is not { Payload: var hint })
             return false;
 
-        if (hint.SessionId.HasValue())
-        {
-            if (!string.Equals(hint.SessionId, authSession.SessionId, StringComparison.Ordinal))
-                return false;
-        }
-        else if (hint.AuthenticationTime is not { } authenticatedAt ||
-                 authenticatedAt.ToUnixTimeSeconds() != authSession.AuthenticationTime.ToUnixTimeSeconds())
-        {
-            // auth_time is a NumericDate, whole seconds, so the session's instant is compared at the same precision
+        if (!string.Equals(hint.SessionId, authSession.SessionId, StringComparison.Ordinal))
             return false;
-        }
 
         // The client is read rather than assumed: the members that resolve it run before this one, and the family
         // is publicly editable, so a host that reorders it finds the request asking for a confirmation instead of

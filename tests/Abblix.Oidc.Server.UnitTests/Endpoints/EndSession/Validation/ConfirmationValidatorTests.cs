@@ -63,18 +63,14 @@ public class ConfirmationValidatorTests
     private void SignedIn(AuthSession? session)
         => _authSessionService.Setup(s => s.AuthenticateAsync()).ReturnsAsync(session);
 
-    // A host may sign in with a sub-second instant, while an ID token states auth_time in whole seconds
-    private static readonly DateTimeOffset SignedInAt = DateTimeOffset.UnixEpoch.AddMilliseconds(400);
-
     private static AuthSession Session(string subject, string sessionId)
-        => new(subject, sessionId, SignedInAt, "local");
+        => new(subject, sessionId, DateTimeOffset.UnixEpoch, "local");
 
     private static EndSessionValidationContext CreateContext(
         string? confirmation = null,
         string? idTokenHint = null,
         string? hintSubject = null,
-        string? hintSessionId = null,
-        DateTimeOffset? hintAuthenticationTime = null)
+        string? hintSessionId = null)
     {
         var request = new EndSessionRequest
         {
@@ -95,7 +91,6 @@ public class ConfirmationValidatorTests
                 {
                     Subject = hintSubject,
                     SessionId = hintSessionId,
-                    AuthenticationTime = hintAuthenticationTime,
                 },
             };
         }
@@ -170,40 +165,12 @@ public class ConfirmationValidatorTests
     }
 
     /// <summary>
-    /// An ID token carries a session identifier only for a client told the session at logout, so a hint without it
-    /// is tied to the session by the sign-in it states, which every ID token carries.
+    /// An ID token states the session only to a client told it at logout, and nothing else in it says which session
+    /// it belongs to, so a hint without it, even about the person signed in now, cannot be shown to belong to this
+    /// session and is asked about.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndSignInAndNoSession_AsksNobody()
-    {
-        SignedIn(Session(CurrentSubject, CurrentSessionId));
-
-        Assert.False(await AsksTheEndUserAsync(CreateContext(
-            idTokenHint: "id_token_value",
-            hintSubject: CurrentSubject,
-            hintAuthenticationTime: DateTimeOffset.FromUnixTimeSeconds(SignedInAt.ToUnixTimeSeconds()))));
-    }
-
-    /// <summary>
-    /// The same person's ID token from an earlier sign-in names neither this session nor its sign-in, so without a
-    /// session identifier to compare it would otherwise end the current session unasked.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithHintNamingAnotherSignInAndNoSession_AsksTheEndUser()
-    {
-        SignedIn(Session(CurrentSubject, CurrentSessionId));
-
-        Assert.True(await AsksTheEndUserAsync(CreateContext(
-            idTokenHint: "id_token_value",
-            hintSubject: CurrentSubject,
-            hintAuthenticationTime: SignedInAt.AddHours(-1))));
-    }
-
-    /// <summary>
-    /// A hint stating neither the session nor the sign-in cannot be tied to the current session at all.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithHintStatingNeitherSessionNorSignIn_AsksTheEndUser()
+    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndNoSession_AsksTheEndUser()
     {
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 

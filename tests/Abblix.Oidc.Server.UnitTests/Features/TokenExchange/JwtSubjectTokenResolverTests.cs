@@ -305,13 +305,53 @@ public class JwtSubjectTokenResolverTests
         Assert.Null(ctx.OriginalClientId);
     }
 
+    /// <summary>
+    /// An untyped token, which among this server's tokens is an ID token, names its session only when its client
+    /// uses the session at logout. Without one a revocation of its session could not refuse it, so it is not
+    /// exchanged.
+    /// </summary>
+    [Fact]
+    public async Task AnUntypedTokenNamingNoSession_IsRefused()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Payload.SessionId = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// An access token minted for no session, as client credentials mint one, names none and stays exchangeable:
+    /// a revocation reaches it through its family and its subject instead.
+    /// </summary>
+    [Fact]
+    public async Task AnAccessTokenNamingNoSession_IsExchanged()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Header.Type = JsonWebTokenTypes.AccessToken;
+        jwt.Payload.SessionId = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
         var jwt = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1) },
+            // A token issued in a session names it, which is what lets a revocation of that session reach it
+            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1), SessionId = "session-1" },
         };
         if (issuer is not null) jwt.Payload.Issuer = issuer;
         if (subject is not null) jwt.Payload.Subject = subject;

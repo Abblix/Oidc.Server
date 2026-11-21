@@ -76,7 +76,7 @@ public class JwtSubjectTokenResolverPairwiseTests
         var now = _timeProvider.GetUtcNow();
         var jwt = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Header = { Algorithm = SigningAlgorithms.RS256, Type = JsonWebTokenTypes.AccessToken },
             Payload =
             {
                 Subject = pairwiseSub,

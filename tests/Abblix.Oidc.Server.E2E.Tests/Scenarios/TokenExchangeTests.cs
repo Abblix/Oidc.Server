@@ -11,6 +11,8 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using Abblix.Jwt;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -136,18 +138,21 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         // though the id_token is a valid, AS-signed token: an id_token carries no client_id claim,
         // so its origin is recovered from the audience. Without that recovery any client could
         // exchange any user's id_token for an access token bound to itself.
+        // Client A uses the session at logout, so its id_token names the session and only the origin is at issue
         var clientA = TestConstants.ConfidentialClientId;
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
         var issued = await PerformParFlowAsync(
             clientA, TestConstants.ConfidentialClientSecret,
-            TestConstants.RedirectUri, PaymentInitiationWireJson);
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
         var idToken = issued[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // Premise of the finding: the id_token's aud is client A and it has no client_id claim.
         var idPayload = DecodeJwtPayload(idToken);
         Assert.Equal(clientA, idPayload["aud"]!.GetValue<string>());
         Assert.Null(idPayload[IanaClaimTypes.ClientId]);
+        Assert.NotNull(idPayload[IanaClaimTypes.Sid]);
 
-        var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
@@ -177,7 +182,9 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
     [InlineData(Scopes.OpenId, true, HttpStatusCode.OK)]
     public async Task AnExchange_IsBoundByTheSubjectTokensScope(string? granted, bool idToken, HttpStatusCode expected)
     {
-        var client = CreateClient();
+        // The client uses the session at logout, so its id_token names the session and can be exchanged at all
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var (verifier, challenge) = GeneratePkcePair();
         var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
@@ -223,4 +230,11 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
         return await ExchangeCodeForTokensAsync(client, discovery, form);
     }
+
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+        => host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
 }

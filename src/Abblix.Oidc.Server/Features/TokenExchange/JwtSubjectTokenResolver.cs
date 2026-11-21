@@ -87,6 +87,17 @@ public sealed class JwtSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
         }
 
+        // A revocation of a session reaches a token through the session it names, and an ID token names its session
+        // only when its client uses the session at logout. Exchanged without one, an ID token would keep working
+        // after its session is revoked, so it is not accepted. Every token this server issues other than an ID token
+        // is typed, and an access token minted for no session (client credentials) stays exchangeable.
+        if (!JwtTypeName.Matches(jwt.Header.Type, JsonWebTokenTypes.AccessToken) && !jwt.Payload.SessionId.HasValue())
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The subject_token names no session, so a revocation of its session could not be checked.");
+        }
+
         var subject = jwt.Payload.Subject;
         if (string.IsNullOrWhiteSpace(subject))
         {

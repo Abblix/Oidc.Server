@@ -370,7 +370,9 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task A_logout_identifies_the_client_from_the_id_token_hint_alone()
     {
-        var client = CreateClient();
+        // The client uses the session at logout, so its hint names the session and the logout needs no confirmation
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
