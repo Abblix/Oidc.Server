@@ -7,7 +7,9 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Abblix.Utils;
 
@@ -85,6 +87,51 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         _proxy = proxy;
         InnerHandler = new TransportsByRule(this);
     }
+
+    /// <summary>
+    /// The TLS options every connection this handler makes starts from: how the server's certificate is validated
+    /// and which client certificate is presented.
+    /// </summary>
+    /// <remarks>
+    /// The transports under this handler are its own, so this is where a host configures a guarded client's
+    /// certificates, for instance from an <c>IHttpClientFactory</c> handler builder action that finds this handler as
+    /// the client's primary handler. Set them before the client's first request: each transport copies these options
+    /// when it sends its first request, while the chain policy object stays shared by reference. They change nothing
+    /// of which address a connection is made to.
+    /// <para>
+    /// By default validating a certificate makes no request of its own: the chain is built without downloading a
+    /// missing issuer and without checking revocation online, because the addresses those downloads go to are named
+    /// by the certificate - that is, by whoever runs the endpoint - and the platform fetches them past this handler.
+    /// So an endpoint that serves its certificate without the intermediate certificates is refused on every
+    /// platform, and on Windows a public root not yet in the local store is not fetched either and fails as an
+    /// untrusted root.
+    /// </para>
+    /// <para>
+    /// A host that needs downloads turns them back on by setting its own
+    /// <see cref="SslClientAuthenticationOptions.CertificateChainPolicy"/> here, for instance one with
+    /// <see cref="X509ChainPolicy.DisableCertificateDownloads"/> false; its policy is used as it is, and every address
+    /// it lets the platform fetch is then reached outside this handler's judgment. While a chain policy is set,
+    /// revocation checking follows only its <see cref="X509ChainPolicy.RevocationMode"/>, and
+    /// <see cref="SslClientAuthenticationOptions.CertificateRevocationCheckMode"/> has no effect. A new
+    /// <see cref="X509ChainPolicy"/> starts with <see cref="X509RevocationMode.Online"/>, so such a policy also fetches
+    /// the revocation lists a certificate names unless the host sets its revocation mode too.
+    /// </para>
+    /// <para>
+    /// A client certificate set here is presented to every endpoint the guarded client reaches, and those are
+    /// addresses that clients registered, so it shows the host's identity to whoever runs them.
+    /// </para>
+    /// </remarks>
+    public SslClientAuthenticationOptions SslOptions { get; } = new()
+    {
+        // A client registers an endpoint whose certificate names an internal address as its issuer's location (AIA)
+        // or its revocation list's, and the server fetches that address while validating the certificate - a request
+        // made by the platform, past every address this handler judges.
+        CertificateChainPolicy = new X509ChainPolicy
+        {
+            DisableCertificateDownloads = true,
+            RevocationMode = X509RevocationMode.NoCheck,
+        },
+    };
 
     /// <summary>
     /// Judges the request's address as written and throws when it may not be reached. Returning normally lets the
@@ -306,6 +353,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         // on its own, so through one the address this handler judged is not necessarily the one reached.
         UseProxy = _proxy != null,
         Proxy = _proxy != null ? new WebProxy(_proxy) { BypassProxyOnLocal = false } : null,
+
+        // The host's certificate settings; the connection step below still decides which address is reached
+        SslOptions = SslOptions,
 
         ConnectCallback = (context, cancellationToken) => ConnectAsync(rule, context, cancellationToken),
     };
