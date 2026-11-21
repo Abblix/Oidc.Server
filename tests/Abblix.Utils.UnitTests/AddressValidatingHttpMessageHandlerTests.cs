@@ -471,10 +471,10 @@ public class AddressValidatingHttpMessageHandlerTests
         using var origin = new LoopbackOrigin(certificate: certificate);
         var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin, Rule = rule };
         var validated = new List<SslPolicyErrors>();
-        handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, errors) =>
+        handler.SslOptions.RemoteCertificateValidationCallback = (sender, presented, chain, errors) =>
         {
             validated.Add(errors);
-            return true;
+            return AcceptingOnly(certificate)(sender, presented, chain, errors);
         };
         using var invoker = new HttpMessageInvoker(handler);
 
@@ -513,9 +513,9 @@ public class AddressValidatingHttpMessageHandlerTests
         using var issuerLocation = new LoopbackOrigin();
         using var certificate = LeafNamingItsIssuerAt(issuerLocation);
         using var origin = new LoopbackOrigin(certificate: certificate);
-        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, issuerLocation);
+        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, certificate, issuerLocation);
         var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
-        handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        handler.SslOptions.RemoteCertificateValidationCallback = AcceptingOnly(certificate);
         using var invoker = new HttpMessageInvoker(handler);
 
         using var response = await GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys");
@@ -535,9 +535,9 @@ public class AddressValidatingHttpMessageHandlerTests
         using var issuerLocation = new LoopbackOrigin();
         using var certificate = LeafNamingItsIssuerAt(issuerLocation);
         using var origin = new LoopbackOrigin(certificate: certificate);
-        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, issuerLocation);
+        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, certificate, issuerLocation);
         var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
-        handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        handler.SslOptions.RemoteCertificateValidationCallback = AcceptingOnly(certificate);
         var hostsPolicy = new X509ChainPolicy
         {
             DisableCertificateDownloads = false,
@@ -562,7 +562,10 @@ public class AddressValidatingHttpMessageHandlerTests
     /// Some platforms complete the server's chain on the server's side as well, through the same AIA address, so a row
     /// counting the client's fetches counts from there.
     /// </remarks>
-    private static async Task<int> FetchesOfTheOriginItselfAsync(LoopbackOrigin origin, LoopbackOrigin issuerLocation)
+    private static async Task<int> FetchesOfTheOriginItselfAsync(
+        LoopbackOrigin origin,
+        X509Certificate2 certificate,
+        LoopbackOrigin issuerLocation)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var tcp = new TcpClient();
@@ -572,7 +575,7 @@ public class AddressValidatingHttpMessageHandlerTests
             new SslClientAuthenticationOptions
             {
                 TargetHost = "tls.example.com",
-                RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                RemoteCertificateValidationCallback = AcceptingOnly(certificate),
                 CertificateChainPolicy = new X509ChainPolicy
                 {
                     DisableCertificateDownloads = true,
@@ -619,6 +622,14 @@ public class AddressValidatingHttpMessageHandlerTests
         using var withKey = issued.CopyWithPrivateKey(key);
         return X509CertificateLoader.LoadPkcs12(withKey.Export(X509ContentType.Pkcs12), password: null);
     }
+
+    /// <summary>
+    /// Accepts the one certificate a row's origin presents, whatever the platform's own verdict on it, and refuses any
+    /// other.
+    /// </summary>
+    private static RemoteCertificateValidationCallback AcceptingOnly(X509Certificate2 expected)
+        => (_, presented, _, _)
+            => presented is not null && presented.GetRawCertData().AsSpan().SequenceEqual(expected.RawData);
 
     /// <summary>
     /// A certificate for <paramref name="host"/> that no machine trusts, loaded so a server can authenticate with it.
