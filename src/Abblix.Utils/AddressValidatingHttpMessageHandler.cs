@@ -95,16 +95,30 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
     /// <remarks>
     /// The transports under this handler are its own, so this is where a host configures a guarded client's
     /// certificates, for instance from an <c>IHttpClientFactory</c> handler builder action that finds this handler as
-    /// the client's primary handler. A transport takes them when it sends its first request, so they are set before
-    /// that. They change nothing of which address a connection is made to.
+    /// the client's primary handler. Set them before the client's first request: each transport copies these options
+    /// when it sends its first request, while the chain policy object stays shared by reference. They change nothing
+    /// of which address a connection is made to.
     /// <para>
     /// By default validating a certificate makes no request of its own: the chain is built without downloading a
     /// missing issuer and without checking revocation online, because the addresses those downloads go to are named
     /// by the certificate - that is, by whoever runs the endpoint - and the platform fetches them past this handler.
-    /// A host that needs them turns them back on by setting its own
+    /// So an endpoint that serves its certificate without the intermediate certificates is refused on every
+    /// platform, and on Windows a public root not yet in the local store is not fetched either and fails as an
+    /// untrusted root.
+    /// </para>
+    /// <para>
+    /// A host that needs downloads turns them back on by setting its own
     /// <see cref="SslClientAuthenticationOptions.CertificateChainPolicy"/> here, for instance one with
     /// <see cref="X509ChainPolicy.DisableCertificateDownloads"/> false; its policy is used as it is, and every address
-    /// it lets the platform fetch is then reached outside this handler's judgment.
+    /// it lets the platform fetch is then reached outside this handler's judgment. While a chain policy is set,
+    /// revocation checking follows only its <see cref="X509ChainPolicy.RevocationMode"/>, and
+    /// <see cref="SslClientAuthenticationOptions.CertificateRevocationCheckMode"/> has no effect. A new
+    /// <see cref="X509ChainPolicy"/> starts with <see cref="X509RevocationMode.Online"/>, so such a policy also fetches
+    /// the revocation lists a certificate names unless the host sets its revocation mode too.
+    /// </para>
+    /// <para>
+    /// A client certificate set here is presented to every endpoint the guarded client reaches, and those are
+    /// addresses that clients registered, so it shows the host's identity to whoever runs them.
     /// </para>
     /// </remarks>
     public SslClientAuthenticationOptions SslOptions { get; } = new()
