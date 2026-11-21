@@ -7,6 +7,7 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 
 namespace Abblix.Utils;
@@ -85,6 +86,18 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         _proxy = proxy;
         InnerHandler = new TransportsByRule(this);
     }
+
+    /// <summary>
+    /// The TLS options every connection this handler makes starts from: how the server's certificate is validated
+    /// and which client certificate is presented.
+    /// </summary>
+    /// <remarks>
+    /// The transports under this handler are its own, so this is where a host configures a guarded client's
+    /// certificates, for instance from an <c>IHttpClientFactory</c> handler builder action that finds this handler as
+    /// the client's primary handler. A transport takes them when it sends its first request, so they are set before
+    /// that. They change nothing of which address a connection is made to.
+    /// </remarks>
+    public SslClientAuthenticationOptions SslOptions { get; } = new();
 
     /// <summary>
     /// Judges the request's address as written and throws when it may not be reached. Returning normally lets the
@@ -306,6 +319,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         // on its own, so through one the address this handler judged is not necessarily the one reached.
         UseProxy = _proxy != null,
         Proxy = _proxy != null ? new WebProxy(_proxy) { BypassProxyOnLocal = false } : null,
+
+        // The host's certificate settings; the connection step below still decides which address is reached
+        SslOptions = SslOptions,
 
         ConnectCallback = (context, cancellationToken) => ConnectAsync(rule, context, cancellationToken),
     };

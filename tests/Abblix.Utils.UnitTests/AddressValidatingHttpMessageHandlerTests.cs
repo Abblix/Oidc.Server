@@ -7,7 +7,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Abblix.Tests.Shared;
 
 namespace Abblix.Utils.UnitTests;
@@ -451,6 +455,68 @@ public class AddressValidatingHttpMessageHandlerTests
 
         Assert.Single(handler.Dialed);
         Assert.Equal(2, origin.Requests);
+    }
+
+    /// <summary>
+    /// The TLS options a host gives the handler are the ones its connections validate the server's certificate by:
+    /// a callback accepting the origin's self-signed certificate lets the request through, under every rule.
+    /// </summary>
+    [Theory]
+    [InlineData(OutboundAddressRule.Unrestricted)]
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved)]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose)]
+    public async Task TheTlsOptionsItIsGiven_ValidateTheServersCertificate(OutboundAddressRule rule)
+    {
+        using var certificate = SelfSignedCertificate("tls.example.com");
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin, Rule = rule };
+        var validated = new List<SslPolicyErrors>();
+        handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, errors) =>
+        {
+            validated.Add(errors);
+            return true;
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual(SslPolicyErrors.None, Assert.Single(validated));
+        Assert.Equal([new IPEndPoint(PublicAddress, origin.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// The control for the row above: with no options given the same certificate is refused, so the request passing
+    /// there is the options taking effect and not an origin any transport would accept.
+    /// </summary>
+    [Fact]
+    public async Task WithoutTlsOptions_ASelfSignedCertificateIsRefused()
+    {
+        using var certificate = SelfSignedCertificate("tls.example.com");
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        var failure = await Assert.ThrowsAsync<HttpRequestException>(
+            () => GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys"));
+
+        Assert.IsType<AuthenticationException>(failure.InnerException);
+    }
+
+    /// <summary>
+    /// A certificate for <paramref name="host"/> that no machine trusts, loaded so a server can authenticate with it.
+    /// </summary>
+    private static X509Certificate2 SelfSignedCertificate(string host)
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest($"CN={host}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName(host);
+        request.CertificateExtensions.Add(names.Build());
+
+        var now = TimeProvider.System.GetUtcNow();
+        using var created = request.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(1));
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), password: null);
     }
 
     /// <summary>
