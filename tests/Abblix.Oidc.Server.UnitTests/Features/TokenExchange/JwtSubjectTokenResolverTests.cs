@@ -306,12 +306,12 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
-    /// An untyped token, which among this server's tokens is an ID token, names its session only when its client
-    /// uses the session at logout. Without one a revocation of its session could not refuse it, so it is not
+    /// Every token this server issues for a session names it, the ID token of a client that does not use the session
+    /// at logout excepted. A token naming none could not be refused by a revocation of its session, so it is not
     /// exchanged.
     /// </summary>
     [Fact]
-    public async Task AnUntypedTokenNamingNoSession_IsRefused()
+    public async Task ATokenNamingNoSession_IsRefused()
     {
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
         jwt.Payload.SessionId = null;
@@ -323,25 +323,6 @@ public class JwtSubjectTokenResolverTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-    }
-
-    /// <summary>
-    /// An access token minted for no session, as client credentials mint one, names none and stays exchangeable:
-    /// a revocation reaches it through its family and its subject instead.
-    /// </summary>
-    [Fact]
-    public async Task AnAccessTokenNamingNoSession_IsExchanged()
-    {
-        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
-        jwt.Header.Type = JsonWebTokenTypes.AccessToken;
-        jwt.Payload.SessionId = null;
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
-            .ReturnsAsync(jwt);
-
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
-
-        Assert.True(result.TryGetSuccess(out _));
     }
 
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)

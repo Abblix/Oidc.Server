@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Mime;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
@@ -388,6 +389,32 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.True(
             response.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Redirect,
             $"/end_session refused a valid id_token_hint: {(int)response.StatusCode} {body}");
+    }
+
+    /// <summary>
+    /// A client that does not use the session at logout receives ID tokens naming no session, so its own hint cannot
+    /// be shown to belong to the session signed in now: RP-Initiated Logout 1.0 section 2 has the OP ask the end user
+    /// "if the supplied ID Token does not belong to the current OP session with the RP". The answer the server issued
+    /// then ends the session.
+    /// </summary>
+    [Fact]
+    public async Task A_hint_naming_no_session_is_asked_about_and_the_answer_ends_the_session()
+    {
+        // On its own host: the question is kept per session, and the shared host's session serves every test class
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+        Assert.Null(DecodeJwtPayload(idToken)[IanaClaimTypes.Sid]);
+
+        var hint = new Dictionary<string, string> { [EndSessionParameters.IdTokenHint] = idToken };
+        var confirmed = await EndSessionConfirmedAsync(client, discovery, hint);
+
+        Assert.True(
+            confirmed.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Redirect,
+            $"the confirmed logout should end the session, got {(int)confirmed.StatusCode}");
     }
 
     /// <summary>

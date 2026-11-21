@@ -11,8 +11,8 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
 /// <summary>
-/// Decides which clients are told the end user's session identifier, so the ID token and the logout messages a
-/// client receives name the session for the same clients.
+/// Decides which clients' ID tokens and logout messages carry the end user's session identifier, so the two name the
+/// session for the same clients.
 /// </summary>
 /// <remarks>
 /// OpenID Connect Front-Channel Logout 1.0 section 3 and Back-Channel Logout 1.0 section 2.1 define the <c>sid</c>

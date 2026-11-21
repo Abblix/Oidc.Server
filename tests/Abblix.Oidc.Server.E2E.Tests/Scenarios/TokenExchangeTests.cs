@@ -130,6 +130,47 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(TokenExchangeTokenTypes.IdToken, echoed[1]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// An actor_token is checked against a session revocation the same way a subject_token is, so an ID token naming
+    /// no session is refused as the actor too, while the same exchange with an ID token that names its session goes
+    /// through.
+    /// </summary>
+    [Theory]
+    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, HttpStatusCode.BadRequest)]
+    public async Task An_actor_id_token_is_exchanged_only_when_it_names_its_session(
+        bool clientUsesSessionAtLogout, HttpStatusCode expected)
+    {
+        await using var host = clientUsesSessionAtLogout ? Factory.WithSessionLogout() : Factory.WithWebHostBuilder(_ => { });
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subject = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
+        var actor = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subject[TokenResponse.Parameters.AccessToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.ActorToken] = actor[TokenResponse.Parameters.IdToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.IdToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(ErrorCodes.InvalidRequest, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        }
+    }
+
     [Fact]
     public async Task Cross_client_id_token_exchange_rejected_by_default()
     {
