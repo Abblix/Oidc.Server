@@ -22,6 +22,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// A list read from a store is judged at every reading, so a check runs once a period. One that throws instead of
 /// refusing fails the whole reading, and the server keeps serving the tenants it read last.
 /// </para>
+/// <para>
+/// A check is handed only tenants holding a value wherever their types declare one: a tenant with a null there - a
+/// member, or an element of a collection, whose nullable annotation rules it out - is refused for it before any
+/// check runs, so a check reads the definition as declared and guards against no such null.
+/// </para>
 /// </remarks>
 public interface ITenantsCheck
 {

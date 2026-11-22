@@ -34,7 +34,8 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
 
     /// <summary>
     /// Everything that refuses tenants in <paramref name="tenants"/>: a tenant that cannot name its data, as
-    /// <see cref="TenantKey.Unnamed"/> tells, and whatever <paramref name="checks"/> refuse.
+    /// <see cref="TenantKey.Unnamed"/> tells, a null where the tenant's types declare a value, as
+    /// <see cref="TenantShape"/> finds, and whatever <paramref name="checks"/> refuse of the rest.
     /// </summary>
     /// <remarks>
     /// Every way a tenant enters the server judges it by this, so the host's choice of checks never lets in a tenant
@@ -44,8 +45,20 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
         IEnumerable<ITenantsCheck> checks,
         IReadOnlyCollection<TenantDefinition> tenants,
         OidcOptions options)
-        => TenantKey.Unnamed(tenants).Concat(
-            from check in checks from refusal in check.Check(tenants, options) select refusal);
+    {
+        var shapes = tenants.Select(tenant => (Tenant: tenant, Nulls: TenantShape.NullsOf(tenant).ToArray())).ToArray();
+
+        // A tenant holding a null where a value is declared is refused for it and kept from the checks, which read
+        // the definition as declared; the conflicts it would have with other tenants do not arise, as it is not served
+        TenantDefinition[] whole = [..from shape in shapes where shape.Nulls.Length == 0 select shape.Tenant];
+
+        return TenantKey.Unnamed(tenants)
+            .Concat(
+                from shape in shapes
+                from path in shape.Nulls
+                select Of(shape.Tenant, $"Tenant '{shape.Tenant.Id}': {path} is null, where a value is required."))
+            .Concat(from check in checks from refusal in check.Check(whole, options) select refusal);
+    }
 
     /// <summary>
     /// The refusals of each of <paramref name="tenants"/> that <paramref name="failures"/> finds wrong with it alone,
