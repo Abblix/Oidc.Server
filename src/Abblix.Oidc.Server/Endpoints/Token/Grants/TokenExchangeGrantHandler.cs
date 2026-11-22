@@ -417,8 +417,12 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     /// RFC 8693 section 2.2.2: "If the request itself is not valid or if either the "subject_token" or
     /// "actor_token" are invalid for any reason, or are unacceptable based on policy ... The value of the "error"
     /// parameter MUST be the "invalid_request" error code." A resolver may be the host's and answer with any code,
-    /// so every failure is rewritten here, prefixed with the parameter it concerns so the description says which
-    /// token was rejected.
+    /// so a rejection is rewritten here to that code. A resolver that could not judge the token at all answers
+    /// server_error or temporarily_unavailable, the codes RFC 6749 section 4.1.2.1 defines for the server's own
+    /// failure; that says nothing about the token, so it reaches the client unchanged instead of telling it to
+    /// discard a token that may be fine, as section 2.2.2 allows: "Other error codes may also be used, as
+    /// appropriate." Every description is prefixed with the parameter it concerns, so it says
+    /// which token was meant.
     /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
         TenantDefinition tenant,
@@ -430,8 +434,18 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     {
         var result = await ResolveByTypeAsync(tenant, clientInfo, tokenType, tokenValue, cancellationToken);
         return result.MapFailure(
-            failure => new OidcError(ErrorCodes.InvalidRequest, $"{parameterName}: {failure.ErrorDescription}"));
+            failure => new OidcError(WireErrorOf(failure.Error), $"{parameterName}: {failure.ErrorDescription}"));
     }
+
+    /// <summary>
+    /// The error code a resolver's failure reaches the client with: the server's own failure as it is, any
+    /// rejection of the token as invalid_request.
+    /// </summary>
+    private static string WireErrorOf(string resolverError) => resolverError switch
+    {
+        ErrorCodes.ServerError or ErrorCodes.TemporarilyUnavailable => resolverError,
+        _ => ErrorCodes.InvalidRequest,
+    };
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
         TenantDefinition tenant,

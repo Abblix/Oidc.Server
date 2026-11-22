@@ -483,10 +483,11 @@ public class TokenExchangeGrantHandlerTests
     }
 
     [Theory]
-    [InlineData(ErrorCodes.InvalidRequest)]
-    [InlineData(ErrorCodes.InvalidGrant)]
-    [InlineData(ErrorCodes.ServerError)]
-    public async Task ActorResolverFailure_PropagatedWithPrefix(string resolverError)
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ActorResolverFailure_PropagatedWithPrefix(string resolverError, string expectedError)
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
@@ -507,7 +508,7 @@ public class TokenExchangeGrantHandlerTests
         var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(expectedError, error.Error);
         Assert.Contains("actor_token", error.ErrorDescription);
         Assert.Contains("actor expired", error.ErrorDescription);
     }
@@ -515,13 +516,17 @@ public class TokenExchangeGrantHandlerTests
     /// <summary>
     /// RFC 8693 section 2.2.2: when "the subject_token ... [is] invalid for any reason, or [is] unacceptable based
     /// on policy ... The value of the "error" parameter MUST be the "invalid_request" error code", so a resolver a
-    /// host registers reaches the wire with invalid_request whatever code it answered with.
+    /// host registers that rejects the token reaches the wire with invalid_request whatever code it answered with.
+    /// A resolver that could not judge the token at all (server_error, temporarily_unavailable) says nothing about
+    /// the token, so its answer reaches the client unchanged rather than telling it to discard a token that may be
+    /// fine.
     /// </summary>
     [Theory]
-    [InlineData(ErrorCodes.InvalidRequest)]
-    [InlineData(ErrorCodes.InvalidGrant)]
-    [InlineData(ErrorCodes.ServerError)]
-    public async Task ResolverFailure_Propagated(string resolverError)
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ResolverFailure_Propagated(string resolverError, string expectedError)
     {
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
@@ -533,7 +538,8 @@ public class TokenExchangeGrantHandlerTests
         var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(expectedError, error.Error);
+        Assert.Contains(TokenRequest.Parameters.SubjectToken, error.ErrorDescription);
     }
 
     [Fact]
