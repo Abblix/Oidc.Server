@@ -89,18 +89,10 @@ public sealed class RedisFixture : IDisposable
         if (_container is not null)
             return _container;
 
+        // A container whose start failed is left to the Testcontainers reaper: removing it here would call Docker
+        // again in the same stall, under the gate, and a failure of that call would hide why the start failed
         var container = new RedisBuilder(Image).Build();
-        try
-        {
-            container.StartAsync().GetAwaiter().GetResult();
-        }
-        catch
-        {
-            // A container left behind by a failed start would be one more for the VM to keep until the process ends
-            container.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            throw;
-        }
-
+        container.StartAsync().GetAwaiter().GetResult();
         return _container = container;
     }
 
