@@ -22,10 +22,10 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// package exists: mutations from independent instances must compose, where the
 /// one-value-per-queue design loses them.
 /// </summary>
-public sealed class RedisEventOutboxTests(RedisFixture redis) : IClassFixture<RedisFixture>
+public sealed class RedisEventOutboxTests(RedisFixture redis)
 {
     /// <summary>
-    /// Streams are namespaced per test: the class fixture is one shared server, and a
+    /// Streams are namespaced per test: every test in the process shares one server, and a
     /// collision between tests would be a test defect wearing a product one's clothes.
     /// </summary>
     private static string NewStreamId() => $"s-{Guid.NewGuid():N}";
