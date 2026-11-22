@@ -70,7 +70,7 @@ public sealed record SubjectTokenContext(
     /// <summary>
     /// The session the subject_token belongs to. The exchanged token joins it, so revoking that session refuses every
     /// token derived from it, however many exchanges stand between them. A resolver refuses a token naming no session
-    /// rather than leaving this empty: the grant handler treats an empty one as a defect of the resolver.
+    /// rather than resolving it.
     /// </summary>
-    public string? SessionId { get; init; }
+    public required string SessionId { get; init; }
 }

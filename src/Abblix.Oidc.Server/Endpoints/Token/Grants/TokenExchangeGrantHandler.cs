@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -51,26 +50,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// the new actor's nested <c>act.act</c>).
 /// </para>
 /// </remarks>
-public class TokenExchangeGrantHandler : IAuthorizationGrantHandler
+public class TokenExchangeGrantHandler(
+    IServiceProvider serviceProvider,
+    TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly TimeProvider _timeProvider;
-
-    /// <summary>
-    /// Creates the handler.
-    /// </summary>
-    /// <param name="serviceProvider">Finds the resolver registered for a token type.</param>
-    /// <param name="sessionIdGenerator">Not used: the exchanged token takes the session of its subject_token.</param>
-    /// <param name="timeProvider">Stamps the moment of the exchange as the authentication time.</param>
-    public TokenExchangeGrantHandler(
-        IServiceProvider serviceProvider,
-        ISessionIdGenerator sessionIdGenerator,
-        TimeProvider timeProvider)
-    {
-        _serviceProvider = serviceProvider;
-        _timeProvider = timeProvider;
-    }
-
     /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
     {
@@ -430,26 +413,14 @@ public class TokenExchangeGrantHandler : IAuthorizationGrantHandler
         CancellationToken cancellationToken)
     {
         if (tokenType is null ||
-            _serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType.OriginalString) is not { } resolver)
+            serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType.OriginalString) is not { } resolver)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        var result = await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
-
-        // A token naming no session is refused by the resolver, which sees its format, so an empty session here can
-        // only be a resolver that skipped that refusal. Answering it with a session of its own would let the
-        // exchanged token outlive the revocation of the session it came from.
-        if (result.TryGetSuccess(out var token) && !token.SessionId.HasValue())
-        {
-            throw new InvalidOperationException(
-                $"{resolver.GetType().FullName} resolved a token naming no session, " +
-                $"so {nameof(SubjectTokenContext)}.{nameof(SubjectTokenContext.SessionId)} is empty.");
-        }
-
-        return result;
+        return await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
@@ -513,8 +484,8 @@ public class TokenExchangeGrantHandler : IAuthorizationGrantHandler
         // user's session reaches it. The authentication time stays the moment of the exchange.
         var authSession = new AuthSession(
             Subject: subject.Subject,
-            SessionId: subject.SessionId.NotNull(nameof(subject.SessionId)),
-            AuthenticationTime: _timeProvider.GetUtcNow(),
+            SessionId: subject.SessionId,
+            AuthenticationTime: timeProvider.GetUtcNow(),
             IdentityProvider: subject.Issuer ?? "self");
 
         // The exchanged token carries authority that came from the subject_token, so it joins that token's

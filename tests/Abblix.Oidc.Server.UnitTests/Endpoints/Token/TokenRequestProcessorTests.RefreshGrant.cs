@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -128,8 +127,7 @@ public partial class TokenRequestProcessorTests
         services.AddKeyedSingleton(TokenExchangeTokenTypes.RefreshToken, resolver.Object);
         await using var provider = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(
-            provider, new Mock<ISessionIdGenerator>(MockBehavior.Strict).Object, TimeProvider.System);
+        var handler = new TokenExchangeGrantHandler(provider, TimeProvider.System);
         await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest

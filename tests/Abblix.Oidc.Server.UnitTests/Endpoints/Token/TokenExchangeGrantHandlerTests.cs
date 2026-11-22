@@ -17,7 +17,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,7 +40,6 @@ public class TokenExchangeGrantHandlerTests
     private const string TestSubject = "user-7";
     private const string TestSessionId = "test-session";
 
-    private readonly Mock<ISessionIdGenerator> _sessionIdGenerator = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
 
     /// <summary>
@@ -314,23 +312,6 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(subjectSession, grant.AuthSession.SessionId);
-    }
-
-    /// <summary>
-    /// A resolver that resolves a token naming no session has skipped the refusal it owes, so the exchange fails
-    /// loudly, naming that resolver, instead of issuing a token no session revocation could reach.
-    /// </summary>
-    [Fact]
-    public async Task ResolvedTokenNamingNoSession_ThrowsNamingTheResolver()
-    {
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
-        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.AuthorizeAsync(
-            SingleIssuer.Tenant, ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
-            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken), TestContext.Current.CancellationToken));
-
-        Assert.Contains(resolverMock.Object.GetType().FullName!, exception.Message);
     }
 
     [Fact]
@@ -974,14 +955,14 @@ public class TokenExchangeGrantHandlerTests
         services.AddKeyedSingleton(tokenType, resolverMock.Object);
         var sp = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
+        var handler = new TokenExchangeGrantHandler(sp, _timeProvider);
         return (handler, resolverMock);
     }
 
     private TokenExchangeGrantHandler CreateHandlerWithoutResolvers()
     {
         var sp = new ServiceCollection().BuildServiceProvider();
-        return new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
+        return new TokenExchangeGrantHandler(sp, _timeProvider);
     }
 
     private static ClientInfo ClientWithAllowlist(params string[]? allowlist) =>

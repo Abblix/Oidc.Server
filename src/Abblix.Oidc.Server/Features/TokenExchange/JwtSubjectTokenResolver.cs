@@ -91,7 +91,7 @@ public sealed class JwtSubjectTokenResolver(
         // for a session names it, the ID token of a client that does not use the session at logout excepted, so a
         // token naming none cannot be checked against a session revocation and would keep working after one. It is
         // refused whichever role it plays in the exchange, subject or actor.
-        if (!jwt.Payload.SessionId.HasValue())
+        if (jwt.Payload.SessionId is not { Length: > 0 } sessionId)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -159,7 +159,7 @@ public sealed class JwtSubjectTokenResolver(
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
-            SessionId = jwt.Payload.SessionId,
+            SessionId = sessionId,
         };
     }
 
