@@ -113,10 +113,13 @@ public sealed partial class SharedSignalsTenantReleaseTests(RedisFixture redis)
     [Fact]
     public async Task AStoreWrappingTheRedisStoreWithoutItsPartitions_StopsTheServer()
     {
+        // Outside the assertion, so a container failing to start does not read as the wrong refusal
+        var connection = redis.Connection;
+
         await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            redis.Connection,
+            connection,
             streamStore: services => services
                 .AddSharedSignalsRedisStreamStore()
                 .AddSingleton<IStreamStore>(provider =>
@@ -170,10 +173,13 @@ public sealed partial class SharedSignalsTenantReleaseTests(RedisFixture redis)
     [Fact]
     public async Task TheRedisStoreRegisteredAfterTheTenantsTransmitter_IsRefusedForThatAlone()
     {
+        // Outside the assertion, so a container failing to start does not read as the wrong refusal
+        var connection = redis.Connection;
+
         var refused = await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            redis.Connection,
+            connection,
             streamStore: _ => { },
             afterSharedSignals: services => services.AddSharedSignalsRedisStreamStore()));
 

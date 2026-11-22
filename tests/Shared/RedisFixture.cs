@@ -31,7 +31,9 @@ namespace Abblix.Tests.Shared;
 /// </para>
 /// <para>
 /// The container starts when a test first asks for a connection, not with the process: xunit creates an assembly
-/// fixture before any test runs, and most tests of a project linking this file need no Redis at all.
+/// fixture before any test runs, and most tests of a project linking this file need no Redis at all. A start or a
+/// connection that fails is not kept, so the next test asks Docker again: one stall of Docker Desktop's VM then
+/// costs the test it hit, not every Redis test left in the process.
 /// </para>
 /// </remarks>
 public sealed class RedisFixture : IDisposable
@@ -39,15 +41,18 @@ public sealed class RedisFixture : IDisposable
     private const string Image =
         "redis:8.10.2-alpine@sha256:9f8d2d789b9a1d1e3f283f979aa9cbf393373806472e1ccd460e2f9c869b833b";
 
-    private readonly Lazy<RedisContainer> _container = new(StartContainer);
-    private readonly Lazy<ConnectionMultiplexer> _connection;
+    private readonly Lock _gate = new();
+    private RedisContainer? _container;
+    private ConnectionMultiplexer? _connection;
 
-    public RedisFixture()
+    public ConnectionMultiplexer Connection
     {
-        _connection = new Lazy<ConnectionMultiplexer>(CreateConnection);
+        get
+        {
+            lock (_gate)
+                return _connection ??= Connect(StartedContainer());
+        }
     }
-
-    public ConnectionMultiplexer Connection => _connection.Value;
 
     /// <summary>
     /// Opens ANOTHER connection to the same server, for the tests that need two replicas rather than
@@ -61,21 +66,44 @@ public sealed class RedisFixture : IDisposable
     /// and present in the majority of operations from two.
     /// </remarks>
     public ConnectionMultiplexer CreateConnection()
-        => ConnectionMultiplexer.Connect(_container.Value.GetConnectionString());
+    {
+        RedisContainer container;
+        lock (_gate)
+            container = StartedContainer();
+
+        return Connect(container);
+    }
 
     public void Dispose()
     {
-        if (_connection.IsValueCreated)
-            _connection.Value.Dispose();
-
-        if (_container.IsValueCreated)
-            _container.Value.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _connection?.Dispose();
+        _container?.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
-    private static RedisContainer StartContainer()
+    /// <summary>
+    /// The running container, started on the first call. Called under <see cref="_gate"/>, so tests asking at once
+    /// wait for one start rather than each starting a container of its own.
+    /// </summary>
+    private RedisContainer StartedContainer()
     {
+        if (_container is not null)
+            return _container;
+
         var container = new RedisBuilder(Image).Build();
-        container.StartAsync().GetAwaiter().GetResult();
-        return container;
+        try
+        {
+            container.StartAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // A container left behind by a failed start would be one more for the VM to keep until the process ends
+            container.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            throw;
+        }
+
+        return _container = container;
     }
+
+    private static ConnectionMultiplexer Connect(RedisContainer container)
+        => ConnectionMultiplexer.Connect(container.GetConnectionString());
 }
