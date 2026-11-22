@@ -502,7 +502,8 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var tokenType = subjectTokenType;
         for (var i = 0; i < exchanges; i++)
         {
-            token = await ExchangeAsync(client, discovery, token, tokenType);
+            var exchanged = await ExchangeAsConfidentialClientAsync(client, discovery, token, tokenType);
+            token = exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
             tokenType = TokenExchangeTokenTypes.AccessToken;
         }
 
@@ -521,27 +522,58 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             "the exchanged token should be inactive once its subject token's session is revoked");
     }
 
-    private static string ResponseMemberOf(string tokenType) => tokenType switch
+    /// <summary>
+    /// A refresh token the refresh grant refuses because its session was revoked is refused for exchange too, also
+    /// when the revocation is dated after the sign-in but before the refresh token was issued, where only the
+    /// session's authentication time, not the token's issue time, falls before it.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_revoked_session_is_refused_for_exchange_as_at_the_refresh_grant()
     {
-        TokenExchangeTokenTypes.AccessToken => TokenResponse.Parameters.AccessToken,
-        TokenExchangeTokenTypes.IdToken => TokenResponse.Parameters.IdToken,
-        TokenExchangeTokenTypes.RefreshToken => TokenResponse.Parameters.RefreshToken,
-        _ => throw new ArgumentOutOfRangeException(nameof(tokenType), tokenType, null),
-    };
+        // No clock tolerance, so a cutoff a second after the sign-in is after it at once
+        await using var host = Factory.WithSessionLogout(options => options.ReplicaClockSkew = TimeSpan.Zero);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
 
-    private static async Task<string> ExchangeAsync(
-        HttpClient client, DiscoveryDocument discovery, string subjectToken, string subjectTokenType)
-    {
-        var response = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        var first = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var signedInAt = DateTimeOffset.FromUnixTimeSeconds(
+            DecodeJwtPayload(first[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.AuthTime]!
+                .GetValue<long>());
+
+        // A second family from the same session, begun well after the sign-in
+        await Task.Delay(TimeSpan.FromSeconds(2.5), TestContext.Current.CancellationToken);
+        var second = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = second[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeRefreshTokenAsync(client, discovery, refreshToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the refresh token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
+            SessionOf(first),
+            signedInAt.AddSeconds(1),
+            TestContext.Current.CancellationToken);
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, refreshToken));
+
+        var afterRevocation = await ExchangeRefreshTokenAsync(client, discovery, refreshToken);
+        var body = await ReadJsonAsync(afterRevocation);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    private static Task<HttpResponseMessage> ExchangeRefreshTokenAsync(
+        HttpClient client, DiscoveryDocument discovery, string refreshToken)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
-            [TokenRequest.Parameters.SubjectToken] = subjectToken,
-            [TokenRequest.Parameters.SubjectTokenType] = subjectTokenType,
+            [TokenRequest.Parameters.SubjectToken] = refreshToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.RefreshToken,
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
-        return response[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
-    }
 
     private static Task<HttpResponseMessage> ExchangeIdTokenAsync(
         HttpClient client, DiscoveryDocument discovery, string idToken)

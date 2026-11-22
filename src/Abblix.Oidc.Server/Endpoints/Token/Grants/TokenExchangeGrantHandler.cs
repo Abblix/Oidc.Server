@@ -50,9 +50,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// the new actor's nested <c>act.act</c>).
 /// </para>
 /// </remarks>
-public class TokenExchangeGrantHandler(
-    IServiceProvider serviceProvider,
-    TimeProvider timeProvider) : IAuthorizationGrantHandler
+public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuthorizationGrantHandler
 {
     /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
@@ -480,22 +478,27 @@ public class TokenExchangeGrantHandler(
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
         };
 
-        // The exchanged token belongs to the session of its subject_token, never to the actor's, so revoking the end
-        // user's session reaches it. The authentication time stays the moment of the exchange.
+        // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the
+        // actor's, so revoking the end user's session reaches it and the exchange does not pass for a new sign-in.
         var authSession = new AuthSession(
             Subject: subject.Subject,
             SessionId: subject.SessionId,
-            AuthenticationTime: timeProvider.GetUtcNow(),
-            IdentityProvider: subject.Issuer ?? "self");
+            AuthenticationTime: subject.AuthenticationTime,
+            IdentityProvider: subject.Issuer ?? "self")
+        {
+            AuthContextClassRef = subject.AuthContextClassRef,
+            AuthenticationMethodReferences = subject.AuthenticationMethodReferences,
+        };
 
         // The exchanged token carries authority that came from the subject_token, so it joins that token's
-        // refresh token family and a replay revoking the family refuses it too. The subject_token's family and no
-        // other, even where an actor_token was presented as well: a token names one family, and the one the
+        // refresh token family and a replay revoking the family refuses it too, and it expires no later than the
+        // subject_token, so a chain of exchanges never outlives the token it started from. The subject_token's family
+        // and no other, even where an actor_token was presented as well: a token names one family, and the one the
         // issued token acts under is the end user's.
         return new AuthorizedGrant(authSession, authContext)
         {
             GrantId = subject.GrantId,
-            ExpiresNoLaterThan = subject.GrantId is not null ? subject.ExpiresAt : null,
+            ExpiresNoLaterThan = subject.ExpiresAt,
         };
     }
 

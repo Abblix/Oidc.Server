@@ -39,11 +39,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// belongs to a federated issuer.
 /// </para>
 /// <para>
-/// Token exchange carries the session of its subject token and is not asked about here either. What judges that
-/// session is the token side: the subject token is validated in this same request against the session's cutoff
-/// by the issue time it carries, not by the session's authentication time as here. So a cutoff dated between the
-/// sign-in and the subject token's issue time refuses a refresh token at the refresh grant, yet lets the same
-/// refresh token through as a subject token.
+/// Token exchange carries the session of its subject token and is not asked about here: the subject token's
+/// resolver judges that session in this same request. A refresh token is asked this validator's own question, so a
+/// refresh token the refresh grant refuses is not exchanged instead. A JWT is judged against the session's cutoff
+/// by the issue time it carries, and the token exchanged from it expires no later than it does.
 /// </para>
 /// </remarks>
 /// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself

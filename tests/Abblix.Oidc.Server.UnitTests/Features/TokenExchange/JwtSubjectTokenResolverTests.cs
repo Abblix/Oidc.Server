@@ -76,6 +76,9 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal([Scopes.OpenId, Scopes.Profile], ctx.Scope!);
         Assert.Null(ctx.AuthorizationDetails);
         Assert.Equal("session-1", ctx.SessionId);
+        Assert.Equal(jwt.Payload.AuthenticationTime, ctx.AuthenticationTime);
+        Assert.Equal("urn:example:acr:1", ctx.AuthContextClassRef);
+        Assert.Equal(["pwd", "otp"], ctx.AuthenticationMethodReferences!);
     }
 
     /// <summary>
@@ -326,6 +329,25 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
+    /// <summary>
+    /// The exchanged token tells when the end user signed in, so a token that does not say is not exchanged rather
+    /// than answered with the moment of the exchange.
+    /// </summary>
+    [Fact]
+    public async Task ATokenStatingNoAuthenticationTime_IsRefused()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Payload.AuthenticationTime = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
@@ -333,7 +355,15 @@ public class JwtSubjectTokenResolverTests
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
             // A token issued in a session names it, which is what lets a revocation of that session reach it
-            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1), SessionId = "session-1" },
+            Payload =
+            {
+                IssuedAt = now,
+                ExpiresAt = now.AddHours(1),
+                SessionId = "session-1",
+                AuthenticationTime = now.AddMinutes(-30),
+                AuthContextClassRef = "urn:example:acr:1",
+                AuthenticationMethodReferences = ["pwd", "otp"],
+            },
         };
         if (issuer is not null) jwt.Payload.Issuer = issuer;
         if (subject is not null) jwt.Payload.Subject = subject;

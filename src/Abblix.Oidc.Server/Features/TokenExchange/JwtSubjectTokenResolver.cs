@@ -98,6 +98,15 @@ public sealed class JwtSubjectTokenResolver(
                 "The token names no session, so a revocation of its session could not be checked.");
         }
 
+        // The exchanged token tells when the end user signed in, and a token that does not say could only be answered
+        // with the moment of the exchange, which would present an old sign-in as a fresh one.
+        if (jwt.Payload.AuthenticationTime is not { } authenticationTime)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token states no authentication time, so the token exchanged from it could not state one.");
+        }
+
         var subject = jwt.Payload.Subject;
         if (string.IsNullOrWhiteSpace(subject))
         {
@@ -108,24 +117,14 @@ public sealed class JwtSubjectTokenResolver(
         // pairwise 'sub' back to the real subject and as the confused-deputy origin below.
         var originalClientId = jwt.Payload.NamedClientId();
 
-        // When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym; open
-        // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
-        // and pass through unchanged.
-        var originalClient = originalClientId is not null
-            ? await clientInfoProvider.TryFindClientAsync(tenant, originalClientId)
-            : null;
-
-        if (originalClient is not null)
+        // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
+        // rather than faulting the exchange.
+        if (await OpenSubjectAsync(tenant, subject, originalClientId) is not { } realSubject)
         {
-            // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
-            // rather than faulting the exchange.
-            var recovered = subjectTypeConverter.ConvertBack(tenant, subject, originalClient);
-            if (recovered is null)
-                return new OidcError(
-                    ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
-
-            subject = recovered;
+            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
         }
+
+        subject = realSubject;
 
         // Direct raw access to authorization_details preserves byte-exact payload; DeepClone
         // detaches it from the subject_token's payload before it flows into a fresh
@@ -160,7 +159,29 @@ public sealed class JwtSubjectTokenResolver(
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
             SessionId = sessionId,
+            AuthenticationTime = authenticationTime,
+            AuthContextClassRef = jwt.Payload.AuthContextClassRef,
+            AuthenticationMethodReferences = jwt.Payload.AuthenticationMethodReferences?.ToList(),
         };
+    }
+
+    /// <summary>
+    /// The real subject behind the token's <c>sub</c>, or <c>null</c> when a pairwise one does not open.
+    /// </summary>
+    /// <remarks>
+    /// When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym, opened
+    /// against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject and pass
+    /// through unchanged.
+    /// </remarks>
+    private async Task<string?> OpenSubjectAsync(TenantDefinition tenant, string subject, string? originalClientId)
+    {
+        var originalClient = originalClientId is not null
+            ? await clientInfoProvider.TryFindClientAsync(tenant, originalClientId)
+            : null;
+
+        return originalClient is not null
+            ? subjectTypeConverter.ConvertBack(tenant, subject, originalClient)
+            : subject;
     }
 
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode

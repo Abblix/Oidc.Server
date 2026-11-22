@@ -757,14 +757,19 @@ public partial class TokenRequestProcessorTests
 
     /// <summary>
     /// A token minted already expired, as one exchanged at the very end of its subject token's life is, is refused
-    /// with invalid_grant instead of being handed to the client.
+    /// instead of being handed to the client: as an invalid subject token under token exchange (RFC 8693 section
+    /// 2.2.2), as an expired grant under any other grant (RFC 6749 section 5.2).
     /// </summary>
     [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public async Task ProcessAsync_TokenMintedAlreadyExpired_RefusesTheGrant(int lifetimeSeconds)
+    [InlineData(0, GrantTypes.AuthorizationCode, ErrorCodes.InvalidGrant)]
+    [InlineData(-1, GrantTypes.AuthorizationCode, ErrorCodes.InvalidGrant)]
+    [InlineData(0, GrantTypes.TokenExchange, ErrorCodes.InvalidRequest)]
+    [InlineData(-1, GrantTypes.TokenExchange, ErrorCodes.InvalidRequest)]
+    public async Task ProcessAsync_TokenMintedAlreadyExpired_RefusesTheGrant(
+        int lifetimeSeconds, string grantType, string expectedError)
     {
         var request = CreateValidTokenRequest([]);
+        request = request with { Model = request.Model with { GrantType = grantType } };
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
         _contextEvaluator
             .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
@@ -779,7 +784,7 @@ public partial class TokenRequestProcessorTests
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Equal(expectedError, error.Error);
     }
 
     /// <summary>

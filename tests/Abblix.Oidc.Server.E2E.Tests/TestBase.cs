@@ -284,6 +284,31 @@ public abstract class TestBase(TestFactory factory)
         });
     }
 
+    /// <summary>
+    /// The member of a token response that carries a token of the RFC 8693 type named.
+    /// </summary>
+    protected static string ResponseMemberOf(string tokenType) => tokenType switch
+    {
+        TokenExchangeTokenTypes.AccessToken => TokenResponse.Parameters.AccessToken,
+        TokenExchangeTokenTypes.IdToken => TokenResponse.Parameters.IdToken,
+        TokenExchangeTokenTypes.RefreshToken => TokenResponse.Parameters.RefreshToken,
+        _ => throw new ArgumentOutOfRangeException(nameof(tokenType), tokenType, null),
+    };
+
+    /// <summary>
+    /// Exchanges a subject token as the confidential test client and returns the successful token response.
+    /// </summary>
+    protected static Task<JsonObject> ExchangeAsConfidentialClientAsync(
+        HttpClient client, DiscoveryDocument discovery, string subjectToken, string subjectTokenType)
+        => ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = subjectTokenType,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
     protected static JsonObject DecodeJwtPayload(string jwt)
     {
         var parts = jwt.Split('.');

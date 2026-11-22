@@ -62,8 +62,8 @@ public sealed record SubjectTokenContext(
     public string? GrantId { get; init; }
 
     /// <summary>
-    /// When the subject_token expires, so a token exchanged from it within a refresh token family does not outlive
-    /// it, and with it the revocation of that family. <c>null</c> when the subject_token states no expiry.
+    /// When the subject_token expires, so a token exchanged from it does not outlive it: an exchange hands on the
+    /// authority of the subject_token and never extends it. <c>null</c> when the subject_token states no expiry.
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; init; }
 
@@ -73,4 +73,22 @@ public sealed record SubjectTokenContext(
     /// rather than resolving it.
     /// </summary>
     public required string SessionId { get; init; }
+
+    /// <summary>
+    /// When the end user signed in to the session the subject_token belongs to. The exchanged token carries it rather
+    /// than the moment of the exchange, which authenticated nobody.
+    /// </summary>
+    public required DateTimeOffset AuthenticationTime { get; init; }
+
+    /// <summary>
+    /// The authentication context class that sign-in satisfied, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public string? AuthContextClassRef { get; init; }
+
+    /// <summary>
+    /// The authentication methods that sign-in used, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public ICollection<string>? AuthenticationMethodReferences { get; init; }
 }

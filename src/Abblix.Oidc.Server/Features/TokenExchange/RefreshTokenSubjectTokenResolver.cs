@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -40,10 +41,13 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
 /// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
 /// pairwise subject back to the real subject.</param>
+/// <param name="cutoffChecker">Asks whether a revocation refuses the session the refresh token continues, as the
+/// refresh grant asks.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     IRefreshTokenService refreshTokenService,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    IClientInfoProvider clientInfoProvider,
+    IRevocationCutoffChecker cutoffChecker) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
@@ -96,6 +100,16 @@ public sealed class RefreshTokenSubjectTokenResolver(
                 "The subject_token does not refer to a known grant.");
         }
 
+        // The question the refresh grant asks of the same refresh token, so a token that grant refuses is not
+        // exchanged instead: the validation above judges the token by its issue time, while a revocation dated after
+        // the sign-in but before the family began refuses the session only by its authentication time.
+        if (await cutoffChecker.IsGrantRefusedAsync(tenant, grant, GrantTypes.RefreshToken))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The session the subject_token was issued in has been revoked.");
+        }
+
         // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
         // instance so mutations downstream do not leak back into stored state.
         var authorizationDetails = (JsonArray?)grant.Context.AuthorizationDetails?.DeepClone();
@@ -117,6 +131,9 @@ public sealed class RefreshTokenSubjectTokenResolver(
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
             SessionId = grant.AuthSession.SessionId,
+            AuthenticationTime = grant.AuthSession.AuthenticationTime,
+            AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
+            AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
         };
     }
 }

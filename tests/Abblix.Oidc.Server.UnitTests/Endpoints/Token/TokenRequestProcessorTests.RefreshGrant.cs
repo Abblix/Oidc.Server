@@ -127,7 +127,7 @@ public partial class TokenRequestProcessorTests
         services.AddKeyedSingleton(TokenExchangeTokenTypes.RefreshToken, resolver.Object);
         await using var provider = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(provider, TimeProvider.System);
+        var handler = new TokenExchangeGrantHandler(provider);
         await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest
