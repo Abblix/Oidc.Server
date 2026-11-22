@@ -9,6 +9,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -172,9 +173,16 @@ internal sealed class TenantMending
     /// A copy of <paramref name="value"/> to mend, or null for a type that cannot copy itself.
     /// </summary>
     private static object? CopyOf(object value)
-        => value is TenantDefinition tenant
-            ? tenant.WithGeneration(tenant.Generation)
-            : value.GetType().GetMethod(RecordCloneMethod, Type.EmptyTypes)?.Invoke(value, null);
+    {
+        if (value is TenantDefinition tenant)
+            return tenant.WithGeneration(tenant.Generation);
+
+        // A value is copied by boxing it again
+        if (value.GetType().IsValueType)
+            return RuntimeHelpers.GetObjectValue(value);
+
+        return value.GetType().GetMethod(RecordCloneMethod, Type.EmptyTypes)?.Invoke(value, null);
+    }
 
     /// <summary>
     /// What a member that has to hold a value holds when its own type offers none: no element, or no address.

@@ -36,7 +36,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
 public class TenantShapeTests
 {
     private const string TenantId = "acme";
-    private const string OwnNamespace = "Abblix.";
 
     /// <summary>
     /// A null the types declare a value for refuses the tenant, and one they allow does not throw; no place makes the
@@ -121,7 +120,7 @@ public class TenantShapeTests
             .ToHashSet();
 
         var missing = DeclaredOwnTypes(typeof(TenantDefinition))
-            .Where(type => !type.IsValueType && !reached.Any(seen => seen.IsAssignableTo(type)))
+            .Where(type => type.GetProperties().Any(HoldsANullOrBelow) && !reached.Any(seen => seen.IsAssignableTo(type)))
             .ToArray();
 
         Assert.Empty(missing);
@@ -177,16 +176,20 @@ public class TenantShapeTests
     }
 
     /// <summary>
-    /// Whether a member holds data the walk reads: written to, not indexed, and a collection only of one kind of
-    /// element.
+    /// Whether the walk reads a member, as the walk itself tells, and can read what it holds: a collection only of one
+    /// kind of element.
     /// </summary>
     private static bool IsWalkable(PropertyInfo property)
-    {
-        var isTenantId = property.DeclaringType == typeof(TenantDefinition) &&
-                         property.Name == nameof(TenantDefinition.Id);
-        var written = property is { CanRead: true, CanWrite: true } && property.GetIndexParameters().Length == 0;
-        return written && HoldsOneKindOfElement(property.PropertyType) && !isTenantId;
-    }
+        => TenantShape.IsWalked(property) && HoldsOneKindOfElement(property.PropertyType);
+
+    /// <summary>
+    /// Whether a member can hold a null, itself or beneath: a reference, or a value of the server's own whose members
+    /// may.
+    /// </summary>
+    private static bool HoldsANullOrBelow(PropertyInfo property)
+        => TenantShape.IsWalked(property) &&
+           (!property.PropertyType.IsValueType ||
+            TenantShape.IsOwn(property.PropertyType) && property.PropertyType.GetProperties().Any(HoldsANullOrBelow));
 
     private static bool HoldsOneKindOfElement(Type type)
     {
@@ -301,7 +304,17 @@ public class TenantShapeTests
     /// <summary>
     /// A member of a reference type, or a collection, found on an object the definition holds.
     /// </summary>
-    private sealed record Place(string Path, object Owner, PropertyInfo Property, NullabilityInfo Nullability)
+    /// <param name="Path">Where the member stands, from the tenant.</param>
+    /// <param name="Owner">The object holding the member.</param>
+    /// <param name="Property">The member.</param>
+    /// <param name="Nullability">What the member's declaration says of null.</param>
+    /// <param name="Commit">Writes the owner back where it is held, for an owner that is a value copied out.</param>
+    private sealed record Place(
+        string Path,
+        object Owner,
+        PropertyInfo Property,
+        NullabilityInfo Nullability,
+        Action Commit)
     {
         public bool DeclaresValue => Nullability.ReadState == NullabilityState.NotNull;
 
@@ -319,6 +332,7 @@ public class TenantShapeTests
             if (!asElement)
             {
                 Property.SetValue(Owner, null);
+                Commit();
 
                 // A member that takes null as something else, as the generation does, holds no null to refuse
                 return DeclaresValue && Property.GetValue(Owner) is null;
@@ -327,13 +341,14 @@ public class TenantShapeTests
             var element = ElementOf(Nullability)!;
             var collection = Array.CreateInstance(element.Type, 1);
             Property.SetValue(Owner, collection);
+            Commit();
             return element.ReadState == NullabilityState.NotNull;
         }
     }
 
-    private static IEnumerable<Place> PlacesOf(TenantDefinition tenant) => PlacesOf(tenant, string.Empty);
+    private static IEnumerable<Place> PlacesOf(TenantDefinition tenant) => PlacesOf(tenant, string.Empty, () => { });
 
-    private static IEnumerable<Place> PlacesOf(object owner, string path)
+    private static IEnumerable<Place> PlacesOf(object owner, string path, Action commit)
     {
         var context = new NullabilityInfoContext();
         foreach (var property in owner.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -346,22 +361,28 @@ public class TenantShapeTests
             var value = property.GetValue(owner);
 
             if (!property.PropertyType.IsValueType || ElementOf(nullability) is not null)
-                yield return new Place(memberPath, owner, property, nullability);
+                yield return new Place(memberPath, owner, property, nullability, commit);
 
             if (value is null or string or Uri)
                 continue;
 
+            // A value of the server's own is a copy, so what is set on it is written back to its owner
+            var held = property;
             var beneath = value is IEnumerable elements
                 ? elements.Cast<object?>().SelectMany((element, index) => PlacesBeneath(element, $"{memberPath}[{index}]"))
-                : PlacesBeneath(value, memberPath);
+                : PlacesBeneath(value, memberPath, () =>
+                {
+                    held.SetValue(owner, value);
+                    commit();
+                });
 
             foreach (var place in beneath)
                 yield return place;
         }
     }
 
-    private static IEnumerable<Place> PlacesBeneath(object? value, string path)
-        => value is not null && IsOwn(value.GetType()) && !value.GetType().IsValueType ? PlacesOf(value, path) : [];
+    private static IEnumerable<Place> PlacesBeneath(object? value, string path, Action? commit = null)
+        => value is not null && TenantShape.IsOwn(value.GetType()) ? PlacesOf(value, path, commit ?? (() => { })) : [];
 
     private static NullabilityInfo? ElementOf(NullabilityInfo collection)
         => collection.ElementType ?? (collection.GenericTypeArguments is [var element] ? element : null);
@@ -388,7 +409,7 @@ public class TenantShapeTests
                     declared = declared.IsArray ? declared.GetElementType()! : declared.GetGenericArguments()[0];
                 }
 
-                if (IsOwn(declared) && found.Add(declared))
+                if (TenantShape.IsOwn(declared) && found.Add(declared))
                     pending.Push(declared);
             }
         }
@@ -396,7 +417,4 @@ public class TenantShapeTests
         found.Remove(root);
         return found;
     }
-
-    private static bool IsOwn(Type type)
-        => !type.IsEnum && type.Namespace?.StartsWith(OwnNamespace, StringComparison.Ordinal) == true;
 }

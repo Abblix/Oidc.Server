@@ -138,9 +138,11 @@ internal static class TenantShape
            !(property.DeclaringType == typeof(TenantDefinition) && property.Name == nameof(TenantDefinition.Id));
 
     /// <summary>
-    /// Whether <paramref name="value"/> is read whole, holding no member the walk reads.
+    /// Whether <paramref name="value"/> is read whole, holding no member the walk reads: a string, an address, or a
+    /// value such as a number; a value of the server's own, such as the refresh token options, is walked.
     /// </summary>
-    internal static bool IsValue(object value) => value is string or Uri || value.GetType().IsValueType;
+    internal static bool IsValue(object value)
+        => value is string or Uri || value.GetType().IsValueType && !IsOwn(value.GetType());
 
     /// <summary>
     /// Whether <paramref name="type"/> is one of the server's own, or a host's type derived from one, as a host's own
