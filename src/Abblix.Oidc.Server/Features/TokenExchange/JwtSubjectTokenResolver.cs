@@ -116,12 +116,13 @@ public sealed class JwtSubjectTokenResolver(
         // pairwise identifiers back to the real parties and as the confused-deputy origin below.
         var originalClientId = jwt.Payload.NamedClientId();
 
-        // A pairwise 'sub' or actor that does not open for its client (a foreign-sector or pre-change token) is
-        // rejected rather than faulting the exchange or passing the pseudonym on as a real party.
-        if (await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId) is not { } real)
+        var opened = await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId);
+        if (opened.TryGetFailure(out var openError))
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
+            return openError;
         }
+
+        var real = opened.GetSuccess();
 
         // Direct raw access to authorization_details preserves byte-exact payload; DeepClone
         // detaches it from the subject_token's payload before it flows into a fresh
@@ -161,26 +162,36 @@ public sealed class JwtSubjectTokenResolver(
     }
 
     /// <summary>
-    /// The real parties behind the token's <c>sub</c> and <c>act</c>, or <c>null</c> when a pairwise one does not open.
+    /// The real parties behind the token's <c>sub</c> and <c>act</c>, or the reason they cannot be told.
     /// </summary>
     /// <remarks>
-    /// When the subject_token was issued to a pairwise client, 'sub' and every actor are that client's per-sector
+    /// When the token was issued to a pairwise client, 'sub' and every actor are that client's per-sector
     /// pseudonyms, opened against that client's sector - not the requesting client's, which differs in a cross-client
-    /// exchange. id_tokens, plain JWTs and public-client tokens carry the real parties and pass through unchanged.
+    /// exchange. A public client's token carries the real parties, which opening leaves as they are, and so does a
+    /// token naming no client at all, which no pairwise client was issued.
+    /// <para>
+    /// Only the sector of the client the token names opens its pairwise identifiers, so a token naming a client this
+    /// server no longer knows is refused rather than exchanged with its pseudonyms taken for the real parties and
+    /// sealed a second time. So is a pairwise 'sub' or actor that does not open for its client (a foreign-sector or
+    /// pre-change token).
+    /// </para>
     /// </remarks>
-    private async Task<TokenSubjects?> OpenSubjectsAsync(
+    private async Task<Result<TokenSubjects, OidcError>> OpenSubjectsAsync(
         TenantDefinition tenant,
         JsonWebTokenPayload payload,
         string? originalClientId)
     {
-        var originalClient = originalClientId is not null
-            ? await clientInfoProvider.TryFindClientAsync(tenant, originalClientId)
-            : null;
-
         var seen = TokenSubjects.Of(payload);
-        return originalClient is not null
-            ? subjectTypeConverter.Open(tenant, seen, originalClient)
-            : seen;
+        if (originalClientId is null)
+            return seen;
+
+        if (await clientInfoProvider.TryFindClientAsync(tenant, originalClientId) is not { } originalClient)
+            return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
+
+        if (subjectTypeConverter.Open(tenant, seen, originalClient) is not { } real)
+            return new OidcError(ErrorCodes.InvalidRequest, "The token's subject could not be resolved.");
+
+        return real;
     }
 
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode

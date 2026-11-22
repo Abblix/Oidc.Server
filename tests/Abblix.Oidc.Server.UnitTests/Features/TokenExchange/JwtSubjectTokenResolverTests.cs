@@ -48,12 +48,12 @@ public class JwtSubjectTokenResolverTests
 
     public JwtSubjectTokenResolverTests()
     {
-        // These tests cover public/plain subject tokens, whose client either is unnamed or is not pairwise, so the
-        // resolver never opens 'sub'. Returning no client from the lookup drives that pass-through path (a converter
-        // with no pairwise settings would pass through anyway), keeping these tests decoupled from licensing.
+        // These tests cover public/plain subject tokens, whose client either is unnamed or is not pairwise, so
+        // opening 'sub' leaves it as it is. Every named client is found as a public one; a converter with no pairwise
+        // settings keeps these tests decoupled from licensing.
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
 
         _resolver = new JwtSubjectTokenResolver(
             _jwtValidator.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clientInfoProvider.Object);
@@ -387,6 +387,29 @@ public class JwtSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Null(ctx.IdentityProvider);
         Assert.Equal("https://issuer.example.com", ctx.Issuer);
+    }
+
+    /// <summary>
+    /// A token naming a client this server no longer knows cannot have its identifiers opened, since only that
+    /// client's sector opens a pairwise one, so it is refused rather than exchanged with its pseudonyms taken for the
+    /// real parties and sealed a second time.
+    /// </summary>
+    [Fact]
+    public async Task ATokenNamingAClientNoLongerKnown_IsRefused()
+    {
+        var jwt = NewJwt(subject: "pseudonym-of-client-gone", issuer: null);
+        jwt.Payload.ClientId = "client-gone";
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client-gone"))
+            .ReturnsAsync((ClientInfo?)null);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
