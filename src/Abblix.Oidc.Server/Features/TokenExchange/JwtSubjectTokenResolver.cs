@@ -69,7 +69,7 @@ public sealed class JwtSubjectTokenResolver(
         if (TokenTypesOf(tokenType.OriginalString) is not { } accepted)
         {
             return new OidcError(
-                ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
+                ErrorCodes.InvalidRequest, $"The token type '{tokenType}' is not a JWT this server reads.");
         }
 
         // An RFC 8693 subject_token may name a client (an ID token) or, under RFC 8707, a resource server in its
@@ -84,7 +84,7 @@ public sealed class JwtSubjectTokenResolver(
             ServiceTokenValidation.AnyAudience);
         if (!validation.TryGetSuccess(out var jwt))
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
+            return new OidcError(ErrorCodes.InvalidRequest, "The token is invalid or has expired.");
         }
 
         // A revocation of a session reaches a token through the session it names. Every token this server issues
@@ -109,7 +109,7 @@ public sealed class JwtSubjectTokenResolver(
 
         if (string.IsNullOrWhiteSpace(jwt.Payload.Subject))
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "subject_token is missing the required 'sub' claim.");
+            return new OidcError(ErrorCodes.InvalidRequest, "The token is missing the required 'sub' claim.");
         }
 
         // The client the subject_token names (client_id, else azp, else the sole audience): used both to open
