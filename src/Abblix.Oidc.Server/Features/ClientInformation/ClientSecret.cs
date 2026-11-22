@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -51,7 +52,11 @@ public record ClientSecret
 	/// so a hash has no scalar form to bind to without this alias: a settings file would have to spell
 	/// the value out one byte per key. Setting either member sets the hash; reading returns whatever
 	/// <see cref="Sha256Hash"/> holds, so the two can never disagree.
+	/// JSON leaves every alias out and carries the hash itself once: written alongside it, an alias is read
+	/// after the hash and overwrites whatever was edited there. The configuration binder ignores the
+	/// serializer's attributes, so binding is unaffected.
 	/// </remarks>
+	[JsonIgnore]
 	public string? Sha256HashBase64
 	{
 		get => Sha256Hash is { } hash ? Convert.ToBase64String(hash) : null;
@@ -63,6 +68,7 @@ public record ClientSecret
 	/// configuration.
 	/// </summary>
 	/// <inheritdoc cref="Sha256HashBase64" path="/remarks"/>
+	[JsonIgnore]
 	public string? Sha512HashBase64
 	{
 		get => Sha512Hash is { } hash ? Convert.ToBase64String(hash) : null;
@@ -75,8 +81,10 @@ public record ClientSecret
 	/// </summary>
 	/// <remarks>
 	/// The same alias as <see cref="Sha256HashBase64"/> in the other common notation. Reading returns
-	/// upper case; either case is accepted when writing.
+	/// upper case; either case is accepted when writing. Left out of JSON for the reason given on
+	/// <see cref="Sha256HashBase64"/>.
 	/// </remarks>
+	[JsonIgnore]
 	public string? Sha256HashHex
 	{
 		get => Sha256Hash is { } hash ? Convert.ToHexString(hash) : null;
@@ -88,6 +96,7 @@ public record ClientSecret
 	/// digest tools print and the form most people paste.
 	/// </summary>
 	/// <inheritdoc cref="Sha256HashHex" path="/remarks"/>
+	[JsonIgnore]
 	public string? Sha512HashHex
 	{
 		get => Sha512Hash is { } hash ? Convert.ToHexString(hash) : null;
