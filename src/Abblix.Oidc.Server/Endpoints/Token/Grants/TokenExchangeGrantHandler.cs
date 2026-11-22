@@ -487,8 +487,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
         // subject_token becomes the new actor's nested act.act, preserving the full delegation
-        // path. Impersonation = no actor_token = no act emission.
-        JsonObject? actorClaim = null;
+        // path. Without an actor_token the subject_token's own chain is kept as it is: a delegated
+        // token exchanged again still acts for somebody else, and only a subject_token carrying no
+        // act yields a token without one.
+        JsonObject? actorClaim;
         if (actor is not null)
         {
             actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
@@ -496,6 +498,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             {
                 actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
             }
+        }
+        else
+        {
+            actorClaim = (JsonObject?)subject.Act?.DeepClone();
         }
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)

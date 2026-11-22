@@ -387,6 +387,38 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal("prev-actor", nested["sub"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// A delegated subject_token exchanged without an actor_token still acts for somebody else, so the issued token
+    /// carries its act chain unchanged rather than presenting the delegate as the user acting directly.
+    /// </summary>
+    [Fact]
+    public async Task ADelegatedSubjectToken_ExchangedWithoutAnActor_KeepsItsActChain()
+    {
+        var existingChain = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            Act = existingChain,
+            OriginalClientId = ClientId,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.True(JsonNode.DeepEquals(existingChain, grant.Context.Actor));
+        Assert.NotSame(existingChain, grant.Context.Actor);
+    }
+
     [Fact]
     public async Task ActorTokenWithoutType_Rejected()
     {

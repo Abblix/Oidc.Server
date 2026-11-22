@@ -61,6 +61,73 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Null(newPayload["act"]);
     }
 
+    /// <summary>
+    /// RFC 8693 section 2.1 lists no redirect_uri, and RFC 6749 section 3.2 has the server "ignore unrecognized
+    /// request parameters", so an exchange carrying one is served rather than refused for a redirect it never had.
+    /// </summary>
+    [Fact]
+    public async Task A_redirect_uri_on_an_exchange_is_ignored()
+    {
+        var initial = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+        var subjectToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.NotNull(exchanged[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// A delegated token exchanged again without an actor_token keeps its act: RFC 8693 section 4.1 has act tell
+    /// the resource server who acts for the subject, and dropping it would present the delegate as the user.
+    /// </summary>
+    [Fact]
+    public async Task A_delegated_token_exchanged_without_an_actor_keeps_its_act()
+    {
+        var subjectToken = (await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var actorToken = (await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var actorSub = DecodeJwtPayload(actorToken)[IanaClaimTypes.Sub]!.GetValue<string>();
+
+        var delegated = (await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.ActorToken] = actorToken,
+            [TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        }))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = delegated,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var act = DecodeJwtPayload(exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>())[IanaClaimTypes.Act]
+            as JsonObject;
+        Assert.NotNull(act);
+        Assert.Equal(actorSub, act[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.Null(act[IanaClaimTypes.Act]);
+    }
+
     [Fact]
     public async Task Delegation_emits_act_claim_with_actor_subject()
     {
