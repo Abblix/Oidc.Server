@@ -2,15 +2,15 @@
 
 Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
 
-## What's New in Version 3.0
+## What's New in Version 3.1
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
-
-🚀 Features
-- Every tenant of a multi-tenant server is served through the same endpoints
+Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.md#%EF%B8%8F-upgrading-to-31) before moving a 3.0 host.
 
 ✏️ Improvements
-- The MVC and Minimal API hosts read a request the same way
+- Discovery publishes every endpoint on the issuer's scheme, host and port, and the registration responses return `registration_client_uri` on it
+- A host with no cache of its own starts on in-process caches
+
+The server's own changes are listed in the [Abblix.OIDC.Server README](https://www.nuget.org/packages/Abblix.OIDC.Server).
 
 ## Key Features
 

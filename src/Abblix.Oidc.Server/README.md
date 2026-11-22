@@ -2,26 +2,31 @@
 
 Abblix OIDC Server is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a certified provider you embed in your own ASP.NET Core application instead of running a separate identity product. It is certified by the OpenID Foundation across all login and logout profiles, builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
 
-## What's New in Version 3.0
+## What's New in Version 3.1
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
+Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.md#%EF%B8%8F-upgrading-to-31) before moving a 3.0 host.
 
 🚀 Features
-- Multi-tenancy: one server serves several issuers, each a tenant with its own clients, scopes, resources, keys and pages, declared in the settings or kept in a store of the host's own and changed while the server runs
-- Every JWT validation states the token types it accepts ([RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html))
-- Tracing and metrics for the protocol endpoints
-- A default scope per client, the resources each client may get an access token for, and one resource per access token
-- Per-client budgets on introspection and revocation
-- A host step before anything is issued
-- Revoking one user's tokens at one client
+- Client ID Metadata Documents, experimental ([draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)), see [below](#client-id-metadata-documents)
+- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`
 
 ✏️ Improvements
-- Revocation reaches every token of a grant
-- A refresh token reuse policy
-- Three limits on guessing a user code
-- Each logout channel is the deployment's own choice, and a logout confirmation is a value the server issues
-- A client authentication JWT names the issuer as its only audience ([RFC 10070](https://www.rfc-editor.org/rfc/rfc10070.html))
-- Any port on a loopback redirect address
+- Outbound requests to client-supplied addresses connect only to the addresses checked for them, and a forward proxy is named in `SecureHttpFetchOptions.OutboundProxy`
+- Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
+- The offline access of dynamically registered clients set by `NewClientOptions.OfflineAccess`
+- TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
+
+🛠 Fixes
+- Native and public clients held to the server-side rules of [RFC 8252](https://datatracker.ietf.org/doc/html/rfc8252), PKCE included
+- Request objects and login hint tokens addressed to the issuer
+- Absolute redirect URIs for clients declared in the tenant settings
+- Resource scopes accepted at dynamic client registration
+- In-process caches when the host registers none
+- Refresh tokens issued only to clients that can redeem them, through the refresh token grant or a token exchange
+- `sid` in ID tokens only for clients with back-channel logout, or front-channel logout that requires the session
+- Tokens obtained by token exchange bound to the session, sign-in and lifetime of their subject token, with the error codes and the `act` record of [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693); `SubjectTokenContext` gains the required `SessionId` and `AuthenticationTime`
+- Each client secret hash written to JSON once
+- A tenant holding a null where a value is required refused on its own
 
 ## Implemented Standards
 
@@ -67,6 +72,8 @@ Abblix OIDC Server implements the following standards for authorization and secu
 A client can use the HTTPS URL of a JSON document it publishes as its `client_id` instead of registering, which is how the MCP authorization specification expects clients and servers with no prior relationship to meet. The server fetches the document the first time the client shows up, keeps it for as long as the response's cache headers allow (within `MinimumCacheDuration` and `MaximumCacheDuration`), and checks it the way it checks a dynamic registration request. Discovery then advertises `client_id_metadata_document_supported`.
 
 Available since 3.1, the feature implements [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03), an Internet-Draft. It stays experimental until the draft becomes an RFC and may change in a minor release, so the compiler reports `ABX9001` wherever your code uses it until you suppress that diagnostic.
+
+The sample is a host on the Minimal API adapter (`Abblix.OIDC.Server.MinimalAPI`); an MVC host makes the same calls with `Abblix.OIDC.Server.MVC` and its namespace.
 
 ```csharp
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
