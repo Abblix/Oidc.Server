@@ -79,6 +79,46 @@ public sealed class TenantWithANullTests
     }
 
     /// <summary>
+    /// A tenant refused for a null still holds its address: another tenant created there is refused for the
+    /// conflict, and one the store already holds there is left out, as beside a tenant refused for anything else.
+    /// </summary>
+    [Fact]
+    public async Task ATenantRefusedForANull_KeepsItsAddressFromAnother()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(Tenant(Acme), ct);
+        await store.AddAsync(FromStoredJson(Tenant(Globex), "Clients/0/RedirectUris", "null"), ct);
+
+        await using var app = Build(
+            services => services.AddSingleton<ITenantStore>(store).AddSingleton<ITenantStoreWriter>(store),
+            _ => { });
+        await app.StartAsync(ct);
+
+        var impostor = Tenant("initech");
+        impostor = new TenantDefinition
+        {
+            Id = impostor.Id,
+            Issuer = new Uri($"{Host}/tenants/{Globex}"),
+            Clients = impostor.Clients,
+            SigningKeys = impostor.SigningKeys,
+        };
+        var created = await app.Services.GetRequiredService<ITenantManager>().CreateAsync(impostor, ct);
+
+        Assert.True(created.TryGetFailure(out var refusal));
+        Assert.Equal(TenantChangeRefusalReason.Invalid, refusal.Reason);
+
+        await store.AddAsync(impostor, ct);
+        await app.Services.GetRequiredService<StoreTenantCatalog>().RefreshAsync(ct);
+        using var http = app.GetTestClient();
+        using var globex = await http.GetAsync(Discovery(Globex), ct);
+        using var acme = await http.GetAsync(Discovery(Acme), ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, globex.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, acme.StatusCode);
+    }
+
+    /// <summary>
     /// The same JSON with nothing replaced serves both tenants, so a tenant left out above is left out for the null.
     /// </summary>
     [Fact]

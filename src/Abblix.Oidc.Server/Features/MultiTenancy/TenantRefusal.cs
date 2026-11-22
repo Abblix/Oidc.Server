@@ -48,16 +48,31 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
     {
         var shapes = tenants.Select(tenant => (Tenant: tenant, Nulls: TenantShape.NullsOf(tenant).ToArray())).ToArray();
 
-        // A tenant holding a null where a value is declared is refused for it and kept from the checks, which read
-        // the definition as declared; the conflicts it would have with other tenants do not arise, as it is not served
-        TenantDefinition[] whole = [..from shape in shapes where shape.Nulls.Length == 0 select shape.Tenant];
+        // A tenant holding a null where a value is declared is refused for it, and the checks, which read the
+        // definition as declared, see only what of it they can read: enough to refuse another tenant claiming its
+        // address or keys, while what they find wrong with that part alone would only repeat the refusal
+        var refusedForNull = shapes
+            .Where(shape => shape.Nulls.Length > 0)
+            .Select(shape => shape.Tenant.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        TenantDefinition[] readable =
+        [
+            ..shapes
+                .Select(shape => shape.Nulls.Length == 0 ? shape.Tenant : TenantShape.Readable(shape.Tenant))
+                .OfType<TenantDefinition>(),
+        ];
 
         return TenantKey.Unnamed(tenants)
             .Concat(
                 from shape in shapes
                 from path in shape.Nulls
                 select Of(shape.Tenant, $"Tenant '{shape.Tenant.Id}': {path} is null, where a value is required."))
-            .Concat(from check in checks from refusal in check.Check(whole, options) select refusal);
+            .Concat(
+                from check in checks
+                from refusal in check.Check(readable, options)
+                where !refusal.TenantIds.All(refusedForNull.Contains)
+                select refusal);
     }
 
     /// <summary>

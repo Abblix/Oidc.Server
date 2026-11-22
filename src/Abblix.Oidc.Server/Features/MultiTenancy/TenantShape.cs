@@ -47,6 +47,56 @@ internal static class TenantShape
             from path in NullsOf(member.Property.GetValue(tenant), member.Nullability, member.Property.Name)
             select path;
 
+    /// <summary>
+    /// What of <paramref name="tenant"/> the checks can read: each of its own members holding a null left out - an
+    /// element of a collection, or the whole member when it is not a collection - and the rest as it is; null when a
+    /// member that has to hold a value, such as the issuer, holds none.
+    /// </summary>
+    /// <remarks>
+    /// A tenant refused for a null still claims its address and its keys, so the tenants beside it are compared with
+    /// what it claims: one taking over its address or its custodian key is refused for the conflict, as it would be
+    /// beside a tenant refused for anything else.
+    /// </remarks>
+    public static TenantDefinition? Readable(TenantDefinition tenant)
+    {
+        var readable = tenant.WithGeneration(tenant.Generation);
+        foreach (var member in MembersOf(typeof(TenantDefinition)))
+        {
+            var value = member.Property.GetValue(tenant);
+            if (member.Property.Name == nameof(TenantDefinition.Id) ||
+                !NullsOf(value, member.Nullability, member.Property.Name).Any())
+            {
+                continue;
+            }
+
+            if (ElementOf(member.Nullability) is { Type.IsValueType: false } element)
+                member.Property.SetValue(readable, WithoutNulls(value as IEnumerable, element));
+            else if (member.Nullability.ReadState != NullabilityState.NotNull)
+                member.Property.SetValue(readable, null);
+            else
+                return null;
+        }
+
+        return readable;
+    }
+
+    /// <summary>
+    /// The elements of <paramref name="elements"/> holding no null, as an array of what the collection declares.
+    /// </summary>
+    private static Array WithoutNulls(IEnumerable? elements, NullabilityInfo element)
+    {
+        object[] whole =
+        [
+            ..from object? item in elements ?? Array.Empty<object>()
+            where item is not null && !NullsOf(item, element, string.Empty).Any()
+            select item,
+        ];
+
+        var readable = Array.CreateInstance(element.Type, whole.Length);
+        whole.CopyTo(readable, 0);
+        return readable;
+    }
+
     private static IEnumerable<string> NullsOf(object? value, NullabilityInfo nullability, string path)
     {
         if (value is null)
@@ -107,9 +157,12 @@ internal static class TenantShape
         });
 
     /// <summary>
-    /// Whether <paramref name="type"/> is one of the server's own, whose members are read further; anything else - a
-    /// string, a <see cref="Uri"/>, a number - is a value whose content the checks judge.
+    /// Whether <paramref name="type"/> is one of the server's own, or a host's type derived from one, as a host's own
+    /// client may be, whose members are read further; anything else - a string, a <see cref="Uri"/>, a number - is a
+    /// value whose content the checks judge.
     /// </summary>
     private static bool IsOwn(Type type)
-        => !type.IsEnum && type.Namespace?.StartsWith(RootNamespace, StringComparison.Ordinal) == true;
+        => !type.IsEnum &&
+           (type.Namespace?.StartsWith(RootNamespace, StringComparison.Ordinal) == true ||
+            type.BaseType is { } baseType && IsOwn(baseType));
 }
