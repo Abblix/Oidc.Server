@@ -11,19 +11,35 @@ name: Publish dev build to GitHub Packages
 # version actually built, so these examples can mislead a READER of this file - which is why they are
 # kept current - but they are no longer what reaches a consumer.
 #
-# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
+# Example versions (with MinVerMinimumMajorMinor=2.4):
+#   develop, or a manual run from any branch but a release one
+#                                       ->  2.4.0-dev.0.<first-parent distance from the root>
+#   a release/* branch                  ->  2.4.0-rc.0.<first-parent distance from the root>
 #   a release, version supplied by hand ->  2.4.0   (release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
 # which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
-# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the number after dev.0 is MinVer's height:
+# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the last number is MinVer's height:
 # the FIRST-PARENT distance back to the root, not a count of everything reachable. Checkable at
 # any commit - height + 1 == git rev-list --count --first-parent HEAD.
 #
-# Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
-# consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
-# To gate deterministically against a specific branch build, pin the exact version.
+# The two branches publish on two lines, because the height alone cannot keep them apart. A release
+# branch cut from develop and later merged with it walks a first-parent chain of its own, usually
+# shorter than develop's, so its height lands on a number develop has already published; the push
+# below uses --skip-duplicate, so on one shared line that push would publish nothing and the release
+# branch's code would never reach the feed. Each line takes its pre-release identifier from one owner:
+# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc.0 is the step "Choose the
+# pre-release identifier" below, which overrides that property for a release/* push only.
+#
+# Within its own line a release branch's height only grows: every commit made on the branch - a
+# squash merge, a merge of develop into it - has the previous head as its first parent, so it stands
+# one above it. A fast-forward or a reset of the branch is the exception: the new head's chain is not
+# the old one extended, its height can land on a number the line already holds, and that push
+# publishes nothing.
+#
+# rc.0 sits outside a 2.4.0-dev.* range, so a consumer floating on it keeps following develop; it
+# sorts above every dev.0 build, so a range as wide as 2.4.0-* would take the release branch instead.
+# To gate against a release branch, pin its exact rc.0 build.
 #
 # Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
 # release.yml - this workflow does not produce them.
@@ -135,8 +151,31 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
         timeout-minutes: 3
+      # Empty leaves Directory.Build.props' identifier in force, which is what develop publishes under.
+      # Build and Pack both take the override: given to Pack alone, it would rebuild with a new version and
+      # publish binaries other than the ones the Test step ran.
+      - name: Choose the pre-release identifier
+        id: line
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            refs/heads/release/*) identifiers=rc.0 ;;
+            *) identifiers="" ;;
+          esac
+          echo "ref=$REF identifiers=${identifiers:-the one in Directory.Build.props}"
+          echo "identifiers=$identifiers" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
       - name: Build
-        run: dotnet build --no-restore -c Release
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
+        run: |
+          set -euo pipefail
+          override=()
+          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
+          dotnet build --no-restore -c Release "${override[@]}"
 
         timeout-minutes: 3
       # Whether the pull request that produced this commit already ran the suite on this very tree. Three
@@ -212,16 +251,28 @@ jobs:
         # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner
         # per-TFM pack. Drop --no-build; the earlier Build step left everything up to date, so pack's build
         # is an incremental no-op. GeneratePackageOnBuild=false stops the on-build pack double-running.
-        run: dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
+        run: |
+          set -euo pipefail
+          override=()
+          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
+          dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false "${override[@]}"
 
         timeout-minutes: 3
       - name: Refuse to publish a release version
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
         run: |
           set -euo pipefail
-          # This workflow publishes DEV builds. A version carrying no dev identifier means a release
-          # tag sits on the commit, and those belong to release.yml, behind its approval
+          # This workflow publishes DEV builds. A version carrying no pre-release identifier means a
+          # release tag sits on the commit, and those belong to release.yml, behind its approval
           # gate. Without this step such a package would reach the feed past that gate, and the
           # approved publish afterwards uses --skip-duplicate and would no-op over it.
+          #
+          # The identifier required is the one in force for this ref, so a release branch's build
+          # that lost its override is refused too: on develop's line it would collide with a build
+          # develop already published and, through --skip-duplicate, publish nothing.
           if [ ! -f Directory.Build.props ]; then
             echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
             exit 1
@@ -238,6 +289,17 @@ jobs:
           EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
           if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
             echo "Could not evaluate MinVerMinimumMajorMinor from Directory.Build.props - there is nothing to check the built version against." >&2
+            exit 1
+          fi
+
+          # Evaluated with the same override Build and Pack were given, so the answer is the identifier
+          # those steps built with, whichever of the two owners supplied it.
+          override=()
+          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
+          rc=0
+          LABEL=$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers -p:Configuration=Release "${override[@]}" -nologo | tr -d '[:space:]') || rc=$?
+          if [ "$rc" -ne 0 ] || [ -z "$LABEL" ]; then
+            echo "Could not evaluate MinVerDefaultPreReleaseIdentifiers for this branch - there is no pre-release identifier to require of the built version." >&2
             exit 1
           fi
 
@@ -273,11 +335,17 @@ jobs:
             exit 1
           fi
 
-          # Both criteria on the version: the dev identifier, and the line this repository builds.
+          # Both criteria on the version: the pre-release identifier in force for this branch, and the
+          # line this repository builds.
           case "$VERSION" in
-            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*-"$LABEL".*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*-*)
+              echo "Refusing to publish $VERSION: this branch builds with the pre-release identifier $LABEL, and the version carries another." >&2
+              echo "Build and Pack did not take the identifier the step \"Choose the pre-release identifier\" chose; published, it could land on a version the other branch already holds and publish nothing." >&2
+              exit 1
+              ;;
             "$EXPECTED".*)
-              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Refusing to publish $VERSION: it carries no pre-release identifier, so a release tag is on this commit." >&2
               echo "Releases and pre-releases are published by release.yml, behind its approval gate." >&2
               exit 1
               ;;
@@ -305,6 +373,8 @@ jobs:
 
         timeout-minutes: 3
       - name: Summary
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
         run: |
           set -euo pipefail
           # Any package: they all carry the same MinVer version. Matched by SHAPE rather than by
@@ -365,6 +435,11 @@ jobs:
               # Only for a dev build: a version read here without the dev identifier gets no sentence
               # about floating, which would be advice about a line it is not on. The step does not
               # fail on it, because the package is already on the feed by now.
+              #
+              # A release branch's build is on a line of its own, which nobody floats on: the gate pins it.
+              if [ -n "$IDENTIFIERS" ]; then
+                echo "A release branch build, outside the \`${VERSION%%-*}-dev.*\` range: pin \`$VERSION\` exactly to take it."
+              fi
               case "$VERSION" in
                 *-dev.*)
                   echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
