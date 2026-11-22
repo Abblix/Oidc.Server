@@ -240,7 +240,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     {
         if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
         {
-            return error;
+            return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }
 
         return ctx;
@@ -396,14 +396,14 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             {
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
-                    "The client the subject_token was issued to could not be determined.");
+                    "The client the token was issued to could not be determined.");
             }
 
             if (!string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal))
             {
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
-                    "subject_token was issued to a different client than the one presenting it.");
+                    "The token was issued to a different client than the one presenting it.");
             }
         }
 
