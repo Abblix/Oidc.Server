@@ -21,6 +21,12 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 - Absolute redirect URIs for clients declared in the tenant settings
 - Resource scopes accepted at dynamic client registration
 - In-process caches when the host registers none
+- Refresh tokens issued only to clients that can redeem them, through the refresh token grant or a token exchange
+- `sid` in ID tokens only for clients with back-channel logout, or front-channel logout that requires the session
+- Tokens obtained by token exchange bound to the session, sign-in and lifetime of their subject token, with the error codes and the `act` record of [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693); `SubjectTokenContext` gains the required `SessionId` and `AuthenticationTime`
+- TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
+- Each client secret hash written to JSON once
+- A tenant holding a null where a value is required refused on its own
 
 ## Implemented Standards
 
