@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
@@ -35,14 +36,15 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// </remarks>
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
-/// <param name="jwtValidator">The JWT validator to validate the token.</param>
+/// <param name="jwtValidator">Reads the token: first that it is authentic, then, once the caller is found entitled
+/// to it, what is recorded about it.</param>
 /// <param name="rateLimiter">
 /// The budget of introspection requests one client gets, spent once the caller is known to be that client.
 /// </param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator,
+	IAuthServiceJwtReader jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Introspection)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
 	: IIntrospectionRequestValidator
@@ -75,7 +77,7 @@ public partial class IntrospectionRequestValidator(
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
 		// which is not a credential - reject it even though "none" is valid at the token endpoint.
-		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+		if (!IntrospectionCallers.Admit(clientInfo.TokenEndpointAuthMethod))
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
 			return new UnauthenticatedCallerError("The client is not authorized");
@@ -108,34 +110,40 @@ public partial class IntrospectionRequestValidator(
 		// notes that a piece of software acting as both "MAY reuse the same credentials", so a client
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
-		var result = await jwtValidator.ValidateAsync(
+		var authentic = await jwtValidator.ReadAuthenticAsync(
 			tenant, clientInfo, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 
-		return result.Match(
-			token =>
-			{
-				if (token is { Payload.ClientId: {} clientId } &&
-				    clientId != clientInfo.ClientId &&
-				    !clientInfo.AllowCrossClientIntrospection)
-				{
-					// The token was issued to another client and this caller is not authorized to act as a
-					// protected resource. RFC 7662 Section 4 asks for exactly that authorization - "SHOULD
-					// require protected resources to be specifically authorized to call the introspection
-					// endpoint" - and says nothing about who the token belongs to, so ownership is what stands
-					// in for the permission on a client that was never granted it.
-					return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
-				}
+		if (!authentic.TryGetSuccess(out var token))
+			return Inactive(introspectionRequest, clientInfo, authentic.GetFailure());
 
-				return new ValidIntrospectionRequest(introspectionRequest, clientInfo, token);
+		// A token that is not this caller's, where the caller is not authorized to act as a protected resource. RFC
+		// 7662 Section 4 asks for exactly that authorization - "SHOULD require protected resources to be specifically
+		// authorized to call the introspection endpoint" - and says nothing about who the token belongs to, so
+		// ownership is what stands in for the permission on a client that was never granted it. Decided before the
+		// token's records are read, because reading them revokes the grant of a superseded refresh token, which a
+		// client holding another client's token would otherwise do to it from here.
+		if (!clientInfo.AllowCrossClientIntrospection && !token.BelongsTo(clientInfo.ClientId))
+			return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 
-			},
-			error =>
-			{
-				LogInvalidJwt(Sanitized.Value(error));
-				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
-			});
+		var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
+		if (!recorded.TryGetSuccess(out var valid))
+			return Inactive(introspectionRequest, clientInfo, recorded.GetFailure());
+
+		return new ValidIntrospectionRequest(introspectionRequest, clientInfo, valid);
+	}
+
+	/// <summary>
+	/// The answer to a request naming a token that was not read, which RFC 7662 Section 2.2 reports as inactive.
+	/// </summary>
+	private ValidIntrospectionRequest Inactive(
+		IntrospectionRequest introspectionRequest,
+		ClientInfo clientInfo,
+		JwtValidationError error)
+	{
+		LogInvalidJwt(Sanitized.Value(error));
+		return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 	}
 
 	/// <summary>

@@ -21,6 +21,12 @@ partial class RevocationRequestValidator
 	private partial void LogTokenIssuedToAnotherClient(Sanitized ClientId);
 
 	[LoggerMessage(
+		EventId = LogEvents.Endpoints.RevocationRequestValidator.TokenOfNoClient,
+		Level = LogLevel.Warning,
+		Message = "Client {ClientId} presented a token that belongs to no client, which no client revokes here")]
+	private partial void LogTokenOfNoClient(Sanitized ClientId);
+
+	[LoggerMessage(
 		EventId = LogEvents.Endpoints.RevocationRequestValidator.TokenValidationFailed,
 		Level = LogLevel.Warning,
 		Message = "The token validation failed: {Error}")]

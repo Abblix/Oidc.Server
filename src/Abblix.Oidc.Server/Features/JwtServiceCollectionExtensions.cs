@@ -65,6 +65,9 @@ public static class JwtServiceCollectionExtensions
         // The validator refuses a token revoked, rotated or cut off, so what records those comes with it
         services.AddTokenRevocation();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
+        // The revocation and introspection endpoints read a token in the two halves the validator runs as one, and
+        // decide whose it is between them
+        services.TryAddSingleton<IAuthServiceJwtReader, AuthServiceJwtValidator>();
         services.TryAddSingleton<IIdTokenHintParser, IdTokenHintParser>();
         return services;
     }
