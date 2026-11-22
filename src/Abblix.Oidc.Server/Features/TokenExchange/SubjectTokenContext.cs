@@ -17,13 +17,14 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <c>subject_token</c>. Independent of the token's on-wire format -- JWT-based resolvers parse
 /// the payload, opaque-token resolvers recover the equivalent fields from a previously stored
 /// grant. The <see cref="TokenExchangeGrantHandler"/> consumes this record to
-/// synthesise the new <see cref="AuthorizationContext"/> and
+/// synthesize the new <see cref="AuthorizationContext"/> and
 /// <see cref="UserAuthentication.AuthSession"/>.
 /// </summary>
 /// <param name="Subject">The end-user identifier the subject_token represents (RFC 7519 <c>sub</c>
-/// claim or its opaque-token equivalent). Required.</param>
+/// claim or its opaque-token equivalent), the real one: a pairwise pseudonym is opened by the resolver, since the
+/// issued token seals it for the client receiving it. Required.</param>
 /// <param name="Issuer">The party that issued the subject_token, used as the
-/// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c> when <see cref="IdentityProvider"/> is
+/// <c>IdentityProvider</c> on the synthesized <c>AuthSession</c> when <see cref="IdentityProvider"/> is
 /// <c>null</c>. <c>null</c> when the resolver cannot determine it (e.g. opaque tokens without an issuer
 /// field).</param>
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
@@ -38,11 +39,11 @@ public sealed record SubjectTokenContext(
     string[]? Scope,
     JsonArray? AuthorizationDetails)
 {
-    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, captured as
-    /// a raw <see cref="JsonObject"/>. When the exchange adds a new actor on top of a subject_token
-    /// that already had its own act chain, the grant handler nests this value under the new actor's
-    /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
-    /// subject_token was not itself a delegation token.</summary>
+    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, every <c>sub</c> in the
+    /// chain the real identifier of its actor: a resolver opens pairwise pseudonyms as it opens
+    /// <see cref="Subject"/>, since the issued token seals them for the client receiving it. The exchanged
+    /// token keeps this chain, nested under the new actor's <c>act</c> member when the request supplies an
+    /// actor_token. <c>null</c> when the subject_token was not itself a delegation token.</summary>
     public JsonObject? Act { get; init; }
 
     /// <summary>

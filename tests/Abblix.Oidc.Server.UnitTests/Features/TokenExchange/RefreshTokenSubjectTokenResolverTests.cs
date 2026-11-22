@@ -89,6 +89,7 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.IdentityProvider);
+        Assert.Equal(jwt.Payload.Issuer, ctx.Issuer);
         Assert.Equal([Scopes.OpenId], ctx.Scope!);
         Assert.Equal("session-1", ctx.SessionId);
         Assert.Equal(signedInAt, ctx.AuthenticationTime);
