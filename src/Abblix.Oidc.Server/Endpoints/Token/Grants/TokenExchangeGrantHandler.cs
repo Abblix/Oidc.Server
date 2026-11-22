@@ -221,7 +221,12 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
+            tenant,
+            ctx.ClientInfo,
+            TokenRequest.Parameters.SubjectToken,
+            ctx.Request.SubjectTokenType,
+            subjectToken,
+            cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
@@ -283,8 +288,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     /// <summary>
     /// Resolves the optional <c>actor_token</c>. Passthrough (no enrichment) when the request
-    /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
-    /// error pinpoints which token was rejected.
+    /// has no actor.
     /// </summary>
     private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
         TenantDefinition tenant,
@@ -295,10 +299,13 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             return ctx;
 
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.ActorTokenType, actorToken, cancellationToken);
-        return result.Match<Result<ValidationContext, OidcError>>(
-            actor => ctx with { Actor = actor },
-            failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
+            tenant,
+            ctx.ClientInfo,
+            TokenRequest.Parameters.ActorToken,
+            ctx.Request.ActorTokenType,
+            actorToken,
+            cancellationToken);
+        return result.MapSuccess(actor => ctx with { Actor = actor });
     }
 
     /// <summary>
@@ -403,7 +410,30 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         return null;
     }
 
+    /// <summary>
+    /// Resolves a subject_token or an actor_token through the resolver registered for its type.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8693 section 2.2.2: "If the request itself is not valid or if either the "subject_token" or
+    /// "actor_token" are invalid for any reason, or are unacceptable based on policy ... The value of the "error"
+    /// parameter MUST be the "invalid_request" error code." A resolver may be the host's and answer with any code,
+    /// so every failure is rewritten here, prefixed with the parameter it concerns so the description says which
+    /// token was rejected.
+    /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
+        TenantDefinition tenant,
+        ClientInfo clientInfo,
+        string parameterName,
+        Uri? tokenType,
+        string tokenValue,
+        CancellationToken cancellationToken)
+    {
+        var result = await ResolveByTypeAsync(tenant, clientInfo, tokenType, tokenValue, cancellationToken);
+        return result.MapFailure(
+            failure => new OidcError(ErrorCodes.InvalidRequest, $"{parameterName}: {failure.ErrorDescription}"));
+    }
+
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
         TenantDefinition tenant,
         ClientInfo clientInfo,
         Uri? tokenType,

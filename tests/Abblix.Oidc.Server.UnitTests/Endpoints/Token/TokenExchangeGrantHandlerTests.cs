@@ -421,8 +421,11 @@ public class TokenExchangeGrantHandlerTests
         Assert.Contains("together", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ActorResolverFailure_PropagatedWithPrefix()
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant)]
+    [InlineData(ErrorCodes.ServerError)]
+    public async Task ActorResolverFailure_PropagatedWithPrefix(string resolverError)
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
@@ -431,7 +434,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
             .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
+            .ReturnsAsync(new OidcError(resolverError, "actor expired"));
 
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -448,17 +451,21 @@ public class TokenExchangeGrantHandlerTests
         Assert.Contains("actor expired", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ResolverFailure_Propagated()
+    /// <summary>
+    /// RFC 8693 section 2.2.2: when "the subject_token ... [is] invalid for any reason, or [is] unacceptable based
+    /// on policy ... The value of the "error" parameter MUST be the "invalid_request" error code", so a resolver a
+    /// host registers reaches the wire with invalid_request whatever code it answered with.
+    /// </summary>
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant)]
+    [InlineData(ErrorCodes.ServerError)]
+    public async Task ResolverFailure_Propagated(string resolverError)
     {
-        // Resolver returns an OidcError -- the handler propagates it without rewrapping so
-        // resolver-specific failure descriptions reach the wire client (RFC 8693 section 2.2.2 maps
-        // every error to invalid_request at the wire, but the description preserves diagnostic
-        // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
             .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "subject expired"));
+            .ReturnsAsync(new OidcError(resolverError, "subject expired"));
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
@@ -466,7 +473,6 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Equal("subject expired", error.ErrorDescription);
     }
 
     [Fact]
