@@ -14,6 +14,7 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 - Outbound requests to client-supplied addresses connect only to the addresses checked for them, and a forward proxy is named in `SecureHttpFetchOptions.OutboundProxy`
 - Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
 - The offline access of dynamically registered clients set by `NewClientOptions.OfflineAccess`
+- TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 
 🛠 Fixes
 - Native and public clients held to the server-side rules of [RFC 8252](https://datatracker.ietf.org/doc/html/rfc8252), PKCE included
@@ -24,7 +25,6 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 - Refresh tokens issued only to clients that can redeem them, through the refresh token grant or a token exchange
 - `sid` in ID tokens only for clients with back-channel logout, or front-channel logout that requires the session
 - Tokens obtained by token exchange bound to the session, sign-in and lifetime of their subject token, with the error codes and the `act` record of [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693); `SubjectTokenContext` gains the required `SessionId` and `AuthenticationTime`
-- TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 - Each client secret hash written to JSON once
 - A tenant holding a null where a value is required refused on its own
 

@@ -7,9 +7,6 @@ A JWT and JOSE toolkit for .NET, built entirely on the platform's cryptographic 
 ✏️ Improvements
 - The replay cache registered by `AddDistributedReplayCache()` keeps its reservations in process when the host registers no `IDistributedCache`, enough for one instance; several instances register a shared one
 
-🛠 Fixes
-- A token refused for want of a matching key is told so without the number of keys the issuer holds
-
 ## Install
 
 ```bash
