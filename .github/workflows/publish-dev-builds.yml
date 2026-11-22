@@ -11,19 +11,35 @@ name: Publish dev build to GitHub Packages
 # version actually built, so these examples can mislead a READER of this file - which is why they are
 # kept current - but they are no longer what reaches a consumer.
 #
-# Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
-#   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
+# Example versions (with MinVerMinimumMajorMinor=2.4):
+#   develop, or a manual run from any branch but a release one
+#                                       ->  2.4.0-dev.<first-parent distance from the root>
+#   a release/* branch                  ->  2.4.0-rc.<first-parent distance from the root>
 #   a release, version supplied by hand ->  2.4.0   (release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
 # which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
-# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the number after dev.0 is MinVer's height:
+# MinVerMinimumMajorMinor lifting a 0.0.0 default, and the last number is MinVer's height:
 # the FIRST-PARENT distance back to the root, not a count of everything reachable. Checkable at
 # any commit - height + 1 == git rev-list --count --first-parent HEAD.
 #
-# Note: develop and release/* publish into the same 2.4.0-dev.* pre-release line, so a
-# consumer floating 2.4.0-dev.* resolves the highest commit height across both branches.
-# To gate deterministically against a specific branch build, pin the exact version.
+# The two branches publish on two lines, because the height alone cannot keep them apart. A release
+# branch cut from develop and later merged with it walks a first-parent chain of its own, usually
+# shorter than develop's, so its height lands on a number develop has already published; the push
+# below uses --skip-duplicate, so on one shared line that push would publish nothing and the release
+# branch's code would never reach the feed. Each line takes its pre-release identifier from one owner:
+# dev is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is RELEASE_BRANCH_IDENTIFIERS
+# below, which the step "Choose the pre-release identifier" passes as an override for a release/* push only.
+#
+# Within its own line a release branch's height only grows: every commit made on the branch - a
+# squash merge, a merge of develop into it - has the previous head as its first parent, so it stands
+# one above it. A fast-forward or a reset of the branch is the exception: the new head's chain is not
+# the old one extended, its height can land on a number the line already holds, and that push
+# publishes nothing.
+#
+# rc sits outside a 2.4.0-dev.* range, so a consumer floating on it keeps following develop; it
+# sorts above every dev build, so a range as wide as 2.4.0-* would take the release branch instead.
+# To gate against a release branch, pin its exact rc build.
 #
 # Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
 # release.yml - this workflow does not produce them.
@@ -54,6 +70,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The pre-release identifier a release/* branch builds under, read by the step that chooses it and by
+  # the guard that checks the packed version, each deciding from the ref on its own.
+  RELEASE_BRANCH_IDENTIFIERS: rc
 
 concurrency:
   # Publishing mutates the package feed - never cancel a run mid-push, or the
@@ -135,8 +156,31 @@ jobs:
           path: ~/.nuget/packages
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
         timeout-minutes: 3
+      # Empty leaves Directory.Build.props' identifier in force, which is what develop publishes under.
+      # Build and Pack both take the override: given to Pack alone, it would rebuild with a new version and
+      # publish binaries other than the ones the Test step ran.
+      - name: Choose the pre-release identifier
+        id: line
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            refs/heads/release/*) identifiers=$RELEASE_BRANCH_IDENTIFIERS ;;
+            *) identifiers="" ;;
+          esac
+          echo "ref=$REF identifiers=${identifiers:-the one in Directory.Build.props}"
+          echo "identifiers=$identifiers" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
       - name: Build
-        run: dotnet build --no-restore -c Release
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
+        run: |
+          set -euo pipefail
+          override=()
+          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
+          dotnet build --no-restore -c Release "${override[@]}"
 
         timeout-minutes: 3
       # Whether the pull request that produced this commit already ran the suite on this very tree. Three
@@ -212,16 +256,30 @@ jobs:
         # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner
         # per-TFM pack. Drop --no-build; the earlier Build step left everything up to date, so pack's build
         # is an incremental no-op. GeneratePackageOnBuild=false stops the on-build pack double-running.
-        run: dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
+        run: |
+          set -euo pipefail
+          override=()
+          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
+          dotnet pack --no-restore -c Release -o nupkg -p:GeneratePackageOnBuild=false "${override[@]}"
 
         timeout-minutes: 3
       - name: Refuse to publish a release version
+        env:
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          # This workflow publishes DEV builds. A version carrying no dev identifier means a release
-          # tag sits on the commit, and those belong to release.yml, behind its approval
+          # This workflow publishes DEV builds. A version carrying no pre-release identifier means a
+          # release tag sits on the commit, and those belong to release.yml, behind its approval
           # gate. Without this step such a package would reach the feed past that gate, and the
           # approved publish afterwards uses --skip-duplicate and would no-op over it.
+          #
+          # The packed version must also carry the identifier of this ref's line followed by the height
+          # alone. The line is decided here from the ref, not taken from the step that chose the
+          # override, so a mapping broken there is refused rather than repeated: a release branch's
+          # package on develop's line would collide with a version develop already published and,
+          # through --skip-duplicate, publish nothing.
           if [ ! -f Directory.Build.props ]; then
             echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
             exit 1
@@ -238,6 +296,23 @@ jobs:
           EXPECTED=$(dotnet msbuild Directory.Build.props -getProperty:MinVerMinimumMajorMinor -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
           if [ "$rc" -ne 0 ] || [ -z "$EXPECTED" ]; then
             echo "Could not evaluate MinVerMinimumMajorMinor from Directory.Build.props - there is nothing to check the built version against." >&2
+            exit 1
+          fi
+
+          case "$REF" in
+            refs/heads/release/*)
+              LINE="Release branch build"
+              LABEL=$RELEASE_BRANCH_IDENTIFIERS
+              ;;
+            *)
+              LINE="Dev build"
+              rc=0
+              LABEL=$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
+              [ "$rc" -eq 0 ] || LABEL=""
+              ;;
+          esac
+          if [ -z "$LABEL" ]; then
+            echo "No pre-release identifier is known for $REF - there is nothing to require of the packed version." >&2
             exit 1
           fi
 
@@ -273,11 +348,24 @@ jobs:
             exit 1
           fi
 
-          # Both criteria on the version: the dev identifier, and the line this repository builds.
+          # Both criteria on the version: the pre-release identifier in force for this branch followed by
+          # the height alone, and the line this repository builds. The whole pre-release part is compared,
+          # not its start: rc is a prefix of rc.0, so a prefix match would pass a build on another line.
           case "$VERSION" in
-            "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
+            "$EXPECTED".*-*)
+              PRERELEASE=${VERSION#*-}
+              HEIGHT=${PRERELEASE#"$LABEL".}
+              case "$HEIGHT" in
+                "$PRERELEASE" | "" | *[!0-9]*)
+                  echo "Refusing to publish $VERSION: this branch builds $LABEL.<height>, and the version carries $PRERELEASE." >&2
+                  echo "Build and Pack did not take the identifier the step \"Choose the pre-release identifier\" chose; published, it could land on a version the other branch already holds and publish nothing." >&2
+                  exit 1
+                  ;;
+              esac
+              echo "$LINE $VERSION - publishing."
+              ;;
             "$EXPECTED".*)
-              echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
+              echo "Refusing to publish $VERSION: it carries no pre-release identifier, so a release tag is on this commit." >&2
               echo "Releases and pre-releases are published by release.yml, behind its approval gate." >&2
               exit 1
               ;;
@@ -305,6 +393,8 @@ jobs:
 
         timeout-minutes: 3
       - name: Summary
+        env:
+          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
         run: |
           set -euo pipefail
           # Any package: they all carry the same MinVer version. Matched by SHAPE rather than by
@@ -317,7 +407,7 @@ jobs:
           #
           # And once the case is corrected the name is still the wrong key: Abblix.OIDC.Server is a
           # PREFIX of Abblix.OIDC.Server.MVC, so head -1 over the family can hand back a file whose
-          # remainder is "MVC.2.4.0-dev.0.469" - a version string with a package fragment inside it.
+          # remainder is "MVC.2.4.0-dev.469" - a version string with a package fragment inside it.
           # (The casing is unpredictable in general: PackageId also uppercases API, CAEP and RISC.)
           #
           # A version has a shape, so take the trailing three-part number and let the name be
@@ -345,7 +435,11 @@ jobs:
                 ;;
             esac
             {
-              echo "## Dev build published"
+              if [ -n "$IDENTIFIERS" ]; then
+                echo "## Release branch build published"
+              else
+                echo "## Dev build published"
+              fi
               echo ""
               echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
               echo ""
@@ -357,7 +451,7 @@ jobs:
               # build, so restore succeeds and the version simply never moves again.
               #
               # The WHOLE three-part number, not major.minor with a zero patch appended. NuGet floats
-              # only the release label, so 2.4.0-dev.* does not resolve 2.4.1-dev.0.3 - and 2.4.1 is
+              # only the release label, so 2.4.0-dev.* does not resolve 2.4.1-dev.3 - and 2.4.1 is
               # what MinVer produces as soon as a v2.4 tag is reachable, which is every day between
               # the release and the next bump of MinVerMinimumMajorMinor. Re-asserting the patch
               # would have rebuilt the same silent failure inside the fix for it.
@@ -365,6 +459,11 @@ jobs:
               # Only for a dev build: a version read here without the dev identifier gets no sentence
               # about floating, which would be advice about a line it is not on. The step does not
               # fail on it, because the package is already on the feed by now.
+              #
+              # A release branch's build is on a line of its own, which nobody floats on: the gate pins it.
+              if [ -n "$IDENTIFIERS" ]; then
+                echo "A release branch build, outside the \`${VERSION%%-*}-dev.*\` range: pin \`$VERSION\` exactly to take it."
+              fi
               case "$VERSION" in
                 *-dev.*)
                   echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
