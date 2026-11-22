@@ -14,21 +14,20 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
-/// Validates the authorization grant in the context of a token request, ensuring that the request is authorized
-/// and that the associated redirect URI matches the one used during the initial authorization request
+/// Validates the authorization grant in the context of a token request, ensuring that the client may use the grant
+/// type and that the grant's handler authorizes the request
 /// </summary>
 /// <remarks>
 /// This validator interacts with the <see cref="IAuthorizationGrantHandler"/> to perform the necessary checks
-/// on the authorization grant. It ensures that the token request is made for an authorized grant and verifies
-/// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context
+/// on the authorization grant. The checks a grant type owns, such as the redirect URI of the authorization code
+/// grant, live in its handler. If the grant is valid and authorized, it updates the validation context
 /// </remarks>
 /// <param name="grantHandler">The handler responsible for authorizing the grant.</param>
 public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler): ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the authorization grant in the token request context. This method checks if the grant
-    /// is valid and authorized for the client making the request. It also ensures that the redirect URI used in the
-    /// token request matches the one used during the initial authorization request.
+    /// is valid and authorized for the client making the request.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the token request and client information.</param>
@@ -61,20 +60,9 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
             return error;
         }
 
-        var grant = result.GetSuccess();
-
-        // Ensure that the redirect URI used matches the original authorization request
-        // to prevent redirection attacks
-        if (grant.Context.RedirectUri != context.Request.RedirectUri)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "The redirect Uri value does not match to the value used before");
-        }
-
         // Accept the request if the grant is valid, and securely store it in the validation context
         // for further processing
-        context.AuthorizedGrant = grant;
+        context.AuthorizedGrant = result.GetSuccess();
         return null;
     }
 }

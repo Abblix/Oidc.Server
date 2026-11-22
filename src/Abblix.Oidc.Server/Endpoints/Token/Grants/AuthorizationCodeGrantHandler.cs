@@ -82,6 +82,17 @@ public class AuthorizationCodeGrantHandler(
                 "Code was issued for another client");
         }
 
+        // RFC 6749 section 4.1.3: the server must "ensure that the "redirect_uri" parameter is present if the
+        // "redirect_uri" parameter was included in the initial authorization request ... and if included ensure
+        // that their values are identical". Only this grant has an authorization request to compare with; every
+        // other grant ignores the parameter, as section 3.2 has the server ignore unrecognized request parameters.
+        if (grant.Context.RedirectUri != request.RedirectUri)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidGrant,
+                "The redirect Uri value does not match to the value used before");
+        }
+
         if (grant.Context.CodeChallenge != null)
         {
             // Checks if PKCE is required but the code challenge method is missing from the request.
