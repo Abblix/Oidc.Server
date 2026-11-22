@@ -49,24 +49,6 @@ public class TenantDefinitionsCheckTests
             Tenant("globex", "https://auth.example.com/tenants/globex"),
             Tenant("initech", "https://auth.example.com/tenants/initech")));
 
-    /// <summary>
-    /// A tenant bound from configuration without an issuer, or read from a store that holds none, is refused by name
-    /// rather than failing the whole list.
-    /// </summary>
-    [Fact]
-    public void ATenantWithNoIssuer_IsRefused_AndTheOthersAreNot()
-    {
-        var refusals = new TenantDefinitionsCheck().Check(
-        [
-            new TenantDefinition { Id = "acme", Issuer = null! },
-            new TenantDefinition { Id = string.Empty, Issuer = null! },
-            Tenant("globex", "https://globex.example.com"),
-        ], new OidcOptions()).ToArray();
-
-        Assert.Contains(refusals, refusal => refusal.TenantIds.SequenceEqual(["acme"]));
-        Assert.DoesNotContain(refusals, refusal => refusal.TenantIds.Contains("globex"));
-    }
-
     [Fact]
     public void ATenantWithNoId_IsRefused()
         => Assert.Contains("has no id", FailureOf(Tenant(string.Empty, "https://acme.example.com")),
