@@ -141,8 +141,8 @@ public class RevokedSessionValidatorTests
     }
 
     /// <summary>
-    /// A token exchange carries the session of its subject token, which the subject token's own validation has
-    /// already checked against that session's cutoffs in the same request, so it is not asked about again here.
+    /// A token exchange carries the session of its subject token, which the subject token's own validation judges
+    /// against that session's cutoff by its issue time in the same request, so it is not asked about here.
     /// </summary>
     [Fact]
     public async Task ATokenExchange_IsNotAskedAbout()
