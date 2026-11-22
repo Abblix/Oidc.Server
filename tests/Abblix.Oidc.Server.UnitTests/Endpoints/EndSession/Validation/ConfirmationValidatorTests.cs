@@ -165,15 +165,16 @@ public class ConfirmationValidatorTests
     }
 
     /// <summary>
-    /// An ID token carries a session identifier only when the deployment issues one, so a hint without it is judged
-    /// by its subject alone.
+    /// An ID token states the session only to a client told it at logout, and nothing else in it says which session
+    /// it belongs to, so a hint without it, even about the person signed in now, cannot be shown to belong to this
+    /// session and is asked about.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndNoSession_AsksNobody()
+    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndNoSession_AsksTheEndUser()
     {
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 
-        Assert.False(await AsksTheEndUserAsync(CreateContext(
+        Assert.True(await AsksTheEndUserAsync(CreateContext(
             idTokenHint: "id_token_value",
             hintSubject: CurrentSubject)));
     }

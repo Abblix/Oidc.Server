@@ -305,13 +305,34 @@ public class JwtSubjectTokenResolverTests
         Assert.Null(ctx.OriginalClientId);
     }
 
+    /// <summary>
+    /// Every token this server issues for a session names it, the ID token of a client that does not use the session
+    /// at logout excepted. A token naming none could not be refused by a revocation of its session, so it is not
+    /// exchanged.
+    /// </summary>
+    [Fact]
+    public async Task ATokenNamingNoSession_IsRefused()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Payload.SessionId = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
         var jwt = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1) },
+            // A token issued in a session names it, which is what lets a revocation of that session reach it
+            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1), SessionId = "session-1" },
         };
         if (issuer is not null) jwt.Payload.Issuer = issuer;
         if (subject is not null) jwt.Payload.Subject = subject;

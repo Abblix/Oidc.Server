@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -102,7 +103,13 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     [Fact]
     public async Task Endsession_get_binds_id_token_hint_and_redirects_to_registered_post_logout_uri()
     {
-        var client = CreateClient();
+        // The client uses the session at logout, so its hint names the session and the logout needs no confirmation
+        await using var host = factory.WithSessionLogout();
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestFactory.BaseAddress,
+        });
         var discovery = await client.FetchDiscoveryAsync();
         var idToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))

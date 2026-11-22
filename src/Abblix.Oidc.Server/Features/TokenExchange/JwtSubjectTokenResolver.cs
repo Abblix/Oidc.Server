@@ -87,6 +87,17 @@ public sealed class JwtSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
         }
 
+        // A revocation of a session reaches a token through the session it names. Every token this server issues
+        // for a session names it, the ID token of a client that does not use the session at logout excepted, so a
+        // token naming none cannot be checked against a session revocation and would keep working after one. It is
+        // refused whichever role it plays in the exchange, subject or actor.
+        if (!jwt.Payload.SessionId.HasValue())
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token names no session, so a revocation of its session could not be checked.");
+        }
+
         var subject = jwt.Payload.Subject;
         if (string.IsNullOrWhiteSpace(subject))
         {

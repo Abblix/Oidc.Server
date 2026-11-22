@@ -186,7 +186,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Ending_a_session_revokes_its_tokens_when_the_option_is_on()
     {
-        await using var host = CreateIsolatedHost(options => options.RevokeSessionTokensOnLogout = true);
+        await using var host = Factory.WithSessionLogout(options => options.RevokeSessionTokensOnLogout = true);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -218,7 +218,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Ending_a_session_leaves_its_tokens_alone_by_default()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -276,7 +276,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Revoking_a_session_stops_that_session_from_minting_more()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -402,7 +402,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task An_id_token_issued_before_a_revocation_at_its_client_cannot_be_exchanged()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -422,6 +422,54 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
         var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
         Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+    }
+
+    /// <summary>
+    /// An ID token exchanged before its session was revoked cannot be exchanged after it: the session it names is
+    /// the one the revocation recorded.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_of_a_revoked_session_cannot_be_exchanged()
+    {
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the ID token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
+            SessionOf(tokens), cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+    }
+
+    /// <summary>
+    /// An ID token of a client that does not use the session at logout names no session, so a revocation of its
+    /// session could not refuse it, and it is not accepted for exchange at all.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_naming_no_session_cannot_be_exchanged()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+
+        var response = await ExchangeIdTokenAsync(client, discovery, idToken);
+
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private static Task<HttpResponseMessage> ExchangeIdTokenAsync(

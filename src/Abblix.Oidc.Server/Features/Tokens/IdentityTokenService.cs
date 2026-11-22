@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -123,7 +124,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 					catalog,
 					authContext.ClientId),
 
-				SessionId = authSession.SessionId,
+				SessionId = SessionIdDisclosure.InIdentityToken(clientInfo) ? authSession.SessionId : null,
 				AuthenticationTime = authSession.AuthenticationTime,
 				AuthContextClassRef = authSession.AuthContextClassRef,
 				AuthenticationMethodReferences = authenticationMethods,

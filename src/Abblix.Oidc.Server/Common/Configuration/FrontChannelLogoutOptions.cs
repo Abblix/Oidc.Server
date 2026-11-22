@@ -16,6 +16,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// <param name="Uri">The client's front-channel logout endpoint, loaded in a hidden iframe at the OP.</param>
 /// <param name="RequiresSessionId">
 /// When <c>true</c>, the OP appends <c>iss</c> and <c>sid</c> query parameters to <paramref name="Uri"/>
-/// so the client can scope the logout to the correct session.
+/// so the client can scope the logout to the correct session, and the ID tokens issued to the client carry the
+/// <c>sid</c> claim to match it against.
 /// </param>
 public record FrontChannelLogoutOptions(Uri Uri, bool RequiresSessionId = true);

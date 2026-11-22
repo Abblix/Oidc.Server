@@ -279,6 +279,8 @@ public class IdentityTokenServiceTests
 
         var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo();
+        // sid is stated only to a client told the session at logout, which SessionIdDisclosureTests covers
+        clientInfo.BackChannelLogout = new BackChannelLogoutOptions(new Uri("https://client.example.com/back-channel-logout"));
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider

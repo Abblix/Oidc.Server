@@ -263,7 +263,8 @@ public class AuthenticationSchemeAdapter(
 	/// end user, it is ended through <see cref="IAuthSessionTerminator"/> once the new cookie is written, and is
 	/// reported as ended. When it belongs to the same end user, as on a re-authentication or a step-up, the session
 	/// continues under its existing identifier: the clients signed in to it are recorded under that identifier and
-	/// their ID tokens carry it, so a fresh one would lose them to the logout that follows.
+	/// the ID tokens of those told the session at logout carry it, so a fresh one would lose them to the logout that
+	/// follows.
 	/// </remarks>
 	/// <param name="authSession">The authentication session details to be used for signing in.</param>
 	/// <returns>The session written, and the replaced session when it belonged to another end user.</returns>
