@@ -24,8 +24,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// </para>
 /// <para>
 /// A check is handed only tenants holding a value wherever their types declare one: a tenant with a null there - a
-/// member, or an element of a collection, whose nullable annotation rules it out - is refused for it before any
-/// check runs, so a check reads the definition as declared and guards against no such null.
+/// member, or an element of a collection, whose nullable annotation rules it out - is refused for it, and handed to
+/// the checks with the null mended so that it still claims its address and keys against the others; a check reads
+/// the definition as declared and guards against no such null.
 /// </para>
 /// </remarks>
 public interface ITenantsCheck

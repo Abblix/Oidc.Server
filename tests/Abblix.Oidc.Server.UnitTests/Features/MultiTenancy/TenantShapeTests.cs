@@ -128,6 +128,75 @@ public class TenantShapeTests
     }
 
     /// <summary>
+    /// The members of a definition's types the walk does not read: computed from others, or the id
+    /// <see cref="TenantKey"/> judges. A member added later that the walk would not read - one with no setter, or a
+    /// dictionary - fails the test below until it is decided here, rather than going unjudged.
+    /// </summary>
+    private static readonly string[] NotWalked =
+    [
+        "ClientInfo.ClientType",
+        "ClientInfo.EffectiveGrantTypes",
+        "ClientInfo.EffectivePkceRequired",
+        "ClientInfo.EffectiveResponseTypes",
+        "EllipticCurveJsonWebKey.HasPrivateKey",
+        "EllipticCurveJsonWebKey.HasPublicKey",
+        "EllipticCurveJsonWebKey.KeyType",
+        "JsonWebKey.HasPrivateKey",
+        "JsonWebKey.HasPublicKey",
+        "JsonWebKey.KeyType",
+        "OctetJsonWebKey.HasPrivateKey",
+        "OctetJsonWebKey.HasPublicKey",
+        "OctetJsonWebKey.KeyType",
+        "RsaJsonWebKey.HasPrivateKey",
+        "RsaJsonWebKey.HasPublicKey",
+        "RsaJsonWebKey.KeyType",
+        "TenantDefinition.Id",
+    ];
+
+    [Fact]
+    public void EveryMemberOfADefinitionsType_IsWalkedOrDecidedNotToBe()
+    {
+        var types = DeclaredOwnTypes(typeof(TenantDefinition)).Append(typeof(TenantDefinition)).ToArray();
+        var concrete = types
+            .Concat(
+                from type in types
+                where type.IsAbstract
+                from derived in type.Assembly.GetTypes()
+                where derived is { IsAbstract: false } && derived.IsAssignableTo(type)
+                select derived)
+            .Distinct();
+
+        var notWalked = (
+            from type in concrete
+            from property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            where !IsWalkable(property)
+            select $"{property.DeclaringType!.Name}.{property.Name}"
+        ).Distinct().Order(StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(NotWalked.Order(StringComparer.Ordinal), notWalked);
+    }
+
+    /// <summary>
+    /// Whether a member holds data the walk reads: written to, not indexed, and a collection only of one kind of
+    /// element.
+    /// </summary>
+    private static bool IsWalkable(PropertyInfo property)
+    {
+        var isTenantId = property.DeclaringType == typeof(TenantDefinition) &&
+                         property.Name == nameof(TenantDefinition.Id);
+        var written = property is { CanRead: true, CanWrite: true } && property.GetIndexParameters().Length == 0;
+        return written && HoldsOneKindOfElement(property.PropertyType) && !isTenantId;
+    }
+
+    private static bool HoldsOneKindOfElement(Type type)
+    {
+        if (type == typeof(string) || !type.IsAssignableTo(typeof(IEnumerable)) || type.IsArray)
+            return true;
+
+        return type is { IsGenericType: true } && type.GetGenericArguments().Length == 1;
+    }
+
+    /// <summary>
     /// The whole tenant the places are set on, and the same tenant with every member that may be null left null, are
     /// not refused for a null: the walk refuses what the types rule out and nothing they allow.
     /// </summary>

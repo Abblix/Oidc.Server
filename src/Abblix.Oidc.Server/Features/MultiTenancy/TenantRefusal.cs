@@ -49,8 +49,8 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
         var shapes = tenants.Select(tenant => (Tenant: tenant, Nulls: TenantShape.NullsOf(tenant).ToArray())).ToArray();
 
         // A tenant holding a null where a value is declared is refused for it, and the checks, which read the
-        // definition as declared, see only what of it they can read: enough to refuse another tenant claiming its
-        // address or keys, while what they find wrong with that part alone would only repeat the refusal
+        // definition as declared, see it mended (TenantShape.Readable): it still claims its address and keys, so a
+        // tenant claiming the same is refused for the conflict
         var refusedForNull = shapes
             .Where(shape => shape.Nulls.Length > 0)
             .Select(shape => shape.Tenant.Id)
@@ -58,11 +58,12 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
 
         TenantDefinition[] readable =
         [
-            ..shapes
-                .Select(shape => shape.Nulls.Length == 0 ? shape.Tenant : TenantShape.Readable(shape.Tenant))
-                .OfType<TenantDefinition>(),
+            ..shapes.Select(shape => shape.Nulls.Length == 0 ? shape.Tenant : TenantShape.Readable(shape.Tenant)),
         ];
 
+        // What the checks find wrong with such a tenant alone is not told: the mending causes some of it - signing
+        // keys left empty once a null key is dropped, a client left with no secret - and nothing tells those from its
+        // other faults, which therefore show once the null is mended in the definition itself
         return TenantKey.Unnamed(tenants)
             .Concat(
                 from shape in shapes
@@ -71,7 +72,7 @@ public sealed record TenantRefusal(IReadOnlyCollection<string> TenantIds, string
             .Concat(
                 from check in checks
                 from refusal in check.Check(readable, options)
-                where !refusal.TenantIds.All(refusedForNull.Contains)
+                where refusal.TenantIds.Count == 0 || !refusal.TenantIds.All(refusedForNull.Contains)
                 select refusal);
     }
 

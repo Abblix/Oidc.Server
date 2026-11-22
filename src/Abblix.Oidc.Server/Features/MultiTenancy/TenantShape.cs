@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 internal static class TenantShape
 {
     /// <summary>A member read from a definition, with the nullability its declaration states.</summary>
-    private sealed record Member(PropertyInfo Property, NullabilityInfo Nullability);
+    internal sealed record Member(PropertyInfo Property, NullabilityInfo Nullability);
 
     // Built once per type, each with a context of its own, since a context is not safe to share between threads
     private static readonly ConcurrentDictionary<Type, Member[]> MembersByType = new();
@@ -39,80 +39,47 @@ internal static class TenantShape
     /// an element by its index, a client by its id.
     /// </summary>
     /// <remarks>
-    /// The id is left to <see cref="TenantKey.Unnamed"/>, which refuses an empty one as well.
+    /// An object met twice - one key listed in two places, or a host's type referring back to itself - is walked
+    /// once.
     /// </remarks>
     public static IEnumerable<string> NullsOf(TenantDefinition tenant)
-        => from member in MembersOf(typeof(TenantDefinition))
-            where member.Property.Name != nameof(TenantDefinition.Id)
-            from path in NullsOf(member.Property.GetValue(tenant), member.Nullability, member.Property.Name)
-            select path;
+        => MemberNullsOf(tenant, string.Empty, new HashSet<object>(ReferenceEqualityComparer.Instance)).ToArray();
 
     /// <summary>
-    /// What of <paramref name="tenant"/> the checks can read: each of its own members holding a null left out - an
-    /// element of a collection, or the whole member when it is not a collection - and the rest as it is; null when a
-    /// member that has to hold a value, such as the issuer, holds none.
+    /// What of <paramref name="tenant"/> the checks can read, mended by <see cref="TenantMending"/> so that it still
+    /// claims its address and keys.
     /// </summary>
     /// <remarks>
-    /// A tenant refused for a null still claims its address and its keys, so the tenants beside it are compared with
-    /// what it claims: one taking over its address or its custodian key is refused for the conflict, as it would be
-    /// beside a tenant refused for anything else.
+    /// A tenant refused for a null is compared with the tenants beside it by what it claims: one taking over its
+    /// address, a key it signs with or its custodian key is refused for the conflict, as it would be beside a tenant
+    /// refused for anything else.
     /// </remarks>
-    public static TenantDefinition? Readable(TenantDefinition tenant)
-    {
-        var readable = tenant.WithGeneration(tenant.Generation);
-        foreach (var member in MembersOf(typeof(TenantDefinition)))
-        {
-            var value = member.Property.GetValue(tenant);
-            if (member.Property.Name == nameof(TenantDefinition.Id) ||
-                !NullsOf(value, member.Nullability, member.Property.Name).Any())
-            {
-                continue;
-            }
+    public static TenantDefinition Readable(TenantDefinition tenant) => TenantMending.Mend(tenant);
 
-            if (ElementOf(member.Nullability) is { Type.IsValueType: false } element)
-                member.Property.SetValue(readable, WithoutNulls(value as IEnumerable, element));
-            else if (member.Nullability.ReadState != NullabilityState.NotNull)
-                member.Property.SetValue(readable, null);
-            else
-                return null;
-        }
-
-        return readable;
-    }
-
-    /// <summary>
-    /// The elements of <paramref name="elements"/> holding no null, as an array of what the collection declares.
-    /// </summary>
-    private static Array WithoutNulls(IEnumerable? elements, NullabilityInfo element)
-    {
-        object[] whole =
-        [
-            ..from object? item in elements ?? Array.Empty<object>()
-            where item is not null && !NullsOf(item, element, string.Empty).Any()
-            select item,
-        ];
-
-        var readable = Array.CreateInstance(element.Type, whole.Length);
-        whole.CopyTo(readable, 0);
-        return readable;
-    }
-
-    private static IEnumerable<string> NullsOf(object? value, NullabilityInfo nullability, string path)
+    private static IEnumerable<string> NullsOf(
+        object? value,
+        NullabilityInfo nullability,
+        string path,
+        HashSet<object> seen)
     {
         if (value is null)
             return nullability.ReadState == NullabilityState.NotNull ? [path] : [];
 
-        if (value is string or Uri)
+        if (IsValue(value) || !seen.Add(value))
             return [];
 
         // An element that is a value, such as a byte of a key, cannot be null
         if (value is IEnumerable elements && ElementOf(nullability) is { } element)
-            return element.Type.IsValueType ? [] : ElementNullsOf(elements, element, path);
+            return element.Type.IsValueType ? [] : ElementNullsOf(elements, element, path, seen);
 
-        return IsOwn(value.GetType()) ? MemberNullsOf(value, path) : [];
+        return IsOwn(value.GetType()) ? MemberNullsOf(value, path, seen) : [];
     }
 
-    private static IEnumerable<string> ElementNullsOf(IEnumerable elements, NullabilityInfo element, string path)
+    private static IEnumerable<string> ElementNullsOf(
+        IEnumerable elements,
+        NullabilityInfo element,
+        string path,
+        HashSet<object> seen)
     {
         var index = 0;
         foreach (var item in elements)
@@ -122,46 +89,65 @@ internal static class TenantShape
                 ? $"{path}['{clientId}']"
                 : $"{path}[{index}]";
 
-            foreach (var found in NullsOf(item, element, itemPath))
+            foreach (var found in NullsOf(item, element, itemPath, seen))
                 yield return found;
 
             index++;
         }
     }
 
-    private static IEnumerable<string> MemberNullsOf(object value, string path)
+    private static IEnumerable<string> MemberNullsOf(object value, string path, HashSet<object> seen)
         => from member in MembersOf(value.GetType())
-            from found in NullsOf(member.Property.GetValue(value), member.Nullability, $"{path}.{member.Property.Name}")
+            from found in NullsOf(
+                member.Property.GetValue(value),
+                member.Nullability,
+                path.Length == 0 ? member.Property.Name : $"{path}.{member.Property.Name}",
+                seen)
             select found;
 
     /// <summary>
     /// What an array or a generic collection holds, as its declaration states; null for anything else.
     /// </summary>
-    private static NullabilityInfo? ElementOf(NullabilityInfo collection)
+    internal static NullabilityInfo? ElementOf(NullabilityInfo collection)
         => collection.ElementType ??
            (collection.GenericTypeArguments is [var element] ? element : null);
 
     /// <summary>
-    /// The members data is written to - settable, not indexed - since a computed one is derived from them.
+    /// The members of <paramref name="type"/> the walk reads, as <see cref="IsWalked"/> tells.
     /// </summary>
-    private static Member[] MembersOf(Type type)
+    internal static Member[] MembersOf(Type type)
         => MembersByType.GetOrAdd(type, static type =>
         {
             var context = new NullabilityInfoContext();
             return
             [
                 ..from property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                where property is { CanRead: true, CanWrite: true } && property.GetIndexParameters().Length == 0
+                where IsWalked(property)
                 select new Member(property, context.Create(property)),
             ];
         });
+
+    /// <summary>
+    /// Whether the walk reads <paramref name="property"/>: a member data is written to - settable, not indexed -
+    /// since a computed one is derived from them; the tenant's id aside, which <see cref="TenantKey.Unnamed"/> judges,
+    /// refusing an empty one as well.
+    /// </summary>
+    internal static bool IsWalked(PropertyInfo property)
+        => property is { CanRead: true, CanWrite: true } &&
+           property.GetIndexParameters().Length == 0 &&
+           !(property.DeclaringType == typeof(TenantDefinition) && property.Name == nameof(TenantDefinition.Id));
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is read whole, holding no member the walk reads.
+    /// </summary>
+    internal static bool IsValue(object value) => value is string or Uri || value.GetType().IsValueType;
 
     /// <summary>
     /// Whether <paramref name="type"/> is one of the server's own, or a host's type derived from one, as a host's own
     /// client may be, whose members are read further; anything else - a string, a <see cref="Uri"/>, a number - is a
     /// value whose content the checks judge.
     /// </summary>
-    private static bool IsOwn(Type type)
+    internal static bool IsOwn(Type type)
         => !type.IsEnum &&
            (type.Namespace?.StartsWith(RootNamespace, StringComparison.Ordinal) == true ||
             type.BaseType is { } baseType && IsOwn(baseType));

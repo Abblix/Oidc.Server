@@ -15,4 +15,7 @@ namespace HostApplication.Clients;
 public sealed record HostClient(string ClientId) : ClientInfo(ClientId)
 {
     public string? Department { get; set; }
+
+    /// <summary>The client this one acts for, which may be the client itself.</summary>
+    public HostClient? ActsFor { get; set; }
 }
