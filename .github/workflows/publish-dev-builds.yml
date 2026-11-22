@@ -14,7 +14,7 @@ name: Publish dev build to GitHub Packages
 # Example versions (with MinVerMinimumMajorMinor=2.4):
 #   develop, or a manual run from any branch but a release one
 #                                       ->  2.4.0-dev.0.<first-parent distance from the root>
-#   a release/* branch                  ->  2.4.0-rc.0.<first-parent distance from the root>
+#   a release/* branch                  ->  2.4.0-rc.<first-parent distance from the root>
 #   a release, version supplied by hand ->  2.4.0   (release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
@@ -28,7 +28,7 @@ name: Publish dev build to GitHub Packages
 # shorter than develop's, so its height lands on a number develop has already published; the push
 # below uses --skip-duplicate, so on one shared line that push would publish nothing and the release
 # branch's code would never reach the feed. Each line takes its pre-release identifier from one owner:
-# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc.0 is the step "Choose the
+# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is the step "Choose the
 # pre-release identifier" below, which overrides that property for a release/* push only.
 #
 # Within its own line a release branch's height only grows: every commit made on the branch - a
@@ -37,9 +37,9 @@ name: Publish dev build to GitHub Packages
 # the old one extended, its height can land on a number the line already holds, and that push
 # publishes nothing.
 #
-# rc.0 sits outside a 2.4.0-dev.* range, so a consumer floating on it keeps following develop; it
+# rc sits outside a 2.4.0-dev.* range, so a consumer floating on it keeps following develop; it
 # sorts above every dev.0 build, so a range as wide as 2.4.0-* would take the release branch instead.
-# To gate against a release branch, pin its exact rc.0 build.
+# To gate against a release branch, pin its exact rc build.
 #
 # Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
 # release.yml - this workflow does not produce them.
@@ -162,7 +162,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$REF" in
-            refs/heads/release/*) identifiers=rc.0 ;;
+            refs/heads/release/*) identifiers=rc ;;
             *) identifiers="" ;;
           esac
           echo "ref=$REF identifiers=${identifiers:-the one in Directory.Build.props}"
@@ -335,14 +335,21 @@ jobs:
             exit 1
           fi
 
-          # Both criteria on the version: the pre-release identifier in force for this branch, and the
-          # line this repository builds.
+          # Both criteria on the version: the pre-release identifier in force for this branch followed by
+          # the height alone, and the line this repository builds. The whole pre-release part is compared,
+          # not its start: rc is a prefix of rc.0, so a prefix match would pass a build on another line.
           case "$VERSION" in
-            "$EXPECTED".*-"$LABEL".*) echo "Dev build $VERSION - publishing." ;;
             "$EXPECTED".*-*)
-              echo "Refusing to publish $VERSION: this branch builds with the pre-release identifier $LABEL, and the version carries another." >&2
-              echo "Build and Pack did not take the identifier the step \"Choose the pre-release identifier\" chose; published, it could land on a version the other branch already holds and publish nothing." >&2
-              exit 1
+              PRERELEASE=${VERSION#*-}
+              HEIGHT=${PRERELEASE#"$LABEL".}
+              case "$HEIGHT" in
+                "$PRERELEASE" | "" | *[!0-9]*)
+                  echo "Refusing to publish $VERSION: this branch builds $LABEL.<height>, and the version carries $PRERELEASE." >&2
+                  echo "Build and Pack did not take the identifier the step \"Choose the pre-release identifier\" chose; published, it could land on a version the other branch already holds and publish nothing." >&2
+                  exit 1
+                  ;;
+              esac
+              echo "Dev build $VERSION - publishing."
               ;;
             "$EXPECTED".*)
               echo "Refusing to publish $VERSION: it carries no pre-release identifier, so a release tag is on this commit." >&2

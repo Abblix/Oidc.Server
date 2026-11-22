@@ -46,7 +46,7 @@
        MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
        range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
        tagged release drops the suffix by itself. It is what develop publishes under; a release
-       branch's push overrides it with rc.0 in .github/workflows/publish-dev-builds.yml, whose header
+       branch's push overrides it with rc in .github/workflows/publish-dev-builds.yml, whose header
        says why the two branches cannot share one line.
 
        No version number is written in this comment on purpose: a number repeated in prose beside
