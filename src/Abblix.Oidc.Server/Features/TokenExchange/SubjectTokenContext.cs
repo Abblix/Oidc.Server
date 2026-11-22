@@ -23,8 +23,9 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="Subject">The end-user identifier the subject_token represents (RFC 7519 <c>sub</c>
 /// claim or its opaque-token equivalent). Required.</param>
 /// <param name="Issuer">The party that issued the subject_token, used as the
-/// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c>. <c>null</c> when the resolver
-/// cannot determine it (e.g. opaque tokens without an issuer field).</param>
+/// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c> when <see cref="IdentityProvider"/> is
+/// <c>null</c>. <c>null</c> when the resolver cannot determine it (e.g. opaque tokens without an issuer
+/// field).</param>
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
 /// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 section 2.1 narrow
 /// only -- never widen). <c>null</c> when the subject_token did not carry a scope claim.</param>
@@ -43,6 +44,14 @@ public sealed record SubjectTokenContext(
     /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
     /// subject_token was not itself a delegation token.</summary>
     public JsonObject? Act { get; init; }
+
+    /// <summary>
+    /// The identity provider the end user signed in with in the session the subject_token belongs to, carried into
+    /// the exchanged token, so that token names the same sign-in whatever kind of token it was exchanged from.
+    /// <c>null</c> when the subject_token states none (an ID token, a host's own token type); <see cref="Issuer"/>
+    /// stands in for it then.
+    /// </summary>
+    public string? IdentityProvider { get; init; }
 
     /// <summary>
     /// The <c>client_id</c> the subject_token was originally issued to. The grant handler uses this

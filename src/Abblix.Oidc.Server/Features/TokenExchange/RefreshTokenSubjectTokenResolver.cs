@@ -117,7 +117,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
-            Issuer: grant.AuthSession.IdentityProvider,
+            Issuer: jwt.Payload.Issuer,
             Scope: grant.Context.Scope,
             AuthorizationDetails: authorizationDetails)
         {
@@ -132,6 +132,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             ExpiresAt = jwt.Payload.ExpiresAt,
             SessionId = grant.AuthSession.SessionId,
             AuthenticationTime = grant.AuthSession.AuthenticationTime,
+            IdentityProvider = grant.AuthSession.IdentityProvider,
             AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
             AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
         };

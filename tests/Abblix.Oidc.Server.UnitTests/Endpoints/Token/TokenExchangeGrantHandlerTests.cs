@@ -358,6 +358,35 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(["pwd", "otp"], grant.AuthSession.AuthenticationMethodReferences!);
     }
 
+    /// <summary>
+    /// The exchanged token names the identity provider of the sign-in its subject_token belongs to, whichever kind
+    /// of token that is; only a subject_token naming none falls back to the party that issued it.
+    /// </summary>
+    [Theory]
+    [InlineData("https://upstream.example.com", "https://issuer.example.com", "https://upstream.example.com")]
+    [InlineData(null, "https://issuer.example.com", "https://issuer.example.com")]
+    public async Task ExchangedToken_NamesTheSignInsIdentityProvider(
+        string? identityProvider, string issuer, string expected)
+    {
+        var subject = new SubjectTokenContext("alice", issuer, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = ClientId,
+            IdentityProvider = identityProvider,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(expected, grant.AuthSession.IdentityProvider);
+    }
+
     [Fact]
     public async Task ChainedDelegation_PrependsExistingActChain()
     {

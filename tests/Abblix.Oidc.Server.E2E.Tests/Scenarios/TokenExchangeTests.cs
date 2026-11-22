@@ -361,6 +361,13 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var signedInAt = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.AuthTime]!
             .GetValue<long>();
 
+        // The sign-in's identity provider, which an access or refresh token states; an ID token states none, so a
+        // chain started from one names the server that issued it.
+        var accessPayload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var signedInWith = subjectTokenType == TokenExchangeTokenTypes.IdToken
+            ? accessPayload[JwtClaimTypes.Issuer]!.GetValue<string>()
+            : accessPayload[OidcClaimTypes.IdentityProvider]!.GetValue<string>();
+
         var token = tokens[ResponseMemberOf(subjectTokenType)]!.GetValue<string>();
         var tokenType = subjectTokenType;
         for (var exchange = 1; exchange <= 2; exchange++)
@@ -381,6 +388,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
                 expiresAt - payload[JwtClaimTypes.IssuedAt]!.GetValue<long>(),
                 response[TokenResponse.Parameters.ExpiresIn]!.GetValue<long>());
             Assert.Equal(signedInAt, payload[IanaClaimTypes.AuthTime]!.GetValue<long>());
+            Assert.Equal(signedInWith, payload[OidcClaimTypes.IdentityProvider]!.GetValue<string>());
         }
     }
 

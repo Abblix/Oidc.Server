@@ -520,7 +520,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             Subject: subject.Subject,
             SessionId: subject.SessionId,
             AuthenticationTime: subject.AuthenticationTime,
-            IdentityProvider: subject.Issuer ?? "self")
+            IdentityProvider: subject.IdentityProvider ?? subject.Issuer ?? "self")
         {
             AuthContextClassRef = subject.AuthContextClassRef,
             AuthenticationMethodReferences = subject.AuthenticationMethodReferences,

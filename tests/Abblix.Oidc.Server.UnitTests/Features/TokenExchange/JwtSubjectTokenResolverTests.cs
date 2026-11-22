@@ -348,6 +348,28 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
+    /// <summary>
+    /// The identity provider the subject_token names reaches the context, so the exchanged token names the sign-in's
+    /// provider rather than the server that issued the subject_token; a token naming none (an ID token) answers none.
+    /// </summary>
+    [Theory]
+    [InlineData("https://upstream.example.com")]
+    [InlineData(null)]
+    public async Task IdentityProviderOfThePresentedToken_ReachesTheContext(string? identityProvider)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com");
+        jwt.Payload.IdentityProvider = identityProvider;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(identityProvider, ctx.IdentityProvider);
+        Assert.Equal("https://issuer.example.com", ctx.Issuer);
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();

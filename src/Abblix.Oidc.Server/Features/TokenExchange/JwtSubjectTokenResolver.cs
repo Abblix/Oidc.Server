@@ -154,6 +154,7 @@ public sealed class JwtSubjectTokenResolver(
             ExpiresAt = jwt.Payload.ExpiresAt,
             SessionId = sessionId,
             AuthenticationTime = authenticationTime,
+            IdentityProvider = jwt.Payload.IdentityProvider,
             AuthContextClassRef = jwt.Payload.AuthContextClassRef,
             AuthenticationMethodReferences = jwt.Payload.AuthenticationMethodReferences?.ToList(),
         };
