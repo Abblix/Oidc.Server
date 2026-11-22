@@ -28,8 +28,8 @@ name: Publish dev build to GitHub Packages
 # shorter than develop's, so its height lands on a number develop has already published; the push
 # below uses --skip-duplicate, so on one shared line that push would publish nothing and the release
 # branch's code would never reach the feed. Each line takes its pre-release identifier from one owner:
-# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is the step "Choose the
-# pre-release identifier" below, which overrides that property for a release/* push only.
+# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is RELEASE_BRANCH_IDENTIFIERS
+# below, which the step "Choose the pre-release identifier" passes as an override for a release/* push only.
 #
 # Within its own line a release branch's height only grows: every commit made on the branch - a
 # squash merge, a merge of develop into it - has the previous head as its first parent, so it stands
@@ -70,6 +70,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The pre-release identifier a release/* branch builds under, read by the step that chooses it and by
+  # the guard that checks the packed version, each deciding from the ref on its own.
+  RELEASE_BRANCH_IDENTIFIERS: rc
 
 concurrency:
   # Publishing mutates the package feed - never cancel a run mid-push, or the
@@ -162,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$REF" in
-            refs/heads/release/*) identifiers=rc ;;
+            refs/heads/release/*) identifiers=$RELEASE_BRANCH_IDENTIFIERS ;;
             *) identifiers="" ;;
           esac
           echo "ref=$REF identifiers=${identifiers:-the one in Directory.Build.props}"
@@ -262,7 +267,7 @@ jobs:
         timeout-minutes: 3
       - name: Refuse to publish a release version
         env:
-          IDENTIFIERS: ${{ steps.line.outputs.identifiers }}
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           # This workflow publishes DEV builds. A version carrying no pre-release identifier means a
@@ -270,9 +275,11 @@ jobs:
           # gate. Without this step such a package would reach the feed past that gate, and the
           # approved publish afterwards uses --skip-duplicate and would no-op over it.
           #
-          # The identifier required is the one in force for this ref, so a release branch's build
-          # that lost its override is refused too: on develop's line it would collide with a build
-          # develop already published and, through --skip-duplicate, publish nothing.
+          # The packed version must also carry the identifier of this ref's line followed by the height
+          # alone. The line is decided here from the ref, not taken from the step that chose the
+          # override, so a mapping broken there is refused rather than repeated: a release branch's
+          # package on develop's line would collide with a version develop already published and,
+          # through --skip-duplicate, publish nothing.
           if [ ! -f Directory.Build.props ]; then
             echo "Directory.Build.props is not here, so the version line this build should be on is unknown." >&2
             exit 1
@@ -292,14 +299,20 @@ jobs:
             exit 1
           fi
 
-          # Evaluated with the same override Build and Pack were given, so the answer is the identifier
-          # those steps built with, whichever of the two owners supplied it.
-          override=()
-          [ -z "$IDENTIFIERS" ] || override=("-p:MinVerDefaultPreReleaseIdentifiers=$IDENTIFIERS")
-          rc=0
-          LABEL=$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers -p:Configuration=Release "${override[@]}" -nologo | tr -d '[:space:]') || rc=$?
-          if [ "$rc" -ne 0 ] || [ -z "$LABEL" ]; then
-            echo "Could not evaluate MinVerDefaultPreReleaseIdentifiers for this branch - there is no pre-release identifier to require of the built version." >&2
+          case "$REF" in
+            refs/heads/release/*)
+              LINE="Release branch build"
+              LABEL=$RELEASE_BRANCH_IDENTIFIERS
+              ;;
+            *)
+              LINE="Dev build"
+              rc=0
+              LABEL=$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers -p:Configuration=Release -nologo | tr -d '[:space:]') || rc=$?
+              [ "$rc" -eq 0 ] || LABEL=""
+              ;;
+          esac
+          if [ -z "$LABEL" ]; then
+            echo "No pre-release identifier is known for $REF - there is nothing to require of the packed version." >&2
             exit 1
           fi
 
@@ -349,7 +362,7 @@ jobs:
                   exit 1
                   ;;
               esac
-              echo "Dev build $VERSION - publishing."
+              echo "$LINE $VERSION - publishing."
               ;;
             "$EXPECTED".*)
               echo "Refusing to publish $VERSION: it carries no pre-release identifier, so a release tag is on this commit." >&2
@@ -422,7 +435,11 @@ jobs:
                 ;;
             esac
             {
-              echo "## Dev build published"
+              if [ -n "$IDENTIFIERS" ]; then
+                echo "## Release branch build published"
+              else
+                echo "## Dev build published"
+              fi
               echo ""
               echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
               echo ""
