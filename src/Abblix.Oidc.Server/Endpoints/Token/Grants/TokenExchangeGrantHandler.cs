@@ -516,6 +516,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
         // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the
         // actor's, so revoking the end user's session reaches it and the exchange does not pass for a new sign-in.
+        // The identity provider is the one exception: an ID token states none, and the server keeps no record of a
+        // session by its identifier that would (the session client registry holds client identifiers only, and the
+        // host's sessions are reachable only through the browser's request), so a token exchanged from an ID token
+        // names the issuer of that ID token instead of the sign-in's provider.
         var authSession = new AuthSession(
             Subject: subject.Subject,
             SessionId: subject.SessionId,

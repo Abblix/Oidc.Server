@@ -48,8 +48,9 @@ public sealed record SubjectTokenContext(
     /// <summary>
     /// The identity provider the end user signed in with in the session the subject_token belongs to, carried into
     /// the exchanged token, so that token names the same sign-in whatever kind of token it was exchanged from.
-    /// <c>null</c> when the subject_token states none (an ID token, a host's own token type); <see cref="Issuer"/>
-    /// stands in for it then.
+    /// <c>null</c> when the subject_token states none: an ID token never does, and neither may a host's own token
+    /// type. <see cref="Issuer"/> stands in for it then, so a token exchanged from an ID token names the ID token's
+    /// issuer.
     /// </summary>
     public string? IdentityProvider { get; init; }
 

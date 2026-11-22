@@ -370,6 +370,25 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal("https://issuer.example.com", ctx.Issuer);
     }
 
+    /// <summary>
+    /// An ID token states no identity provider, so it resolves to none and the exchange names its issuer instead:
+    /// the one kind of subject_token whose exchanged token does not name the sign-in's provider.
+    /// </summary>
+    [Fact]
+    public async Task AnIdToken_StatesNoIdentityProvider_SoItsIssuerStandsIn()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com", audiences: ["client-A"]);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Null(ctx.IdentityProvider);
+        Assert.Equal("https://issuer.example.com", ctx.Issuer);
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
