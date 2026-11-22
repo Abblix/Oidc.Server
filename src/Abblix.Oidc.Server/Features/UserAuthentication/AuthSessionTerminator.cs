@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// <summary>
 /// Ends a session through <see cref="ITokenRevoker"/> and <see cref="ISessionLogoutNotifier"/>.
 /// </summary>
-/// <param name="tokenRevoker">Revokes the tokens of the ended session, when the deployment asks for it.</param>
+/// <param name="tokenRevoker">Revokes the tokens of the ended session, unless the deployment turned that off.</param>
 /// <param name="sessionLogoutNotifier">Notifies the clients of the ended session.</param>
 /// <param name="options">Supplies whether ending a session revokes its tokens.</param>
 public class AuthSessionTerminator(

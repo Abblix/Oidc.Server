@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 public interface IAuthSessionTerminator
 {
     /// <summary>
-    /// Revokes the tokens of the session when the deployment asks for it, then notifies its clients.
+    /// Revokes the tokens of the session unless the deployment turned that off, then notifies its clients.
     /// </summary>
     /// <param name="tenant">The tenant the session belonged to, which outside a request is the definition the tenant
     /// catalog returns.</param>
