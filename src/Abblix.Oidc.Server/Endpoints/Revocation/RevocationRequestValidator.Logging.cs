@@ -27,6 +27,12 @@ partial class RevocationRequestValidator
 	private partial void LogTokenValidationFailed(Sanitized Error);
 
 	[LoggerMessage(
+		EventId = LogEvents.Endpoints.RevocationRequestValidator.TokenAlreadyRevoked,
+		Level = LogLevel.Information,
+		Message = "The token was already revoked: {Error}")]
+	private partial void LogTokenAlreadyRevoked(Sanitized Error);
+
+	[LoggerMessage(
 		EventId = LogEvents.Endpoints.RevocationRequestValidator.CallerRateLimited,
 		Level = LogLevel.Warning,
 		Message = "Revocation refused for client {ClientId}: it is over its budget of requests")]
