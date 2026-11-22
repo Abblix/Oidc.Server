@@ -48,6 +48,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(factory)
 {
     private const string PairwiseClientId = "e2e-pairwise";
+    private const string OtherSectorClientId = "e2e-pairwise-other-sector";
+    private const string OtherSector = "other-sector.example.com";
     private const string RealSubject = "e2e-subject";
 
     [Fact]
@@ -157,15 +159,160 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         Assert.NotEqual(RealSubject, exchangedSub);
     }
 
+    /// <summary>
+    /// A pairwise client sees the actor of a delegated token under its own pseudonym, as it sees the subject, and a
+    /// delegated token exchanged again keeps that same pseudonym: the server opened the actor before sealing it anew.
+    /// </summary>
+    [Fact]
+    public async Task PairwiseClient_Delegation_SealsTheActorForItsSector_AndAReexchangeKeepsIt()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subjectToken = await PairwiseAccessTokenAsync(client, discovery);
+        var actorToken = await PairwiseAccessTokenAsync(client, discovery);
+        var delegated = await ExchangeAsync(client, discovery, PairwiseClientId, subjectToken, actorToken);
+
+        Assert.Equal(ExpectedPseudonym(), ActorSubjectOf(delegated));
+
+        var reexchanged = await ExchangeAsync(client, discovery, PairwiseClientId, delegated, actorToken: null);
+
+        Assert.Equal(ExpectedPseudonym(), ActorSubjectOf(reexchanged));
+    }
+
+    /// <summary>
+    /// A delegated token issued to one pairwise client and exchanged by another of a different sector carries its
+    /// actor opened under the sector of the client it was issued to and sealed under the sector of the client that
+    /// receives the new token.
+    /// </summary>
+    [Fact]
+    public async Task ACrossClientExchange_ReSealsTheActorForTheReceivingClientsSector()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subjectToken = await PairwiseAccessTokenAsync(client, discovery);
+        var actorToken = await PairwiseAccessTokenAsync(client, discovery);
+        var delegated = await ExchangeAsync(client, discovery, PairwiseClientId, subjectToken, actorToken);
+
+        var exchanged = await ExchangeAsync(client, discovery, OtherSectorClientId, delegated, actorToken: null);
+
+        Assert.Equal(ExpectedPseudonym(OtherSectorClient()), ActorSubjectOf(exchanged));
+        Assert.NotEqual(ExpectedPseudonym(), ActorSubjectOf(exchanged));
+    }
+
+    /// <summary>
+    /// An actor_token of a public-subject client names the real party, and the pairwise client receiving the
+    /// delegated token sees that party under its own pseudonym.
+    /// </summary>
+    [Fact]
+    public async Task APublicClientsActor_IsSealedForThePairwiseRecipient()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subjectToken = await PairwiseAccessTokenAsync(client, discovery);
+        var actorToken = (await ObtainConfidentialOfflineTokensAsync(client, discovery))
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        Assert.Equal(RealSubject, DecodeJwtPayload(actorToken)[IanaClaimTypes.Sub]!.GetValue<string>());
+
+        var delegated = await ExchangeAsync(client, discovery, PairwiseClientId, subjectToken, actorToken);
+
+        Assert.Equal(ExpectedPseudonym(), ActorSubjectOf(delegated));
+    }
+
+    /// <summary>
+    /// RFC 8693 section 4.1: act "has the same semantics and format" in an introspection response, so a protected
+    /// resource asking about a delegated token learns who acts, under the identifier it is entitled to: the owner
+    /// sees the pseudonym of its token, another pairwise caller its own.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_ShowsTheActorToEveryCaller_UnderItsOwnPseudonym()
+    {
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subjectToken = await PairwiseAccessTokenAsync(client, discovery);
+        var actorToken = await PairwiseAccessTokenAsync(client, discovery);
+        var delegated = await ExchangeAsync(client, discovery, PairwiseClientId, subjectToken, actorToken);
+
+        var byOwner = await IntrospectAsync(client, discovery, delegated, PairwiseClientId);
+        var byOther = await IntrospectAsync(client, discovery, delegated, OtherSectorClientId);
+
+        Assert.Equal(ExpectedPseudonym(), byOwner[IanaClaimTypes.Act]?[IanaClaimTypes.Sub]?.GetValue<string>());
+        Assert.Equal(
+            ExpectedPseudonym(OtherSectorClient()),
+            byOther[IanaClaimTypes.Act]?[IanaClaimTypes.Sub]?.GetValue<string>());
+    }
+
+    private static async Task<string> PairwiseAccessTokenAsync(HttpClient client, DiscoveryDocument discovery)
+        => (await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId))
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+    private static async Task<string> ExchangeAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientId,
+        string subjectToken,
+        string? actorToken)
+    {
+        var form = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        };
+        if (actorToken is not null)
+        {
+            form[TokenRequest.Parameters.ActorToken] = actorToken;
+            form[TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.AccessToken;
+        }
+
+        var response = await ExchangeCodeForTokensAsync(client, discovery, form);
+        return response[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+    }
+
+    private static string? ActorSubjectOf(string token)
+        => DecodeJwtPayload(token)[IanaClaimTypes.Act]?[IanaClaimTypes.Sub]?.GetValue<string>();
+
     // The pairwise pseudonym the code under test must produce for this client and subject, recomputed with the same
     // salt and client so the E2E can pin the exact expected value deterministically.
     private static string ExpectedPseudonym()
+        => ExpectedPseudonym(new ClientInfo(PairwiseClientId)
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
+        });
+
+    private static string ExpectedPseudonym(ClientInfo client)
         => new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) })
-            .Convert(RealSubject, new ClientInfo(PairwiseClientId)
-            {
-                SubjectType = SubjectTypes.Pairwise,
-                RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
-            });
+            .Convert(RealSubject, client);
+
+    /// <summary>
+    /// A second pairwise client whose sector differs from the first one's, allowed to exchange and introspect tokens
+    /// issued to other clients.
+    /// </summary>
+    private static ClientInfo OtherSectorClient() => new(OtherSectorClientId)
+    {
+        ClientSecrets = [ConfidentialSecret()],
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+        AllowedGrantTypes = [GrantTypes.TokenExchange],
+        SubjectType = SubjectTypes.Pairwise,
+        SectorIdentifier = OtherSector,
+        AllowCrossClientSubjectTokenExchange = true,
+        AllowCrossClientIntrospection = true,
+    };
+
+    private static ClientSecret ConfidentialSecret() => new()
+    {
+        Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)),
+    };
 
     private static async Task<JsonObject> ObtainPairwiseTokensAsync(
         HttpClient client,
@@ -254,6 +401,9 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             // Also acts as a protected resource in the introspection scenario below, so it receives tokens
             // issued to other clients - and, being pairwise, sees their users under its own pseudonyms.
             AllowCrossClientIntrospection = true,
+
+            // Accepts an actor_token issued to another client in the delegation scenarios.
+            AllowCrossClientSubjectTokenExchange = true,
         };
 
         return Factory.WithWebHostBuilder(builder =>
@@ -281,7 +431,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
                 services.PostConfigure<TestTenantSettings>(tenant =>
                 {
                     tenant.PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) };
-                    tenant.Clients = [.. tenant.Clients, pairwiseClient];
+                    tenant.Clients = [.. tenant.Clients, pairwiseClient, OtherSectorClient()];
                 });
             }));
     }

@@ -107,24 +107,21 @@ public sealed class JwtSubjectTokenResolver(
                 "The token states no authentication time, so the token exchanged from it could not state one.");
         }
 
-        var subject = jwt.Payload.Subject;
-        if (string.IsNullOrWhiteSpace(subject))
+        if (string.IsNullOrWhiteSpace(jwt.Payload.Subject))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "subject_token is missing the required 'sub' claim.");
         }
 
-        // The client the subject_token names (client_id, else azp, else the sole audience): used both to open a
-        // pairwise 'sub' back to the real subject and as the confused-deputy origin below.
+        // The client the subject_token names (client_id, else azp, else the sole audience): used both to open
+        // pairwise identifiers back to the real parties and as the confused-deputy origin below.
         var originalClientId = jwt.Payload.NamedClientId();
 
-        // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
-        // rather than faulting the exchange.
-        if (await OpenSubjectAsync(tenant, subject, originalClientId) is not { } realSubject)
+        // A pairwise 'sub' or actor that does not open for its client (a foreign-sector or pre-change token) is
+        // rejected rather than faulting the exchange or passing the pseudonym on as a real party.
+        if (await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId) is not { } real)
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
         }
-
-        subject = realSubject;
 
         // Direct raw access to authorization_details preserves byte-exact payload; DeepClone
         // detaches it from the subject_token's payload before it flows into a fresh
@@ -132,19 +129,16 @@ public sealed class JwtSubjectTokenResolver(
         // rejects the second serialisation because the JsonNode is parented twice.
         var authorizationDetails = Extract<JsonArray>(jwt, IanaClaimTypes.AuthorizationDetails);
 
-        // RFC 8693 section 4.1 act chain: preserve the subject_token's act so a delegation chain can
-        // be extended when this resolver feeds a Token Exchange request that also supplies an
-        // actor_token. DeepClone for the same parenting reason as AD.
-        var act = Extract<JsonObject>(jwt, IanaClaimTypes.Act);
-
         return new SubjectTokenContext(
-            Subject: subject,
+            Subject: real.Subject,
             Issuer: jwt.Payload.Issuer,
             // A scope claim holding no scope is still the token's scope, unlike a token carrying no scope claim
             Scope: jwt.Payload.Json.ContainsKey(IanaClaimTypes.Scope) ? [.. jwt.Payload.Scope] : null,
             AuthorizationDetails: authorizationDetails)
         {
-            Act = act,
+            // RFC 8693 section 4.1 act chain, opened to the real actors: the exchanged token keeps it, and extends it
+            // when the request also supplies an actor_token.
+            Act = real.Actor,
 
             // Origin tracking for the confused-deputy guard. Access and refresh tokens name their
             // client in the client_id claim, but an id_token carries no such claim -- it identifies
@@ -166,22 +160,26 @@ public sealed class JwtSubjectTokenResolver(
     }
 
     /// <summary>
-    /// The real subject behind the token's <c>sub</c>, or <c>null</c> when a pairwise one does not open.
+    /// The real parties behind the token's <c>sub</c> and <c>act</c>, or <c>null</c> when a pairwise one does not open.
     /// </summary>
     /// <remarks>
-    /// When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym, opened
-    /// against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject and pass
-    /// through unchanged.
+    /// When the subject_token was issued to a pairwise client, 'sub' and every actor are that client's per-sector
+    /// pseudonyms, opened against that client's sector - not the requesting client's, which differs in a cross-client
+    /// exchange. id_tokens, plain JWTs and public-client tokens carry the real parties and pass through unchanged.
     /// </remarks>
-    private async Task<string?> OpenSubjectAsync(TenantDefinition tenant, string subject, string? originalClientId)
+    private async Task<TokenSubjects?> OpenSubjectsAsync(
+        TenantDefinition tenant,
+        JsonWebTokenPayload payload,
+        string? originalClientId)
     {
         var originalClient = originalClientId is not null
             ? await clientInfoProvider.TryFindClientAsync(tenant, originalClientId)
             : null;
 
+        var seen = TokenSubjects.Of(payload);
         return originalClient is not null
-            ? subjectTypeConverter.ConvertBack(tenant, subject, originalClient)
-            : subject;
+            ? subjectTypeConverter.Open(tenant, seen, originalClient)
+            : seen;
     }
 
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode
