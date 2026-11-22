@@ -732,6 +732,56 @@ public class AccessTokenServiceTests
     }
 
     /// <summary>
+    /// A pairwise client sees every party by its per-sector pseudonym, so the actors of a delegated token, the prior
+    /// ones of the RFC 8693 section 4.1 chain included, are sealed for its sector as its sub is: otherwise act.sub
+    /// hands it the real identifier sub was sealed to hide. The server opens them all again when the token comes back.
+    /// </summary>
+    [Fact]
+    public async Task APairwiseDelegatedToken_SealsEveryActorAsItsSubject_AndOpensThemBack()
+    {
+        var converter = new SubjectTypeConverter(
+            new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            Mock.Of<ITokenIdGenerator>(),
+            _jwtFormatter.Object,
+            new FixedSubjectTypeConverter(converter),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(NoResources, NoResourceKeys, Encrypting()),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+        var client = new ClientInfo(ClientId)
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifier = "sector.example.com",
+        };
+        var actor = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var context = CreateAuthorizationContext() with { Actor = actor };
+
+        var issued = await service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), context, client, grantId: null, null);
+
+        var act = Assert.IsType<JsonObject>(issued.Token.Payload.Json[IanaClaimTypes.Act]);
+        Assert.Equal(converter.Convert("current-actor", client), act[IanaClaimTypes.Sub]!.GetValue<string>());
+        var prior = Assert.IsType<JsonObject>(act[IanaClaimTypes.Act]);
+        Assert.Equal(converter.Convert("prior-actor", client), prior[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.Equal("current-actor", actor[IanaClaimTypes.Sub]!.GetValue<string>());
+
+        var authenticated = await service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, issued.Token, client);
+
+        Assert.True(authenticated.TryGetSuccess(out var grant));
+        Assert.True(JsonNode.DeepEquals(actor, grant.Context.Actor));
+    }
+
+    /// <summary>
     /// Verifies that the JWT formatter is called exactly once during token creation
     /// with the correctly constructed JWT.
     /// </summary>

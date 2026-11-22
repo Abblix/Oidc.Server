@@ -221,7 +221,12 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
+            tenant,
+            ctx.ClientInfo,
+            TokenRequest.Parameters.SubjectToken,
+            ctx.Request.SubjectTokenType,
+            subjectToken,
+            cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
@@ -235,7 +240,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     {
         if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
         {
-            return error;
+            return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }
 
         return ctx;
@@ -283,8 +288,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     /// <summary>
     /// Resolves the optional <c>actor_token</c>. Passthrough (no enrichment) when the request
-    /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
-    /// error pinpoints which token was rejected.
+    /// has no actor.
     /// </summary>
     private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
         TenantDefinition tenant,
@@ -295,10 +299,13 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             return ctx;
 
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.ActorTokenType, actorToken, cancellationToken);
-        return result.Match<Result<ValidationContext, OidcError>>(
-            actor => ctx with { Actor = actor },
-            failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
+            tenant,
+            ctx.ClientInfo,
+            TokenRequest.Parameters.ActorToken,
+            ctx.Request.ActorTokenType,
+            actorToken,
+            cancellationToken);
+        return result.MapSuccess(actor => ctx with { Actor = actor });
     }
 
     /// <summary>
@@ -389,21 +396,58 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             {
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
-                    "The client the subject_token was issued to could not be determined.");
+                    "The client the token was issued to could not be determined.");
             }
 
             if (!string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal))
             {
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
-                    "subject_token was issued to a different client than the one presenting it.");
+                    "The token was issued to a different client than the one presenting it.");
             }
         }
 
         return null;
     }
 
+    /// <summary>
+    /// Resolves a subject_token or an actor_token through the resolver registered for its type.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8693 section 2.2.2: "If the request itself is not valid or if either the "subject_token" or
+    /// "actor_token" are invalid for any reason, or are unacceptable based on policy ... The value of the "error"
+    /// parameter MUST be the "invalid_request" error code." A resolver may be the host's and answer with any code,
+    /// so a rejection is rewritten here to that code. A resolver that could not judge the token at all answers
+    /// server_error or temporarily_unavailable, the codes RFC 6749 section 4.1.2.1 defines for the server's own
+    /// failure; that says nothing about the token, so it reaches the client unchanged instead of telling it to
+    /// discard a token that may be fine, as section 2.2.2 allows: "Other error codes may also be used, as
+    /// appropriate." Every description is prefixed with the parameter it concerns, so it says
+    /// which token was meant.
+    /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
+        TenantDefinition tenant,
+        ClientInfo clientInfo,
+        string parameterName,
+        Uri? tokenType,
+        string tokenValue,
+        CancellationToken cancellationToken)
+    {
+        var result = await ResolveByTypeAsync(tenant, clientInfo, tokenType, tokenValue, cancellationToken);
+        return result.MapFailure(
+            failure => new OidcError(WireErrorOf(failure.Error), $"{parameterName}: {failure.ErrorDescription}"));
+    }
+
+    /// <summary>
+    /// The error code a resolver's failure reaches the client with: the server's own failure as it is, any
+    /// rejection of the token as invalid_request.
+    /// </summary>
+    private static string WireErrorOf(string resolverError) => resolverError switch
+    {
+        ErrorCodes.ServerError or ErrorCodes.TemporarilyUnavailable => resolverError,
+        _ => ErrorCodes.InvalidRequest,
+    };
+
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
         TenantDefinition tenant,
         ClientInfo clientInfo,
         Uri? tokenType,
@@ -457,8 +501,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
         // subject_token becomes the new actor's nested act.act, preserving the full delegation
-        // path. Impersonation = no actor_token = no act emission.
-        JsonObject? actorClaim = null;
+        // path. Without an actor_token the subject_token's own chain is kept as it is: a delegated
+        // token exchanged again still acts for somebody else, and only a subject_token carrying no
+        // act yields a token without one.
+        JsonObject? actorClaim;
         if (actor is not null)
         {
             actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
@@ -466,6 +512,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             {
                 actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
             }
+        }
+        else
+        {
+            actorClaim = (JsonObject?)subject.Act?.DeepClone();
         }
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
@@ -480,11 +530,15 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
         // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the
         // actor's, so revoking the end user's session reaches it and the exchange does not pass for a new sign-in.
+        // The identity provider is the one exception: an ID token states none, and the server keeps no record of a
+        // session by its identifier that would (the session client registry holds client identifiers only, and the
+        // host's sessions are reachable only through the browser's request), so a token exchanged from an ID token
+        // names the issuer of that ID token instead of the sign-in's provider.
         var authSession = new AuthSession(
             Subject: subject.Subject,
             SessionId: subject.SessionId,
             AuthenticationTime: subject.AuthenticationTime,
-            IdentityProvider: subject.Issuer ?? "self")
+            IdentityProvider: subject.IdentityProvider ?? subject.Issuer ?? "self")
         {
             AuthContextClassRef = subject.AuthContextClassRef,
             AuthenticationMethodReferences = subject.AuthenticationMethodReferences,

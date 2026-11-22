@@ -358,6 +358,35 @@ public class TokenExchangeGrantHandlerTests
         Assert.Equal(["pwd", "otp"], grant.AuthSession.AuthenticationMethodReferences!);
     }
 
+    /// <summary>
+    /// The exchanged token names the identity provider of the sign-in its subject_token belongs to, whichever kind
+    /// of token that is; only a subject_token naming none falls back to the party that issued it.
+    /// </summary>
+    [Theory]
+    [InlineData("https://upstream.example.com", "https://issuer.example.com", "https://upstream.example.com")]
+    [InlineData(null, "https://issuer.example.com", "https://issuer.example.com")]
+    public async Task ExchangedToken_NamesTheSignInsIdentityProvider(
+        string? identityProvider, string issuer, string expected)
+    {
+        var subject = new SubjectTokenContext("alice", issuer, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = ClientId,
+            IdentityProvider = identityProvider,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(expected, grant.AuthSession.IdentityProvider);
+    }
+
     [Fact]
     public async Task ChainedDelegation_PrependsExistingActChain()
     {
@@ -385,6 +414,38 @@ public class TokenExchangeGrantHandlerTests
         var nested = grant.Context.Actor["act"] as JsonObject;
         Assert.NotNull(nested);
         Assert.Equal("prev-actor", nested["sub"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A delegated subject_token exchanged without an actor_token still acts for somebody else, so the issued token
+    /// carries its act chain unchanged rather than presenting the delegate as the user acting directly.
+    /// </summary>
+    [Fact]
+    public async Task ADelegatedSubjectToken_ExchangedWithoutAnActor_KeepsItsActChain()
+    {
+        var existingChain = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            Act = existingChain,
+            OriginalClientId = ClientId,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.True(JsonNode.DeepEquals(existingChain, grant.Context.Actor));
+        Assert.NotSame(existingChain, grant.Context.Actor);
     }
 
     [Fact]
@@ -421,8 +482,12 @@ public class TokenExchangeGrantHandlerTests
         Assert.Contains("together", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ActorResolverFailure_PropagatedWithPrefix()
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ActorResolverFailure_PropagatedWithPrefix(string resolverError, string expectedError)
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
@@ -431,7 +496,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
             .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
+            .ReturnsAsync(new OidcError(resolverError, "actor expired"));
 
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -443,30 +508,38 @@ public class TokenExchangeGrantHandlerTests
         var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(expectedError, error.Error);
         Assert.Contains("actor_token", error.ErrorDescription);
         Assert.Contains("actor expired", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ResolverFailure_Propagated()
+    /// <summary>
+    /// RFC 8693 section 2.2.2: when "the subject_token ... [is] invalid for any reason, or [is] unacceptable based
+    /// on policy ... The value of the "error" parameter MUST be the "invalid_request" error code", so a resolver a
+    /// host registers that rejects the token reaches the wire with invalid_request whatever code it answered with.
+    /// A resolver that could not judge the token at all (server_error, temporarily_unavailable) says nothing about
+    /// the token, so its answer reaches the client unchanged rather than telling it to discard a token that may be
+    /// fine.
+    /// </summary>
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ResolverFailure_Propagated(string resolverError, string expectedError)
     {
-        // Resolver returns an OidcError -- the handler propagates it without rewrapping so
-        // resolver-specific failure descriptions reach the wire client (RFC 8693 section 2.2.2 maps
-        // every error to invalid_request at the wire, but the description preserves diagnostic
-        // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
             .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "subject expired"));
+            .ReturnsAsync(new OidcError(resolverError, "subject expired"));
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
         var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Equal("subject expired", error.ErrorDescription);
+        Assert.Equal(expectedError, error.Error);
+        Assert.Contains(TokenRequest.Parameters.SubjectToken, error.ErrorDescription);
     }
 
     [Fact]

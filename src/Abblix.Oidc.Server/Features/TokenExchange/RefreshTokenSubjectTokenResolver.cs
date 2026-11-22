@@ -69,7 +69,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token is invalid or has expired.");
+                "The token is invalid or has expired.");
         }
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
@@ -80,7 +80,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
         if (originalClient is null)
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");
+            return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }
 
         // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
@@ -89,7 +89,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token's client is not allowed offline access.");
+                "The token's client is not allowed offline access.");
         }
 
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, jwt, originalClient);
@@ -97,7 +97,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token does not refer to a known grant.");
+                "The token does not refer to a known grant.");
         }
 
         // The question the refresh grant asks of the same refresh token, so a token that grant refuses is not
@@ -107,7 +107,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The session the subject_token was issued in has been revoked.");
+                "The session the token was issued in has been revoked.");
         }
 
         // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
@@ -117,7 +117,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
-            Issuer: grant.AuthSession.IdentityProvider,
+            Issuer: jwt.Payload.Issuer,
             Scope: grant.Context.Scope,
             AuthorizationDetails: authorizationDetails)
         {
@@ -132,6 +132,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             ExpiresAt = jwt.Payload.ExpiresAt,
             SessionId = grant.AuthSession.SessionId,
             AuthenticationTime = grant.AuthSession.AuthenticationTime,
+            IdentityProvider = grant.AuthSession.IdentityProvider,
             AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
             AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
         };
