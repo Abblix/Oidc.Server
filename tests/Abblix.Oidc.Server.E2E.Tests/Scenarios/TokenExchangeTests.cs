@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
@@ -263,6 +264,80 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
             var body = JsonNode.Parse(await exchange.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             Assert.Equal(ErrorCodes.InvalidScope, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
         }
+    }
+
+    /// <summary>
+    /// Each token in a chain of exchanges expires no later than the token it was exchanged from, and its expires_in
+    /// says so, while it tells of the sign-in the chain started from rather than of the moment of the exchange.
+    /// </summary>
+    /// <remarks>
+    /// Each exchange waits a second first, so a token given a fresh lifetime would expire later than its subject
+    /// token and a fresh authentication time would differ from the sign-in, both in the whole seconds a JWT states.
+    /// An access token is taken both from a refresh token family and from outside one, since a token of a family was
+    /// cut short to its subject token before any other was.
+    /// </remarks>
+    [Theory]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, true)]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, false)]
+    [InlineData(TokenExchangeTokenTypes.IdToken, false)]
+    [InlineData(TokenExchangeTokenTypes.RefreshToken, true)]
+    public async Task A_chain_of_exchanges_never_outlives_its_subject_token_and_keeps_its_sign_in(
+        string subjectTokenType, bool offline)
+    {
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = offline
+            ? await ObtainConfidentialOfflineTokensAsync(client, discovery)
+            : await ObtainConfidentialOnlineTokensAsync(client, discovery);
+        var signedInAt = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.AuthTime]!
+            .GetValue<long>();
+
+        var token = tokens[ResponseMemberOf(subjectTokenType)]!.GetValue<string>();
+        var tokenType = subjectTokenType;
+        for (var exchange = 1; exchange <= 2; exchange++)
+        {
+            var subjectExpiresAt = DecodeJwtPayload(token)[JwtClaimTypes.ExpiresAt]!.GetValue<long>();
+            await Task.Delay(TimeSpan.FromSeconds(1.1), TestContext.Current.CancellationToken);
+
+            var response = await ExchangeAsConfidentialClientAsync(client, discovery, token, tokenType);
+            token = response[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+            tokenType = TokenExchangeTokenTypes.AccessToken;
+
+            var payload = DecodeJwtPayload(token);
+            var expiresAt = payload[JwtClaimTypes.ExpiresAt]!.GetValue<long>();
+            Assert.True(
+                expiresAt <= subjectExpiresAt,
+                $"exchange {exchange}: the token expires at {expiresAt}, after its subject token at {subjectExpiresAt}");
+            Assert.Equal(
+                expiresAt - payload[JwtClaimTypes.IssuedAt]!.GetValue<long>(),
+                response[TokenResponse.Parameters.ExpiresIn]!.GetValue<long>());
+            Assert.Equal(signedInAt, payload[IanaClaimTypes.AuthTime]!.GetValue<long>());
+        }
+    }
+
+    /// <summary>
+    /// The token response of an authorization code grant to the confidential client without offline access, so its
+    /// access token belongs to no refresh token family.
+    /// </summary>
+    private static async Task<JsonObject> ObtainConfidentialOnlineTokensAsync(HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(TestConstants.ConfidentialClientId, challenge));
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        Assert.Null(DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>())[OidcClaimTypes.GrantId]);
+        return tokens;
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)

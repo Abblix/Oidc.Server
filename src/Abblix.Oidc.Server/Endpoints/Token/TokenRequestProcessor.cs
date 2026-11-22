@@ -106,7 +106,7 @@ public class TokenRequestProcessor(
 		if (lifetime <= TimeSpan.Zero)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ExpiredGrantError(request.Model.GrantType),
 				"The grant expired before a token could be issued under it.");
 		}
 
@@ -274,12 +274,26 @@ public class TokenRequestProcessor(
 	}
 
 	/// <summary>
+	/// The error a grant expired before a token could be issued under it is refused with.
+	/// </summary>
+	/// <remarks>
+	/// Under token exchange the grant is the subject token, and RFC 8693 section 2.2.2 answers a subject token that is
+	/// invalid for any reason with <c>invalid_request</c>. Every other grant is answered as RFC 6749 section 5.2
+	/// answers an expired grant, with <c>invalid_grant</c>.
+	/// </remarks>
+	private static string ExpiredGrantError(string? grantType) => grantType switch
+	{
+		GrantTypes.TokenExchange => ErrorCodes.InvalidRequest,
+		_ => ErrorCodes.InvalidGrant,
+	};
+
+	/// <summary>
 	/// The lifetime the minted access token carries, which is what <c>expires_in</c> reports.
 	/// </summary>
 	/// <remarks>
-	/// Read from the token rather than from the client's configured lifetime, because a token exchanged within a
-	/// refresh token family is cut short to its subject token's expiry, and a client told the full lifetime would
-	/// keep presenting a token its resource server already refuses.
+	/// Read from the token rather than from the client's configured lifetime, because a token obtained by exchange is
+	/// cut short to its subject token's expiry, and a client told the full lifetime would keep presenting a token its
+	/// resource server already refuses.
 	/// </remarks>
 	private static TimeSpan LifetimeOf(JsonWebToken accessToken)
 		=> accessToken.Payload is { IssuedAt: { } issuedAt, ExpiresAt: { } expiresAt }

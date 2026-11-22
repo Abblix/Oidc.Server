@@ -41,9 +41,8 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
 
     /// <summary>
     /// The latest moment an access token issued from this grant may expire, or <c>null</c> when only the client's
-    /// access token lifetime bounds it. Set by a token exchange joining the subject token's refresh token family, so
-    /// the exchanged token expires no later than the token it came from and a revocation of the family, which lasts
-    /// as long as the family's own tokens, outlasts it too.
+    /// access token lifetime bounds it. Set by a token exchange, so the exchanged token expires no later than the
+    /// token it came from: an exchange never extends the authority it hands on.
     /// </summary>
     [NotStored("Set only by a token exchange, whose grant is never stored")]
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }

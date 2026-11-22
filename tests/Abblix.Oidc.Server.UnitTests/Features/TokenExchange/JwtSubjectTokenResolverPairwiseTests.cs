@@ -81,6 +81,7 @@ public class JwtSubjectTokenResolverPairwiseTests
             {
                 Subject = pairwiseSub,
                 SessionId = "session-1",
+                AuthenticationTime = now,
                 ClientId = OriginalClientId,
                 IssuedAt = now,
                 ExpiresAt = now.AddHours(1),

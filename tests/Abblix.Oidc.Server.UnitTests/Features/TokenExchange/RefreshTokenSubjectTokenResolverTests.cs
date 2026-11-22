@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Time.Testing;
@@ -42,6 +43,7 @@ public class RefreshTokenSubjectTokenResolverTests
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator = new(MockBehavior.Strict);
     private readonly Mock<IRefreshTokenService> _refreshTokenService = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
+    private readonly Mock<IRevocationCutoffChecker> _cutoffChecker = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
     private readonly RefreshTokenSubjectTokenResolver _resolver;
 
@@ -53,8 +55,12 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.ConsentRequired });
 
+        _cutoffChecker
+            .Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()))
+            .ReturnsAsync(false);
+
         _resolver = new RefreshTokenSubjectTokenResolver(
-            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
+            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object, _cutoffChecker.Object);
     }
 
     [Fact]
@@ -65,8 +71,13 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
+        var signedInAt = _timeProvider.GetUtcNow().AddHours(-2);
         var grant = new AuthorizedGrant(
-            new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "https://idp.example.com"),
+            new AuthSession("user-9", "session-1", signedInAt, "https://idp.example.com")
+            {
+                AuthContextClassRef = "urn:example:acr:1",
+                AuthenticationMethodReferences = ["pwd", "otp"],
+            },
             new AuthorizationContext("client-1", [Scopes.OpenId], null));
 
         _refreshTokenService
@@ -79,6 +90,10 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
         Assert.Equal([Scopes.OpenId], ctx.Scope!);
+        Assert.Equal("session-1", ctx.SessionId);
+        Assert.Equal(signedInAt, ctx.AuthenticationTime);
+        Assert.Equal("urn:example:acr:1", ctx.AuthContextClassRef);
+        Assert.Equal(["pwd", "otp"], ctx.AuthenticationMethodReferences!);
     }
 
     /// <summary>
@@ -251,12 +266,39 @@ public class RefreshTokenSubjectTokenResolverTests
                 TestOidcOptions.Defaults(),
             Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>()),
             _refreshTokenService.Object,
-            _clientInfoProvider.Object);
+            _clientInfoProvider.Object,
+            _cutoffChecker.Object);
 
         var result = await resolver.ResolveAsync(
             SingleIssuer.Tenant,
             Requester,
             TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A refresh token the refresh grant would refuse because its session was revoked is not exchanged instead: the
+    /// resolver asks the session the same question.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenOfARevokedSession_IsRefused()
+    {
+        var jwt = NewRefreshJwt();
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(jwt);
+        var session = new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self");
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(session, new AuthorizationContext("client-1", [Scopes.OpenId], null)));
+        _cutoffChecker
+            .Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, session))
+            .ReturnsAsync(true);
+
+        var result = await _resolver.ResolveAsync(
+            SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
