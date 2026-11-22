@@ -57,15 +57,8 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     {
         var failures = new List<TenantRefusal>();
 
-        // Required by the compiler only: configuration without the key, or a store holding none, gives no issuer
         failures.AddRange(
             from tenant in tenants
-            where tenant.Issuer is null
-            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}' has no issuer."));
-
-        failures.AddRange(
-            from tenant in tenants
-            where tenant.Issuer is not null
             let refusal = IssuerIdentifier.Refusal(tenant.Issuer, options.AllowHttpIssuer)
             where refusal is not null
             select TenantRefusal.Of(
@@ -151,8 +144,7 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
     /// The checks of addresses read the issuer's, so they skip a tenant whose issuer has none to read; that tenant
     /// is refused for its issuer elsewhere. An http issuer has an address whether or not it is let through.
     /// </remarks>
-    private static bool IsIssuer(Uri? issuer)
-        => issuer is not null && IssuerIdentifier.Refusal(issuer, allowHttp: true) is null;
+    private static bool IsIssuer(Uri issuer) => IssuerIdentifier.Refusal(issuer, allowHttp: true) is null;
 
     /// <remarks>
     /// Asked only of an absolute address, since a relative one throws on either read.

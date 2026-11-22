@@ -161,6 +161,67 @@ public class AuthorizationCodeGrantHandlerTests
 		Assert.NotNull(grant);
 	}
 
+	/// <summary>
+	/// RFC 6749 section 4.1.3: the server must "ensure that the "redirect_uri" parameter is present if the
+	/// "redirect_uri" parameter was included in the initial authorization request ... and if included ensure
+	/// that their values are identical". Identical means the very URI: a loopback redirect on another port
+	/// (accepted at the authorization endpoint by RFC 8252 section 7.3) and a path differing in case both fail.
+	/// </summary>
+	[Theory]
+	[InlineData("https://client.example.com/callback2", "https://client.example.com/callback1")]
+	[InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
+	[InlineData("https://client.example.com/callback", "https://client.example.com/Callback")]
+	[InlineData("https://client.example.com/callback", null)]
+	[InlineData(null, "https://client.example.com/callback")]
+	public async Task ARedirectUriOtherThanTheAuthorizationRequests_ReturnsInvalidGrant(
+		string? authorizedRedirectUri,
+		string? requestedRedirectUri)
+	{
+		var result = await RedeemWithRedirectUri(authorizedRedirectUri, requestedRedirectUri);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+	}
+
+	/// <summary>
+	/// The redirect URI of the authorization request, sent again, or none on either side, redeems the code.
+	/// </summary>
+	[Theory]
+	[InlineData("https://client.example.com/callback", "https://client.example.com/callback")]
+	[InlineData(null, null)]
+	public async Task TheAuthorizationRequestsRedirectUri_RedeemsTheCode(
+		string? authorizedRedirectUri,
+		string? requestedRedirectUri)
+	{
+		var result = await RedeemWithRedirectUri(authorizedRedirectUri, requestedRedirectUri);
+
+		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	private async Task<Result<AuthorizedGrant, OidcError>> RedeemWithRedirectUri(
+		string? authorizedRedirectUri,
+		string? requestedRedirectUri)
+	{
+		var clientInfo = new ClientInfo("client1");
+		var tokenRequest = new TokenRequest
+		{
+			Code = "abc",
+			RedirectUri = requestedRedirectUri is null ? null : new Uri(requestedRedirectUri),
+		};
+
+		_authCodeService
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
+			.ReturnsAsync(
+				new AuthorizedGrant(
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
+					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)
+					{
+						RedirectUri = authorizedRedirectUri is null ? null : new Uri(authorizedRedirectUri),
+					}));
+
+		return await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+	}
+
 	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		// arrange

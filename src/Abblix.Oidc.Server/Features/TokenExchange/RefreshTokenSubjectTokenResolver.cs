@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -40,10 +41,13 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
 /// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
 /// pairwise subject back to the real subject.</param>
+/// <param name="cutoffChecker">Asks whether a revocation refuses the session the refresh token continues, as the
+/// refresh grant asks.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
     IRefreshTokenService refreshTokenService,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    IClientInfoProvider clientInfoProvider,
+    IRevocationCutoffChecker cutoffChecker) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
@@ -65,7 +69,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token is invalid or has expired.");
+                "The token is invalid or has expired.");
         }
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
@@ -76,7 +80,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
             : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
         if (originalClient is null)
         {
-            return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");
+            return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }
 
         // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
@@ -85,7 +89,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token's client is not allowed offline access.");
+                "The token's client is not allowed offline access.");
         }
 
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, jwt, originalClient);
@@ -93,7 +97,17 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
-                "The subject_token does not refer to a known grant.");
+                "The token does not refer to a known grant.");
+        }
+
+        // The question the refresh grant asks of the same refresh token, so a token that grant refuses is not
+        // exchanged instead: the validation above judges the token by its issue time, while a revocation dated after
+        // the sign-in but before the family began refuses the session only by its authentication time.
+        if (await cutoffChecker.IsGrantRefusedAsync(tenant, grant, GrantTypes.RefreshToken))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The session the token was issued in has been revoked.");
         }
 
         // DeepClone detaches AuthorizationDetails / Actor from the recovered grant's storage
@@ -103,7 +117,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
-            Issuer: grant.AuthSession.IdentityProvider,
+            Issuer: jwt.Payload.Issuer,
             Scope: grant.Context.Scope,
             AuthorizationDetails: authorizationDetails)
         {
@@ -113,9 +127,14 @@ public sealed class RefreshTokenSubjectTokenResolver(
             // names the client it was issued to. Mismatch with the requesting client triggers
             // the handler's cross-client guard.
             OriginalClientId = grant.Context.ClientId,
-            
+
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
+            SessionId = grant.AuthSession.SessionId,
+            AuthenticationTime = grant.AuthSession.AuthenticationTime,
+            IdentityProvider = grant.AuthSession.IdentityProvider,
+            AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
+            AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
         };
     }
 }

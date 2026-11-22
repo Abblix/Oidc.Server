@@ -48,12 +48,12 @@ public class JwtSubjectTokenResolverTests
 
     public JwtSubjectTokenResolverTests()
     {
-        // These tests cover public/plain subject tokens, whose client either is unnamed or is not pairwise, so the
-        // resolver never opens 'sub'. Returning no client from the lookup drives that pass-through path (a converter
-        // with no pairwise settings would pass through anyway), keeping these tests decoupled from licensing.
+        // These tests cover public/plain subject tokens, whose client either is unnamed or is not pairwise, so
+        // opening 'sub' leaves it as it is. Every named client is found as a public one; a converter with no pairwise
+        // settings keeps these tests decoupled from licensing.
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
 
         _resolver = new JwtSubjectTokenResolver(
             _jwtValidator.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clientInfoProvider.Object);
@@ -75,6 +75,10 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal("https://idp.example.com", ctx.Issuer);
         Assert.Equal([Scopes.OpenId, Scopes.Profile], ctx.Scope!);
         Assert.Null(ctx.AuthorizationDetails);
+        Assert.Equal("session-1", ctx.SessionId);
+        Assert.Equal(jwt.Payload.AuthenticationTime, ctx.AuthenticationTime);
+        Assert.Equal("urn:example:acr:1", ctx.AuthContextClassRef);
+        Assert.Equal(["pwd", "otp"], ctx.AuthenticationMethodReferences!);
     }
 
     /// <summary>
@@ -305,13 +309,125 @@ public class JwtSubjectTokenResolverTests
         Assert.Null(ctx.OriginalClientId);
     }
 
+    /// <summary>
+    /// Every token this server issues for a session names it, the ID token of a client that does not use the session
+    /// at logout excepted. A token naming none could not be refused by a revocation of its session, so it is not
+    /// exchanged.
+    /// </summary>
+    [Fact]
+    public async Task ATokenNamingNoSession_IsRefused()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Payload.SessionId = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// The exchanged token tells when the end user signed in, so a token that does not say is not exchanged rather
+    /// than answered with the moment of the exchange.
+    /// </summary>
+    [Fact]
+    public async Task ATokenStatingNoAuthenticationTime_IsRefused()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
+        jwt.Payload.AuthenticationTime = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// The identity provider the subject_token names reaches the context, so the exchanged token names the sign-in's
+    /// provider rather than the server that issued the subject_token; a token naming none (an ID token) answers none.
+    /// </summary>
+    [Theory]
+    [InlineData("https://upstream.example.com")]
+    [InlineData(null)]
+    public async Task IdentityProviderOfThePresentedToken_ReachesTheContext(string? identityProvider)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com");
+        jwt.Payload.IdentityProvider = identityProvider;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(identityProvider, ctx.IdentityProvider);
+        Assert.Equal("https://issuer.example.com", ctx.Issuer);
+    }
+
+    /// <summary>
+    /// An ID token states no identity provider, so it resolves to none and the exchange names its issuer instead:
+    /// the one kind of subject_token whose exchanged token does not name the sign-in's provider.
+    /// </summary>
+    [Fact]
+    public async Task AnIdToken_StatesNoIdentityProvider_SoItsIssuerStandsIn()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com", audiences: ["client-A"]);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Null(ctx.IdentityProvider);
+        Assert.Equal("https://issuer.example.com", ctx.Issuer);
+    }
+
+    /// <summary>
+    /// A token naming a client this server no longer knows cannot have its identifiers opened, since only that
+    /// client's sector opens a pairwise one, so it is refused rather than exchanged with its pseudonyms taken for the
+    /// real parties and sealed a second time.
+    /// </summary>
+    [Fact]
+    public async Task ATokenNamingAClientNoLongerKnown_IsRefused()
+    {
+        var jwt = NewJwt(subject: "pseudonym-of-client-gone", issuer: null);
+        jwt.Payload.ClientId = "client-gone";
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client-gone"))
+            .ReturnsAsync((ClientInfo?)null);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
     private JsonWebToken NewJwt(string? subject, string? issuer, string[]? audiences = null)
     {
         var now = _timeProvider.GetUtcNow();
         var jwt = new JsonWebToken
         {
             Header = { Algorithm = SigningAlgorithms.RS256 },
-            Payload = { IssuedAt = now, ExpiresAt = now.AddHours(1) },
+            // A token issued in a session names it, which is what lets a revocation of that session reach it
+            Payload =
+            {
+                IssuedAt = now,
+                ExpiresAt = now.AddHours(1),
+                SessionId = "session-1",
+                AuthenticationTime = now.AddMinutes(-30),
+                AuthContextClassRef = "urn:example:acr:1",
+                AuthenticationMethodReferences = ["pwd", "otp"],
+            },
         };
         if (issuer is not null) jwt.Payload.Issuer = issuer;
         if (subject is not null) jwt.Payload.Subject = subject;

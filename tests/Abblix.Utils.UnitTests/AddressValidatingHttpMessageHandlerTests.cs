@@ -7,7 +7,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Abblix.Tests.Shared;
 
 namespace Abblix.Utils.UnitTests;
@@ -451,6 +455,196 @@ public class AddressValidatingHttpMessageHandlerTests
 
         Assert.Single(handler.Dialed);
         Assert.Equal(2, origin.Requests);
+    }
+
+    /// <summary>
+    /// The TLS options a host gives the handler are the ones its connections validate the server's certificate by:
+    /// a callback accepting the origin's self-signed certificate lets the request through, under every rule.
+    /// </summary>
+    [Theory]
+    [InlineData(OutboundAddressRule.Unrestricted)]
+    [InlineData(OutboundAddressRule.NoPrivateOrReserved)]
+    [InlineData(OutboundAddressRule.NoSpecialPurpose)]
+    public async Task TheTlsOptionsItIsGiven_ValidateTheServersCertificate(OutboundAddressRule rule)
+    {
+        using var certificate = SelfSignedCertificate("tls.example.com");
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin, Rule = rule };
+        var validated = new List<SslPolicyErrors>();
+        handler.SslOptions.RemoteCertificateValidationCallback = (sender, presented, chain, errors) =>
+        {
+            validated.Add(errors);
+            return AcceptingOnly(certificate)(sender, presented, chain, errors);
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual(SslPolicyErrors.None, Assert.Single(validated));
+        Assert.Equal([new IPEndPoint(PublicAddress, origin.Port)], handler.Dialed);
+    }
+
+    /// <summary>
+    /// The control for the row above: with no options given the same certificate is refused, so the request passing
+    /// there is the options taking effect and not an origin any transport would accept.
+    /// </summary>
+    [Fact]
+    public async Task WithoutTlsOptions_ASelfSignedCertificateIsRefused()
+    {
+        using var certificate = SelfSignedCertificate("tls.example.com");
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        var failure = await Assert.ThrowsAsync<HttpRequestException>(
+            () => GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys"));
+
+        Assert.IsType<AuthenticationException>(failure.InnerException);
+    }
+
+    /// <summary>
+    /// Validating the server's certificate downloads nothing: a leaf whose issuer is missing and whose AIA extension
+    /// names an address of the endpoint's choosing does not make the guarded client fetch that address.
+    /// </summary>
+    [Fact]
+    public async Task ValidatingACertificate_DoesNotFetchItsIssuerFromTheAddressItNames()
+    {
+        using var issuerLocation = new LoopbackOrigin();
+        using var certificate = LeafNamingItsIssuerAt(issuerLocation);
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, certificate, issuerLocation);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        handler.SslOptions.RemoteCertificateValidationCallback = AcceptingOnly(certificate);
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(originsOwnFetches, issuerLocation.Connections);
+    }
+
+    /// <summary>
+    /// The control for the row above, and the way a host turns downloads back on: its own chain policy allowing them
+    /// is kept as it is, and the same certificate then makes the client fetch its issuer, so no fetch there is the
+    /// default at work and not a certificate the platform would never fetch for.
+    /// </summary>
+    [Fact]
+    public async Task AHostsOwnChainPolicy_IsKept_AndMayFetchTheIssuer()
+    {
+        using var issuerLocation = new LoopbackOrigin();
+        using var certificate = LeafNamingItsIssuerAt(issuerLocation);
+        using var origin = new LoopbackOrigin(certificate: certificate);
+        var originsOwnFetches = await FetchesOfTheOriginItselfAsync(origin, certificate, issuerLocation);
+        var handler = new Recording(new Resolver([PublicAddress]).ResolveAsync) { Origin = origin };
+        handler.SslOptions.RemoteCertificateValidationCallback = AcceptingOnly(certificate);
+        var hostsPolicy = new X509ChainPolicy
+        {
+            DisableCertificateDownloads = false,
+            RevocationMode = X509RevocationMode.NoCheck,
+        };
+        handler.SslOptions.CertificateChainPolicy = hostsPolicy;
+        using var invoker = new HttpMessageInvoker(handler);
+
+        using var response = await GetAsync(invoker, $"https://tls.example.com:{origin.Port}/keys");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(issuerLocation.Connections > originsOwnFetches);
+        Assert.Same(hostsPolicy, handler.SslOptions.CertificateChainPolicy);
+        Assert.False(hostsPolicy.DisableCertificateDownloads);
+    }
+
+    /// <summary>
+    /// What the origin's own TLS stack fetches of its certificate's issuer, by completing one handshake with a client
+    /// that downloads nothing.
+    /// </summary>
+    /// <remarks>
+    /// Some platforms complete the server's chain on the server's side as well, through the same AIA address, so a row
+    /// counting the client's fetches counts from there.
+    /// </remarks>
+    private static async Task<int> FetchesOfTheOriginItselfAsync(
+        LoopbackOrigin origin,
+        X509Certificate2 certificate,
+        LoopbackOrigin issuerLocation)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(IPAddress.Loopback, origin.Port, cancellationToken);
+        await using var tls = new SslStream(tcp.GetStream());
+        await tls.AuthenticateAsClientAsync(
+            new SslClientAuthenticationOptions
+            {
+                TargetHost = "tls.example.com",
+                RemoteCertificateValidationCallback = AcceptingOnly(certificate),
+                CertificateChainPolicy = new X509ChainPolicy
+                {
+                    DisableCertificateDownloads = true,
+                    RevocationMode = X509RevocationMode.NoCheck,
+                },
+            },
+            cancellationToken);
+
+        return issuerLocation.Connections;
+    }
+
+    /// <summary>
+    /// A certificate for <c>tls.example.com</c> issued by a CA that is nowhere to be found except at an address on
+    /// <paramref name="issuerLocation"/>, which its AIA extension names; a fresh path each time, so no fetch is
+    /// answered from a cache.
+    /// </summary>
+    private static X509Certificate2 LeafNamingItsIssuerAt(LoopbackOrigin issuerLocation)
+    {
+        var location = new Uri($"http://127.0.0.1:{issuerLocation.Port}/{Guid.NewGuid():N}.cer");
+        using var issuerKey = RSA.Create(2048);
+        var issuerRequest = new CertificateRequest(
+            "CN=Missing Issuer", issuerKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        issuerRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        issuerRequest.CertificateExtensions.Add(
+            new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
+        var issuerKeyId = new X509SubjectKeyIdentifierExtension(issuerRequest.PublicKey, false);
+        issuerRequest.CertificateExtensions.Add(issuerKeyId);
+
+        var now = TimeProvider.System.GetUtcNow();
+        using var issuer = issuerRequest.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(2));
+
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=tls.example.com", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName("tls.example.com");
+        request.CertificateExtensions.Add(names.Build());
+        request.CertificateExtensions.Add(
+            X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(issuerKeyId));
+        request.CertificateExtensions.Add(
+            new X509AuthorityInformationAccessExtension(null, [location.AbsoluteUri]));
+
+        using var issued = request.Create(issuer, now.AddMinutes(-5), now.AddHours(1), [1, 2, 3, 4]);
+        using var withKey = issued.CopyWithPrivateKey(key);
+        return X509CertificateLoader.LoadPkcs12(withKey.Export(X509ContentType.Pkcs12), password: null);
+    }
+
+    /// <summary>
+    /// Accepts the one certificate a row's origin presents, whatever the platform's own verdict on it, and refuses any
+    /// other.
+    /// </summary>
+    private static RemoteCertificateValidationCallback AcceptingOnly(X509Certificate2 expected)
+        => (_, presented, _, _)
+            => presented is not null && presented.GetRawCertData().AsSpan().SequenceEqual(expected.RawData);
+
+    /// <summary>
+    /// A certificate for <paramref name="host"/> that no machine trusts, loaded so a server can authenticate with it.
+    /// </summary>
+    private static X509Certificate2 SelfSignedCertificate(string host)
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest($"CN={host}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName(host);
+        request.CertificateExtensions.Add(names.Build());
+
+        var now = TimeProvider.System.GetUtcNow();
+        using var created = request.CreateSelfSigned(now.AddMinutes(-5), now.AddHours(1));
+        return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), password: null);
     }
 
     /// <summary>

@@ -150,8 +150,8 @@ public class BackChannelAuthenticationRequestProcessor(
 			AuthorizationDetails = requestedDetails,
 
 			// The request as the client sent it, which the scope validator served with the default without
-			// rewriting
-			ClientNamedNoScope = request.Model.Scope is not { Length: > 0 },
+			// rewriting; one naming only an ignored offline_access names none
+			ClientNamedNoScope = request.ClientInfo.ReceivableScope(request.Model.Scope).Length == 0,
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);

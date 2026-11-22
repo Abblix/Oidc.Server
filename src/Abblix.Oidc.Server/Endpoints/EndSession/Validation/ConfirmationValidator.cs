@@ -11,7 +11,6 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -69,9 +68,10 @@ public class ConfirmationValidator(
     /// the end user instead, which is the outcome the same sentence puts under MUST, and which keeps a logout
     /// working for somebody whose hint is merely stale.
     /// <para>
-    /// The session identifier is compared only when the hint carries one, because OpenID Connect Core 1.0 section 2
-    /// makes <c>sid</c> optional in an ID token: a deployment that issues none would otherwise have every logout
-    /// stopped for a confirmation. The subject travels through the same conversion the authorization endpoint
+    /// A hint without a session identifier is always asked about. This server states <c>sid</c> only to a client
+    /// told the session at logout, and nothing else in an ID token says which session it belongs to, so such a hint
+    /// cannot be shown to belong to the current one: the same person's token from an earlier session would otherwise
+    /// end this session unasked. The subject travels through the same conversion the authorization endpoint
     /// applies to its own hint, so a pairwise client's pseudonym is compared against the pseudonym this client
     /// would see rather than against the real subject.
     /// </para>
@@ -81,7 +81,7 @@ public class ConfirmationValidator(
         if (context.IdToken is not { Payload: var hint })
             return false;
 
-        if (hint.SessionId.HasValue() && !string.Equals(hint.SessionId, authSession.SessionId, StringComparison.Ordinal))
+        if (!string.Equals(hint.SessionId, authSession.SessionId, StringComparison.Ordinal))
             return false;
 
         // The client is read rather than assumed: the members that resolve it run before this one, and the family

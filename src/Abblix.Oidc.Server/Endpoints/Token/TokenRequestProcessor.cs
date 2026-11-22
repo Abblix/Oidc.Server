@@ -24,7 +24,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
 /// Default <see cref="ITokenRequestProcessor"/>: always issues an access token (RFC 6749 section 5.1),
-/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11),
+/// adds a refresh token when <c>offline_access</c> is in the granted scope (OIDC Core 1.0 section 11) and the client
+/// may use a grant that redeems it,
 /// and adds an ID token when <c>openid</c> is in scope (OIDC Core 1.0 section 3.1.3.3, with <c>at_hash</c>
 /// computed from the issued access token).
 /// </summary>
@@ -74,7 +75,7 @@ public class TokenRequestProcessor(
 		string[] grantedScope = [..grantedContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
-		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
+		var issuesRefreshToken = mayIssueDerivedTokens && IssuesRefreshToken(grantedScope);
 
 		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
 			? refreshToken
@@ -105,7 +106,7 @@ public class TokenRequestProcessor(
 		if (lifetime <= TimeSpan.Zero)
 		{
 			return new OidcError(
-				ErrorCodes.InvalidGrant,
+				ExpiredGrantError(request.Model.GrantType),
 				"The grant expired before a token could be issued under it.");
 		}
 
@@ -149,9 +150,11 @@ public class TokenRequestProcessor(
 	/// At that step a client naming no scope is served its default, which the grant marks, so a default the client
 	/// never named does not count. The other grants naming no scope in the token request are given one by the server
 	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
-	/// a token left with none of it answers a request that asked for nothing. A refresh token is minted only with
-	/// offline_access, so a refresh naming no scope keeps it and never ends with none - unless a host declares
-	/// offline_access as the scope of a resource the refreshed token does not address.
+	/// a token left with none of it answers a request that asked for nothing. A token request naming only an
+	/// offline_access the client may not receive a refresh token for named a scope: a token left without it is
+	/// refused rather than issued with none, which the response could not tell apart from the scope requested. A
+	/// refresh token is minted only with offline_access, so a refresh naming no scope keeps it and never ends with
+	/// none - unless a host declares offline_access as the scope of a resource the refreshed token does not address.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
 		=> request.Model.Scope is { Length: > 0 } ||
@@ -159,19 +162,37 @@ public class TokenRequestProcessor(
 		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
 	/// <summary>
-	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,
-	/// so no refresh token is issued to it: a grant taking its scope from the token request has no authorization
-	/// request in front of it to ignore the scope there.
+	/// The context without <c>offline_access</c> for a client not allowed offline access or one that may not receive a
+	/// refresh token (<see cref="ClientInfo.MayReceiveRefreshToken"/>), whichever grant brought it, so neither its
+	/// access token nor the response scope carries offline access the client does not get: a grant taking its scope
+	/// from the token request has no authorization request in front of it to ignore the scope there, and a token
+	/// exchange inherits it from its subject token.
 	/// </summary>
 	private static AuthorizationContext OfflineAccessIgnoredUnlessAllowed(
 		ClientInfo clientInfo,
 		AuthorizationContext authContext)
 	{
-		if (clientInfo.OfflineAccess.IsAllowed() || !authContext.Scope.HasFlag(Scopes.OfflineAccess))
+		if (!authContext.Scope.HasFlag(Scopes.OfflineAccess) ||
+		    clientInfo.OfflineAccess.IsAllowed() && clientInfo.MayReceiveRefreshToken())
+		{
 			return authContext;
+		}
 
 		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };
 	}
+
+	/// <summary>
+	/// Whether a grant that may produce derived tokens adds a refresh token: one left with <c>offline_access</c> in
+	/// its granted scope.
+	/// </summary>
+	/// <remarks>
+	/// The granted scope keeps <c>offline_access</c> only for a client allowed offline access that may receive a
+	/// refresh token (<see cref="OfflineAccessIgnoredUnlessAllowed"/>), so a client that may redeem one neither through
+	/// the refresh token grant nor through a token exchange is issued none, and RFC 6749 section 1.5 leaves issuing one
+	/// to the server.
+	/// </remarks>
+	private static bool IssuesRefreshToken(string[] grantedScope)
+		=> grantedScope.HasFlag(Scopes.OfflineAccess);
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.
@@ -253,12 +274,26 @@ public class TokenRequestProcessor(
 	}
 
 	/// <summary>
+	/// The error a grant expired before a token could be issued under it is refused with.
+	/// </summary>
+	/// <remarks>
+	/// Under token exchange the grant is the subject token, and RFC 8693 section 2.2.2 answers a subject token that is
+	/// invalid for any reason with <c>invalid_request</c>. Every other grant is answered as RFC 6749 section 5.2
+	/// answers an expired grant, with <c>invalid_grant</c>.
+	/// </remarks>
+	private static string ExpiredGrantError(string? grantType) => grantType switch
+	{
+		GrantTypes.TokenExchange => ErrorCodes.InvalidRequest,
+		_ => ErrorCodes.InvalidGrant,
+	};
+
+	/// <summary>
 	/// The lifetime the minted access token carries, which is what <c>expires_in</c> reports.
 	/// </summary>
 	/// <remarks>
-	/// Read from the token rather than from the client's configured lifetime, because a token exchanged within a
-	/// refresh token family is cut short to its subject token's expiry, and a client told the full lifetime would
-	/// keep presenting a token its resource server already refuses.
+	/// Read from the token rather than from the client's configured lifetime, because a token obtained by exchange is
+	/// cut short to its subject token's expiry, and a client told the full lifetime would keep presenting a token its
+	/// resource server already refuses.
 	/// </remarks>
 	private static TimeSpan LifetimeOf(JsonWebToken accessToken)
 		=> accessToken.Payload is { IssuedAt: { } issuedAt, ExpiresAt: { } expiresAt }

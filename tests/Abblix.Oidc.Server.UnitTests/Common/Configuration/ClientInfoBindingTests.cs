@@ -185,6 +185,46 @@ public class ClientInfoBindingTests
     }
 
     /// <summary>
+    /// Every alias binds from configuration, although JSON leaves all of them out: the binder reads
+    /// none of the serializer's attributes.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(ClientSecret.Sha256HashBase64))]
+    [InlineData(nameof(ClientSecret.Sha512HashBase64))]
+    [InlineData(nameof(ClientSecret.Sha256HashHex))]
+    [InlineData(nameof(ClientSecret.Sha512HashHex))]
+    public void Bind_EachClientSecretAlias_SetsItsHash(string alias)
+    {
+        var hash = new byte[] { 0x2b, 0xb8, 0x0d, 0x53, 0x7b, 0x1d, 0xa3, 0xe3 };
+        var notation = alias switch
+        {
+            nameof(ClientSecret.Sha256HashBase64) or nameof(ClientSecret.Sha512HashBase64)
+                => Convert.ToBase64String(hash),
+            nameof(ClientSecret.Sha256HashHex) or nameof(ClientSecret.Sha512HashHex)
+                => Convert.ToHexString(hash),
+            _ => throw new ArgumentOutOfRangeException(nameof(alias), alias, null),
+        };
+
+        var configuration = Configuration(new Dictionary<string, string?>
+        {
+            ["Clients:0:ClientId"] = "storefront",
+            [$"Clients:0:ClientSecrets:0:{alias}"] = notation,
+        });
+
+        var clients = configuration.GetSection("Clients").Get<ClientInfo[]>();
+
+        Assert.NotNull(clients);
+        var secret = Assert.Single(Assert.Single(clients).ClientSecrets ?? []);
+        var bound = alias switch
+        {
+            nameof(ClientSecret.Sha256HashBase64) or nameof(ClientSecret.Sha256HashHex) => secret.Sha256Hash,
+            nameof(ClientSecret.Sha512HashBase64) or nameof(ClientSecret.Sha512HashHex) => secret.Sha512Hash,
+            _ => throw new ArgumentOutOfRangeException(nameof(alias), alias, null),
+        };
+        Assert.Equal(hash, bound);
+    }
+
+    /// <summary>
     /// Both notations describe the same bytes, so a hash set through one member reads back through
     /// the other and neither can drift from <see cref="ClientSecret.Sha256Hash"/> itself.
     /// </summary>

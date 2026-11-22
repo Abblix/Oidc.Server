@@ -51,6 +51,9 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         var userIdentifier = ExtractUserIdentifier(request);
 ///         var bindingMessage = request.Model.BindingMessage;
 ///
+///         // The scope to show the end user is the one the request is served with, request.Scope, not
+///         // request.Model.Scope as the client sent it: an ignored offline_access is left out of the first only.
+///
 ///         // The levels an essential acr requires, or null when it requires none. The device interaction
 ///         // has to reach one of them: completion refuses an authentication at any other level.
 ///         var requiredLevels = request.RequiredAuthContextClassRefs;
@@ -175,6 +178,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 /// <para><strong>Additional Key Points:</strong></para>
 /// <list type="bullet">
 ///   <item><strong>Binding Message:</strong> Display request.Model.BindingMessage to user for transaction confirmation</item>
+///   <item><strong>Scope:</strong> Show the user request.Scope, the scope the request is served with, not request.Model.Scope</item>
 ///   <item><strong>User Code:</strong> If request.Model.UserCode is present, require user to confirm it</item>
 ///   <item><strong>Authentication:</strong> All notifications use Bearer token from <c>client_notification_token</c></item>
 /// </list>

@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -186,7 +187,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Ending_a_session_revokes_its_tokens_when_the_option_is_on()
     {
-        await using var host = CreateIsolatedHost(options => options.RevokeSessionTokensOnLogout = true);
+        await using var host = Factory.WithSessionLogout(options => options.RevokeSessionTokensOnLogout = true);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -218,7 +219,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Ending_a_session_leaves_its_tokens_alone_by_default()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -276,7 +277,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Revoking_a_session_stops_that_session_from_minting_more()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -402,7 +403,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task An_id_token_issued_before_a_revocation_at_its_client_cannot_be_exchanged()
     {
-        await using var host = CreateIsolatedHost();
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -423,6 +424,156 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
         Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
     }
+
+    /// <summary>
+    /// An ID token exchanged before its session was revoked cannot be exchanged after it: the session it names is
+    /// the one the revocation recorded.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_of_a_revoked_session_cannot_be_exchanged()
+    {
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the ID token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
+            SessionOf(tokens), cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+    }
+
+    /// <summary>
+    /// An ID token of a client that does not use the session at logout names no session, so a revocation of its
+    /// session could not refuse it, and it is not accepted for exchange at all.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_naming_no_session_cannot_be_exchanged()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+
+        var response = await ExchangeIdTokenAsync(client, discovery, idToken);
+
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A token obtained by exchange belongs to the session of its subject token, so revoking that session refuses
+    /// it, however many exchanges stand between them and whichever kind of token the chain started from.
+    /// </summary>
+    /// <remarks>
+    /// The exchanged token is asked about at introspection, where a resource server asks, on both sides of the
+    /// revocation on the same host: "inactive after" alone is indistinguishable from a host that answers inactive
+    /// for everything.
+    /// </remarks>
+    [Theory]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, 1)]
+    [InlineData(TokenExchangeTokenTypes.IdToken, 1)]
+    [InlineData(TokenExchangeTokenTypes.RefreshToken, 1)]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, 2)]
+    [InlineData(TokenExchangeTokenTypes.IdToken, 2)]
+    [InlineData(TokenExchangeTokenTypes.RefreshToken, 2)]
+    public async Task A_token_exchanged_from_a_revoked_session_is_refused(string subjectTokenType, int exchanges)
+    {
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var sessionId = SessionOf(tokens);
+
+        var token = tokens[ResponseMemberOf(subjectTokenType)]!.GetValue<string>();
+        var tokenType = subjectTokenType;
+        for (var i = 0; i < exchanges; i++)
+        {
+            var exchanged = await ExchangeAsConfidentialClientAsync(client, discovery, token, tokenType);
+            token = exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+            tokenType = TokenExchangeTokenTypes.AccessToken;
+        }
+
+        var beforeRevocation = await IntrospectAsync(client, discovery, token, TestConstants.ConfidentialClientId);
+        Assert.True(
+            beforeRevocation[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>(),
+            "the exchanged token should be active before the revocation");
+
+        await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
+            sessionId, cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await IntrospectAsync(client, discovery, token, TestConstants.ConfidentialClientId);
+        Assert.False(
+            afterRevocation[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>(),
+            "the exchanged token should be inactive once its subject token's session is revoked");
+    }
+
+    /// <summary>
+    /// A refresh token the refresh grant refuses because its session was revoked is refused for exchange too, also
+    /// when the revocation is dated after the sign-in but before the refresh token was issued, where only the
+    /// session's authentication time, not the token's issue time, falls before it.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_revoked_session_is_refused_for_exchange_as_at_the_refresh_grant()
+    {
+        // No clock tolerance, so a cutoff a second after the sign-in is after it at once
+        await using var host = Factory.WithSessionLogout(options => options.ReplicaClockSkew = TimeSpan.Zero);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var first = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var signedInAt = DateTimeOffset.FromUnixTimeSeconds(
+            DecodeJwtPayload(first[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.AuthTime]!
+                .GetValue<long>());
+
+        // A second family from the same session, begun well after the sign-in
+        await Task.Delay(TimeSpan.FromSeconds(2.5), TestContext.Current.CancellationToken);
+        var second = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = second[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeRefreshTokenAsync(client, discovery, refreshToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the refresh token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
+            SessionOf(first),
+            signedInAt.AddSeconds(1),
+            TestContext.Current.CancellationToken);
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, refreshToken));
+
+        var afterRevocation = await ExchangeRefreshTokenAsync(client, discovery, refreshToken);
+        var body = await ReadJsonAsync(afterRevocation);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    private static Task<HttpResponseMessage> ExchangeRefreshTokenAsync(
+        HttpClient client, DiscoveryDocument discovery, string refreshToken)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = refreshToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.RefreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
 
     private static Task<HttpResponseMessage> ExchangeIdTokenAsync(
         HttpClient client, DiscoveryDocument discovery, string idToken)

@@ -31,7 +31,7 @@ public record ValidDeviceAuthorizationRequest
         Scope = AuthorizationContext.GetScopeNames(context.Scope, context.Resources);
         Resources = context.Resources.Select(r => r.Resource).ToArray();
         AuthorizationDetails = context.AuthorizationDetails;
-        ClientNamedNoScope = context.Request.Scope is not { Length: > 0 };
+        ClientNamedNoScope = context.ClientInfo.ReceivableScope(context.Request.Scope ?? []).Length == 0;
     }
 
     /// <summary>

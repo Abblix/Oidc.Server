@@ -23,10 +23,12 @@ internal static class TokenRequestScope
     /// <remarks>
     /// Only a grant starting from the client alone serves a request naming no scope with the client's default: a
     /// code, a refresh token, a device code or a backchannel request carries the scope it was granted, and a token
-    /// exchange inherits the subject token's. Read once the client is known.
+    /// exchange inherits the subject token's. Such a grant ignores an offline_access the client may not receive a
+    /// refresh token for (<see cref="Features.ClientInformation.ClientInfo.ReceivableScopeServedFor"/>), as a device
+    /// authorization or a backchannel authentication request does. Read once the client is known.
     /// </remarks>
     public static string[]? ServedFor(TokenValidationContext context)
         => context.Request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
-            ? context.ClientInfo.ScopeServedFor(context.Request.Scope)
+            ? context.ClientInfo.ReceivableScopeServedFor(context.Request.Scope)
             : context.Request.Scope;
 }

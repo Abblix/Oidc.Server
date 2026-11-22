@@ -155,10 +155,10 @@ public class RefreshTokenService(
 		// overwritten here.
 		authContext.ApplyTo(newToken.Payload);
 
-		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
-		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
+		// For a pairwise client, replace the real subject in 'sub' and every actor in 'act' with the client's
+		// reversible per-sector pseudonyms; a public client is untouched. A pseudonym carries the real identifier that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
-		newToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
+		subjectTypeConverter.SealSubjects(tenant, newToken.Payload, clientInfo);
 
 		var encoded = await jwtFormatter.FormatAsync(
 			tenant,
@@ -209,11 +209,11 @@ public class RefreshTokenService(
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 
-		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
-		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
-		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo);
-		if (subject is null)
+		// Open the real parties from the per-sector pseudonyms (their sector comes from clientInfo) before building
+		// the grant, so the grant carries the real subject and actors the server refreshes and exchanges against - the
+		// refresh-token token-exchange resolver reads them from here. A public client's are already real.
+		var real = subjectTypeConverter.Open(tenant, TokenSubjects.Of(refreshToken.Payload), clientInfo);
+		if (real is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the
 			// grant rather than faulting the refresh.
@@ -225,6 +225,9 @@ public class RefreshTokenService(
 		// belongs to. Copying the value onto the grant would let the two disagree, and would put the answer in a
 		// place a host building this grant itself can leave empty.
 		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
-			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
+			new RefreshTokenAuthorizedGrant(
+				authSession with { Subject = real.Subject },
+				authContext with { Actor = real.Actor },
+				refreshToken));
 	}
 }

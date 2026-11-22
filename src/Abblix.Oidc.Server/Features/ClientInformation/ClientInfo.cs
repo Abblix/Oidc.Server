@@ -208,6 +208,14 @@ public record ClientInfo(string ClientId)
     public string[] EffectiveGrantTypes => AllowedGrantTypes ?? [GrantTypes.AuthorizationCode];
 
     /// <summary>
+    /// Whether this client may use the grant type: the one answer both the token endpoint refusing a grant with
+    /// <c>unauthorized_client</c> and the issuance of a credential only that grant redeems ask, so the server never
+    /// hands out what it then refuses.
+    /// </summary>
+    /// <param name="grantType">The grant type, as the <c>grant_type</c> parameter names it.</param>
+    internal bool MayUseGrantType(string grantType) => EffectiveGrantTypes.Contains(grantType, StringComparer.Ordinal);
+
+    /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
     /// which the authorization response is delivered. When set to a non-empty list, a request is rejected unless
     /// its effective response mode (the explicit <c>response_mode</c>, or the flow default when the parameter is
@@ -323,6 +331,55 @@ public record ClientInfo(string ClientId)
     /// Mirrors the <see cref="AuthorizationDetailsTypes"/> tri-state pattern.
     /// </summary>
     public Uri[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="TokenExchangeAllowedSubjectTokenTypes"/> admits the token type: the one answer the Token
+    /// Exchange grant refusing a token type and the issuance of a token only an exchange may redeem both ask.
+    /// </summary>
+    /// <remarks>
+    /// A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by their
+    /// spelling rather than as equivalent addresses.
+    /// </remarks>
+    /// <param name="tokenType">The token type URI, as the request names it.</param>
+    internal bool MayExchangeTokenType(Uri tokenType)
+        => TokenExchangeAllowedSubjectTokenTypes is not { } allowlist ||
+           allowlist.Any(allowed => string.Equals(allowed.OriginalString, tokenType.OriginalString, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Whether this client may receive a refresh token: whether it may redeem one, through the refresh token grant or
+    /// through a token exchange naming it as the subject token (RFC 8693 section 3) where its token types admit it.
+    /// </summary>
+    /// <remarks>
+    /// The one answer both the issuance of a refresh token and the authorization steps ignoring an
+    /// <c>offline_access</c> ask, so the server neither issues a refresh token the token endpoint then refuses nor has
+    /// the end user consent to offline access the client cannot receive.
+    /// </remarks>
+    internal bool MayReceiveRefreshToken()
+        => MayUseGrantType(GrantTypes.RefreshToken) ||
+           MayUseGrantType(GrantTypes.TokenExchange) && MayExchangeTokenType(RefreshTokenType);
+
+    private static readonly Uri RefreshTokenType = new(TokenExchangeTokenTypes.RefreshToken);
+
+    /// <summary>
+    /// The scope without an <c>offline_access</c> this client may not receive a refresh token for
+    /// (<see cref="MayReceiveRefreshToken"/>), which a device authorization or a backchannel authentication request
+    /// has ignored as if never asked for.
+    /// </summary>
+    /// <param name="scope">The scope a request names or is served with.</param>
+    internal string[] ReceivableScope(string[] scope)
+        => !scope.Contains(Scopes.OfflineAccess, StringComparer.Ordinal) || MayReceiveRefreshToken()
+            ? scope
+            : [.. scope.Where(value => value != Scopes.OfflineAccess)];
+
+    /// <summary>
+    /// The scope a device authorization or a backchannel authentication request is served with: the one it names
+    /// without an ignored <c>offline_access</c> (<see cref="ReceivableScope"/>), or else <see cref="DefaultScope"/>
+    /// likewise, or null when <see cref="RequireScope"/> refuses a request naming none. A request naming only an
+    /// ignored <c>offline_access</c> names none.
+    /// </summary>
+    /// <param name="requested">The scope the request names, empty when it names none.</param>
+    internal string[]? ReceivableScopeServedFor(string[] requested)
+        => ScopeServedFor(ReceivableScope(requested)) is { } served ? ReceivableScope(served) : null;
 
     /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when

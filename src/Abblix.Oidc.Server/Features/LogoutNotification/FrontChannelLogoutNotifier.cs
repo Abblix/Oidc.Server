@@ -49,10 +49,10 @@ public class FrontChannelLogoutNotifier: ILogoutNotifier
 
     private static void NotifyClient(ClientInfo clientInfo, LogoutContext logoutContext)
     {
-        if (clientInfo is not { FrontChannelLogout: { Uri: var uri, RequiresSessionId: var requiresSid } })
+        if (clientInfo is not { FrontChannelLogout.Uri: var uri })
             return;
 
-        if (requiresSid)
+        if (SessionIdDisclosure.InFrontChannelLogout(clientInfo))
         {
             if (string.IsNullOrEmpty(logoutContext.SessionId))
             {

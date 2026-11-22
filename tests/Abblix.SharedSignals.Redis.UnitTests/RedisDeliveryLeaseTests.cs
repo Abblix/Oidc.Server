@@ -20,7 +20,7 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// Each test names its own claim, since the fixture is one shared server and a collision between
 /// tests would read as a product defect.
 /// </remarks>
-public sealed class RedisDeliveryLeaseTests(RedisFixture redis) : IClassFixture<RedisFixture>
+public sealed class RedisDeliveryLeaseTests(RedisFixture redis)
 {
     private static readonly TimeSpan Minute = TimeSpan.FromMinutes(1);
 

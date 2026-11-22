@@ -17,14 +17,16 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <c>subject_token</c>. Independent of the token's on-wire format -- JWT-based resolvers parse
 /// the payload, opaque-token resolvers recover the equivalent fields from a previously stored
 /// grant. The <see cref="TokenExchangeGrantHandler"/> consumes this record to
-/// synthesise the new <see cref="AuthorizationContext"/> and
+/// synthesize the new <see cref="AuthorizationContext"/> and
 /// <see cref="UserAuthentication.AuthSession"/>.
 /// </summary>
 /// <param name="Subject">The end-user identifier the subject_token represents (RFC 7519 <c>sub</c>
-/// claim or its opaque-token equivalent). Required.</param>
+/// claim or its opaque-token equivalent), the real one: a pairwise pseudonym is opened by the resolver, since the
+/// issued token seals it for the client receiving it. Required.</param>
 /// <param name="Issuer">The party that issued the subject_token, used as the
-/// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c>. <c>null</c> when the resolver
-/// cannot determine it (e.g. opaque tokens without an issuer field).</param>
+/// <c>IdentityProvider</c> on the synthesized <c>AuthSession</c> when <see cref="IdentityProvider"/> is
+/// <c>null</c>. <c>null</c> when the resolver cannot determine it (e.g. opaque tokens without an issuer
+/// field).</param>
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
 /// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 section 2.1 narrow
 /// only -- never widen). <c>null</c> when the subject_token did not carry a scope claim.</param>
@@ -37,12 +39,21 @@ public sealed record SubjectTokenContext(
     string[]? Scope,
     JsonArray? AuthorizationDetails)
 {
-    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, captured as
-    /// a raw <see cref="JsonObject"/>. When the exchange adds a new actor on top of a subject_token
-    /// that already had its own act chain, the grant handler nests this value under the new actor's
-    /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
-    /// subject_token was not itself a delegation token.</summary>
+    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, every <c>sub</c> in the
+    /// chain the real identifier of its actor: a resolver opens pairwise pseudonyms as it opens
+    /// <see cref="Subject"/>, since the issued token seals them for the client receiving it. The exchanged
+    /// token keeps this chain, nested under the new actor's <c>act</c> member when the request supplies an
+    /// actor_token. <c>null</c> when the subject_token was not itself a delegation token.</summary>
     public JsonObject? Act { get; init; }
+
+    /// <summary>
+    /// The identity provider the end user signed in with in the session the subject_token belongs to, carried into
+    /// the exchanged token, so that token names the same sign-in whatever kind of token it was exchanged from.
+    /// <c>null</c> when the subject_token states none: an ID token never does, and neither may a host's own token
+    /// type. <see cref="Issuer"/> stands in for it then, so a token exchanged from an ID token names the ID token's
+    /// issuer.
+    /// </summary>
+    public string? IdentityProvider { get; init; }
 
     /// <summary>
     /// The <c>client_id</c> the subject_token was originally issued to. The grant handler uses this
@@ -62,8 +73,33 @@ public sealed record SubjectTokenContext(
     public string? GrantId { get; init; }
 
     /// <summary>
-    /// When the subject_token expires, so a token exchanged from it within a refresh token family does not outlive
-    /// it, and with it the revocation of that family. <c>null</c> when the subject_token states no expiry.
+    /// When the subject_token expires, so a token exchanged from it does not outlive it: an exchange hands on the
+    /// authority of the subject_token and never extends it. <c>null</c> when the subject_token states no expiry.
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// The session the subject_token belongs to. The exchanged token joins it, so revoking that session refuses every
+    /// token derived from it, however many exchanges stand between them. A resolver refuses a token naming no session
+    /// rather than resolving it.
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// When the end user signed in to the session the subject_token belongs to. The exchanged token carries it rather
+    /// than the moment of the exchange, which authenticated nobody.
+    /// </summary>
+    public required DateTimeOffset AuthenticationTime { get; init; }
+
+    /// <summary>
+    /// The authentication context class that sign-in satisfied, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public string? AuthContextClassRef { get; init; }
+
+    /// <summary>
+    /// The authentication methods that sign-in used, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public ICollection<string>? AuthenticationMethodReferences { get; init; }
 }

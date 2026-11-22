@@ -75,10 +75,20 @@ public class IntrospectionRequestProcessor(
 		{
 			payload = WithoutPrivateClaims(payload, request.ClientInfo);
 
-			var pseudonym = await PseudonymForCallerAsync(tenant, request);
-			if (pseudonym != null)
+			var forCaller = await SubjectsForCallerAsync(tenant, request);
+			if (forCaller != null)
 			{
-				payload[IanaClaimTypes.Sub] = pseudonym;
+				payload[IanaClaimTypes.Sub] = forCaller.Subject;
+			}
+
+			// RFC 8693 section 4.1: "When included as a top-level member of an OAuth token introspection response,
+			// "act" has the same semantics and format as the claim of the same name." A resource server deciding
+			// access is to consider "the party identified as the current actor", so every caller learns that the
+			// token is a delegation and how deep its chain is, and each actor is identified as the subject is: by
+			// the caller's own pseudonym, or not at all.
+			if (request.Token.Payload.Json[IanaClaimTypes.Act] is JsonObject act)
+			{
+				payload[IanaClaimTypes.Act] = forCaller?.Actor ?? WithoutIdentifiers(act);
 			}
 		}
 
@@ -86,8 +96,8 @@ public class IntrospectionRequestProcessor(
 	}
 
 	/// <summary>
-	/// Produces the identifier by which the calling protected resource knows this end-user, or <c>null</c> when
-	/// there is none to give and the subject stays withheld.
+	/// Produces the identifiers by which the calling protected resource knows this end-user and the actors of the
+	/// token, or <c>null</c> when there are none to give and they stay withheld.
 	/// </summary>
 	/// <remarks>
 	/// RFC 7662 Section 5 offers this as the alternative to withholding: "transmit user identifiers as opaque
@@ -103,23 +113,41 @@ public class IntrospectionRequestProcessor(
 	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not
 	/// open, leaves the response as it would have been without this.
 	/// </remarks>
-	private async Task<string?> PseudonymForCallerAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
+	private async Task<TokenSubjects?> SubjectsForCallerAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
 	{
 		if (request.ClientInfo.SubjectType != SubjectTypes.Pairwise)
 			return null;
 
 		var token = request.Token.NotNull(nameof(request.Token));
-		if (token.Payload.Subject is not { } subject || token.Payload.ClientId is not { } ownerId)
+		if (token.Payload.Subject is null || token.Payload.ClientId is not { } ownerId)
 			return null;
 
-		// The subject in the token is what its own client sees, so it has to be opened against that client
-		// before it can be re-sealed for anybody else.
+		// The parties in the token are what its own client sees, so they have to be opened against that client
+		// before they can be re-sealed for anybody else.
 		var owner = await clientInfoProvider.TryFindClientAsync(tenant, ownerId);
 		if (owner == null)
 			return null;
 
-		var realSubject = subjectTypeConverter.ConvertBack(tenant, subject, owner);
-		return realSubject == null ? null : subjectTypeConverter.Convert(tenant, realSubject, request.ClientInfo);
+		var real = subjectTypeConverter.Open(tenant, TokenSubjects.Of(token.Payload), owner);
+		return real == null ? null : subjectTypeConverter.Seal(tenant, real, request.ClientInfo);
+	}
+
+	/// <summary>
+	/// The actor chain with the identifier of every actor removed, for a caller given no identifier of its own.
+	/// </summary>
+	/// <remarks>
+	/// The chain still tells the caller that the token is a delegation, which is what it would otherwise mistake
+	/// for the end-user acting directly; what it is not told is who acts, for the reason it is not told the subject.
+	/// </remarks>
+	private static JsonObject WithoutIdentifiers(JsonObject actor)
+	{
+		var withheld = new JsonObject();
+		if (actor[IanaClaimTypes.Act] is JsonObject prior)
+		{
+			withheld[IanaClaimTypes.Act] = WithoutIdentifiers(prior);
+		}
+
+		return withheld;
 	}
 
 	/// <summary>

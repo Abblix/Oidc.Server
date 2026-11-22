@@ -95,7 +95,7 @@ public class ClientIdMetadataDocumentReaderTests
         return metadata;
     }
 
-    private static void Refused(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
+    private static void AssertRefused(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
     {
         var result = (reader ?? CreateReader()).Read(ClientId, document);
         Assert.True(result.TryGetFailure(out var failure), "the document was expected to be refused");
@@ -139,20 +139,20 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("https://client.example.com:443/metadata.json")]
     [InlineData("https://CLIENT.example.com/metadata.json")]
     public void ADocumentNamingAnotherClientId_IsRefused(string documentClientId)
-        => Refused(Document($$"""{"client_id":"{{documentClientId}}"}"""));
+        => AssertRefused(Document($$"""{"client_id":"{{documentClientId}}"}"""));
 
     [Theory]
     [InlineData("""{"client_id":null}""")]
     [InlineData("""{"client_id":42}""")]
     public void ADocumentWithoutAClientIdString_IsRefused(string json)
-        => Refused(Document(json));
+        => AssertRefused(Document(json));
 
     [Fact]
     public void ADocumentWithoutAClientId_IsRefused()
     {
         var document = Document();
         document.Remove("client_id");
-        Refused(document);
+        AssertRefused(document);
     }
 
     /// <summary>
@@ -167,7 +167,7 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("""{"jwks":{"keys":[{"kty":"RSA","n":"a","e":"AQAB","p":"c"}]}}""")]
     [InlineData("""{"jwks":{"keys":[{"kty":"RSA","n":"a","e":"AQAB","oth":[]}]}}""")]
     [InlineData("""{"jwks":{"keys":[{"kty":"oct","k":"c2VjcmV0"}]}}""")]
-    public void ADocumentCarryingASecret_IsRefused(string json) => Refused(Document(json));
+    public void ADocumentCarryingASecret_IsRefused(string json) => AssertRefused(Document(json));
 
     /// <summary>
     /// Section 5: with neither member the server "MUST assume the token endpoint authentication method of none", and it
@@ -214,7 +214,7 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("""{"token_endpoint_auth_methods_supported":"none"}""")]
     [InlineData("""{"token_endpoint_auth_methods_supported":[1]}""")]
     [InlineData("""{"token_endpoint_auth_method":["none"]}""")]
-    public void AMethodDeclarationBreakingARule_IsRefused(string json) => Refused(Document(json));
+    public void AMethodDeclarationBreakingARule_IsRefused(string json) => AssertRefused(Document(json));
 
     /// <summary>
     /// Section 5: when the server "does not support any of the token endpoint authentication methods declared", it
@@ -222,7 +222,7 @@ public class ClientIdMetadataDocumentReaderTests
     /// </summary>
     [Fact]
     public void ADocumentOfferingOnlyUnsupportedMethods_IsRefused()
-        => Refused(
+        => AssertRefused(
             Document("""{"token_endpoint_auth_methods_supported":["private_key_jwt"]}"""),
             CreateReader(authenticationMethods: [ClientAuthenticationMethods.None]));
 
@@ -301,13 +301,13 @@ public class ClientIdMetadataDocumentReaderTests
 
     [Fact]
     public void ADocumentOfOnlyResponseTypesWhoseGrantsAreDropped_IsRefused()
-        => Refused(
+        => AssertRefused(
             Document("""{"response_types":["id_token"],"grant_types":["implicit","refresh_token"]}"""),
             CreateReader(responseTypeParts: [ResponseTypes.Code, ResponseTypes.IdToken]));
 
     [Fact]
     public void ADocumentOfOnlyGrantTypesTheHostDoesNotAllow_IsRefused()
-        => Refused(
+        => AssertRefused(
             Document("""{"grant_types":["refresh_token"],"response_types":[]}"""),
             CreateReader(allowedGrantTypes: [GrantTypes.AuthorizationCode]));
 
@@ -327,7 +327,7 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("""{"response_types":[null]}""")]
     [InlineData("""{"grant_types":["urn:example:unknown"]}""")]
     [InlineData("""{"response_types":["token"]}""")]
-    public void ADocumentOfNoSupportedGrantOrResponseType_IsRefused(string json) => Refused(Document(json));
+    public void ADocumentOfNoSupportedGrantOrResponseType_IsRefused(string json) => AssertRefused(Document(json));
 
     [Fact]
     public void ADocumentDeclaringNoResponseType_IsKeptWithNone()
@@ -381,7 +381,7 @@ public class ClientIdMetadataDocumentReaderTests
     {
         var document = Document();
         document[member] = JsonNode.Parse(value);
-        Refused(document);
+        AssertRefused(document);
     }
 
     /// <summary>
@@ -400,7 +400,7 @@ public class ClientIdMetadataDocumentReaderTests
         document[member] = JsonNode.Parse(value);
 
         Assert.NotNull(Read(document));
-        Refused(document, CreateReader(allowedDestinations: [new Uri("https://internal.example.com/")]));
+        AssertRefused(document, CreateReader(allowedDestinations: [new Uri("https://internal.example.com/")]));
     }
 
     [Theory]
@@ -457,7 +457,7 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("ping")]
     [InlineData("push")]
     public void ADocumentAskingOnlyForBackchannelNotifications_IsRefused(string mode)
-        => Refused(
+        => AssertRefused(
             Document($$"""
                 {"grant_types":["{{GrantTypes.Ciba}}"],"response_types":[],"backchannel_token_delivery_mode":"{{mode}}",
                  "backchannel_client_notification_endpoint":"https://client.example.com/ciba"}
@@ -476,5 +476,5 @@ public class ClientIdMetadataDocumentReaderTests
 
     [Fact]
     public void AMemberOfTheWrongShape_IsRefused()
-        => Refused(Document("""{"redirect_uris":"https://client.example.com/cb"}"""));
+        => AssertRefused(Document("""{"redirect_uris":"https://client.example.com/cb"}"""));
 }

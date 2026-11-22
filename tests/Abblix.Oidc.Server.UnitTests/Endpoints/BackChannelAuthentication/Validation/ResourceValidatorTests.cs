@@ -71,6 +71,35 @@ public class ResourceValidatorTests
     }
 
     /// <summary>
+    /// An offline_access the client may not receive a refresh token for is ignored before the resources are settled,
+    /// so a resource declaring it does not keep it among the scopes the request is served with.
+    /// </summary>
+    [Fact]
+    public async Task AnIgnoredOfflineAccess_IsNotKeptOnAResourceDeclaringIt()
+    {
+        var resource = new Uri("https://orders.example.com");
+        var tenant = new TestIssuer
+        {
+            Resources =
+            [
+                new ResourceDefinition(
+                    resource, new ScopeDefinition("orders.read"), new ScopeDefinition(Scopes.OfflineAccess)),
+            ],
+        }.ToTenant();
+        var context = CreateContext(resources: [resource], scopes: ["orders.read", Scopes.OfflineAccess]);
+        context.ClientInfo = new ClientInfo("test-client")
+        {
+            AllowedScopes = ["orders.read", Scopes.OfflineAccess],
+            AllowedGrantTypes = [GrantTypes.Ciba],
+        };
+
+        var result = await new ResourceValidator(SingleIssuer.ResourceManager()).ValidateAsync(tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal("orders.read", Assert.Single(Assert.Single(context.Resources).Scopes).Scope);
+    }
+
+    /// <summary>
     /// Verifies validation succeeds when no resources are specified.
     /// Per RFC 8707, resource parameter is optional.
     /// </summary>

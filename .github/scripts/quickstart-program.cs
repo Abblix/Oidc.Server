@@ -17,7 +17,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 if (args is not [var samplePath, var programPath])
 {
-    Console.Error.WriteLine("Usage: dotnet quickstart-program.cs <compiled copy of the block> <Program.cs to write>");
+    await Console.Error.WriteLineAsync("Usage: dotnet quickstart-program.cs <compiled copy of the block> <Program.cs to write>");
     return 2;
 }
 

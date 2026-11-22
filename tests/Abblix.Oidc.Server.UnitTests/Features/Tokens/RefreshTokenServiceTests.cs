@@ -9,6 +9,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -1044,6 +1045,57 @@ public class RefreshTokenServiceTests
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A refresh token reaches its pairwise client, so the actors of a delegated grant are sealed in it for that
+    /// client's sector as its sub is, and opened back when the token is redeemed: a refresh then issues tokens naming
+    /// the same real parties instead of sealing a pseudonym a second time.
+    /// </summary>
+    [Fact]
+    public async Task APairwiseDelegatedRefreshToken_SealsEveryActor_AndOpensThemBack()
+    {
+        var converter = new SubjectTypeConverter(
+            new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>();
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var service = new RefreshTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            _jwtFormatter.Object,
+            _tokenRegistry.Object,
+            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new FixedSubjectTypeConverter(converter),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.LicensedCatalog);
+        var client = CreateClientInfo();
+        client.SubjectType = SubjectTypes.Pairwise;
+        client.SectorIdentifier = "sector.example.com";
+        var actor = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var authContext = CreateAuthorizationContext() with { Actor = actor };
+        var authSession = CreateAuthSession() with { AuthenticationTime = _currentTime.AddMinutes(-5) };
+
+        var issued = await service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, client, null, GrantId);
+
+        Assert.NotNull(issued);
+        var act = Assert.IsType<JsonObject>(issued.Token.Payload.Json[IanaClaimTypes.Act]);
+        Assert.Equal(converter.Convert("current-actor", client), act[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.Equal(
+            converter.Convert("prior-actor", client),
+            act[IanaClaimTypes.Act]![IanaClaimTypes.Sub]!.GetValue<string>());
+
+        var redeemed = await service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued.Token, client);
+
+        Assert.True(redeemed.TryGetSuccess(out var grant));
+        Assert.Equal(UserId, grant.AuthSession.Subject);
+        Assert.True(JsonNode.DeepEquals(actor, grant.Context.Actor));
     }
 
 

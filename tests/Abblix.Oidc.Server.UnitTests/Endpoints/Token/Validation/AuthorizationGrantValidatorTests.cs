@@ -179,75 +179,6 @@ public class AuthorizationGrantValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when redirect URI doesn't match.
-    /// Per OAuth 2.0, redirect URI must match between authorization and token requests.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithMismatchedRedirectUri_ShouldReturnError()
-    {
-        // Arrange
-        var requestRedirectUri = new Uri("https://client.example.com/callback1");
-        var grantRedirectUri = new Uri("https://client.example.com/callback2");
-        var context = CreateContext(redirectUri: requestRedirectUri);
-        var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
-
-        _grantHandler
-            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
-
-        // Act
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("redirect Uri value does not match", error.ErrorDescription);
-    }
-
-    /// <summary>
-    /// The authorization endpoint accepts any port on a loopback IP redirect URI (RFC 8252 section 7.3), but the token
-    /// request must carry the very URI the authorization request did, port included (RFC 6749 section 4.1.3).
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithLoopbackRedirectUriOnAnotherPort_ShouldReturnError()
-    {
-        var context = CreateContext(redirectUri: new Uri("http://127.0.0.1:51005/oauth2redirect"));
-        var authorizedGrant = CreateAuthorizedGrant(new Uri("http://127.0.0.1:51004/oauth2redirect"));
-
-        _grantHandler
-            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
-
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
-
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-    }
-
-    /// <summary>
-    /// Verifies successful validation when both redirect URIs are null.
-    /// Null redirect URIs should match.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithBothRedirectUrisNull_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext(redirectUri: null);
-        var authorizedGrant = CreateAuthorizedGrant(redirectUri: null);
-
-        _grantHandler
-            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
-
-        // Act
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Null(error);
-        Assert.Same(authorizedGrant, context.AuthorizedGrant);
-    }
-
-    /// <summary>
     /// Verifies grant handler is called with correct parameters.
     /// Tests data flow from context to handler.
     /// </summary>
@@ -340,27 +271,26 @@ public class AuthorizationGrantValidatorTests
     }
 
     /// <summary>
-    /// Verifies redirect URI case-sensitive comparison.
-    /// Per RFC 3986, URIs are generally case-sensitive (except scheme and host).
+    /// RFC 6749 section 4.1.3 asks for redirect_uri only on the authorization code grant, and section 3.2 has the
+    /// server "ignore unrecognized request parameters", so a grant with no authorization step is not refused for
+    /// carrying one: its handler builds a context naming no redirect URI, and the request is served.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_ShouldUseExactRedirectUriComparison()
+    [Theory]
+    [InlineData(GrantTypes.TokenExchange)]
+    [InlineData(GrantTypes.RefreshToken)]
+    [InlineData(GrantTypes.ClientCredentials)]
+    public async Task ARedirectUriOnAGrantWithoutAnAuthorizationStep_IsIgnored(string grantType)
     {
-        // Arrange
-        var requestRedirectUri = new Uri("https://client.example.com/Callback");
-        var grantRedirectUri = new Uri("https://client.example.com/callback");
-        var context = CreateContext(redirectUri: requestRedirectUri);
-        var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
+        var context = CreateContext(grantType, redirectUri: new Uri("https://client.example.com/callback"));
+        var authorizedGrant = CreateAuthorizedGrant(redirectUri: null);
 
         _grantHandler
             .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)authorizedGrant);
 
-        // Act
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
-        // Assert - Path is case-sensitive
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        Assert.Null(error);
+        Assert.Same(authorizedGrant, context.AuthorizedGrant);
     }
 }
