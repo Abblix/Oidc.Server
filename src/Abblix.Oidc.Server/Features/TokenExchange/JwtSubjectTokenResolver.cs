@@ -159,6 +159,7 @@ public sealed class JwtSubjectTokenResolver(
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
+            SessionId = jwt.Payload.SessionId,
         };
     }
 

@@ -131,11 +131,24 @@ public class RevokedSessionValidatorTests
     [Theory]
     [InlineData(GrantTypes.ClientCredentials)]
     [InlineData(GrantTypes.JwtBearer)]
-    [InlineData(GrantTypes.TokenExchange)]
     [InlineData(GrantTypes.Password)]
     public async Task AGrantBuildingItsOwnSession_IsNotAskedAbout(string grantType)
     {
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
+
+        Assert.Null(error);
+        _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A token exchange carries the session of its subject token, which the subject token's own validation has
+    /// already checked against that session's cutoffs in the same request, so it is not asked about again here.
+    /// </summary>
+    [Fact]
+    public async Task ATokenExchange_IsNotAskedAbout()
+    {
+        var error = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, Context(GrantTypes.TokenExchange), CancellationToken.None);
 
         Assert.Null(error);
         _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);

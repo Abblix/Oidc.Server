@@ -113,9 +113,10 @@ public sealed class RefreshTokenSubjectTokenResolver(
             // names the client it was issued to. Mismatch with the requesting client triggers
             // the handler's cross-client guard.
             OriginalClientId = grant.Context.ClientId,
-            
+
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
+            SessionId = grant.AuthSession.SessionId,
         };
     }
 }

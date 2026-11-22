@@ -79,6 +79,7 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
         Assert.Equal([Scopes.OpenId], ctx.Scope!);
+        Assert.Equal("session-1", ctx.SessionId);
     }
 
     /// <summary>

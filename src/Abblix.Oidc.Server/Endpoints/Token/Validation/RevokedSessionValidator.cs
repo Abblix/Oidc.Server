@@ -31,12 +31,18 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// delegating, so a refusal there would burn a code the request never earned. Validation happens first.
 /// </para>
 /// <para>
-/// It asks only about grants that carry a session from an earlier request. The remaining grant types build
-/// their session during this one - a client credentials, jwt-bearer or token exchange request stamps
-/// <c>AuthenticationTime</c> from the current clock and generates the session identifier on the spot - so no
-/// cutoff can predate it, and asking would be two store reads that cannot answer yes. It would also put a
-/// subject from somebody else's namespace against our cutoffs: under client credentials the subject is the
-/// client identifier, and under the assertion grants it belongs to a federated issuer.
+/// It asks only about grants that carry a session from an earlier request. Client credentials and jwt-bearer
+/// build their session during this one - they stamp <c>AuthenticationTime</c> from the current clock and
+/// generate the session identifier on the spot - so no cutoff can predate it, and asking would be two store
+/// reads that cannot answer yes. It would also put a subject from somebody else's namespace against our
+/// cutoffs: under client credentials the subject is the client identifier, and under the assertion grants it
+/// belongs to a federated issuer.
+/// </para>
+/// <para>
+/// Token exchange carries the session of its subject token, and the token side has already answered for it:
+/// the subject token is validated in this same request against the cutoffs of the session it names, by the
+/// issue time it carries. Asking here would put the exchange's own authentication time, the current clock,
+/// against the same cutoff, which cannot answer yes.
 /// </para>
 /// </remarks>
 /// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself

@@ -44,11 +44,6 @@ public class TokenExchangeGrantHandlerTests
     private readonly Mock<ISessionIdGenerator> _sessionIdGenerator = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _timeProvider = new();
 
-    public TokenExchangeGrantHandlerTests()
-    {
-        _sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns(TestSessionId);
-    }
-
     /// <summary>
     /// RFC 8693 section 2.1 / RFC 6749 section 5.2: a request without subject_token or subject_token_type is the
     /// caller's protocol error and yields invalid_request - previously it threw and surfaced as
@@ -79,7 +74,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: "https://issuer", Scope: [Scopes.OpenId], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -98,7 +93,7 @@ public class TokenExchangeGrantHandlerTests
         var adNode = (JsonArray)JsonNode.Parse(adWire)!;
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: adNode)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -135,7 +130,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ATokenTypeSpelledOtherwise_ReachesNoResolver()
     {
         var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
 
         var result = await handler.AuthorizeAsync(
@@ -157,7 +152,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var spelledOtherwise = UpperCaseScheme(TokenExchangeTokenTypes.AccessToken);
         var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(spelledOtherwise, ctx);
 
         var result = await handler.AuthorizeAsync(
@@ -212,6 +207,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
             GrantId = grantId,
         };
@@ -239,6 +235,7 @@ public class TokenExchangeGrantHandlerTests
         var subjectExpiresAt = new DateTimeOffset(2024, 1, 15, 13, 0, 0, TimeSpan.Zero);
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
             GrantId = grantId,
             ExpiresAt = subjectExpiresAt,
@@ -259,8 +256,8 @@ public class TokenExchangeGrantHandlerTests
     public async Task DelegationFlow_BuildsActClaimWithActorSubject()
     {
         // Single-hop delegation: subject_token has no prior act chain. Result: act = { sub: <actor> }.
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
-        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { SessionId = TestSessionId, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
@@ -288,14 +285,62 @@ public class TokenExchangeGrantHandlerTests
         resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
     }
 
+    /// <summary>
+    /// The exchanged token belongs to the session of its subject_token and never to the actor's, so revoking the end
+    /// user's session reaches a delegated token too.
+    /// </summary>
+    [Fact]
+    public async Task ExchangedToken_BelongsToTheSubjectTokensSession_NotTheActors()
+    {
+        const string subjectSession = "subject-session";
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+            { SessionId = subjectSession, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null)
+            { SessionId = "actor-session", OriginalClientId = ClientId };
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
+        };
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant, request, ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(subjectSession, grant.AuthSession.SessionId);
+    }
+
+    /// <summary>
+    /// A resolver that resolves a token naming no session has skipped the refusal it owes, so the exchange fails
+    /// loudly, naming that resolver, instead of issuing a token no session revocation could reach.
+    /// </summary>
+    [Fact]
+    public async Task ResolvedTokenNamingNoSession_ThrowsNamingTheResolver()
+    {
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.AuthorizeAsync(
+            SingleIssuer.Tenant, ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken), TestContext.Current.CancellationToken));
+
+        Assert.Contains(resolverMock.Object.GetType().FullName!, exception.Message);
+    }
+
     [Fact]
     public async Task ChainedDelegation_PrependsExistingActChain()
     {
         // Subject_token already carries an act chain: { sub: prev-actor }. New actor wraps it:
         // result act = { sub: new-actor, act: { sub: prev-actor } }.
         var existingChain = new JsonObject { ["sub"] = "prev-actor" };
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { Act = existingChain, OriginalClientId = ClientId };
-        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, Act = existingChain, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { SessionId = TestSessionId, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
@@ -356,7 +401,7 @@ public class TokenExchangeGrantHandlerTests
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
@@ -404,7 +449,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, ctx);
         var clientInfo = ClientWithAllowlist(null);  // tri-state: no constraint
         var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken);
@@ -422,7 +467,7 @@ public class TokenExchangeGrantHandlerTests
         var requestScope = new[] { Scopes.OpenId };  // narrow to one
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: subjectScope, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = requestScope };
@@ -444,7 +489,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, Scopes.Profile, "admin"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -471,7 +516,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, "admin"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -496,7 +541,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: ["read"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["read", "admin"] };
@@ -517,7 +562,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
@@ -538,7 +583,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
@@ -566,6 +611,7 @@ public class TokenExchangeGrantHandlerTests
         // by any client (confused deputy).
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = "client-A",
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -587,6 +633,7 @@ public class TokenExchangeGrantHandlerTests
         // otherwise clear the guard that a token naming another client fails.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = null,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -607,6 +654,7 @@ public class TokenExchangeGrantHandlerTests
         // whose issuer cannot be read at all. A broker trusted with the first is trusted with the second.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = null,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -628,6 +676,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = "client-A",
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -651,6 +700,7 @@ public class TokenExchangeGrantHandlerTests
         // self-exchange case), default policy accepts without opt-in.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -673,6 +723,7 @@ public class TokenExchangeGrantHandlerTests
         var ad = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], ad)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -695,6 +746,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -720,6 +772,7 @@ public class TokenExchangeGrantHandlerTests
         // client could mint a token for any target service it names in the issued token's aud.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -740,6 +793,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -769,6 +823,7 @@ public class TokenExchangeGrantHandlerTests
         // renaming the parameter from audience to resource.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -791,6 +846,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -814,6 +870,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -839,6 +896,7 @@ public class TokenExchangeGrantHandlerTests
         // assumes it got what it asked for and breaks downstream.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -863,11 +921,13 @@ public class TokenExchangeGrantHandlerTests
         // are not permitted to use access_token as an ACTOR either.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         const string actorWire = "actor.jwt";
         var actor = new SubjectTokenContext("svc-worker", null, null, null)
         {
+            SessionId = TestSessionId,
             OriginalClientId = ClientId,
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);

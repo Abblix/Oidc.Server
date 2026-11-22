@@ -75,6 +75,7 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal("https://idp.example.com", ctx.Issuer);
         Assert.Equal([Scopes.OpenId, Scopes.Profile], ctx.Scope!);
         Assert.Null(ctx.AuthorizationDetails);
+        Assert.Equal("session-1", ctx.SessionId);
     }
 
     /// <summary>
