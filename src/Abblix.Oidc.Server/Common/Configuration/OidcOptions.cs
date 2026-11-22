@@ -500,7 +500,7 @@ public record OidcOptions
 	/// <para>
 	/// The section speaks of browser-based applications, and this setting is one for the whole server: a session
 	/// ends for every client whose tokens were issued in it, a native application that signed in through the
-	/// same browser and a device or CIBA authorization the end user approved there included. Reaching those too
+	/// same browser and a device or CIBA grant the host recorded under that session included. Reaching those too
 	/// is this server's choice, not the specification's requirement.
 	/// </para>
 	/// <para>
@@ -515,10 +515,11 @@ public record OidcOptions
 	/// </para>
 	/// <para>
 	/// A session ends on logout and when a sign-in replaces the session of another end user in the same user
-	/// agent. What it reaches is what a revocation cutoff reaches: refresh tokens, access tokens a resource server
-	/// introspects, and an ID token presented as the subject token of a token exchange. An access token validated
-	/// locally against its signature and expiry never comes back here, and an <c>id_token_hint</c> naming the
-	/// ended session is still accepted.
+	/// agent. What it reaches is what a revocation cutoff reaches: refresh tokens, access tokens presented at
+	/// introspection or at the UserInfo endpoint, any token of the session presented to token exchange, and the
+	/// authorization codes, device codes and CIBA requests authorized in the session and not yet redeemed. An
+	/// access token validated locally against its signature and expiry never comes back here, and an
+	/// <c>id_token_hint</c> naming the ended session is still accepted.
 	/// </para>
 	/// </remarks>
 	public bool RevokeSessionTokensOnLogout { get; set; } = true;
