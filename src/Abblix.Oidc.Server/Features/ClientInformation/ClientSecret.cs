@@ -48,9 +48,8 @@ public record ClientSecret
 	/// configuration.
 	/// </summary>
 	/// <remarks>
-	/// The .NET configuration binder treats a byte array as a collection to fill element by element,
-	/// so a hash has no scalar form to bind to without this alias: a settings file would have to spell
-	/// the value out one byte per key. Setting either member sets the hash; reading returns whatever
+	/// Names the notation of the string a settings file carries; the configuration binder also reads
+	/// <see cref="Sha256Hash"/> itself from a Base64 string. Setting either member sets the hash; reading returns whatever
 	/// <see cref="Sha256Hash"/> holds, so the two can never disagree.
 	/// JSON leaves every alias out and carries the hash itself once: written alongside it, an alias is read
 	/// after the hash and overwrites whatever was edited there. The configuration binder ignores the
