@@ -13,7 +13,7 @@ name: Publish dev build to GitHub Packages
 #
 # Example versions (with MinVerMinimumMajorMinor=2.4):
 #   develop, or a manual run from any branch but a release one
-#                                       ->  2.4.0-dev.0.<first-parent distance from the root>
+#                                       ->  2.4.0-dev.<first-parent distance from the root>
 #   a release/* branch                  ->  2.4.0-rc.<first-parent distance from the root>
 #   a release, version supplied by hand ->  2.4.0   (release.yml, MinVerVersionOverride)
 #
@@ -28,7 +28,7 @@ name: Publish dev build to GitHub Packages
 # shorter than develop's, so its height lands on a number develop has already published; the push
 # below uses --skip-duplicate, so on one shared line that push would publish nothing and the release
 # branch's code would never reach the feed. Each line takes its pre-release identifier from one owner:
-# dev.0 is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is RELEASE_BRANCH_IDENTIFIERS
+# dev is Directory.Build.props' MinVerDefaultPreReleaseIdentifiers, and rc is RELEASE_BRANCH_IDENTIFIERS
 # below, which the step "Choose the pre-release identifier" passes as an override for a release/* push only.
 #
 # Within its own line a release branch's height only grows: every commit made on the branch - a
@@ -38,7 +38,7 @@ name: Publish dev build to GitHub Packages
 # publishes nothing.
 #
 # rc sits outside a 2.4.0-dev.* range, so a consumer floating on it keeps following develop; it
-# sorts above every dev.0 build, so a range as wide as 2.4.0-* would take the release branch instead.
+# sorts above every dev build, so a range as wide as 2.4.0-* would take the release branch instead.
 # To gate against a release branch, pin its exact rc build.
 #
 # Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
@@ -407,7 +407,7 @@ jobs:
           #
           # And once the case is corrected the name is still the wrong key: Abblix.OIDC.Server is a
           # PREFIX of Abblix.OIDC.Server.MVC, so head -1 over the family can hand back a file whose
-          # remainder is "MVC.2.4.0-dev.0.469" - a version string with a package fragment inside it.
+          # remainder is "MVC.2.4.0-dev.469" - a version string with a package fragment inside it.
           # (The casing is unpredictable in general: PackageId also uppercases API, CAEP and RISC.)
           #
           # A version has a shape, so take the trailing three-part number and let the name be
@@ -451,7 +451,7 @@ jobs:
               # build, so restore succeeds and the version simply never moves again.
               #
               # The WHOLE three-part number, not major.minor with a zero patch appended. NuGet floats
-              # only the release label, so 2.4.0-dev.* does not resolve 2.4.1-dev.0.3 - and 2.4.1 is
+              # only the release label, so 2.4.0-dev.* does not resolve 2.4.1-dev.3 - and 2.4.1 is
               # what MinVer produces as soon as a v2.4 tag is reachable, which is every day between
               # the release and the next bump of MinVerMinimumMajorMinor. Re-asserting the patch
               # would have rebuilt the same silent failure inside the fix for it.
