@@ -531,17 +531,24 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
 
     /// <summary>
     /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
-    /// strings it generates do not start with https://", so a registrant cannot take a document's URL.
+    /// strings it generates do not start with https://", so a registrant cannot take a document's URL, in whatever
+    /// spelling of it.
     /// </summary>
-    [Fact]
-    public async Task ARegistrationNamingAClientIdentifierUrl_IsRefused()
+    [Theory]
+    [InlineData(ClientId)]
+    [InlineData("HTTPS://client.example.com/oauth/metadata.json")]
+    [InlineData("Https://client.example.com/oauth/metadata.json")]
+    [InlineData(" https://client.example.com/oauth/metadata.json")]
+    [InlineData("https://client.example.com/oauth/metadata.json ")]
+    public async Task ARegistrationNamingAClientIdentifierUrl_IsRefused(string clientId)
     {
         Serve(PublicClientDocument());
         await using var host = CreateHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = PublicClientDocument();
-        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://attacker.example.com/cb");
+        metadata[RegistrationMembers.ClientId] = clientId;
+        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://other.example.com/cb");
 
         using var response = await client.PostAsync(
             discovery.RegistrationEndpoint,
@@ -551,6 +558,41 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, await ErrorResponseReader.ErrorCodeOf(response));
         Assert.Equal(0, _origin.RequestsTo(ClientId));
+
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+        Assert.NotEmpty(code);
+    }
+
+    /// <summary>
+    /// Section 3 compares Client Identifier URLs "using simple string comparison", so a registration held under
+    /// another spelling of the URL, however it got into the store, is not the client the URL names: the client is
+    /// resolved from its document and redirected where the document says.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationUnderAnotherSpellingOfTheUrl_IsNotTheClientItNames()
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost();
+        var registered = new ClientInfo("HTTPS://client.example.com/oauth/metadata.json")
+        {
+            RedirectUris = [new Uri("https://other.example.com/cb")],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+        using (TestTenant.Enter(host.Services))
+        {
+            Assert.True(await host.Services.GetRequiredService<IClientInfoManager>()
+                .TryAddClientAsync(TestTenant.Of(host.Services), new RegisteredClient(registered, "jti")));
+        }
+
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+
+        Assert.NotEmpty(code);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
     }
 
     private static Dictionary<string, string> CodeExchange(string code, string verifier) => new()

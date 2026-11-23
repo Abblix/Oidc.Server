@@ -18,7 +18,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// Every call names the tenant of the request, and a registration is kept and found under that tenant's
 /// <see cref="TenantDefinition.Id"/> and <see cref="TenantDefinition.Generation"/> together: a registration made at
 /// one tenant is never found at another, and a tenant created again under an id finds none of the registrations made
-/// at the creation before it. Client ids are compared without regard to case, as the server compares them.
+/// at the creation before it. The server names a client by its id exactly and takes a registration found under
+/// another spelling of the id for none, so a store may hold ids regardless of case, refusing an addition under an id
+/// that differs from one it holds only in case, as the server's own store does.
 /// <para>
 /// The clients a tenant's definition configures stay in the definition, and the server keeps them apart from what
 /// this store holds: a configured client is served over a registration under its id, a registration the server meets

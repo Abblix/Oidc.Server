@@ -108,6 +108,26 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A host's store holding ids regardless of case answers a lookup under another spelling with the registration,
+    /// and the server takes it for none, leaving it held.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationTheHostsStoreAnswersUnderAnotherSpelling_IsNotFound()
+    {
+        var registrations = new HostRegistrations();
+        using var provider = ServingWithHostRegistrations(registrations);
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+        var clients = provider.GetRequiredService<IClientInfoProvider>();
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), Registration("app")));
+
+        Assert.Null(await clients.TryFindClientAsync(Entered(provider), "APP"));
+        Assert.Null(await manager.TryFindRegisteredClientAsync(Entered(provider), "APP"));
+        Assert.Single(registrations.Held);
+        Assert.NotNull(await clients.TryFindClientAsync(Entered(provider), "app"));
+    }
+
+    /// <summary>
     /// A tenant created again under an id finds none of the registrations made at the creation before it.
     /// </summary>
     [Fact]
