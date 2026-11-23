@@ -222,8 +222,9 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
         => rule switch
         {
             OutboundAddressRule.Unrestricted => new HttpRequestException(reason, cause),
-            OutboundAddressRule.NoPrivateOrReserved or OutboundAddressRule.NoSpecialPurpose
-                => new OutboundAddressRefusedException($"SSRF protection: {reason}", cause),
+            OutboundAddressRule.NoPrivateOrReserved or
+                OutboundAddressRule.NoSpecialPurpose or
+                OutboundAddressRule.NoSpecialPurposeButLoopback => new OutboundAddressRefusedException($"SSRF protection: {reason}", cause),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(rule), rule, "An address rule this library does not know."),
         };
