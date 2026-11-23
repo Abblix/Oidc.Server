@@ -7,10 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Mime;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
-using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -71,13 +71,9 @@ public class EndSessionResponseFormatter(
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        if (!page.IsAbsoluteUri)
-        {
-            page = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request
-                .ResolveInteractionUri(page.OriginalString);
-        }
-
-        return new SeeOtherResult(LogoutConfirmationPage.Address(page, request, confirmation.Confirmation));
+        var resolved = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request.ResolveInteractionUri(page);
+        return new SeeOtherResult(LogoutConfirmationPage.Address(resolved, request, confirmation.Confirmation))
+            .WithHeader(LogoutConfirmationPage.ReferrerPolicyHeader, LogoutConfirmationPage.NoReferrer);
     }
 
     private IResult FormatSuccessResponse(EndSessionSuccess success)

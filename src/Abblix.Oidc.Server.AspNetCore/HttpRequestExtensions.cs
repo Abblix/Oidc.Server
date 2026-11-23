@@ -22,6 +22,13 @@ public static class HttpRequestExtensions
     public static string GetAppUrl(this HttpRequest request) => request.GetFullUrl(request.PathBase);
 
     /// <summary>
+    /// The interaction page <paramref name="page"/> names as an absolute address: an absolute one as it is, a relative
+    /// one resolved by <see cref="ResolveInteractionUri(HttpRequest, string)"/>.
+    /// </summary>
+    internal static Uri ResolveInteractionUri(this HttpRequest request, Uri page)
+        => page.IsAbsoluteUri ? page : request.ResolveInteractionUri(page.OriginalString);
+
+    /// <summary>
     /// Resolves a relative address - an interaction page (login, consent, registration), or in the MVC transport
     /// an endpoint route - to an absolute one.
     /// </summary>

@@ -164,7 +164,11 @@ public sealed class TenantDefinition
     /// The end-session endpoint redirects the user agent there with the parameters of the logout request and
     /// <c>confirmation</c>, the value the server issued for the question. When the end user agrees, the page sends
     /// all of them back to the end-session endpoint, with GET or POST; the value is good for one use and for
-    /// <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>. Left unset, the endpoint answers such
+    /// <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>. When the end user declines, the page
+    /// does not send them to the <c>post_logout_redirect_uri</c> its query carries: only the end-session endpoint
+    /// checks that address against the client's registration (RP-Initiated Logout 1.0 section 3). The page's address
+    /// carries the hint and the issued value, so the redirect there sends no referrer, and the page sends none either
+    /// and loads nothing from another origin. Left unset, the endpoint answers such
     /// a request with the <c>confirmation_required</c> error and the value in its body, for a host that asks the
     /// question through an end-session response formatter of its own.
     /// </remarks>

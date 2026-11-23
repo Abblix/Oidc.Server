@@ -24,6 +24,17 @@ namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 internal static class LogoutConfirmationPage
 {
     /// <summary>
+    /// The header the redirect to the page carries, which the framework names no constant for.
+    /// </summary>
+    public const string ReferrerPolicyHeader = "Referrer-Policy";
+
+    /// <summary>
+    /// The redirect to the page sends no referrer, so neither the hint nor the issued value in the page's address
+    /// travels on from the redirect.
+    /// </summary>
+    public const string NoReferrer = "no-referrer";
+
+    /// <summary>
     /// The confirmation page with the parameters of the logout request and the value issued for the question.
     /// </summary>
     /// <param name="page">The tenant's confirmation page, resolved to an absolute address.</param>

@@ -75,7 +75,8 @@ public class EndSessionResponseFormatter(
         if (!page.IsAbsoluteUri)
             page = uriResolver.Content(page.OriginalString);
 
-        return new SeeOtherResult(LogoutConfirmationPage.Address(page, request, confirmation.Confirmation));
+        return new SeeOtherResult(LogoutConfirmationPage.Address(page, request, confirmation.Confirmation))
+            .WithHeader(LogoutConfirmationPage.ReferrerPolicyHeader, LogoutConfirmationPage.NoReferrer);
     }
 
     private ActionResult FormatSuccessResponse(EndSessionSuccess success)
