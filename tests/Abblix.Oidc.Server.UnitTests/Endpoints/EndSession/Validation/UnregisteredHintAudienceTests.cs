@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -63,6 +64,7 @@ public class UnregisteredHintAudienceTests
         // missing error rather than on a mock.
         services.AddSingleton(Mock.Of<IAuthSessionService>());
         services.AddSingleton(Mock.Of<ISubjectTypeConverter>());
+        services.AddSingleton(Mock.Of<ISessionClientRegistry>());
         services.AddSingleton(Mock.Of<ILogoutConfirmationStore>());
         services.AddSingleton(SingleIssuer.Accessor);
         services.AddSingleton(SingleIssuer.Accessor);

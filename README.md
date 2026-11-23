@@ -165,12 +165,12 @@ Both adapters expose the same OpenID Connect endpoints and pull in the core `Abb
 
 A 2.x deployment applies [Upgrading to 3.0](#%EF%B8%8F-upgrading-to-30) first, then the items below.
 
-Version 3.1 is not a drop-in replacement for 3.0. It changes public signatures: `SubjectTokenContext` gains required members; the constructors of `TokenExchangeGrantHandler`, `RefreshTokenSubjectTokenResolver`, `IntrospectionRequestValidator`, `RevocationRequestValidator`, `RevocationRequestProcessor` and the dynamic registration processors `RegisterClientRequestProcessor`, `ReadClientRequestProcessor` and `UpdateClientRequestProcessor` change; and `BackChannelClientAuthenticationCheck` is removed. Some defaults change, and some tenants 3.0 served are refused. Upgrade a staging deployment first and read its startup log.
+Version 3.1 is not a drop-in replacement for 3.0. It changes public signatures: `SubjectTokenContext` gains required members; the constructors of `TokenExchangeGrantHandler`, `RefreshTokenSubjectTokenResolver`, `IntrospectionRequestValidator`, `RevocationRequestValidator`, `RevocationRequestProcessor`, the end-session `ConfirmationValidator`, the `EndSessionResponseFormatter` of each transport adapter and the dynamic registration processors `RegisterClientRequestProcessor`, `ReadClientRequestProcessor` and `UpdateClientRequestProcessor` change; and `BackChannelClientAuthenticationCheck` is removed. Some defaults change, and some tenants 3.0 served are refused. Upgrade a staging deployment first and read its startup log.
 
 What fails to build:
 
 - An `ISubjectTokenResolver` sets the new required `SessionId` and `AuthenticationTime` of `SubjectTokenContext` (CS9035).
-- Code constructing the classes above by hand passes their new parameters: `IAuthServiceJwtReader` where `IAuthServiceJwtValidator` was, `IRevocationCutoffChecker`, `RegistrationAccessTokenRevocation`, `IClientSecretEncryptor`, or only an `IServiceProvider` for `TokenExchangeGrantHandler`.
+- Code constructing the classes above by hand passes their new parameters: `IAuthServiceJwtReader` where `IAuthServiceJwtValidator` was, `IRevocationCutoffChecker`, `RegistrationAccessTokenRevocation`, `IClientSecretEncryptor`, `ISessionClientRegistry`, `ITenantAccessor` with `IUriResolver` (MVC) or `IHttpContextAccessor` (Minimal API), or only an `IServiceProvider` for `TokenExchangeGrantHandler`.
 - A host that registered `BackChannelClientAuthenticationCheck` drops that line.
 - Delete any assignment of the obsolete `JwtBearerOptions.StrictAudienceValidation` (CS0618 under `TreatWarningsAsErrors`).
 
@@ -193,7 +193,7 @@ What behaves differently at runtime, with no error:
 - A request object or CIBA `login_hint_token` carrying an `aud` names the issuer identifier exactly.
 - Native and public clients always use PKCE.
 - Outbound requests to client-supplied addresses use no system proxy and no HTTP/3, download no missing intermediate certificates, and, with `BlockPrivateNetworks` on, refuse every special-purpose address block: a deployment behind a forward proxy sets `SecureHttpFetchOptions.OutboundProxy`, and `SharedSignalsTransmitterOptions.OutboundProxy` for Shared Signals push delivery.
-- An ID token carries `sid` only for a client with session logout, and a token exchange keeps the session, `auth_time`, `acr` and `amr` of its subject token.
+- An ID token carries `sid` only for a client with session logout, and a token exchange keeps the session, `auth_time`, `acr` and `amr` of its subject token. A logout whose `id_token_hint` has no `sid` ends the session without asking when the hint names the signed-in end user, carries the `auth_time` of the session and was issued to a client that signed in to it; the end user is asked about any other. A tenant that sets `TenantDefinition.LogoutConfirmationUri` has the browser redirected there to be asked, with the request's parameters and `confirmation` for the page to send back; without it the endpoint answers 400 `confirmation_required` as before.
 - A host that derives from `AddressValidatingHttpMessageHandler`, replaces the primary handler of the server's outbound clients, writes its own `IAuthorizationGrantHandler`, stores client JSON naming a secret hash only through a `Base64` or `Hex` alias, alerts on event id 2015, or has pairwise clients holding delegated access tokens issued by 3.0 reads the guide: each of these changes with no error.
 - An RFC 7592 update carrying a `client_secret` other than the issued one is refused, and a read returns `client_secret` for clients registered under 3.1.
 
