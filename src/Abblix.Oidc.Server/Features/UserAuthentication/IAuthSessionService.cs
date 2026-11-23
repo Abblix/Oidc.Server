@@ -38,8 +38,8 @@ public interface IAuthSessionService
 	/// <remarks>
 	/// The implementation decides whether the sign-in ends a session the user agent already holds. It ends each such
 	/// session through <see cref="IAuthSessionTerminator"/> after writing the new one, so a sign-in that fails signs
-	/// nobody out, and reports it in the result. That revokes the session's tokens when
-	/// <see cref="Common.Configuration.OidcOptions.RevokeSessionTokensOnLogout"/> asks for it and sends its clients
+	/// nobody out, and reports it in the result. That revokes the session's tokens unless
+	/// <see cref="Common.Configuration.OidcOptions.RevokeSessionTokensOnLogout"/> is off and sends its clients
 	/// back-channel logout notifications. Front-channel notifications are not sent, because a sign-in has no logout
 	/// page to render them on.
 	/// <para>

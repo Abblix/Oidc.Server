@@ -210,8 +210,39 @@ public partial class RevocationRequestValidator(
 			},
 			error =>
 			{
-				LogTokenValidationFailed(Sanitized.Value(error));
+				LogRefusal(error);
 				return ValidRevocationRequest.InvalidToken(revocationRequest);
 			});
+	}
+
+	/// <summary>
+	/// Records why the token was not read, at the level its reason calls for.
+	/// </summary>
+	/// <remarks>
+	/// A token a revocation already reached is the ordinary end of a sign-out: ending the session revokes its
+	/// tokens, and the client then revokes its refresh token here as RFC 7009 asks. Every other refusal names a
+	/// token this server did not issue in this form, which a caller doing things right never presents.
+	/// </remarks>
+	private void LogRefusal(JwtValidationError error)
+	{
+		switch (error.Error)
+		{
+			case JwtError.TokenRevoked:
+				LogTokenAlreadyRevoked(Sanitized.Value(error));
+				break;
+
+			case JwtError.InvalidToken
+				or JwtError.TokenAlreadyUsed
+				or JwtError.MalformedToken
+				or JwtError.InvalidAlgorithm
+				or JwtError.InvalidTokenType
+				or JwtError.InvalidHeader
+				or JwtError.InvalidSignature:
+				LogTokenValidationFailed(Sanitized.Value(error));
+				break;
+
+			default:
+				throw new ArgumentOutOfRangeException(nameof(error), error.Error, "A token refusal without a log level.");
+		}
 	}
 }

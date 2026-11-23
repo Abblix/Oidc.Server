@@ -491,29 +491,38 @@ public record OidcOptions
 	/// Whether ending a session also revokes the tokens issued within it.
 	/// </summary>
 	/// <remarks>
-	/// Off, which keeps a refresh token working after the user has signed out of the browser. That is what a
-	/// native application relies on to stay signed in while the web session ends, and turning it on for an
-	/// existing deployment would log those users out with nothing in their own code having changed.
+	/// On by default, following OAuth 2.0 for Browser-Based Applications (RFC 10017) Section 6.3.2.3:
+	/// "Authorization servers SHOULD link the lifetime of the refresh token to the user's authenticated session
+	/// with the authorization server. Doing so ensures that when a user logs out, previously issued refresh
+	/// tokens to browser-based applications become invalid, mimicking a single-logout scenario. Authorization
+	/// servers MAY set different policies for refresh token issuance, lifetime, and expiration for browser-based
+	/// applications compared to other public clients."
 	/// <para>
-	/// Turn it on where a sign-out is meant to mean the end of access rather than the end of a browser session,
-	/// and read the specification's advice as advice. OpenID Connect RP-Initiated Logout 1.0 says nothing about
-	/// tokens at all, but Back-Channel Logout 1.0 Section 2.7 does: "Refresh tokens issued without the
-	/// offline_access property to a session being logged out SHOULD be revoked. Refresh tokens issued with the
-	/// offline_access property normally SHOULD NOT be revoked."
+	/// The section speaks of browser-based applications, and this setting is one for the whole server: a session
+	/// ends for every client whose tokens were issued in it, a native application that signed in through the
+	/// same browser and a device or CIBA grant the host recorded under that session included. Reaching those too
+	/// is this server's choice, not the specification's requirement.
 	/// </para>
 	/// <para>
-	/// Every refresh token this server mints carries <c>offline_access</c>, because that scope is what makes it
-	/// issue one at all. So the first sentence applies to nothing here, and the second describes every token
-	/// this option would revoke - which is why it is off. Turning it on is a deliberate departure from a
-	/// SHOULD NOT, and the word "normally" is what leaves room for it: a deployment whose sign-out is meant to
-	/// end access has a reason the specification's default case does not cover.
+	/// Back-Channel Logout 1.0 Section 2.7 leans the other way: "Refresh tokens issued without the offline_access
+	/// property to a session being logged out SHOULD be revoked. Refresh tokens issued with the offline_access
+	/// property normally SHOULD NOT be revoked." Every refresh token this server mints carries
+	/// <c>offline_access</c>, because that scope is what makes it issue one at all, so the second sentence
+	/// describes every token this setting revokes. A deployment whose native applications are meant to stay
+	/// signed in after the end user signs out of the browser sets it to <c>false</c>
+	/// (<c>options.RevokeSessionTokensOnLogout = false</c> in the delegate passed to <c>AddOidcServices</c>), and
+	/// a refresh token then works after the sign-out until it expires.
 	/// </para>
 	/// <para>
-	/// What it reaches is what a revocation cutoff reaches: refresh tokens, and access tokens a resource server
-	/// introspects. An access token validated locally against its signature and expiry never comes back here.
+	/// A session ends on logout and when a sign-in replaces the session of another end user in the same user
+	/// agent. What it reaches is what a revocation cutoff reaches: refresh tokens, access tokens presented at
+	/// introspection or at the UserInfo endpoint, any token of the session presented to token exchange, and the
+	/// authorization codes, device codes and CIBA requests authorized in the session and not yet redeemed. An
+	/// access token validated locally against its signature and expiry never comes back here, and an
+	/// <c>id_token_hint</c> naming the ended session is still accepted.
 	/// </para>
 	/// </remarks>
-	public bool RevokeSessionTokensOnLogout { get; set; }
+	public bool RevokeSessionTokensOnLogout { get; set; } = true;
 
 	/// <summary>
 	/// Configuration options for JWT Bearer grant type (RFC 7523).

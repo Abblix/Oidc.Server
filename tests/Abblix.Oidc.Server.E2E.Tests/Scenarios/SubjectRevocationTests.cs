@@ -177,17 +177,17 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// Ending a session revokes the tokens issued in it, once a deployment turns that on.
+    /// Ending a session revokes the tokens issued in it, with no setting made.
     /// </summary>
     /// <remarks>
-    /// The option is opt-in, so it runs on its own host. Both halves are asserted on that same host: the
-    /// refresh works before the logout and fails after it, because "the token stopped working" is
-    /// indistinguishable from "this host refuses everything" when only the second half is checked.
+    /// Both halves are asserted on the same host: the refresh works before the logout and fails after it,
+    /// because "the token stopped working" is indistinguishable from "this host refuses everything" when only
+    /// the second half is checked.
     /// </remarks>
     [Fact]
-    public async Task Ending_a_session_revokes_its_tokens_when_the_option_is_on()
+    public async Task Ending_a_session_revokes_its_tokens_by_default()
     {
-        await using var host = Factory.WithSessionLogout(options => options.RevokeSessionTokensOnLogout = true);
+        await using var host = Factory.WithSessionLogout();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -209,17 +209,17 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// And with the option left off, the same logout leaves the same token working.
+    /// And with the option turned off, the same logout leaves the same token working.
     /// </summary>
     /// <remarks>
-    /// The control <see cref="Ending_a_session_revokes_its_tokens_when_the_option_is_on"/> needs. Without it,
-    /// a logout that broke refresh for some unrelated reason -
-    /// ending the session the grant hangs on, say - would read as the option working.
+    /// The control <see cref="Ending_a_session_revokes_its_tokens_by_default"/> needs. Without it, a logout
+    /// that broke refresh for some unrelated reason - ending the session the grant hangs on, say - would read
+    /// as the option working.
     /// </remarks>
     [Fact]
-    public async Task Ending_a_session_leaves_its_tokens_alone_by_default()
+    public async Task Ending_a_session_leaves_its_tokens_alone_when_the_option_is_off()
     {
-        await using var host = Factory.WithSessionLogout();
+        await using var host = Factory.WithSessionLogout(options => options.RevokeSessionTokensOnLogout = false);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -232,7 +232,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var afterLogout = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
             afterLogout.IsSuccessStatusCode,
-            $"a logout should not revoke tokens by default, got {(int)afterLogout.StatusCode}");
+            $"a logout should not revoke tokens with the option off, got {(int)afterLogout.StatusCode}");
     }
 
     /// <summary>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -965,5 +966,68 @@ public class RevocationRequestValidatorTests
         // Assert
         Assert.True(first.TryGetSuccess(out _));
         Assert.IsType<TooManyRequestsError>(reentrantError);
+    }
+
+    /// <summary>
+    /// A token a revocation already reached is the ordinary end of a client's sign-out: it ends the session, which
+    /// revokes the session's tokens, and then revokes its refresh token here as RFC 7009 asks. The request is
+    /// answered as RFC 7009 Section 2.2 answers an invalid token, and nobody did anything wrong, so nothing is
+    /// logged as a warning.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithATokenAlreadyRevoked_ShouldNotWarn()
+    {
+        var recorded = await ValidateRecordingAsync(
+            new JwtValidationError(JwtError.TokenRevoked, "Tokens issued before the revocation cutoff are rejected"));
+
+        Assert.DoesNotContain(recorded, entry => entry.Level >= LogLevel.Warning);
+        var entry = Assert.Single(
+            recorded,
+            entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.TokenAlreadyRevoked);
+        Assert.Equal(LogLevel.Information, entry.Level);
+    }
+
+    /// <summary>
+    /// A token that is not one this server issued, a forged signature here, is still a caller doing something
+    /// wrong, and still a warning: only a revocation already recorded is told apart.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAForgedToken_ShouldWarn()
+    {
+        var recorded = await ValidateRecordingAsync(
+            new JwtValidationError(JwtError.InvalidSignature, "The signature does not verify"));
+
+        var entry = Assert.Single(
+            recorded,
+            entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.TokenValidationFailed);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+    }
+
+    private async Task<List<LogRecord>> ValidateRecordingAsync(JwtValidationError refusal)
+    {
+        var recorded = new RecordingLoggerFactory();
+        var validator = new RevocationRequestValidator(
+            new Logger<RevocationRequestValidator>(recorded),
+            _clientAuthenticator.Object,
+            _jwtValidator.Object,
+            CallerRateLimiters.Create(new CallerRateLimitOptions()),
+            _requestInfoProvider.Object,
+            new UnnamedSourceNotice(
+                new Logger<UnnamedSourceNotice>(new RecordingLoggerFactory()),
+                Options.Create(new OidcOptions())));
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(refusal);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Null(validRequest.Token);
+        return recorded.Entries;
     }
 }
