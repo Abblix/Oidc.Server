@@ -54,6 +54,8 @@ internal static class ClientRegistrationMetadataChecks
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProfileSigningKeysValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, EncryptedResponseAlgorithmsValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
+        // After the method is known to be one this server supports, so an unsupported method is reported as such
+        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ConfidentialGrantTypeValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, PkceOptOutValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TlsClientAuthValidator>(),

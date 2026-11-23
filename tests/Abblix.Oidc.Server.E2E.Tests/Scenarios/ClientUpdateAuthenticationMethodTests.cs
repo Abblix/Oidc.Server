@@ -46,6 +46,15 @@ public class ClientUpdateAuthenticationMethodTests(TestFactory factory) : TestBa
             [RequestMembers.TokenEndpointAuthMethod] = registeredMethod,
         };
 
+        // A client authenticating with none may not hold the client credentials grant (RFC 6749 section 4.4), so the
+        // public one is registered for the authorization code grant instead
+        if (registeredMethod == ClientAuthenticationMethods.None)
+        {
+            metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode);
+            metadata[RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code);
+            metadata[RequestMembers.RedirectUris] = new JsonArray("https://client.example.com/callback");
+        }
+
         var registered = await RegisterClientAsync(client, discovery, metadata);
         var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
 

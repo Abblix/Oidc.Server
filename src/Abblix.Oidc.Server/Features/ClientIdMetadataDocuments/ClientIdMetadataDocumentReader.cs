@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
@@ -130,7 +131,7 @@ internal sealed class ClientIdMetadataDocumentReader(
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
-            grantTypes = Array.FindAll(grantTypes, grantType => grantType != GrantTypes.Ciba);
+            grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -257,12 +258,6 @@ internal sealed class ClientIdMetadataDocumentReader(
     private static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
-    /// The grant types that issue tokens on the client's word alone, which a client proving nothing never gets.
-    /// </summary>
-    private static readonly string[] ConfidentialGrantTypes =
-        [GrantTypes.ClientCredentials, GrantTypes.Password, GrantTypes.JwtBearer];
-
-    /// <summary>
     /// The grant types of <paramref name="declared"/> this server supports and the host allows a document client.
     /// </summary>
     /// <remarks>
@@ -284,8 +279,7 @@ internal sealed class ClientIdMetadataDocumentReader(
         if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
             supported.IntersectWith(allowed);
 
-        if (authenticationMethod == ClientAuthenticationMethods.None)
-            supported.ExceptWith(ConfidentialGrantTypes);
+        supported.ExceptWith(ConfidentialGrantTypes.RefusedTo(authenticationMethod, supported));
 
         return declared.Where(grantType => grantType is not null && supported.Contains(grantType))
             .Distinct(StringComparer.Ordinal)

@@ -45,6 +45,7 @@ internal static class TenantSettingsChecksServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, ProfileServiceTokensCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClockSkewCeilingCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, BackChannelClientAuthenticationCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ConfidentialGrantTypesCheck>(),
         ]);
 
         return services;

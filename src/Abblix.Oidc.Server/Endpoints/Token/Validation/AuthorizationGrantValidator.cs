@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -45,6 +46,17 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The grant type is not allowed for this client");
+        }
+
+        // RFC 6749 section 4.4.2: for the client credentials grant "The client MUST authenticate". A client that
+        // authenticates with none is refused such a grant here too, since a client the host's own store serves never
+        // passes the checks a registration or the tenant's settings go through
+        if (ConfidentialGrantTypes.RefusedTo(context.ClientInfo.TokenEndpointAuthMethod, [context.Request.GrantType])
+            is { Length: > 0 })
+        {
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient,
+                "The grant type is only for a client that authenticates itself");
         }
 
         // A grant starting from the client alone builds its context from the request's scope, so it is handed the
