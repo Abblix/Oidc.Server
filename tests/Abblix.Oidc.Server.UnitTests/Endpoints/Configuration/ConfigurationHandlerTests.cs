@@ -43,6 +43,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
 /// </summary>
 public class ConfigurationHandlerTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     /// <summary>
     /// The scopes, claims and subject types the document lists are those of the tenant the request is served at:
     /// the provider answers them for that tenant alone.
@@ -345,6 +348,7 @@ public class ConfigurationHandlerTests
                     ResponseMode = responseMode,
                 })
                 {
+                    Clients = Mock.Of<IClientInfoProvider>(),
                     ClientInfo = new ClientInfo(TestConstants.DefaultClientId) { AllowedResponseTypes = everyResponseType },
                 };
 
@@ -406,7 +410,7 @@ public class ConfigurationHandlerTests
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             };
-            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
             if (authenticated.TryGetSuccess(out _))
                 accepted.Add(grantType);
         }
@@ -459,7 +463,7 @@ public class ConfigurationHandlerTests
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             };
-            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
             if (authenticated.TryGetSuccess(out _))
                 accepted.Add(deliveryMode);
         }
@@ -521,7 +525,7 @@ public class ConfigurationHandlerTests
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             };
-            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
             if (authenticated.TryGetSuccess(out _))
                 accepted.Add(method);
         }
@@ -661,7 +665,7 @@ public class ConfigurationHandlerTests
     private static SecurityProfileClientAuthenticator AuthenticatorOver(ClientInfo client)
     {
         var inner = new Mock<IClientAuthenticator>();
-        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>()))
+        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         var options = new OidcOptions();
         options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;

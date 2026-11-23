@@ -38,6 +38,12 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	public ClientInfo ClientInfo { get => _clientInfo.NotNull(nameof(ClientInfo)); set => _clientInfo = value; }
 
 	/// <summary>
+	/// The clients the request names, each found once: the answers are fixed for this request, so every validator
+	/// asking for the client gets the answer the request's earlier steps got.
+	/// </summary>
+	public required IClientInfoProvider Clients { get; init; }
+
+	/// <summary>
 	/// Specifies how the authorization response should be delivered to the client, e.g., via a direct query or fragment.
 	/// </summary>
 	public string ResponseMode { get; set; } = ResponseModes.Query;

@@ -58,10 +58,10 @@ public class ClientSecretAuthenticatorTests
         IClientInfoProvider clientInfoProvider,
         TimeProvider clock,
         IHashService hashService)
-        : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService)
+        : ClientSecretAuthenticator(logger, clock, hashService)
     {
         public Task<Result<ClientInfo, OidcError>> TestTryAuthenticateAsync(string? clientId, string? secret, string authMethod)
-            => TryAuthenticateAsync(SingleIssuer.Tenant, clientId, secret, authMethod);
+            => TryAuthenticateAsync(SingleIssuer.Tenant, clientInfoProvider, clientId, secret, authMethod);
     }
 
     private static byte[] ComputeSha256(string value)
@@ -181,8 +181,8 @@ public class ClientSecretAuthenticatorTests
         var secret = "test-secret";
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         // Act
         var result = await _authenticator.TestTryAuthenticateAsync(
@@ -209,7 +209,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -238,7 +238,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -267,7 +267,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -305,7 +305,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -340,7 +340,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -385,7 +385,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -430,7 +430,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -473,7 +473,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -513,7 +513,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -558,7 +558,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -604,7 +604,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService

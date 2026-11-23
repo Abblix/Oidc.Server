@@ -47,33 +47,43 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     ProductionEnvironment environment) : IClientInfoProvider
 {
     /// <inheritdoc />
-    public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
+    public async Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
         // A store the host registered may answer with a client held under another spelling of the URL, which section 3
         // has compared "using simple string comparison": that client is not the one the URL names
-        var stored = await inner.TryFindClientAsync(tenant, clientId);
-        if (stored is not null && stored.IsNamedBy(clientId))
+        var stored = await inner.FindClientAsync(tenant, clientId);
+        if (stored.TryGetSuccess(out var storedClient) && storedClient.IsNamedBy(clientId))
             return stored;
 
         var settings = options.CurrentValue;
         var url = Fetched(tenant, clientId, settings, out var rule);
         if (url is null)
-            return null;
+            return NamesAUrl(clientId) ? ClientAbsence.Refused : ClientAbsence.Unknown;
 
         var held = await documents.GetAsync(clientId, url, rule);
-        if (held is null)
-            return null;
+        if (!held.TryGetSuccess(out var document))
+            return held.GetFailure().MayPass ? ClientAbsence.TemporarilyUnavailable : ClientAbsence.Refused;
 
         var generation = (tenant.Id, tenant.Generation);
-        if (held.Clients.TryGetValue(generation, out var client))
+        if (document.Clients.TryGetValue(generation, out var client))
             return client;
 
-        client = await JudgeAsync(tenant, clientId, held.Metadata, settings.NewClientOptions);
+        client = await JudgeAsync(tenant, clientId, document.Metadata, settings.NewClientOptions);
 
         // A refusal is not kept: section 6.2 has the server "MUST NOT cache documents which are invalid", and one is so
         // at this tenant
-        return client is null ? null : held.Clients.GetOrAdd(generation, client);
+        if (client is null)
+            return ClientAbsence.Refused;
+
+        return document.Clients.GetOrAdd(generation, client);
     }
+
+    /// <summary>
+    /// Whether <paramref name="clientId"/> is written as an <c>https</c> URL, which only a client identifier URL is: an
+    /// identifier that is not names no document, and its client is unknown like any other.
+    /// </summary>
+    private static bool NamesAUrl(string clientId)
+        => clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal);
 
     /// <summary>
     /// The URL to fetch <paramref name="clientId"/>'s document from, or null when it is not fetched.
@@ -97,7 +107,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         if (why is not null)
         {
             // An identifier that is no URL at all is an unknown client like any other, and says nothing worth a line
-            if (clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal))
+            if (NamesAUrl(clientId))
                 LogIdentifierNotFetched(clientId, why);
 
             return null;

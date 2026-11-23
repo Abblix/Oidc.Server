@@ -57,7 +57,7 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
         if (refreshToken is not { IssuedAt: { } issuedAt, ClientId: { } clientId })
             return null;
 
-        return await clientInfoProvider.TryFindClientAsync(tenant, clientId) is { } client
+        return (await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client)
             ? issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn
             : null;
     }

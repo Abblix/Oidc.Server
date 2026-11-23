@@ -42,7 +42,6 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientSecretBasicAuthenticator(
             logger.Object,
-            clientInfoProvider.Object,
             timeProvider ?? TimeProvider.System,
             hashService);
     }
@@ -67,7 +66,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
     {
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(CreateClientInfo(ClientSecret));
         var valid = PrepareValidRequest(ClientId, ClientSecret);
         var request = valid with
@@ -77,7 +76,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
                 valid.AuthorizationHeader!.Parameter).ToString()],
         };
 
-        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request, clientInfoProvider.Object);
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(ClientId, result.GetSuccess().ClientId);
@@ -101,7 +100,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
             AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!").ToString()],
         };
 
-        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request, clientInfoProvider.Object);
 
         Assert.False(result.TryGetSuccess(out _));
     }
@@ -168,7 +167,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -194,7 +193,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -209,10 +208,11 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
     [InlineData("Basic ,")]
     public async Task AnAuthorizationHeaderThisMethodCannotRead_IsAPresentedCredentialRefused(string line)
     {
-        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var authenticator = CreateAuthenticator(clientInfoProvider);
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { AuthorizationHeaderLines = [line] });
+            SingleIssuer.Tenant, new ClientRequest { AuthorizationHeaderLines = [line] }, clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var failure));
         Assert.IsNotType<UnauthenticatedCallerError>(failure);

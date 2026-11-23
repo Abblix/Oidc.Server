@@ -51,6 +51,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ReplayPrevention;
 /// </remarks>
 public class ReplayChecksThroughEntityStorageTests
 {
+
     private const string Prefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
     private const string ClientId = "client-a";
     private const string Secret = "0123456789abcdef0123456789abcdef0123456789";
@@ -162,18 +163,18 @@ public class ReplayChecksThroughEntityStorageTests
             ClientSecrets = [new ClientSecret { Value = Secret }],
         };
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(Tenant, ClientId)).ReturnsAsync(client);
+        clients.Setup(p => p.FindClientAsync(Tenant, ClientId)).ReturnsAsync(client);
 
         var services = Services();
         services.AddSingleton<ProfiledJwtValidator>();
         await using var provider = services.BuildServiceProvider();
-        var authenticator = ActivatorUtilities.CreateInstance<ClientSecretJwtAuthenticator>(provider, clients.Object);
+        var authenticator = ActivatorUtilities.CreateInstance<ClientSecretJwtAuthenticator>(provider);
 
         var jwtId = Guid.NewGuid().ToString("N");
         var request = await AssertionAsync(provider, jwtId);
 
-        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request)).TryGetSuccess(out _));
-        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request)).TryGetFailure(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, clients.Object)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, clients.Object)).TryGetFailure(out _));
         Assert.Equal([Prefix + jwtId, Prefix + jwtId], _storage.Claimed);
     }
 

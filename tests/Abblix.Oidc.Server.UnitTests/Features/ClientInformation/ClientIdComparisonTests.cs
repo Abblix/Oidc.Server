@@ -40,9 +40,9 @@ public class ClientIdComparisonTests
         var tenant = Configuring();
         Assert.True(await store.TryAddClientAsync(tenant, Registration("abc")));
 
-        Assert.Null(await store.TryFindClientAsync(tenant, "ABC"));
+        Assert.Equal(ClientAbsence.Unknown, (await store.FindClientAsync(tenant, "ABC")).GetFailure());
         Assert.Null(await store.TryFindRegisteredClientAsync(tenant, "ABC"));
-        Assert.Equal("abc", (await store.TryFindClientAsync(tenant, "abc"))?.ClientId);
+        Assert.Equal("abc", (await store.FindClientAsync(tenant, "abc")).GetSuccess().ClientId);
         Assert.Equal("abc", (await store.TryFindRegisteredClientAsync(tenant, "abc"))?.ClientInfo.ClientId);
     }
 
@@ -54,7 +54,7 @@ public class ClientIdComparisonTests
         Assert.True(await store.TryAddClientAsync(tenant, Registration("abc")));
 
         Assert.False(await store.TryAddClientAsync(tenant, Registration("ABC")));
-        Assert.Null(await store.TryFindClientAsync(tenant, "ABC"));
+        Assert.Equal(ClientAbsence.Unknown, (await store.FindClientAsync(tenant, "ABC")).GetFailure());
     }
 
     [Fact]
@@ -63,8 +63,8 @@ public class ClientIdComparisonTests
         var store = Store();
         var tenant = Configuring("app");
 
-        Assert.Null(await store.TryFindClientAsync(tenant, "APP"));
-        Assert.Equal("app", (await store.TryFindClientAsync(tenant, "app"))?.ClientId);
+        Assert.Equal(ClientAbsence.Unknown, (await store.FindClientAsync(tenant, "APP")).GetFailure());
+        Assert.Equal("app", (await store.FindClientAsync(tenant, "app")).GetSuccess().ClientId);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class ClientIdComparisonTests
         var tenant = Configuring("app");
 
         Assert.False(await store.TryAddClientAsync(tenant, Registration("APP")));
-        Assert.Null(await store.TryFindClientAsync(tenant, "APP"));
+        Assert.Equal(ClientAbsence.Unknown, (await store.FindClientAsync(tenant, "APP")).GetFailure());
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ public class ClientIdComparisonTests
         var before = Configuring();
         Assert.True(await store.TryAddClientAsync(before, Registration("APP")));
 
-        Assert.Equal("app", (await store.TryFindClientAsync(Configuring("app"), "app"))?.ClientId);
+        Assert.Equal("app", (await store.FindClientAsync(Configuring("app"), "app")).GetSuccess().ClientId);
 
         Assert.Null(await store.TryFindRegisteredClientAsync(before, "APP"));
     }

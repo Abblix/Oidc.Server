@@ -64,6 +64,7 @@ public class ResourceValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
         };
     }

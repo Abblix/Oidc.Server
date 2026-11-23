@@ -98,11 +98,9 @@ public class UserInfoRequestValidator(
 		// before the proof: the lookup only reads, while the proof check spends the proof's jti. A pairwise access
 		// token's 'sub' is also opened back to the real subject with the client's sector further down.
 		var clientId = token.Payload.ClientId;
-		var clientInfo = clientId is not null
-			? await clientInfoProvider.TryFindClientAsync(tenant, clientId)
-			: null;
-
-		if (clientInfo == null)
+		ClientInfo? clientInfo = null;
+		if (clientId is null ||
+		    !(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out clientInfo))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,

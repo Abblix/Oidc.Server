@@ -75,6 +75,7 @@ public class FlowTypeValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
         };
     }

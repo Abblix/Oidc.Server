@@ -41,9 +41,11 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="rateLimiter">
 /// The budget of introspection requests one client gets, spent once the caller is known to be that client.
 /// </param>
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
+	IClientInfoProvider clientInfoProvider,
 	IAuthServiceJwtReader jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Introspection)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
@@ -70,7 +72,8 @@ public partial class IntrospectionRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
+			tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
 		if (!authenticated.TryGetSuccess(out var clientInfo))
 			return RefusalOf(authenticated.GetFailure());
 

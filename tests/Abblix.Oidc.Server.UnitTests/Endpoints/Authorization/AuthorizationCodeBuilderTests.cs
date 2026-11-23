@@ -113,7 +113,7 @@ public class AuthorizationCodeBuilderTests
             Scope = [Scopes.OpenId],
         };
         var request = new ValidAuthorizationRequest(
-            new AuthorizationValidationContext(model) { ClientInfo = new ClientInfo(ClientId) });
+            new AuthorizationValidationContext(model) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = new ClientInfo(ClientId) });
 
         var grant = new AuthorizedGrant(
             new AuthSession("user_123", "session_123", DateTimeOffset.UnixEpoch, "local"),

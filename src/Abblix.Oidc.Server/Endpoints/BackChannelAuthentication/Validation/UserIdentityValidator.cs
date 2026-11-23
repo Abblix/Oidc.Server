@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -21,9 +22,11 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <param name="hintParser">Decides whether an <c>id_token_hint</c> is an ID token this server issued.</param>
 /// <param name="clientJwtValidator">Validator for JWTs issued by clients.</param>
+/// <param name="clientInfoProvider">Finds a client a login hint token names other than the requesting one.</param>
 public class UserIdentityValidator(
     IIdTokenHintParser hintParser,
-    IClientJwtValidator clientJwtValidator): IBackChannelAuthenticationContextValidator
+    IClientJwtValidator clientJwtValidator,
+    IClientInfoProvider clientInfoProvider): IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Validates the user's identity based on the provided identity hints, such as login hint, login hint token,
@@ -77,7 +80,10 @@ public class UserIdentityValidator(
             var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
                 tenant,
                 context.ClientInfo,
-                request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
+                clientInfoProvider,
+                request.LoginHintToken,
+                TokenTypePolicy.CheckedByCaller,
+                signingAlgorithms: null);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))
             {

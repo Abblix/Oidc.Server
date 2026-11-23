@@ -39,6 +39,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// </summary>
 public class PrivateKeyJwtAuthenticatorTests
 {
+    /// <summary>The clients of the request, which the authenticators under test receive and pass on.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     private const string ClientId = "test_client_789";
     private const string JwtAssertion = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
 
@@ -85,7 +88,7 @@ public class PrivateKeyJwtAuthenticatorTests
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
@@ -95,7 +98,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -128,7 +131,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Header.Type = tokenType;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var request = new ClientRequest
@@ -138,7 +141,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -168,7 +171,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Header.Type = tokenType;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var request = new ClientRequest
@@ -178,7 +181,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -200,7 +203,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -221,7 +224,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -243,7 +246,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -260,7 +263,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator();
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid signature"));
 
         var request = new ClientRequest
@@ -270,7 +273,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -290,7 +293,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var invalidToken = CreateValidJwtToken("different_issuer", ClientId);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(invalidToken, clientInfo));
 
         var request = new ClientRequest
@@ -300,7 +303,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -320,7 +323,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var tokenWithoutIssuer = CreateValidJwtToken(null, ClientId);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(tokenWithoutIssuer, clientInfo));
 
         var request = new ClientRequest
@@ -330,7 +333,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -350,7 +353,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var tokenWithoutSubject = CreateValidJwtToken(ClientId, null);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(tokenWithoutSubject, clientInfo));
 
         var request = new ClientRequest
@@ -360,7 +363,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -382,7 +385,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var validToken = CreateValidJwtToken(ClientId, ClientId);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
@@ -392,7 +395,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -416,7 +419,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var validToken = CreateValidJwtTokenWithJtiAndExp(ClientId, ClientId, jti, expiresAt);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         var request = new ClientRequest
@@ -426,7 +429,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -455,7 +458,7 @@ public class PrivateKeyJwtAuthenticatorTests
             DateTimeOffset.Parse("2027-01-01T00:05:00Z", System.Globalization.CultureInfo.InvariantCulture));
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         mocks.ReplayCache
@@ -469,7 +472,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -491,7 +494,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var tokenWithoutJti = CreateValidJwtToken(ClientId, ClientId);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(tokenWithoutJti, clientInfo));
 
         var request = new ClientRequest
@@ -501,7 +504,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -527,7 +530,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var tokenWithoutExp = CreateValidJwtTokenWithJti(ClientId, ClientId, "jti-without-exp");
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(tokenWithoutExp, clientInfo));
 
         var request = new ClientRequest
@@ -537,7 +540,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -558,7 +561,7 @@ public class PrivateKeyJwtAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -602,14 +605,14 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Audiences = audiences;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.False(result.TryGetSuccess(out _));
         AssertRefusedForItsAudience(mocks);
@@ -663,14 +666,14 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = new JsonArray(IssuerIdentifier);
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -694,14 +697,14 @@ public class PrivateKeyJwtAuthenticatorTests
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -727,14 +730,14 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience.DeepClone();
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -816,7 +819,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var tenant = new TestIssuer { Issuer = new Uri("https://ISSUER.example.com:443") }.ToTenant();
@@ -824,7 +827,7 @@ public class PrivateKeyJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -854,7 +857,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var tenant = new TestIssuer { Issuer = new Uri("https://ISSUER.example.com:443/tenants/acme") }.ToTenant();
@@ -862,7 +865,7 @@ public class PrivateKeyJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -893,7 +896,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var tenant = new TestIssuer
@@ -906,7 +909,7 @@ public class PrivateKeyJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -938,7 +941,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var tenant = new TestIssuer
@@ -951,7 +954,7 @@ public class PrivateKeyJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -1013,7 +1016,7 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         var tenant = new TestIssuer
@@ -1026,7 +1029,7 @@ public class PrivateKeyJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -1153,14 +1156,14 @@ public class PrivateKeyJwtAuthenticatorTests
         token.Payload.Json[JwtClaimTypes.Audience] = audience;
 
         mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         return await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, Clients);
     }
 
     /// <summary>
@@ -1220,6 +1223,8 @@ public class PrivateKeyJwtAuthenticatorTests
 
         var services = new ServiceCollection();
         services.AddScoped<IClientJwtValidator>(_ => clientJwtValidator.Object);
+        services.AddSingleton(Mock.Of<IJsonWebTokenValidator>(
+            validator => validator.SigningAlgorithmsSupported == ValidatorSigningAlgorithms));
         if (resolverRegistered)
             services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
         var serviceProvider = services.BuildServiceProvider(validateScopes: true);
@@ -1359,6 +1364,47 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// The signature algorithms the JWT validator supports in these tests, a shared-secret one and "none" among them.
+    /// </summary>
+    private static readonly string[] ValidatorSigningAlgorithms =
+    [
+        SigningAlgorithms.RS256, SigningAlgorithms.ES256, SigningAlgorithms.PS256, SigningAlgorithms.HS256,
+        SigningAlgorithms.None,
+    ];
+
+    /// <summary>
+    /// A private key signs asymmetrically, so the client JWT validator is handed every supported algorithm but the
+    /// shared-secret ones and "none", which it refuses before it looks the assertion's issuer up.
+    /// </summary>
+    [Fact]
+    public async Task TheValidatorIsHandedTheAsymmetricAlgorithmsAlone()
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        System.Collections.Generic.IReadOnlySet<string>? handed = null;
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched,
+                null,
+                Clients,
+                JwtAssertion,
+                It.IsAny<TokenTypePolicy>(),
+                It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(),
+                It.IsAny<ValidationOptions>()))
+            .Callback((TenantDefinition _, ClientInfo? _, IClientInfoProvider _, string _, TokenTypePolicy _,
+                System.Collections.Generic.IReadOnlySet<string>? algorithms, ValidationOptions _) => handed = algorithms)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+
+        await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientAssertionType = ClientAssertionTypes.JwtBearer, ClientAssertion = JwtAssertion },
+            Clients);
+
+        Assert.Equal(
+            [SigningAlgorithms.ES256, SigningAlgorithms.PS256, SigningAlgorithms.RS256],
+            handed.NotNull(nameof(handed)).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// A client_assertion_type without an assertion presents nothing: the assertion is the credential, its type only
     /// says how to read it.
     /// </summary>
@@ -1369,7 +1415,8 @@ public class PrivateKeyJwtAuthenticatorTests
 
         var result = await authenticator.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
-            new ClientRequest { ClientId = ClientId, ClientAssertionType = ClientAssertionTypes.JwtBearer });
+            new ClientRequest { ClientId = ClientId, ClientAssertionType = ClientAssertionTypes.JwtBearer },
+            Clients);
 
         Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
@@ -1383,10 +1430,11 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, _) = CreateAuthenticator();
 
         var none = await authenticator.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId });
+            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId }, Clients);
         var otherType = await authenticator.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
-            new ClientRequest { ClientAssertionType = "urn:example:other", ClientAssertion = "assertion" });
+            new ClientRequest { ClientAssertionType = "urn:example:other", ClientAssertion = "assertion" },
+            Clients);
 
         Assert.IsType<UnauthenticatedCallerError>(none.GetFailure());
         Assert.IsNotType<UnauthenticatedCallerError>(otherType.GetFailure());

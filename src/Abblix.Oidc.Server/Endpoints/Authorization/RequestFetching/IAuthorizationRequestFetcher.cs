@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -27,6 +28,7 @@ public interface IAuthorizationRequestFetcher
     /// <param name="request">
     /// The initial authorization request, which may contain a reference to a request object or inline request parameters.
     /// </param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.</param>
     /// <returns>
     /// A task that returns the processed authorization request details, encapsulated within a
     /// <see cref="Result{TSuccess,TFailure}"/> of <see cref="AuthorizationRequest"/> on success or
@@ -37,5 +39,8 @@ public interface IAuthorizationRequestFetcher
     /// or validating the request object provided inline via the 'request' parameter. It ensures the request adheres
     /// to the expected format and validation requirements before further processing.
     /// </remarks>
-    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(TenantDefinition tenant, AuthorizationRequest request);
+    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        TenantDefinition tenant,
+        AuthorizationRequest request,
+        IClientInfoProvider clients);
 }

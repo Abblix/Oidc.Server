@@ -28,6 +28,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication;
 /// </summary>
 public class BackChannelAuthenticationHandlerTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     private readonly Mock<IClientAuthenticator> _clientAuthenticator = new(MockBehavior.Strict);
     private readonly Mock<IBackChannelAuthenticationRequestFetcher> _fetcher = new(MockBehavior.Strict);
     private readonly Mock<IBackChannelAuthenticationRequestValidator> _validator = new(MockBehavior.Strict);
@@ -47,7 +50,8 @@ public class BackChannelAuthenticationHandlerTests
     };
 
     private BackChannelAuthenticationHandler Handler() => new(
-        _clientAuthenticator.Object, _fetcher.Object, _validator.Object, _processor.Object);
+        _clientAuthenticator.Object,
+        Clients, _fetcher.Object, _validator.Object, _processor.Object);
 
     /// <summary>
     /// A caller that does not authenticate is answered invalid_client (CIBA Core 1.0 section 13) and nothing it sent is
@@ -57,7 +61,7 @@ public class BackChannelAuthenticationHandlerTests
     public async Task AnUnauthenticatedCaller_IsInvalidClient_BeforeTheRequestIsRead()
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var result = await Handler().HandleAsync(SingleIssuer.Tenant, _request, _clientRequest);
@@ -81,7 +85,7 @@ public class BackChannelAuthenticationHandlerTests
         string[] grantTypes, string authenticationMethod, string? deliveryMode)
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo("client-1")
             {
                 AllowedGrantTypes = grantTypes,
@@ -107,7 +111,7 @@ public class BackChannelAuthenticationHandlerTests
         var refusal = new OidcError(ErrorCodes.InvalidScope, "refused");
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         _fetcher
             .Setup(f => f.FetchAsync(TestTenant.Matched, client, _request))
@@ -121,7 +125,7 @@ public class BackChannelAuthenticationHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Same(refusal, error);
         _clientAuthenticator.Verify(
-            a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest), Times.Once);
+            a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()), Times.Once);
     }
 
     /// <summary>
@@ -134,7 +138,7 @@ public class BackChannelAuthenticationHandlerTests
         var client = CibaClient();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         _fetcher
             .Setup(f => f.FetchAsync(TestTenant.Matched, client, _request))

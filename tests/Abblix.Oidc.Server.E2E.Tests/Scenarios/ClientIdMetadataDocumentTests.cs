@@ -36,7 +36,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// A client identifying itself by the URL of its own metadata document (draft-ietf-oauth-client-id-metadata-document),
 /// on a host that turned the feature on, as it meets the discovery, authorization, token and registration endpoints.
 /// </summary>
-public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(factory)
+public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(factory)
 {
     private const string ClientId = "https://client.example.com/oauth/metadata.json";
 
@@ -161,8 +161,7 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
-        // A refusal is not held (section 6.2: the server "MUST NOT cache error responses"), so each lookup of the
-        // client within the request asks again; one refused before any fetch reaches nothing
+        // One refused before any fetch reaches nothing
         Assert.Equal(fetched, _origin.RequestsTo(ClientId) > 0);
     }
 

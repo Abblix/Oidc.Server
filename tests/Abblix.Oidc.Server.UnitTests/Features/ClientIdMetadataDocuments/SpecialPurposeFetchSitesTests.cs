@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -45,12 +46,12 @@ public class SpecialPurposeFetchSitesTests
         var client = new ClientInfo("client") { RequestUris = [requestUri], ResolvedFromMetadataDocument = fromDocument };
         var origin = new Origin("eyJhbGciOiJub25lIn0.e30.");
         using var http = new HttpClient(Behind(origin));
+        var found = Task.FromResult<Result<ClientInfo, ClientAbsence>>(client);
         var fetcher = new RequestUriFetcher(
             NullLogger<RequestUriFetcher>.Instance,
-            Mock.Of<IClientInfoProvider>(store => store.TryFindClientAsync(Tenant, client.ClientId) == Task.FromResult<ClientInfo?>(client)),
             new SecureHttpFetcher(NullLogger<SecureHttpFetcher>.Instance, http, Options.Create(new SecureHttpFetchOptions())));
 
-        var result = await fetcher.FetchAsync(Tenant, new AuthorizationRequest { ClientId = client.ClientId, RequestUri = requestUri });
+        var result = await fetcher.FetchAsync(Tenant, new AuthorizationRequest { ClientId = client.ClientId, RequestUri = requestUri }, Mock.Of<IClientInfoProvider>(store => store.FindClientAsync(Tenant, client.ClientId) == found));
 
         Assert.Equal(fetched, result.TryGetSuccess(out _));
         Assert.Equal(fetched, origin.Reached);

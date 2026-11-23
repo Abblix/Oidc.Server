@@ -99,8 +99,7 @@ public partial class AuthenticationCompletionRouter(
         }
 
         var clientId = stored.AuthorizedGrant.Context.ClientId;
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo == null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(fingerprints.Of(authenticationRequestId), clientId);
             throw new InvalidOperationException(

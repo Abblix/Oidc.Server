@@ -49,7 +49,7 @@ public class RevocationCutoffCheckerClientSubjectTests
                 TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
         _clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
     }
 
@@ -133,7 +133,7 @@ public class RevocationCutoffCheckerClientSubjectTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = "client.example.com",
         };
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
         SetupCutoff(ClientId, IssuedAt.AddMinutes(10));
         var token = Token(ClientId);
         token.Subject = converter.Convert(Subject, pairwiseClient);

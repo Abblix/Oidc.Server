@@ -161,7 +161,7 @@ public class ServiceCollectionOverrideTests
         };
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+        clients.Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
 
         services.AddLogging();
         services.AddSingleton(clients.Object);
@@ -188,7 +188,8 @@ public class ServiceCollectionOverrideTests
 
         var authenticated = await authenticator.TryAuthenticateClientAsync(
             fapi2.ToTenant(),
-            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+            new ClientRequest { ClientId = TestConstants.DefaultClientId },
+            clients.Object);
 
         Assert.False(authenticated.TryGetSuccess(out _));
     }
@@ -211,8 +212,8 @@ public class ServiceCollectionOverrideTests
         };
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
-            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? publicClient : null);
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? publicClient : ClientAbsence.Unknown);
 
         services.AddLogging();
         services.AddSingleton(clients.Object);
@@ -234,8 +235,8 @@ public class ServiceCollectionOverrideTests
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
         var request = new ClientRequest { ClientId = TestConstants.DefaultClientId };
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
-        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request, clients.Object)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request, clients.Object)).TryGetSuccess(out _));
     }
 
     [Fact]

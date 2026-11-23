@@ -50,8 +50,8 @@ public class AuthServiceJwtValidatorTests
         // A client the token names is not registered unless a test says so, leaving the token to the presenter's
         // profile alone
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync(ClientAbsence.Unknown);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _validator = new AuthServiceJwtValidator(
@@ -558,7 +558,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -908,7 +908,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.ClientId = ownerId;
         SetupHonouringValidator(token, keyManagement: null);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ownerId))
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
         var presenter = new ClientInfo(ValidClientId) { SecurityProfile = presenterProfile };
 
@@ -937,7 +937,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.ClientId = ownerId;
         SetupHonouringValidator(token, keyManagement: null);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ownerId))
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
@@ -963,7 +963,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.Audiences = [ownerId];
         SetupHonouringValidator(token, keyManagement: null);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ownerId))
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
@@ -991,7 +991,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.Audiences = [ExpectedIssuer];
         SetupHonouringValidator(token, keyManagement: null);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ownerId))
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
@@ -1016,7 +1016,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.ClientId = ownerId;
         SetupHonouringValidator(token, EncryptionAlgorithms.KeyManagement.Rsa1_5);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ownerId))
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(

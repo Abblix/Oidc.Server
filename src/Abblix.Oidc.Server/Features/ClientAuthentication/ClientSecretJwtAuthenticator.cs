@@ -8,6 +8,7 @@
 
 using System.Text;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -29,7 +30,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="tokenValidator">Validator for JSON Web Tokens.</param>
-/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Resolves per request where the token and backchannel authentication endpoints are
@@ -38,7 +38,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     ProfiledJwtValidator tokenValidator,
-    IClientInfoProvider clientInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache,
     IServiceProvider serviceProvider)
@@ -59,14 +58,15 @@ public partial class ClientSecretJwtAuthenticator(
     /// Validates the JWT assertion using HMAC signature with the client secret.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
     protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
-        TenantDefinition tenant, string jwt)
+        TenantDefinition tenant, IClientInfoProvider clients, string jwt)
     {
-        var context = new ValidationContext();
+        var context = new ValidationContext(clients);
         var profile = DefaultProfileRequirementsOf(tenant);
 
         var result = await tokenValidator.ValidateAsync(
@@ -81,6 +81,9 @@ public partial class ClientSecretJwtAuthenticator(
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
                 ClockSkew = profile.ClockSkewOrDefault(),
+                // The client secret signs with HMAC alone (OpenID Connect Core section 9), and the same list
+                // offers its keys: an assertion signed otherwise is refused before its issuer is looked up
+                AllowedSigningAlgorithms = HmacAlgorithms.All,
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });
@@ -91,8 +94,14 @@ public partial class ClientSecretJwtAuthenticator(
     /// <summary>
     /// Context object used to pass state between validation methods during JWT validation process.
     /// </summary>
-    private sealed class ValidationContext
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
+    private sealed class ValidationContext(IClientInfoProvider clients)
     {
+        /// <summary>
+        /// The clients of the request being served.
+        /// </summary>
+        public IClientInfoProvider Clients => clients;
+
         /// <summary>
         /// The client information resolved during the validation process.
         /// </summary>
@@ -119,19 +128,17 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(tenant, issuer))
+        if (!(await context.Clients.FindClientAsync(tenant, issuer)).TryGetSuccess(out var clientInfo))
+            return false;
+
+        if (clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt)
         {
-            case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
-                LogWrongAuthMethod(issuer);
-                return false;
-
-            case { } clientInfo:
-                context.ClientInfo = clientInfo;
-                return true;
-
-            default:
-                return false;
+            LogWrongAuthMethod(issuer);
+            return false;
         }
+
+        context.ClientInfo = clientInfo;
+        return true;
     }
 
     /// <summary>
@@ -167,12 +174,10 @@ public partial class ClientSecretJwtAuthenticator(
                 continue;
             }
 
-            // Provide keys for all supported HMAC algorithms
-            // The JWT validator will use the one matching the JWT's alg header
+            // The JWT validator uses the key matching the JWT's alg header
             var secretBytes = Encoding.UTF8.GetBytes(clientSecret.Value);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS512, secretBytes);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS384, secretBytes);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS256, secretBytes);
+            foreach (var algorithm in HmacAlgorithms.All)
+                yield return CreateSymmetricKey(algorithm, secretBytes);
         }
     }
 
