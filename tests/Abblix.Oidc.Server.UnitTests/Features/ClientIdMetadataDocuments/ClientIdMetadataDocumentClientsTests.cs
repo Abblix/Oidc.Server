@@ -77,6 +77,21 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     }
 
     /// <summary>
+    /// Section 3 compares Client Identifier URLs "using simple string comparison", so a client a store holds under
+    /// another spelling of the URL is not the one the URL names, and the document is fetched.
+    /// </summary>
+    [Fact]
+    public async Task AClientTheStoreHoldsUnderAnotherSpelling_IsNotServed_AndTheDocumentIsFetched()
+    {
+        var stored = new ClientInfo("HTTPS://client.example.com/metadata.json");
+        _store.Setup(store => store.FindClientAsync(Tenant, ClientId)).ReturnsAsync(stored);
+        _services.Origin.Serve(ClientId, Document);
+
+        Assert.NotSame(stored, (await CreateClients().FindClientAsync(Tenant, ClientId)).GetSuccess());
+        Assert.Equal(1, _services.Origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
     /// An identifier not written as an https URL names no document, so its client is unknown like any other; one that
     /// is so written but is no client identifier URL (section 3) is a document the server refuses to fetch.
     /// </summary>

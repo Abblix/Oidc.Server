@@ -12,10 +12,11 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses a tenant declaring two clients under one id, the case of its letters aside.
+/// Refuses a tenant declaring two clients under one id, or under ids that differ only in the case of their letters.
 /// </summary>
 /// <remarks>
-/// The client registry looks ids up regardless of case, so it cannot hold both and fails when it is first built -
+/// A request names a client by its id exactly, but no tenant holds two clients under ids differing only in case
+/// (<see cref="ClientIdComparison.Held"/>), so the client registry cannot hold both and fails when it is first built -
 /// on a request, with an error that names neither client.
 /// </remarks>
 public sealed class ClientIdsCheck : ITenantsCheck
@@ -26,10 +27,10 @@ public sealed class ClientIdsCheck : ITenantsCheck
 
     private static IEnumerable<string> Failures(IEnumerable<ClientInfo> clients)
         => clients
-            .GroupBy(client => client.ClientId, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(client => client.ClientId, ClientIdComparison.Held)
             .Where(same => same.Count() > 1)
             .Select(same =>
                 $"{same.Count()} clients are configured under the id " +
-                $"{string.Join(" and ", same.Select(client => $"'{client.ClientId}'").Distinct())}; client ids " +
-                "are compared regardless of case, so give each client an id of its own.");
+                $"{string.Join(" and ", same.Select(client => $"'{client.ClientId}'").Distinct())}; no two clients " +
+                "may hold ids that differ only in case, so give each client an id of its own.");
 }

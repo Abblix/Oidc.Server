@@ -49,8 +49,10 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     /// <inheritdoc />
     public async Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
+        // A store the host registered may answer with a client held under another spelling of the URL, which section 3
+        // has compared "using simple string comparison": that client is not the one the URL names
         var stored = await inner.FindClientAsync(tenant, clientId);
-        if (stored.TryGetSuccess(out _))
+        if (stored.TryGetSuccess(out var storedClient) && storedClient.IsNamedBy(clientId))
             return stored;
 
         var settings = options.CurrentValue;

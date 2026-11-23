@@ -29,7 +29,38 @@ public class ClientIdentifierUrlTests
     {
         Assert.Null(ClientIdentifierUrl.WhyNotFetched(clientId, OutboundAddressRule.NoSpecialPurpose, out var url));
         Assert.Equal(clientId, url!.AbsoluteUri);
+        Assert.True(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
     }
+
+    /// <summary>
+    /// Registration withholds every spelling of an https URL, not only the one a document is fetched under, so no
+    /// registration holds an id reading as a document's URL.
+    /// </summary>
+    [Theory]
+    [InlineData("HTTPS://client.example.com/metadata.json")]
+    [InlineData("Https://client.example.com/metadata.json")]
+    [InlineData("hTtPs://client.example.com/metadata.json")]
+    [InlineData(" https://client.example.com/metadata.json")]
+    [InlineData("https://client.example.com/metadata.json ")]
+    [InlineData(" HTTPS://client.example.com/metadata.json ")]
+    [InlineData("\thttps://client.example.com/metadata.json")]
+    [InlineData("https://client.example.com/metadata.json\r\n")]
+    [InlineData("https://Client.Example.com:443/metadata.json")]
+    [InlineData("https://client.example.com")]
+    [InlineData("https://")]
+    public void AnHttpsUrlInAnySpelling_IsWithheldFromRegistration(string clientId)
+        => Assert.True(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
+
+    [Theory]
+    [InlineData("client-1")]
+    [InlineData("ABC")]
+    [InlineData("httpsclient")]
+    [InlineData("https-client")]
+    [InlineData("http://client.example.com/metadata.json")]
+    [InlineData("HTTP://client.example.com/metadata.json")]
+    [InlineData("urn:example:client")]
+    public void AnIdThatIsNoHttpsUrl_MayBeRegistered(string clientId)
+        => Assert.False(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
 
     [Theory]
     // "MUST use the https URL scheme", compared as written
