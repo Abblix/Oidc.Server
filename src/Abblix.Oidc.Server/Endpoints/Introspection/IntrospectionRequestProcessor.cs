@@ -51,7 +51,7 @@ public class IntrospectionRequestProcessor(
 	{
 		if (request.Token == null)
 		{
-			// https://www.rfc-editor.org/rfc/rfc7662#section-2.2: 
+			// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2: 
 
 			// If the introspection call is properly authorized but the token is not active, does not exist on this server,
 			// or the protected resource is not allowed to introspect this particular token, then the authorization server

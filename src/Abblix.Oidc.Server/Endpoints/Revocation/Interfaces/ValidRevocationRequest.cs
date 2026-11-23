@@ -33,7 +33,7 @@ public record ValidRevocationRequest
 	/// <remarks>
 	/// Invalid tokens do not cause an error response since the client cannot handle such an error in a reasonable way.
 	/// Moreover, the purpose of the revocation request, invalidating the particular token, is already achieved.
-	/// See https://www.rfc-editor.org/rfc/rfc7009#section-2.2
+	/// See https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 	/// </remarks>
 	public static ValidRevocationRequest InvalidToken(RevocationRequest model) => new(model);
 

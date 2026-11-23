@@ -73,7 +73,7 @@ public class ClientSecretBasicAuthenticator(
 
 		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
-		// According to RFC 7617: https://www.rfc-editor.org/rfc/rfc7617#section-2.1
+		// According to RFC 7617: https://datatracker.ietf.org/doc/html/rfc7617#section-2.1
 		// the first colon in a user-pass string separates user-id and password from one another,
 		// text after the first colon is part of the password.
 		// User-ids containing colons cannot be encoded in user-pass strings.

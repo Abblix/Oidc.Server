@@ -122,7 +122,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// Handles the device authorization endpoint for getting user authorization on limited-input devices.
     /// </summary>
     /// <remarks>
-    /// <see href="https://www.rfc-editor.org/rfc/rfc8628">
+    /// <see href="https://datatracker.ietf.org/doc/html/rfc8628">
     /// OAuth 2.0 Device Authorization Grant Documentation
     /// </see>
     /// </remarks>

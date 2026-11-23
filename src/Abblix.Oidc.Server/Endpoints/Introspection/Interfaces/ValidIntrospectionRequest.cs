@@ -56,7 +56,7 @@ public record ValidIntrospectionRequest
 	/// <param name="clientInfo">The authenticated client making the introspection request.</param>
 	/// <returns>A valid introspection request with the "active" field set to "false."</returns>
 	/// <remarks>
-	/// See https://www.rfc-editor.org/rfc/rfc7662#section-5.2
+	/// See https://datatracker.ietf.org/doc/html/rfc7662#section-5.2
 	/// </remarks>
 	public static ValidIntrospectionRequest InvalidToken(IntrospectionRequest model, ClientInfo clientInfo)
 	{
