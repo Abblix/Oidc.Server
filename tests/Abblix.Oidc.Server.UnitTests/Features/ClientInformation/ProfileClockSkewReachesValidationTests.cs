@@ -170,23 +170,11 @@ public class ProfileClockSkewReachesValidationTests
     }
 
     /// <summary>
-    /// Under the profile its own tolerance arrives at the validator - the asymmetric pair section
-    /// 5.3.2.1 describes, rather than the symmetric default a site that forgot the line would send.
-    /// </summary>
-    [Fact]
-    public async Task UnderTheProfile_TheProfilesToleranceReachesTheValidator()
-    {
-        var parameters = await CaptureParameters(ClientSecurityProfile.Fapi2);
-
-        Assert.Equal(ClockSkew.Fapi2, parameters.ClockSkew);
-    }
-
-    /// <summary>
-    /// And selecting no profile brings ITS answer, not the library's own - which is none, and would
+    /// Selecting no profile brings ITS answer, not the library's own - which is none, and would
     /// leave a bearer assertion from an issuer whose clock this server does not run refused over a
-    /// second of drift. Without this case
-    /// <see cref="UnderTheProfile_TheProfilesToleranceReachesTheValidator"/> would be satisfied by a
-    /// site that sends the FAPI 2.0 pair whatever profile is selected.
+    /// second of drift. A profile with a tolerance of its own never reaches this validator through
+    /// client_secret_jwt: every FAPI profile admits only asymmetric signatures, which no client secret
+    /// makes, so the assertion is refused before it is validated.
     /// </summary>
     [Fact]
     public async Task WithNoProfile_TheProfilesOwnToleranceReachesTheValidator()

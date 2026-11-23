@@ -104,13 +104,13 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// The floor is the tenant's own: under a tenant naming FAPI 2.0 a client naming nothing is held to the seconds
-    /// the profile grants, though the validator here is a stub that applies no window at all.
+    /// the profile grants, though the validator here is a stub that applies no window at all. Driven through
+    /// private_key_jwt, since the profile admits no algorithm a client secret signs with.
     /// </summary>
     [Fact]
     public async Task UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt()
     {
-        var result = await Authenticate(
-            clientProfile: null,
+        var result = await AuthenticateWithPrivateKey(
             issuedAt: Now + BeyondEveryProfileButNone,
             tenantProfile: ClientSecurityProfile.Fapi2);
 
@@ -125,8 +125,7 @@ public class ClientAssertionMayTightenItselfTests
     [Fact]
     public async Task UnderATenantNamingFapi2_AClientNamingNothingKeepsItsWindow()
     {
-        var result = await Authenticate(
-            clientProfile: null,
+        var result = await AuthenticateWithPrivateKey(
             issuedAt: Now.AddSeconds(5),
             tenantProfile: ClientSecurityProfile.Fapi2);
 
@@ -239,8 +238,7 @@ public class ClientAssertionMayTightenItselfTests
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? notBefore = null,
-        ClientSecurityProfile tenantProfile = ClientSecurityProfile.None)
+        DateTimeOffset? notBefore = null)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -283,6 +281,47 @@ public class ClientAssertionMayTightenItselfTests
             replayCache.Object,
             new ServiceCollection().BuildServiceProvider());
 
+        var tenant = new TestIssuer { Issuer = new Uri(Issuer) }.ToTenant();
+        return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+    }
+
+    /// <summary>
+    /// A private_key_jwt assertion of a client naming no profile, under a tenant naming
+    /// <paramref name="tenantProfile"/>, with the client JWT validator a stub applying no window, so only the base
+    /// class's pass judges the window.
+    /// </summary>
+    private async Task<Result<ClientInfo, OidcError>> AuthenticateWithPrivateKey(
+        DateTimeOffset issuedAt,
+        ClientSecurityProfile tenantProfile)
+    {
+        var clientInfo = new ClientInfo(ClientId) { TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt };
+        var token = CreateAssertion(issuedAt, expiresAt: null, notBefore: null, SigningAlgorithms.PS256);
+
+        var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
+        clientJwtValidator
+            .Setup(v => v.ValidateAsync(
+                It.IsAny<TenantDefinition>(),
+                null,
+                JwtAssertion,
+                It.IsAny<TokenTypePolicy>(),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var services = new ServiceCollection().AddSingleton(clientJwtValidator.Object).BuildServiceProvider();
+        var authenticator = new PrivateKeyJwtAuthenticator(
+            Mock.Of<ILogger<PrivateKeyJwtAuthenticator>>(),
+            replayCache.Object,
+            services,
+            new FakeTimeProvider(Now));
+
         var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
         {
@@ -294,13 +333,14 @@ public class ClientAssertionMayTightenItselfTests
     private static JsonWebToken CreateAssertion(
         DateTimeOffset? issuedAt,
         DateTimeOffset? expiresAt,
-        DateTimeOffset? notBefore)
+        DateTimeOffset? notBefore,
+        string algorithm = SigningAlgorithms.HS256)
     {
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject
             {
-                [JwtClaimTypes.Algorithm] = "HS256",
+                [JwtClaimTypes.Algorithm] = algorithm,
                 [JwtClaimTypes.Type] = "JWT",
             }),
             Payload = new JsonWebTokenPayload(new JsonObject

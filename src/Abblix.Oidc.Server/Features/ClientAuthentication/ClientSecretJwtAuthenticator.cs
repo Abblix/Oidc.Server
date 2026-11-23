@@ -45,6 +45,17 @@ public partial class ClientSecretJwtAuthenticator(
     : JwtAssertionAuthenticatorBase(logger, replayCache, clock, serviceProvider)
 {
     /// <summary>
+    /// The algorithms a client secret signs with, the HMAC family OpenID Connect Core section 9 names for
+    /// client_secret_jwt. Each is both admitted for the assertion and offered as a key, so an assertion signed
+    /// with any other algorithm is refused before its issuer is looked up.
+    /// </summary>
+    private static readonly string[] SecretSigningAlgorithms =
+        [SigningAlgorithms.HS512, SigningAlgorithms.HS384, SigningAlgorithms.HS256];
+
+    private static readonly IReadOnlySet<string> AdmittedSigningAlgorithms =
+        SecretSigningAlgorithms.ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
     /// This indicates that the authenticator handles client authentication using JSON Web Tokens (JWT) for
     /// the client secret, as defined in the OpenID Connect specification. It involves using JWTs as
@@ -81,6 +92,7 @@ public partial class ClientSecretJwtAuthenticator(
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
                 ClockSkew = profile.ClockSkewOrDefault(),
+                AllowedSigningAlgorithms = AdmittedSigningAlgorithms,
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });
@@ -165,12 +177,10 @@ public partial class ClientSecretJwtAuthenticator(
                 continue;
             }
 
-            // Provide keys for all supported HMAC algorithms
-            // The JWT validator will use the one matching the JWT's alg header
+            // The JWT validator uses the key matching the JWT's alg header
             var secretBytes = Encoding.UTF8.GetBytes(clientSecret.Value);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS512, secretBytes);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS384, secretBytes);
-            yield return CreateSymmetricKey(SigningAlgorithms.HS256, secretBytes);
+            foreach (var algorithm in SecretSigningAlgorithms)
+                yield return CreateSymmetricKey(algorithm, secretBytes);
         }
     }
 

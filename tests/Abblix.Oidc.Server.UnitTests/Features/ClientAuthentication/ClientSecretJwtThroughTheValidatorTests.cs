@@ -74,6 +74,25 @@ public class ClientSecretJwtThroughTheValidatorTests
         Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences))).TryGetSuccess(out _));
     }
 
+    /// <summary>
+    /// An assertion signed with an algorithm a client secret does not sign with, such as a private_key_jwt
+    /// assertion the composite authenticator also offers here, is refused before its issuer is looked up: a
+    /// client named by a metadata document would otherwise be fetched once here and again by private_key_jwt.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionNotSignedWithASecret_IsRefusedWithoutLookingTheClientUp()
+    {
+        await using var jwt = JsonWebTokenServices();
+        var clients = new Mock<IClientInfoProvider>();
+        var authenticator = Authenticator(jwt, clients);
+
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        var request = await RequestAsync(jwt, [Globex.Issuer.OriginalString], key);
+
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, request)).TryGetSuccess(out _));
+        clients.Verify(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
+    }
+
     private static ServiceProvider JsonWebTokenServices()
     {
         var services = new ServiceCollection();
@@ -84,13 +103,15 @@ public class ClientSecretJwtThroughTheValidatorTests
     }
 
     private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt)
+        => Authenticator(jwt, new Mock<IClientInfoProvider>());
+
+    private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt, Mock<IClientInfoProvider> clients)
     {
         var client = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
             ClientSecrets = [new ClientSecret { Value = Secret }],
         };
-        var clients = new Mock<IClientInfoProvider>();
         clients
             .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == Globex.Id ? client : ClientAbsence.Unknown);
@@ -108,12 +129,18 @@ public class ClientSecretJwtThroughTheValidatorTests
             new ServiceCollection().BuildServiceProvider());
     }
 
-    private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)
+    private static Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)
+        => RequestAsync(
+            jwt,
+            audiences,
+            new OctetJsonWebKey { Algorithm = SigningAlgorithms.HS256, KeyValue = Encoding.UTF8.GetBytes(Secret) });
+
+    private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences, JsonWebKey key)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.HS256 },
+            Header = { Algorithm = key.Algorithm },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -125,7 +152,6 @@ public class ClientSecretJwtThroughTheValidatorTests
                 ExpiresAt = now.AddMinutes(1),
             },
         };
-        var key = new OctetJsonWebKey { Algorithm = SigningAlgorithms.HS256, KeyValue = Encoding.UTF8.GetBytes(Secret) };
         var assertion = await jwt.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
         return new ClientRequest { ClientAssertionType = ClientAssertionTypes.JwtBearer, ClientAssertion = assertion };
     }
