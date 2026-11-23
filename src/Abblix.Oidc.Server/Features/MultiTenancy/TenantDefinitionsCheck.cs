@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
@@ -110,6 +111,13 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
 
         // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
         failures.AddRange(TenantRefusal.EachOf(tenants, tenant => PairwiseKeyRefusals(tenant.PairwiseSubject)));
+
+        // Refused here rather than when the first client registers, which would answer with a 500
+        failures.AddRange(TenantRefusal.EachOf(
+            tenants,
+            tenant => tenant.ClientSecretEncryption is { } settings
+                ? ClientSecretEncryptionSettings.Refusals(settings)
+                : []));
 
         return failures;
     }

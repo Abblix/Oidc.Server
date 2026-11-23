@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -40,6 +41,45 @@ public partial class RegisterClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
     NewClientOptions newClientOptions) : IRegisterClientRequestProcessor
 {
+    /// <summary>
+    /// Creates the processor keeping each secret it issues encrypted as well, so a client reading its registration is
+    /// given its secret back (RFC 7592 section 3).
+    /// </summary>
+    /// <param name="logger">Records a registration the client store did not keep.</param>
+    /// <param name="credentialFactory">Generates the client id and secret.</param>
+    /// <param name="clientInfoManager">Stores the registration with its registration access token id.</param>
+    /// <param name="clock">Provides the issue time.</param>
+    /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
+    /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+    /// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
+    /// <param name="clientSecretEncryptor">Encrypts the secret issued with the key of the tenant.</param>
+    [ActivatorUtilitiesConstructor]
+    public RegisterClientRequestProcessor(
+        ILogger<RegisterClientRequestProcessor> logger,
+        IClientCredentialFactory credentialFactory,
+        IClientInfoManager clientInfoManager,
+        TimeProvider clock,
+        ITokenIdGenerator tokenIdGenerator,
+        IRegistrationAccessTokenService registrationAccessTokenService,
+        NewClientOptions newClientOptions,
+        IClientSecretEncryptor clientSecretEncryptor)
+        : this(
+            logger,
+            credentialFactory,
+            clientInfoManager,
+            clock,
+            tokenIdGenerator,
+            registrationAccessTokenService,
+            newClientOptions)
+    {
+        _clientSecretEncryptor = clientSecretEncryptor;
+    }
+
+    /// <summary>
+    /// Encrypts the secret issued, or null for a processor built without it, which keeps the hash alone.
+    /// </summary>
+    private readonly IClientSecretEncryptor? _clientSecretEncryptor;
+
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
@@ -119,7 +159,7 @@ public partial class RegisterClientRequestProcessor(
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
+            .WithClientSecrets(ToClientSecrets(tenant, model.TokenEndpointAuthMethod, credentials))
             .Build();
 
     /// <summary>
@@ -133,17 +173,21 @@ public partial class RegisterClientRequestProcessor(
     /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
+    private ClientSecret[]? ToClientSecrets(
+        TenantDefinition tenant,
+        string tokenEndpointAuthMethod,
+        ClientCredentials credentials)
     {
-        if (!credentials.ClientSecret.HasValue())
+        if (credentials.ClientSecret is not { Length: > 0 } secret)
             return null;
 
         return
         [
             new ClientSecret
             {
-                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? credentials.ClientSecret : null,
+                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? secret : null,
                 Sha512Hash = credentials.Sha512Hash,
+                EncryptedValue = _clientSecretEncryptor?.Encrypt(tenant, credentials.ClientId, secret),
                 ExpiresAt = credentials.ExpiresAt,
             }
         ];

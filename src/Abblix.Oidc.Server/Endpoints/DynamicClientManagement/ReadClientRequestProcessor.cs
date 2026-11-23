@@ -13,20 +13,42 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Builds the RFC 7592 section 2.1 read-client response from stored client metadata. The
-/// <c>client_secret</c> is intentionally omitted because secrets are persisted only as
-/// hashes; a registration access token bearing the client's current jti is re-issued so the
-/// client can keep using the management endpoint after the read, without invalidating the token
-/// it presented (read stays idempotent - only update rotates the jti).
+/// Builds the RFC 7592 section 2.1 read-client response from stored client metadata. The <c>client_secret</c> is
+/// returned when the tenant kept it encrypted (<see cref="TenantDefinition.ClientSecretEncryption"/>), as section 3 and
+/// Appendix A.1 ask, and left out otherwise, since only its hash is kept; a registration access token bearing the
+/// client's current jti is re-issued so the client can keep using the management endpoint after the read, without
+/// invalidating the token it presented (read stays idempotent - only update rotates the jti).
 /// </summary>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
     TimeProvider clock) : IReadClientRequestProcessor
 {
+    /// <summary>
+    /// Creates the processor returning the client its secret where the tenant kept it encrypted.
+    /// </summary>
+    /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+    /// <param name="clock">Provides the issue time.</param>
+    /// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
+    [ActivatorUtilitiesConstructor]
+    public ReadClientRequestProcessor(
+        IRegistrationAccessTokenService registrationAccessTokenService,
+        TimeProvider clock,
+        IClientSecretEncryptor clientSecretEncryptor)
+        : this(registrationAccessTokenService, clock)
+    {
+        _clientSecretEncryptor = clientSecretEncryptor;
+    }
+
+    /// <summary>
+    /// Decrypts the secret, or null for a processor built without it, which answers without the secret.
+    /// </summary>
+    private readonly IClientSecretEncryptor? _clientSecretEncryptor;
+
     /// <inheritdoc />
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request)
     {
@@ -43,35 +65,9 @@ public class ReadClientRequestProcessor(
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(client))
         {
             ClientId = client.ClientId,
-            ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
-            ClientSecretExpiresAt = GetClientSecretExpiresAt(client),
+            ClientSecret = IssuedClientSecret.Of(tenant, client, _clientSecretEncryptor),
+            ClientSecretExpiresAt = IssuedClientSecret.ExpiresAt(client),
             RegistrationAccessToken = registrationAccessToken,
         };
-    }
-
-    /// <summary>
-    /// Determines the latest expiration time among all client secrets.
-    /// </summary>
-    /// <param name="client">The client information containing secret configurations.</param>
-    /// <returns>
-    /// The latest expiration time if any secrets have expiration dates; otherwise, null.
-    /// Returns null if the client has no secrets or all secrets have no expiration.
-    /// </returns>
-    private static DateTimeOffset? GetClientSecretExpiresAt(ClientInfo client)
-    {
-        if (client.ClientSecrets == null)
-            return null;
-
-        DateTimeOffset? result = null;
-        foreach (var expiresAt in client.ClientSecrets.Select(secret => secret.ExpiresAt))
-        {
-            if (!expiresAt.HasValue)
-                continue;
-
-            if (!result.HasValue || result.Value < expiresAt.Value)
-                result = expiresAt;
-        }
-
-        return result;
     }
 }

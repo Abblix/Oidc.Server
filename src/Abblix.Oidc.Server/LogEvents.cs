@@ -1034,6 +1034,17 @@ internal static class LogEvents
             public const int ClientRefused = Base + 6;
             public const int LoopbackWithheld = Base + 7;
         }
+
+        /// <summary>
+        /// <c>Features/ClientInformation/IssuerClientSecretEncryptor.cs</c> - a client secret kept encrypted that no
+        /// longer decrypts (sub-range 10660-10679).
+        /// </summary>
+        public static class ClientSecretEncryption
+        {
+            private const int Base = 10660;
+
+            public const int SecretNotDecrypted = Base;
+        }
     }
 
     /// <summary>

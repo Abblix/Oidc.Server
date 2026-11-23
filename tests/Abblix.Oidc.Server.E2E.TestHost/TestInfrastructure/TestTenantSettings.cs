@@ -39,6 +39,7 @@ public sealed class TestTenantSettings
     public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
     public PairwiseSubjectSettings? PairwiseSubject { get; set; }
+    public ClientSecretEncryptionSettings? ClientSecretEncryption { get; set; }
     public CustodianHeldKeys? CustodianKeys { get; set; }
     public Uri? MtlsBaseUri { get; set; }
 
@@ -61,6 +62,7 @@ public sealed class TestTenantSettings
         SigningKeys = SigningKeys,
         EncryptionKeys = EncryptionKeys,
         PairwiseSubject = PairwiseSubject,
+        ClientSecretEncryption = ClientSecretEncryption,
         CustodianKeys = CustodianKeys,
         MtlsBaseUri = MtlsBaseUri,
     };

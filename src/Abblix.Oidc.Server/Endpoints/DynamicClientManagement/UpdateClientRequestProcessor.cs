@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -36,6 +37,34 @@ public class UpdateClientRequestProcessor(
     NewClientOptions newClientOptions) : IUpdateClientRequestProcessor
 {
     /// <summary>
+    /// Creates the processor returning the client its secret where the tenant kept it encrypted.
+    /// </summary>
+    /// <param name="clientInfoManager">Stores the updated client.</param>
+    /// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
+    /// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
+    /// <param name="clock">Provides the issue time.</param>
+    /// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
+    /// </param>
+    /// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
+    [ActivatorUtilitiesConstructor]
+    public UpdateClientRequestProcessor(
+        IClientInfoManager clientInfoManager,
+        IRegistrationAccessTokenService registrationAccessTokenService,
+        ITokenIdGenerator tokenIdGenerator,
+        TimeProvider clock,
+        NewClientOptions newClientOptions,
+        IClientSecretEncryptor clientSecretEncryptor)
+        : this(clientInfoManager, registrationAccessTokenService, tokenIdGenerator, clock, newClientOptions)
+    {
+        _clientSecretEncryptor = clientSecretEncryptor;
+    }
+
+    /// <summary>
+    /// Decrypts the secret, or null for a processor built without it, which answers without the secret.
+    /// </summary>
+    private readonly IClientSecretEncryptor? _clientSecretEncryptor;
+
+    /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
@@ -46,7 +75,7 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint
+    /// - Client secrets cannot be updated via this endpoint; the one issued is returned as a read returns it
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
@@ -98,30 +127,11 @@ public class UpdateClientRequestProcessor(
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // The update issues no new secret, so there is none to return
-            ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
+            // RFC 7592 Appendix A.1: the client's current credentials "MUST be included in the client information
+            // response" of a read or an update alike, and the update keeps the secret issued
+            ClientSecret = IssuedClientSecret.Of(tenant, updatedClient, _clientSecretEncryptor),
+            ClientSecretExpiresAt = IssuedClientSecret.ExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
         };
-    }
-
-    /// <summary>
-    /// Determines the latest expiration time among all client secrets.
-    /// </summary>
-    private static DateTimeOffset? GetClientSecretExpiresAt(ClientInfo client)
-    {
-        if (client.ClientSecrets == null)
-            return null;
-
-        DateTimeOffset? result = null;
-        foreach (var secretExpiresAt in client.ClientSecrets.Select(s => s.ExpiresAt))
-        {
-            if (!secretExpiresAt.HasValue)
-                continue;
-
-            if (!result.HasValue || result.Value < secretExpiresAt.Value)
-                result = secretExpiresAt;
-        }
-
-        return result;
     }
 }
