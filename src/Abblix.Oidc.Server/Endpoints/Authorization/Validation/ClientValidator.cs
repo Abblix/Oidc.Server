@@ -28,14 +28,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// only valid and authorized clients can initiate authorization requests.
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
-/// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
 /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to, judged against its
 /// profile.</param>
 /// <param name="options">Supplies the service token settings the client's access and refresh tokens are issued with.
 /// </param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider,
     ClientEncryptionKeyResolver encryptionKeyResolver,
     IOptions<OidcOptions> options) : IAuthorizationContextValidator
 {
@@ -59,7 +57,7 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
+        if (!(await context.Clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
 

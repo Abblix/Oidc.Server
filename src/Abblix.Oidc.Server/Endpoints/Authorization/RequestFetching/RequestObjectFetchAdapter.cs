@@ -28,10 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
-public class RequestObjectFetchAdapter(
-    IRequestObjectFetcher requestObjectFetcher,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
+public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
@@ -41,6 +38,8 @@ public class RequestObjectFetchAdapter(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be processed.</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.
+    /// The client named outside the object is found in them.</param>
     /// <returns>
     /// A task that returns a <see cref="Result{AuthorizationRequest, AuthorizationRequestValidationError}"/>
     /// which either represents a successfully processed request with merged JWT claims or an error indicating
@@ -48,7 +47,8 @@ public class RequestObjectFetchAdapter(
     /// </returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
         TenantDefinition tenant,
-        AuthorizationRequest request)
+        AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
         // A request read back from storage had its object validated and applied before it was stored, and carries what
         // the server set on it since: the URN it is consumed under, the pages the end user was sent to, the DPoP key the
@@ -71,7 +71,7 @@ public class RequestObjectFetchAdapter(
                     $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
             }
 
-            if ((await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found))
+            if ((await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found))
                 namedClient = found;
         }
 

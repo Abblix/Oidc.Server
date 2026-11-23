@@ -19,10 +19,8 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
-public class PushedRequestObjectFetchAdapter(
-    IRequestObjectFetcher requestObjectFetcher,
-    IClientInfoProvider clientInfoProvider) : RequestObjectFetchAdapter(requestObjectFetcher, clientInfoProvider)
+public class PushedRequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher)
+    : RequestObjectFetchAdapter(requestObjectFetcher)
 {
     /// <summary>
     /// RFC 9126 section 3 step 3: "reject the request if the authenticated "client_id" does not match the "client_id"

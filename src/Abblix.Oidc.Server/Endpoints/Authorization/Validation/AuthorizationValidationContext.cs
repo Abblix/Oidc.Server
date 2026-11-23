@@ -37,6 +37,16 @@ public record AuthorizationValidationContext(AuthorizationRequest Request)
 	/// </exception>
 	public ClientInfo ClientInfo { get => _clientInfo.NotNull(nameof(ClientInfo)); set => _clientInfo = value; }
 
+	private IClientInfoProvider? _clients;
+
+	/// <summary>
+	/// The clients the request names, each found once: the answers are fixed for this request, so every validator
+	/// asking for the client gets the answer the request's earlier steps got.
+	/// </summary>
+	/// <exception cref="InvalidOperationException">Thrown when trying to access this property before it is set.
+	/// </exception>
+	public IClientInfoProvider Clients { get => _clients.NotNull(nameof(Clients)); init => _clients = value; }
+
 	/// <summary>
 	/// Specifies how the authorization response should be delivered to the client, e.g., via a direct query or fragment.
 	/// </summary>

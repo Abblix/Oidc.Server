@@ -57,8 +57,8 @@ public class PushedAuthorizationRequestValidatorTests
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
         _innerValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationRequest>()))
-            .ReturnsAsync((TenantDefinition _, AuthorizationRequest req) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((TenantDefinition _, AuthorizationRequest req, IClientInfoProvider _) =>
             {
                 _capturedRequest = req;
                 return (Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)
@@ -84,7 +84,9 @@ public class PushedAuthorizationRequestValidatorTests
         ClientRequest clientRequest)
     {
         var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest);
-        return await _validator.ValidateAsync(SingleIssuer.Tenant, client.GetSuccess(), request, clientRequest);
+        return await _validator.ValidateAsync(
+            SingleIssuer.Tenant, client.GetSuccess(), request, clientRequest,
+            new Mock<IClientInfoProvider>().Object);
     }
 
     private AuthorizationRequest? _capturedRequest;

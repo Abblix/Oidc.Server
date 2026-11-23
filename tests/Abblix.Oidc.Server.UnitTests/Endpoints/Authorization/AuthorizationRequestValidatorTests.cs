@@ -63,7 +63,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -91,7 +91,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -120,7 +120,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -146,7 +146,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         _contextValidator.Verify(
@@ -177,7 +177,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -206,7 +206,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -233,7 +233,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -265,8 +265,8 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request1);
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request2);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request1, new Mock<IClientInfoProvider>().Object);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request2, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.Equal(2, capturedContexts.Count);
@@ -307,8 +307,8 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, request1);
-        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, request2);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, request1, new Mock<IClientInfoProvider>().Object);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, request2, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var validRequest1));
@@ -342,7 +342,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request, new Mock<IClientInfoProvider>().Object);
 
         // Assert
         Assert.NotNull(capturedContext);

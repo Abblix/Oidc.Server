@@ -31,11 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// data required for processing the authorization request.
 /// </summary>
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
-/// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
 public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
-    IClientInfoProvider clientInfoProvider,
     ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
@@ -45,6 +43,7 @@ public partial class RequestUriFetcher(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request, which contains the RequestUri.</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.</param>
     /// <returns>
     /// A task representing the asynchronous operation, with the result being the fetched request object or an error.
     /// </returns>
@@ -55,7 +54,8 @@ public partial class RequestUriFetcher(
     /// </remarks>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
         TenantDefinition tenant,
-        AuthorizationRequest request)
+        AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
         if (request is { Request: not null, RequestUri: not null })
         {
@@ -85,7 +85,7 @@ public partial class RequestUriFetcher(
                 $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
-        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
+        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
             return AuthorizationErrorFactory.ValidationError(

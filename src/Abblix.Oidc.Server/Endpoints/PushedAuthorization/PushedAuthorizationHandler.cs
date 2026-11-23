@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -28,7 +29,10 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// pushed authorization requests.</param>
 /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
 /// validated authorization requests.</param>
+/// <param name="clientInfoProvider">The client store, which every step after the client authenticated asks through one
+/// <see cref="RequestScopedClientInfoProvider"/> answering for the authenticated client without asking.</param>
 public class PushedAuthorizationHandler(
+    IClientInfoProvider clientInfoProvider,
     IClientAuthenticator clientAuthenticator,
     IAuthorizationRequestFetcher fetcher,
     IPushedAuthorizationRequestValidator validator,
@@ -87,6 +91,10 @@ public class PushedAuthorizationHandler(
                 ErrorFactory.InvalidRequest("The pushed authorization request must be bound to the client that posted it"));
         }
 
+        // Every later step asking for the client the request names gets the one that authenticated, without asking the
+        // store again
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider, clientInfo);
+
         // RFC 9126 section 3: "Request parameters required by a given client authentication method are included in the
         // "application/x-www-form-urlencoded" request directly and are the only parameters other than "request" in the
         // form body". A client whose authentication method carries no client_id in the form sends the object alone, so
@@ -96,7 +104,8 @@ public class PushedAuthorizationHandler(
             tenant,
             authorizationRequest is { Request: not null, ClientId: null }
                 ? authorizationRequest with { ClientId = clientInfo.ClientId }
-                : authorizationRequest);
+                : authorizationRequest,
+            clients);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);
@@ -106,7 +115,7 @@ public class PushedAuthorizationHandler(
         var fetched = fetchResult.GetSuccess();
         authorizationRequest = fetched with { RequestUri = fetched.RequestUri ?? authorizationRequest.RequestUri };
 
-        var validationResult = await validator.ValidateAsync(tenant, clientInfo, authorizationRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, clientInfo, authorizationRequest, clientRequest, clients);
 
         return await validationResult.MatchAsync(
             onSuccess: valid => processor.ProcessAsync(tenant, valid),

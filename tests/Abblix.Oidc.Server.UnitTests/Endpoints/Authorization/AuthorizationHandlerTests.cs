@@ -45,6 +45,7 @@ public class AuthorizationHandlerTests
         _encoder.Setup(e => e.EncodeAsync(TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>()))
             .Returns<TenantDefinition, Core.AuthorizationResponse>((_, response) => Task.FromResult(response));
         _handler = new AuthorizationHandler(
+            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object,
             _fetcher.Object,
             _validator.Object,
             _processor.Object,
@@ -78,11 +79,11 @@ public class AuthorizationHandlerTests
             ResponseModes.Query, request.RedirectUri);
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, request))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validRequest));
 
         _processor
@@ -94,8 +95,8 @@ public class AuthorizationHandlerTests
 
         // Assert
         Assert.NotNull(result);
-        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request), Times.Once);
-        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest), Times.Once);
+        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest, It.IsAny<IClientInfoProvider>()), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
@@ -115,7 +116,7 @@ public class AuthorizationHandlerTests
             ResponseModes.Query);
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, request))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchError));
 
         // Act
@@ -125,7 +126,7 @@ public class AuthorizationHandlerTests
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Equal("Failed to fetch request object", error.ErrorDescription);
-        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request), Times.Once);
+        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()), Times.Once);
         _validator.VerifyNoOtherCalls();
         _processor.VerifyNoOtherCalls();
     }
@@ -147,11 +148,11 @@ public class AuthorizationHandlerTests
             ResponseModes.Query);
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, request))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validationError));
 
         // Act
@@ -161,8 +162,8 @@ public class AuthorizationHandlerTests
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.InvalidScope, error.Error);
         Assert.Equal("Invalid scope requested", error.ErrorDescription);
-        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request), Times.Once);
-        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest), Times.Once);
+        _fetcher.Verify(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest, It.IsAny<IClientInfoProvider>()), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -193,11 +194,11 @@ public class AuthorizationHandlerTests
             ResponseModes.Query, fetchedRequest.RedirectUri);
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, originalRequest))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, originalRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchedRequest));
 
         _validator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.Is<AuthorizationRequest>(r => r.State == "modified_state")))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.Is<AuthorizationRequest>(r => r.State == "modified_state"), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)(validRequest));
 
         _processor
@@ -210,7 +211,8 @@ public class AuthorizationHandlerTests
         // Assert
         _validator.Verify(v => v.ValidateAsync(
             TestTenant.Matched,
-            It.Is<AuthorizationRequest>(r => r.State == "modified_state")), Times.Once);
+            It.Is<AuthorizationRequest>(r => r.State == "modified_state"),
+            It.IsAny<IClientInfoProvider>()), Times.Once);
     }
 
     /// <summary>
@@ -229,7 +231,7 @@ public class AuthorizationHandlerTests
             ResponseModes.Query);
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, request))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)(fetchError));
 
         // Act
@@ -263,7 +265,7 @@ public class AuthorizationHandlerTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, request))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("fetch");
@@ -271,7 +273,7 @@ public class AuthorizationHandlerTests
             });
 
         _validator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, fetchedRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");

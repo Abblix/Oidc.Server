@@ -49,10 +49,9 @@ public class SpecialPurposeFetchSitesTests
         var found = Task.FromResult<Result<ClientInfo, ClientAbsence>>(client);
         var fetcher = new RequestUriFetcher(
             NullLogger<RequestUriFetcher>.Instance,
-            Mock.Of<IClientInfoProvider>(store => store.FindClientAsync(Tenant, client.ClientId) == found),
             new SecureHttpFetcher(NullLogger<SecureHttpFetcher>.Instance, http, Options.Create(new SecureHttpFetchOptions())));
 
-        var result = await fetcher.FetchAsync(Tenant, new AuthorizationRequest { ClientId = client.ClientId, RequestUri = requestUri });
+        var result = await fetcher.FetchAsync(Tenant, new AuthorizationRequest { ClientId = client.ClientId, RequestUri = requestUri }, Mock.Of<IClientInfoProvider>(store => store.FindClientAsync(Tenant, client.ClientId) == found));
 
         Assert.Equal(fetched, result.TryGetSuccess(out _));
         Assert.Equal(fetched, origin.Reached);

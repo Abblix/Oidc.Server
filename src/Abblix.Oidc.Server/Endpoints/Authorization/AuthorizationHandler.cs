@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -22,7 +23,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// <param name="processor">Produces the validated authorization result projected onto the wire.</param>
 /// <param name="responseEncoder">Applies iss/scope gating and, for a JARM request, packs the response
 /// parameters into the response JWT, at the single convergence point for success and every error variant.</param>
+/// <param name="clientInfoProvider">The client store, which every step of one request asks through one
+/// <see cref="RequestScopedClientInfoProvider"/>, so the request finds its client once.</param>
 public class AuthorizationHandler(
+    IClientInfoProvider clientInfoProvider,
     IAuthorizationRequestFetcher fetcher,
     IAuthorizationRequestValidator validator,
     IAuthorizationRequestProcessor processor,
@@ -56,20 +60,24 @@ public class AuthorizationHandler(
         // decorator that sets session_state), then let the encoder apply iss/scope gating and - for a
         // JARM request - pack the parameters into the response JWT. Encoding happens here, at the single
         // convergence point for success and every error variant, after session_state is finalised.
-        var response = await ProduceResponseAsync(tenant, request);
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        var response = await ProduceResponseAsync(tenant, request, clients);
         return await responseEncoder.EncodeAsync(tenant, response);
     }
 
-    private async Task<AuthorizationResponse> ProduceResponseAsync(TenantDefinition tenant, Model.AuthorizationRequest request)
+    private async Task<AuthorizationResponse> ProduceResponseAsync(
+        TenantDefinition tenant,
+        Model.AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
-        var fetchResult = await fetcher.FetchAsync(tenant, request);
+        var fetchResult = await fetcher.FetchAsync(tenant, request, clients);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(request, fetchError);
 
         request = fetchResult.GetSuccess();
 
-        var validationResult = await validator.ValidateAsync(tenant, request);
+        var validationResult = await validator.ValidateAsync(tenant, request, clients);
 
         return await validationResult.MatchAsync(
             onSuccess: valid => processor.ProcessAsync(tenant, valid),

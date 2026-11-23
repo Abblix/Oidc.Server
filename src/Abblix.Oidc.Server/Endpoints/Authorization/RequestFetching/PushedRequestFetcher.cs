@@ -27,13 +27,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// Provides configuration options for the OIDC server, such as whether PAR is required.</param>
 /// <param name="authorizationRequestStorage">
 /// The storage system used to retrieve pushed authorization request objects.</param>
-/// <param name="clientInfoProvider">
-/// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
 /// <param name="consumedRequestUris">The flows that ended, whose remaining pages are refused.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
     IAuthorizationRequestStorage authorizationRequestStorage,
-    IClientInfoProvider clientInfoProvider,
     IConsumedRequestUriRegistry consumedRequestUris) : IAuthorizationRequestFetcher
 {
     /// <summary>
@@ -43,6 +40,8 @@ public class PushedRequestFetcher(
     /// <param name="request">
     /// The authorization request containing a URN from which to fetch the stored pushed authorization request object.
     /// </param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.
+    /// The client's registration says whether it has to push its requests.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains the fetched pushed authorization
     /// request object or an error if not found.
@@ -54,7 +53,10 @@ public class PushedRequestFetcher(
     /// an error is returned.
     /// Additionally, it checks the server configuration to enforce the Pushed Authorization Request (PAR) requirement.
     /// </remarks>
-    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(TenantDefinition tenant, AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        TenantDefinition tenant,
+        AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
         // If the request contains a URN, attempt to retrieve the pushed authorization request from storage
         if (request is { RequestUri: { } requestUrn } &&
@@ -71,7 +73,7 @@ public class PushedRequestFetcher(
             return ErrorFactory.InvalidRequest("The Pushed Authorization Request (PAR) is required");
         }
 
-        if (await ClientRequiresPushedRequestsAsync(tenant, request.ClientId))
+        if (await ClientRequiresPushedRequestsAsync(tenant, request.ClientId, clients))
         {
             return ErrorFactory.InvalidRequest(
                 "The client is required to use Pushed Authorization Requests (PAR)");
@@ -148,12 +150,15 @@ public class PushedRequestFetcher(
     /// over the requirement it is there to satisfy.
     /// The rule is a predicate method of its own, so the fetch above reads as the order of checks it performs.
     /// </remarks>
-    private async Task<bool> ClientRequiresPushedRequestsAsync(TenantDefinition tenant, string? clientId)
+    private static async Task<bool> ClientRequiresPushedRequestsAsync(
+        TenantDefinition tenant,
+        string? clientId,
+        IClientInfoProvider clients)
     {
         if (clientId is null)
             return false;
 
-        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
+        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
             return false;
 
         return clientInfo.RequirePushedAuthorizationRequests ||

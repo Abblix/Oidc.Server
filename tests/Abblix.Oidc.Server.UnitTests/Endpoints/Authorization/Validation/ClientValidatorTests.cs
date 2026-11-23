@@ -55,7 +55,6 @@ public class ClientValidatorTests
     private ClientValidator Validator(OidcOptions options)
         => new(
             new Mock<ILogger<ClientValidator>>(MockBehavior.Loose).Object,
-            _clientInfoProvider.Object,
             new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa(), TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
             Options.Create(options));
 
@@ -85,7 +84,7 @@ public class ClientValidatorTests
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
     /// </summary>
-    private static AuthorizationValidationContext CreateContext(string? clientId)
+    private AuthorizationValidationContext CreateContext(string? clientId)
     {
         var request = new AuthorizationRequest
         {
@@ -95,7 +94,7 @@ public class ClientValidatorTests
             Scope = [Scopes.OpenId]
         };
 
-        return new AuthorizationValidationContext(request);
+        return new AuthorizationValidationContext(request) { Clients = _clientInfoProvider.Object };
     }
 
     /// <summary>
