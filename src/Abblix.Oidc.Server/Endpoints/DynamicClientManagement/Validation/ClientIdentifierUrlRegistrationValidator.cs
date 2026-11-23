@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -15,8 +16,8 @@ using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Refuses a registration naming an <c>https</c> URL as its client_id while the server resolves clients from the
-/// metadata documents such URLs name.
+/// Refuses a registration naming an <c>https</c> URL as its client_id, in any spelling, while the server resolves
+/// clients from the metadata documents such URLs name.
 /// </summary>
 /// <remarks>
 /// A registration is found before a document is fetched, so a registrant naming somebody else's client identifier URL
@@ -34,9 +35,9 @@ internal sealed class ClientIdentifierUrlRegistrationValidator(IOptionsMonitor<O
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
         => context is { Operation: DynamicClientOperation.Register, Request.ClientId: { } clientId } &&
            options.CurrentValue.ClientIdMetadataDocuments.Enabled &&
-           clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal)
+           ClientIdentifierUrl.IsWithheldFromRegistration(clientId)
             ? ErrorFactory.InvalidClientMetadata(
-                $"A {Parameters.ClientId} starting with {Uri.UriSchemeHttps}{Uri.SchemeDelimiter} names a client " +
-                "identifier URL, which is resolved from its own metadata document rather than registered")
+                $"A {Parameters.ClientId} that is an {Uri.UriSchemeHttps} URL names a client identifier URL, which " +
+                "is resolved from its own metadata document rather than registered")
             : null;
 }
