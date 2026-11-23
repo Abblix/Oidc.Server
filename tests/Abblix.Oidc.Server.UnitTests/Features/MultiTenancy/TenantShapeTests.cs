@@ -296,6 +296,7 @@ public class TenantShapeTests
             Scopes = [scope],
             Resources = [new ResourceDefinition(new Uri("https://api.example.com"), scope) { Jwks = new JsonWebKeySet([key]) }],
             PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) },
+            ClientSecretEncryption = new ClientSecretEncryptionSettings { Key = Convert.ToBase64String(new byte[32]) },
             SigningKeys = [key],
             EncryptionKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
         };

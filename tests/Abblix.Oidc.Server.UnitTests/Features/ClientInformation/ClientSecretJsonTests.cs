@@ -40,6 +40,7 @@ public class ClientSecretJsonTests
                 nameof(ClientSecret.Sha256Hash),
                 nameof(ClientSecret.Sha512Hash),
                 nameof(ClientSecret.Value),
+                nameof(ClientSecret.EncryptedValue),
                 nameof(ClientSecret.ExpiresAt),
             ],
             names);
