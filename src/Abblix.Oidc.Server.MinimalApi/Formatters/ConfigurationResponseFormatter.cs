@@ -107,7 +107,7 @@ public class ConfigurationResponseFormatter : IConfigurationResponseFormatter<IR
             RevocationEndpointAuthSigningAlgValuesSupported = response.RevocationEndpointAuthSigningAlgValuesSupported,
             IntrospectionEndpointAuthMethodsSupported = response.IntrospectionEndpointAuthMethodsSupported,
             IntrospectionEndpointAuthSigningAlgValuesSupported =
-            	response.IntrospectionEndpointAuthSigningAlgValuesSupported,
+                response.IntrospectionEndpointAuthSigningAlgValuesSupported,
             TlsClientCertificateBoundAccessTokens = response.TlsClientCertificateBoundAccessTokens,
 
             IdTokenSigningAlgValuesSupported = response.IdTokenSigningAlgValuesSupported,
