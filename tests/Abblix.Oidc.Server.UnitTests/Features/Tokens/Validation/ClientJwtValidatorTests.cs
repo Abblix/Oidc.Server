@@ -1236,4 +1236,37 @@ public class ClientJwtValidatorTests
 
         Assert.Equal(read ? 1 : 0, keys.Length);
     }
+
+    /// <summary>
+    /// The client the request names outside the token is already found, so a token speaking for it by its issuer or
+    /// its client_id claim is settled on that client without asking the store again.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ATokenSpeakingForTheNamedClient_IsSettledOnItWithoutALookup(bool byIssuer)
+    {
+        var token = CreateValidToken();
+        if (!byIssuer)
+        {
+            token.Payload.Issuer = null;
+            token.Payload.ClientId = ValidClientId;
+        }
+
+        var named = CreateClientInfo(ValidClientId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                if (byIssuer)
+                    await p.ValidateIssuer!(ValidClientId);
+                return token;
+            });
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, named, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.True(result.TryGetSuccess(out var valid));
+        Assert.Same(named, valid.Client);
+        _clientInfoProvider.VerifyNoOtherCalls();
+    }
 }

@@ -71,7 +71,7 @@ public partial class ClientJwtValidator(
         TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant, client);
 
         // The token is validated under the profile of the client the request names outside it, or what the
         // deployment demands of every client where it names none, the guard holding its signature and each JWE layer
@@ -183,8 +183,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                if ((await clientInfoProvider.FindClientAsync(tenant, clientIdFromJwt)).TryGetSuccess(out var named))
-                    context.ClientInfo = named;
+                context.ClientInfo = await FindClientAsync(tenant, client, clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -252,13 +251,30 @@ public partial class ClientJwtValidator(
     }
 
     /// <summary>
+    /// The client <paramref name="clientId"/> names: the one the request names outside the token when it is that one,
+    /// as it is already found, else the one the store holds, or null.
+    /// </summary>
+    private async Task<ClientInfo?> FindClientAsync(TenantDefinition tenant, ClientInfo? named, string clientId)
+    {
+        if (named?.ClientId == clientId)
+            return named;
+
+        return (await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found) ? found : null;
+    }
+
+    /// <summary>
     /// Encapsulates the validation context for a single JWT validation operation.
     /// Holds client information that gets populated during the validation process.
     /// </summary>
+    /// <param name="clientInfoProvider">Finds the client the token's issuer names.</param>
+    /// <param name="clientJwksProvider">Reads the keys the client signs with.</param>
+    /// <param name="tenant">The tenant the token is for.</param>
+    /// <param name="named">The client the request names outside the token, already found, or null.</param>
     private sealed class ValidationContext(
         IClientInfoProvider clientInfoProvider,
         IClientKeysProvider clientJwksProvider,
-        TenantDefinition tenant)
+        TenantDefinition tenant,
+        ClientInfo? named)
     {
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
@@ -292,8 +308,10 @@ public partial class ClientJwtValidator(
 
             if (!_clientLookupPerformed)
             {
-                // Attempt to find the client by issuer
-                if ((await clientInfoProvider.FindClientAsync(tenant, issuer)).TryGetSuccess(out var client))
+                // Attempt to find the client by issuer, unless it is the one the request already found
+                if (named?.ClientId == issuer)
+                    ClientInfo = named;
+                else if ((await clientInfoProvider.FindClientAsync(tenant, issuer)).TryGetSuccess(out var client))
                     ClientInfo = client;
 
                 _clientLookupPerformed = true;
