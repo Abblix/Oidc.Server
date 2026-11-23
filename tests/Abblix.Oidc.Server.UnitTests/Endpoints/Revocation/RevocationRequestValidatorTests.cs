@@ -400,7 +400,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
-            .Callback(new Action<TenantDefinition, ClientRequest>((_, _) => callOrder.Add("authenticate")))
+            .Callback(new Action<TenantDefinition, ClientRequest, IClientInfoProvider>((_, _, _) => callOrder.Add("authenticate")))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator

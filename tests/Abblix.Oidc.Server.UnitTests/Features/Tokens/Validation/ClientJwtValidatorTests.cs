@@ -115,11 +115,11 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
-    /// The algorithms a caller admits reach the JWT validator, whose algorithm check runs before the issuer's keys are
-    /// resolved, so a token signed otherwise is refused without the client being looked up.
+    /// The algorithms a caller admits reach the JWT validator, which checks a token's algorithm before it resolves the
+    /// issuer's keys, where the client is looked up.
     /// </summary>
     [Fact]
-    public async Task TheAlgorithmsTheCallerAdmits_ReachTheValidatorAndNoClientIsLookedUp()
+    public async Task TheAlgorithmsTheCallerAdmits_ReachTheValidator()
     {
         ValidationParameters? capturedParams = null;
         _tokenValidator
@@ -138,7 +138,6 @@ public class ClientJwtValidatorTests
 
         Assert.NotNull(capturedParams);
         Assert.Equal(admitted, capturedParams.AllowedSigningAlgorithms);
-        _clientInfoProvider.VerifyNoOtherCalls();
     }
 
     /// <summary>

@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// pushed authorization requests.</param>
 /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
 /// validated authorization requests.</param>
-/// <param name="clientInfoProvider">The client store, which every step after the client authenticated asks through one
-/// <see cref="RequestScopedClientInfoProvider"/> answering for the authenticated client without asking.</param>
+/// <param name="clientInfoProvider">The client store, asked once per request through one
+/// <see cref="RequestScopedClientInfoProvider"/> that client authentication and every later step share.</param>
 public class PushedAuthorizationHandler(
     IClientInfoProvider clientInfoProvider,
     IClientAuthenticator clientAuthenticator,

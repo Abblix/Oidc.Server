@@ -105,9 +105,8 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// A pushed request authenticated with a private_key_jwt assertion is offered to every assertion method, and a
-    /// refused document is still fetched once: client_secret_jwt refuses an assertion no client secret signs before
-    /// it looks the issuer up.
+    /// A pushed request authenticated with a private_key_jwt assertion is offered to both assertion methods, and a
+    /// refused document is still fetched once: both find the client through the lookup the request shares.
     /// </summary>
     [Fact]
     public async Task ARefusedDocument_IsFetchedOnceByAPushedRequestWithAPrivateKeyAssertion()
@@ -149,9 +148,8 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// The mirror of <see cref="ARefusedDocument_IsFetchedOnceByAPushedRequestWithAPrivateKeyAssertion"/>: an assertion
-    /// signed with a shared secret is refused by private_key_jwt before it looks the issuer up, so client_secret_jwt
-    /// alone fetches the document.
+    /// The mirror of <see cref="ARefusedDocument_IsFetchedOnceByAPushedRequestWithAPrivateKeyAssertion"/> for an
+    /// assertion signed with a shared secret: the document is fetched once for both assertion methods.
     /// </summary>
     [Fact]
     public async Task ARefusedDocument_IsFetchedOnceByAPushedRequestWithASecretAssertion()

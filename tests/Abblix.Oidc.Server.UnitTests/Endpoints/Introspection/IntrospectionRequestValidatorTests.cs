@@ -477,7 +477,7 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
-            .Callback(new Action<TenantDefinition, ClientRequest>((_, _) => callOrder.Add("authenticate")))
+            .Callback(new Action<TenantDefinition, ClientRequest, IClientInfoProvider>((_, _, _) => callOrder.Add("authenticate")))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
@@ -651,7 +651,7 @@ public class IntrospectionRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
-            .Returns<TenantDefinition, ClientRequest>((_, request) => Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(request.ClientId!)));
+            .Returns<TenantDefinition, ClientRequest, IClientInfoProvider>((_, request, _) => Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(request.ClientId!)));
 
         _jwtValidator
             .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))

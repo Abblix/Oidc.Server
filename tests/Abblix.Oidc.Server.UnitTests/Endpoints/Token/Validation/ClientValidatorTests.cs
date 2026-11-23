@@ -105,14 +105,14 @@ public class ClientValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest, Clients), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest, It.IsAny<IClientInfoProvider>()), Times.Once);
     }
 
     /// <summary>
@@ -202,10 +202,10 @@ public class ClientValidatorTests
         var clientInfo2 = new ClientInfo("client2");
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest1, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest1, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo1);
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest2, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest2, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo2);
 
         // Act

@@ -30,6 +30,8 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="logger">The logger for recording debug information and warnings.</param>
 /// <param name="jsonObjectBinder">The binder for converting JSON payloads into request objects.</param>
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
+/// <param name="clientInfoProvider">Finds a client the request object names other than the one the request names
+/// outside it.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
 /// <param name="timeProvider">The clock a profile's bound on how far in the past a request object's nbf may lie
@@ -38,6 +40,7 @@ public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
+    IClientInfoProvider clientInfoProvider,
     IOptionsSnapshot<OidcOptions> options,
     TimeProvider timeProvider) : IRequestObjectFetcher
 {
@@ -231,7 +234,7 @@ public partial class RequestObjectFetcher(
         var result = await tokenValidator.ValidateAsync(
             tenant,
             namedClient,
-            scope.ServiceProvider.GetRequiredService<IClientInfoProvider>(),
+            clientInfoProvider,
             requestObject,
             TokenTypePolicy.CheckedByCaller,
             signingAlgorithms: null,

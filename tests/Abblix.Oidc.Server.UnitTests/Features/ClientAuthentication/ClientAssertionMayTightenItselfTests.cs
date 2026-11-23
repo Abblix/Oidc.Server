@@ -318,7 +318,11 @@ public class ClientAssertionMayTightenItselfTests
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        var services = new ServiceCollection().AddSingleton(clientJwtValidator.Object).BuildServiceProvider();
+        var services = new ServiceCollection()
+            .AddSingleton(clientJwtValidator.Object)
+            .AddSingleton(Mock.Of<IJsonWebTokenValidator>(
+                validator => validator.SigningAlgorithmsSupported == new[] { SigningAlgorithms.PS256 }))
+            .BuildServiceProvider();
         var authenticator = new PrivateKeyJwtAuthenticator(
             Mock.Of<ILogger<PrivateKeyJwtAuthenticator>>(),
             replayCache.Object,

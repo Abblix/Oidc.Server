@@ -87,7 +87,9 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
         _store.Setup(store => store.FindClientAsync(Tenant, ClientId)).ReturnsAsync(stored);
         _services.Origin.Serve(ClientId, Document);
 
-        Assert.NotSame(stored, (await CreateClients().FindClientAsync(Tenant, ClientId)).GetSuccess());
+        var answer = await CreateClients().FindClientAsync(Tenant, ClientId);
+
+        Assert.False(answer.TryGetSuccess(out var found) && ReferenceEquals(found, stored));
         Assert.Equal(1, _services.Origin.RequestsTo(ClientId));
     }
 

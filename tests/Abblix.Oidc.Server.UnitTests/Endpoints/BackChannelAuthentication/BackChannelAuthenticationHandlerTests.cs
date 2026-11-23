@@ -61,7 +61,7 @@ public class BackChannelAuthenticationHandlerTests
     public async Task AnUnauthenticatedCaller_IsInvalidClient_BeforeTheRequestIsRead()
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var result = await Handler().HandleAsync(SingleIssuer.Tenant, _request, _clientRequest);
@@ -85,7 +85,7 @@ public class BackChannelAuthenticationHandlerTests
         string[] grantTypes, string authenticationMethod, string? deliveryMode)
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo("client-1")
             {
                 AllowedGrantTypes = grantTypes,
@@ -111,7 +111,7 @@ public class BackChannelAuthenticationHandlerTests
         var refusal = new OidcError(ErrorCodes.InvalidScope, "refused");
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         _fetcher
             .Setup(f => f.FetchAsync(TestTenant.Matched, client, _request))
@@ -125,7 +125,7 @@ public class BackChannelAuthenticationHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Same(refusal, error);
         _clientAuthenticator.Verify(
-            a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, Clients), Times.Once);
+            a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()), Times.Once);
     }
 
     /// <summary>
@@ -138,7 +138,7 @@ public class BackChannelAuthenticationHandlerTests
         var client = CibaClient();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, Clients))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         _fetcher
             .Setup(f => f.FetchAsync(TestTenant.Matched, client, _request))

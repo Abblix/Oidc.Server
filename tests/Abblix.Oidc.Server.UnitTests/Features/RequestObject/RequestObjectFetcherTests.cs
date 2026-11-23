@@ -96,7 +96,7 @@ public class RequestObjectFetcherTests
 
     private RequestObjectFetcher CreateFetcher()
     {
-        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object, _clock);
+        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, new Mock<IClientInfoProvider>().Object, _options.Object, _clock);
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);
@@ -390,7 +390,7 @@ public class RequestObjectFetcherTests
     private async Task<Result<AuthorizationRequest, OidcError>> FetchWithUiLocales(JsonNode uiLocales)
     {
         var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
-            _options.Object, _clock);
+            new Mock<IClientInfoProvider>().Object, _options.Object, _clock);
         var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjoiISJ9.signature";
         var payload = new JsonObject { [RequestParameters.UiLocales] = uiLocales };
@@ -545,7 +545,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
-            .Callback<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options)
+            .Callback<TenantDefinition, ClientInfo?, IClientInfoProvider, string, TokenTypePolicy, System.Collections.Generic.IReadOnlySet<string>?, ValidationOptions>((_, _, _, _, _, _, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -583,7 +583,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
-            .Callback<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options)
+            .Callback<TenantDefinition, ClientInfo?, IClientInfoProvider, string, TokenTypePolicy, System.Collections.Generic.IReadOnlySet<string>?, ValidationOptions>((_, _, _, _, _, _, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -694,7 +694,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((TenantDefinition _, ClientInfo? _, string jwt, TokenTypePolicy _, ValidationOptions _) =>
+            .ReturnsAsync((TenantDefinition _, ClientInfo? _, IClientInfoProvider _, string jwt, TokenTypePolicy _, System.Collections.Generic.IReadOnlySet<string>? _, ValidationOptions _) =>
             {
                 var token = jwt == jwt1 ? token1 : token2;
                 return new ValidJsonWebToken(token, new ClientInfo("test-client"));
