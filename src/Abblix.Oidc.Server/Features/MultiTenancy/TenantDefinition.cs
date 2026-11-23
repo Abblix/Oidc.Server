@@ -156,6 +156,21 @@ public sealed class TenantDefinition
     public Uri? LoginUri { get; init; }
 
     /// <summary>
+    /// The page the end user is asked on whether to log out, when a logout request does not show that it belongs to
+    /// their current session (OpenID Connect RP-Initiated Logout 1.0 section 2). A relative address is a page under
+    /// this tenant's issuer.
+    /// </summary>
+    /// <remarks>
+    /// The end-session endpoint redirects the user agent there with the parameters of the logout request and
+    /// <c>confirmation</c>, the value the server issued for the question. When the end user agrees, the page sends
+    /// all of them back to the end-session endpoint, with GET or POST; the value is good for one use and for
+    /// <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>. Left unset, the endpoint answers such
+    /// a request with the <c>confirmation_required</c> error and the value in its body, for a host that asks the
+    /// question through an end-session response formatter of its own.
+    /// </remarks>
+    public Uri? LogoutConfirmationUri { get; init; }
+
+    /// <summary>
     /// The page a user creates an account on when a client requests registration with <c>prompt=create</c>
     /// (Initiating User Registration via OpenID Connect 1.0); left unset, <see cref="LoginUri"/> is used instead,
     /// so a login page that also offers registration needs nothing more. A relative address is a page under this

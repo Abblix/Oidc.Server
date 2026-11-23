@@ -57,6 +57,9 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Justification = "Stand-in for an attacker-controlled target in the open-redirect test; not a deployment URL.")]
     private const string UnregisteredPostLogoutUri = "https://attacker.example.com/harvest";
 
+    /// <summary>The tenant's page asking the end user whether to log out, under its issuer.</summary>
+    private const string LogoutConfirmationPath = "/logout-confirmation";
+
     /// <summary>The client's own logout endpoint, which the OP's page loads in a frame.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test frontchannel_logout_uri for the dynamically registered client; not a deployment URL.")]
@@ -220,6 +223,49 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// With a confirmation page set for the tenant, a logout the end user has to confirm sends the browser to that
+    /// page rather than showing it an error body, and the page has what it needs: the request's own parameters and the
+    /// value that makes the answer an answer. Sending them back, as the page does once the end user agrees, ends the
+    /// session and returns to the client.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_to_confirm_is_sent_to_the_confirmation_page_whose_answer_ends_the_session()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.PostConfigure<TestTenantSettings>(tenant =>
+                tenant.LogoutConfirmationUri = new Uri(LogoutConfirmationPath, UriKind.Relative))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var state = Guid.NewGuid().ToString("N");
+        var asked = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+            [EndSessionParameters.State] = state,
+        });
+
+        Assert.Equal(HttpStatusCode.SeeOther, asked.StatusCode);
+        var page = asked.Headers.Location;
+        Assert.NotNull(page);
+        Assert.Equal(TestConstants.Issuer + LogoutConfirmationPath, page.GetLeftPart(UriPartial.Path));
+
+        var carried = System.Web.HttpUtility.ParseQueryString(page.Query);
+        Assert.Equal(clientId, carried[EndSessionParameters.ClientId]);
+        Assert.Equal(RegisteredPostLogoutUri, carried[EndSessionParameters.PostLogoutRedirectUri]);
+        Assert.Equal(state, carried[EndSessionParameters.State]);
+        Assert.False(string.IsNullOrEmpty(carried[EndSessionParameters.Confirmation]));
+
+        var answered = await EndSessionAsync(
+            client, discovery, carried.AllKeys.ToDictionary(name => name!, name => carried[name]!));
+
+        Assert.Equal(HttpStatusCode.Redirect, answered.StatusCode);
+        var location = AssertRedirectedTo(answered, RegisteredPostLogoutUri);
+        Assert.Equal(state, System.Web.HttpUtility.ParseQueryString(location.Query)[EndSessionParameters.State]);
     }
 
     [Fact]

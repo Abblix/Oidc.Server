@@ -36,6 +36,7 @@ public sealed class TestTenantSettings
     public Uri? ConsentUri { get; set; }
     public Uri? AccountSelectionUri { get; set; }
     public Uri? RegistrationUri { get; set; }
+    public Uri? LogoutConfirmationUri { get; set; }
     public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
     public PairwiseSubjectSettings? PairwiseSubject { get; set; }
@@ -59,6 +60,7 @@ public sealed class TestTenantSettings
         ConsentUri = ConsentUri,
         AccountSelectionUri = AccountSelectionUri,
         RegistrationUri = RegistrationUri,
+        LogoutConfirmationUri = LogoutConfirmationUri,
         SigningKeys = SigningKeys,
         EncryptionKeys = EncryptionKeys,
         PairwiseSubject = PairwiseSubject,
