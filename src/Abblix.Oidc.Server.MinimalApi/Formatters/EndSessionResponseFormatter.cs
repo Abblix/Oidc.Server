@@ -71,7 +71,7 @@ public class EndSessionResponseFormatter(
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var resolved = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request.ResolveInteractionUri(page);
+        var resolved = httpContextAccessor.ResolveInteractionUri(page);
         return new SeeOtherResult(LogoutConfirmationPage.Address(resolved, request, confirmation.Confirmation))
             .WithHeader(LogoutConfirmationPage.ReferrerPolicyHeader, LogoutConfirmationPage.NoReferrer);
     }

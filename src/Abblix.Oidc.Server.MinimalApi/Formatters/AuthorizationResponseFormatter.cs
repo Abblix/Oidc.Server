@@ -161,7 +161,7 @@ public class AuthorizationResponseFormatter(
     private async Task<IResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
         var stored = await authorizationRequestStorage.StoreAsync(tenantAccessor.CurrentTenant(), request, options.Value.AuthenticationRequestExpiresIn);
-        var resolved = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request.ResolveInteractionUri(uri);
+        var resolved = httpContextAccessor.ResolveInteractionUri(uri);
         var target = resolved.AddToQuery([(options.Value.RequestUriParameterName, stored.RequestUri.OriginalString)]);
         return new SeeOtherResult(target);
     }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
 namespace Abblix.Oidc.Server.AspNetCore;
@@ -23,10 +24,13 @@ public static class HttpRequestExtensions
 
     /// <summary>
     /// The interaction page <paramref name="page"/> names as an absolute address: an absolute one as it is, a relative
-    /// one resolved by <see cref="ResolveInteractionUri(HttpRequest, string)"/>.
+    /// one resolved by <see cref="ResolveInteractionUri(HttpRequest, string)"/> against the current request, which only
+    /// a relative page needs.
     /// </summary>
-    internal static Uri ResolveInteractionUri(this HttpRequest request, Uri page)
-        => page.IsAbsoluteUri ? page : request.ResolveInteractionUri(page.OriginalString);
+    internal static Uri ResolveInteractionUri(this IHttpContextAccessor httpContextAccessor, Uri page)
+        => page.IsAbsoluteUri
+            ? page
+            : httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request.ResolveInteractionUri(page.OriginalString);
 
     /// <summary>
     /// Resolves a relative address - an interaction page (login, consent, registration), or in the MVC transport
