@@ -165,6 +165,7 @@ public class AuthorizationGrantValidatorTests
     [InlineData(GrantTypes.ClientCredentials)]
     [InlineData(GrantTypes.Password)]
     [InlineData(GrantTypes.JwtBearer)]
+    [InlineData(GrantTypes.Ciba)]
     public async Task APublicClient_IsRefusedAGrantKeptForConfidentialClients(string grantType)
     {
         var context = CreateContext(grantType);

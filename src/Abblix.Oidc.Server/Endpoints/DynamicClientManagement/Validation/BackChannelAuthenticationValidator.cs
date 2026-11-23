@@ -71,8 +71,8 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     ErrorCodes.InvalidClientMetadata,
                     "The specified token delivery mode is not supported");
             // CIBA Core 1.0 sections 7.1 and 10.1 require the client to authenticate at both endpoints of the flow,
-            // which a client registered with the method "none" never does. A delivery mode registers the client for
-            // the flow whatever its grant_types say, so the mode is judged as the grant
+            // which a client registered with the method "none" never does. A delivery mode is metadata only that flow
+            // reads, so a client naming one is judged as one asking for the grant
             case { BackChannelTokenDeliveryMode: not null }
                 when ConfidentialGrantTypes.Refuses(context.Request.TokenEndpointAuthMethod, GrantTypes.Ciba):
                 return new OidcError(

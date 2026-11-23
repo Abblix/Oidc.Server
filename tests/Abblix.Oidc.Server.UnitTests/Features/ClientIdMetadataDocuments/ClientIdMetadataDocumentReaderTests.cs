@@ -8,10 +8,13 @@
 
 using System;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -465,13 +468,15 @@ public class ClientIdMetadataDocumentReaderTests
             CreateReader(grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba], documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
 
     /// <summary>
-    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at both endpoints of the flow, so a client
-    /// authenticating with none loses the backchannel grant in poll mode as well, while one proving itself keeps it.
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at the endpoints of the flow, so a client
+    /// authenticating with none loses the backchannel grant in poll mode as well, and the mode with it, so the
+    /// registration checks the document is judged by serve it without the flow rather than refuse it; one proving
+    /// itself keeps both.
     /// </summary>
     [Theory]
     [InlineData(null, false)]
     [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true)]
-    public void ADocumentPollingForBackchannelTokens_KeepsTheGrantOnlyForAClientProvingItself(
+    public async Task ADocumentPollingForBackchannelTokens_KeepsTheFlowOnlyForAClientProvingItself(
         string? authenticationMethod,
         bool kept)
     {
@@ -488,11 +493,19 @@ public class ClientIdMetadataDocumentReaderTests
 
         Assert.Equal(kept, metadata.GrantTypes.Contains(GrantTypes.Ciba));
         Assert.Contains(GrantTypes.AuthorizationCode, metadata.GrantTypes);
+        Assert.Equal(kept ? BackchannelTokenDeliveryModes.Poll : null, metadata.BackChannelTokenDeliveryMode);
+
+        var backChannelCheck = new BackChannelAuthenticationValidator(Mock.Of<IJsonWebTokenValidator>());
+        Assert.Null(await backChannelCheck.ValidateAsync(
+            SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
     }
 
+    /// <summary>
+    /// A delivery mode without the backchannel grant serves no flow, so it goes as the grant would.
+    /// </summary>
     [Fact]
-    public void ADocumentPollingForBackchannelTokens_IsKept()
-        => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
+    public void ADocumentNamingAModeWithoutTheBackchannelGrant_LosesTheMode()
+        => Assert.Null(Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
 
     [Fact]
     public void ANamedApplicationType_IsKept()

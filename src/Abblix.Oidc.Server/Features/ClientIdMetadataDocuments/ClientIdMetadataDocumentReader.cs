@@ -126,12 +126,15 @@ internal sealed class ClientIdMetadataDocumentReader(
         // A ping or push notification is posted from the stored backchannel authentication request, where the client
         // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
         // for. The backchannel grant goes with the mode, as any grant this server does not serve such a client, and
-        // the document is refused only when nothing is left of it
+        // the document is refused only when nothing is left of it. Whenever the backchannel grant goes, for this
+        // reason or because the client authenticates with none, the delivery mode and its endpoint go with it, so
+        // the client is served without the flow rather than refused for naming a mode
         var notified = metadata.BackChannelTokenDeliveryMode is
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
             grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
+        var backChannel = grantTypes.Contains(GrantTypes.Ciba, StringComparer.Ordinal);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -156,8 +159,8 @@ internal sealed class ClientIdMetadataDocumentReader(
             PkceRequired = true,
             GrantTypes = grantTypes,
             ResponseTypes = responseTypes,
-            BackChannelTokenDeliveryMode = notified ? null : metadata.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = notified ? null : metadata.BackChannelClientNotificationEndpoint,
+            BackChannelTokenDeliveryMode = backChannel ? metadata.BackChannelTokenDeliveryMode : null,
+            BackChannelClientNotificationEndpoint = backChannel ? metadata.BackChannelClientNotificationEndpoint : null,
             ApplicationType = document.ContainsKey(Parameters.ApplicationType)
                 ? metadata.ApplicationType
                 : ApplicationTypeOf(metadata.RedirectUris),
@@ -265,7 +268,8 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// a document is filtered: section 6 has the server keep "the intersection of what the Client ID Metadata Document
     /// declares and what the Authorization Servers supports", and what the host allows is what it supports for such a
     /// client, so one document can serve servers allowing different grant types. A client authenticating with
-    /// <c>none</c> loses the grants RFC 6749 section 4.4 keeps for confidential clients, whatever the host allows.
+    /// <c>none</c> loses the grants <see cref="ConfidentialGrantTypes"/> keeps for a client that authenticates itself,
+    /// whatever the host allows.
     /// </remarks>
     private string[] SupportedGrantTypes(string[] declared, string authenticationMethod)
     {
