@@ -110,5 +110,8 @@ public class ResponseModeRestrictionTests(TestFactory factory) : TestBase(factor
         Assert.Contains("frame-ancestors 'none'", csp);
         Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));
         Assert.Contains("DENY", xFrameOptions);
+
+        // The page carries the code, so a resource it loads learns nothing of its address (RFC 9700 section 4.2.4)
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
     }
 }
