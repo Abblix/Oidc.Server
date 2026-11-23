@@ -8,8 +8,10 @@
 
 using System.Globalization;
 using System.Text;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -85,7 +87,29 @@ internal sealed class RedirectUrisCheck : ITenantsCheck
             .Concat(client.PostLogoutRedirectUris
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)))
             .Where(redirect => Refuses(redirect.Uri))
-            .Select(redirect => Failure(client, redirect.Member, redirect.Uri));
+            .Select(redirect => Failure(client, redirect.Member, redirect.Uri))
+            .Concat(WebClientFailures(client));
+
+    /// <summary>
+    /// The redirect URIs of a web client that are not https, which RFC 9700 section 2.6 forbids ("MUST NOT allow
+    /// redirection URIs that use the http scheme except for native clients that use loopback interface redirection")
+    /// and RFC 8252 section 7.1 leaves private-use schemes to native apps for. A native app's URIs are
+    /// NativeClientsCheck's to judge, and a post-logout redirect carries no authorization response, so it is not held to
+    /// the rule.
+    /// </summary>
+    private static IEnumerable<string> WebClientFailures(ClientInfo client)
+    {
+        if (client.ApplicationType == ApplicationTypes.Native)
+            return [];
+
+        return
+            from uri in client.RedirectUris
+            where !Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri, native: false)
+            select $"The client '{client.ClientId}' has the {nameof(ClientInfo.RedirectUris)} '{Shown(uri)}': a web " +
+                   $"client redirects to https (RFC 9700 section 2.6), and only a native app " +
+                   $"({nameof(ClientInfo.ApplicationType)} '{ApplicationTypes.Native}') to http on a loopback host " +
+                   $"or to a private-use scheme.";
+    }
 
     private static string Failure(ClientInfo client, string member, Uri? uri)
     {

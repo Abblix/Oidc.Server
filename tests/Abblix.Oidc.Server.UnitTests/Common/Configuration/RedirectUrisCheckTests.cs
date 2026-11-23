@@ -55,6 +55,38 @@ public class RedirectUrisCheckTests
     }
 
     /// <summary>
+    /// A web client redirects only to https: RFC 9700 section 2.6 has the server "MUST NOT allow redirection URIs that
+    /// use the http scheme except for native clients that use loopback interface redirection", and a private-use scheme
+    /// is a native app's (RFC 8252 section 7.1). The refusal is this check's alone, among every check of the settings.
+    /// </summary>
+    [Theory]
+    [InlineData("http://app.example.com/cb")]
+    [InlineData("http://127.0.0.1/cb")]
+    [InlineData("http://localhost:5000/cb")]
+    [InlineData("com.example.app:/cb")]
+    public void AWebClient_RedirectingElsewhereThanHttps_IsRefused(string uri)
+    {
+        var client = Bound(uri, ApplicationTypes.Web, postLogout: false);
+
+        var refusal = Assert.Single(Check(client));
+        Assert.Contains($"'{ClientId}'", refusal);
+        Assert.Equal(refusal, Assert.Single(AllChecks(client)).Message);
+    }
+
+    /// <summary>
+    /// The same URIs serve a native app, and a web client may still redirect to https on a loopback host while it is
+    /// developed: dynamic registration refuses that one, the settings do not.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1/cb", ApplicationTypes.Native)]
+    [InlineData("http://[::1]:8080/cb", ApplicationTypes.Native)]
+    [InlineData("com.example.app:/cb", ApplicationTypes.Native)]
+    [InlineData("https://localhost:5001/cb", ApplicationTypes.Web)]
+    [InlineData("https://app.example.com/cb", ApplicationTypes.Web)]
+    public void AClient_RedirectingWhereItsTypeMay_Starts(string uri, string applicationType)
+        => Assert.Empty(AllChecks(Bound(uri, applicationType, postLogout: false)));
+
+    /// <summary>
     /// The settings values a URL parser of a browser turns into a javascript URI, by removing a tab or a newline
     /// anywhere and a control character in front, beside a plain relative path.
     /// </summary>
@@ -143,7 +175,7 @@ public class RedirectUrisCheckTests
         string applicationType,
         bool postLogout)
     {
-        Assert.Empty(AllChecks(Bound("com.example.app:/cb", applicationType, postLogout)));
+        Assert.Empty(AllChecks(Bound("https://app.example.com/cb", applicationType, postLogout)));
 
         var client = Bound(uri, applicationType, postLogout);
         Assert.Equal(Assert.Single(Check(client)), Assert.Single(AllChecks(client)).Message);
@@ -262,16 +294,18 @@ public class RedirectUrisCheckTests
     }
 
     /// <summary>
-    /// Any other scheme starts, a web client's private-use one included.
+    /// A web client's post-logout redirect carries no authorization response, so any other scheme starts there, a
+    /// private-use one and http included, beside an https redirect URI.
     /// </summary>
     [Theory]
     [InlineData("https://app.example.com/cb")]
     [InlineData("myapp:/cb")]
     [InlineData("com.example.app:/cb")]
-    public void AClient_RedirectingToAnotherScheme_Starts(string uri)
+    [InlineData("http://app.example.com/signed-out")]
+    public void AWebClient_ReturningAfterLogoutToAnotherScheme_Starts(string uri)
         => Assert.Empty(Check(new ClientInfo(ClientId)
         {
-            RedirectUris = [new Uri(uri)],
+            RedirectUris = [new Uri("https://app.example.com/cb")],
             PostLogoutRedirectUris = [new Uri(uri)],
         }));
 
@@ -300,7 +334,7 @@ public class RedirectUrisCheckTests
 
     /// <summary>
     /// A client bound from settings naming <paramref name="uri"/> as its only redirect or post-logout redirect URI,
-    /// and otherwise passing every check: a public client, the native one redirecting to a private-use scheme.
+    /// and otherwise passing every check: a public client whose other member names an https URI.
     /// </summary>
     private static ClientInfo Bound(string uri, string applicationType, bool postLogout)
     {
@@ -313,7 +347,7 @@ public class RedirectUrisCheckTests
                 [nameof(ClientInfo.ApplicationType)] = applicationType,
                 [nameof(ClientInfo.TokenEndpointAuthMethod)] = ClientAuthenticationMethods.None,
                 [$"{member}:0"] = uri,
-                [$"{other}:0"] = "com.example.app:/other",
+                [$"{other}:0"] = "https://app.example.com/other",
             })
             .Build();
 

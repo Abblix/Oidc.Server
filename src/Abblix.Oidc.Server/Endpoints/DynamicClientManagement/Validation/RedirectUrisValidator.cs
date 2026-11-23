@@ -73,7 +73,7 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                 switch (applicationType)
                 {
                     // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
-                    case ApplicationTypes.Web when uri.Scheme != Uri.UriSchemeHttps:
+                    case ApplicationTypes.Web when !RedirectUriSchemes.IsAllowed(uri, native: false):
                         return ErrorFactory.InvalidRedirectUri(
                             $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
 
@@ -105,7 +105,7 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
                     // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period
                     // character (".") SHOULD be rejected". The javascript, data and vbscript schemes carry none, and a
                     // response posted to one of them would run in this server's origin
-                    case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri):
+                    case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri, native: true):
                         return ErrorFactory.InvalidRedirectUri(
                             $"Native Clients MUST only register {Parameters.RedirectUris} using a private-use URI "
                             + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");

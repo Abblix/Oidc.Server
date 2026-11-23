@@ -41,9 +41,16 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Creates an AuthorizationValidationContext for testing.
+    /// Creates an AuthorizationValidationContext for testing, for a native client, which may redirect to each kind of
+    /// URI these tests match: https, a private-use scheme and http on a loopback host.
     /// </summary>
     private static AuthorizationValidationContext CreateContext(
+        Uri? redirectUri,
+        params Uri[] registeredUris)
+        => CreateContextFor(ApplicationTypes.Native, redirectUri, registeredUris);
+
+    private static AuthorizationValidationContext CreateContextFor(
+        string applicationType,
         Uri? redirectUri,
         params Uri[] registeredUris)
     {
@@ -57,6 +64,7 @@ public class RedirectUriValidatorTests
 
         var clientInfo = new ClientInfo(ClientId)
         {
+            ApplicationType = applicationType,
             RedirectUris = registeredUris,
         };
 
@@ -699,6 +707,29 @@ public class RedirectUriValidatorTests
     {
         var context = CreateContext(new Uri(requested), new Uri(registered));
         context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
+    /// A client the host's own store supplies never met the check of the settings, so the endpoint holds its redirect URI
+    /// to the same rule: a web client redirects only to https (RFC 9700 section 2.6, RFC 8252 section 7.1), even to a
+    /// URI it registered, while a native client keeps the loopback and private-use redirects.
+    /// </summary>
+    [Theory]
+    [InlineData(ApplicationTypes.Web, "http://client.example.com/callback", false)]
+    [InlineData(ApplicationTypes.Web, "http://127.0.0.1:8080/callback", false)]
+    [InlineData(ApplicationTypes.Web, "com.example.app:/callback", false)]
+    [InlineData(ApplicationTypes.Web, "https://client.example.com/callback", true)]
+    [InlineData(ApplicationTypes.Native, "http://127.0.0.1:8080/callback", true)]
+    [InlineData(ApplicationTypes.Native, "http://client.example.com/callback", false)]
+    [InlineData(ApplicationTypes.Native, "myapp:/callback", false)]
+    public async Task ValidateAsync_ARegisteredRedirectUri_IsHeldToTheSchemesOfItsClientType(
+        string applicationType, string uri, bool accepted)
+    {
+        var context = CreateContextFor(applicationType, new Uri(uri), new Uri(uri));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

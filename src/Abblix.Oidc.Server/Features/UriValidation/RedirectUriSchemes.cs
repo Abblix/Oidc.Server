@@ -9,30 +9,28 @@
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// The URI schemes a native app's redirect URI may use (RFC 8252 section 7).
+/// The URI schemes a client's redirect URI may use, the one rule the check of the settings, dynamic registration, client
+/// ID metadata documents and the authorization endpoint hold a redirect URI to.
 /// </summary>
 internal static class RedirectUriSchemes
 {
     /// <summary>
-    /// Whether the user agent may be sent to <paramref name="uri"/>: an https URI, an http URI to a loopback host, or a
-    /// private-use scheme carrying a period, which RFC 8252 section 8.4 asks for "At a minimum".
+    /// Whether a client of the given kind may redirect to <paramref name="uri"/>: any client to https; only a native app
+    /// to http, on a loopback host (RFC 9700 section 2.6: the server "MUST NOT allow redirection URIs that use the http
+    /// scheme except for native clients that use loopback interface redirection"); and only a native app to a private-use
+    /// scheme, one containing a period (RFC 8252 sections 7.1 and 8.4: "any private-use URI scheme that doesn't contain a
+    /// period character (".") SHOULD be rejected").
     /// </summary>
-    /// <remarks>
-    /// Dynamic registration, a client's metadata document and startup each hold a native client's redirect URIs to it.
-    /// The registration checks, which judge a metadata document too, refuse a native client's https URI besides, since
-    /// OpenID Connect Dynamic Client Registration 1.0 section 2 has a native client "only register redirect_uris using
-    /// custom URI schemes or loopback URLs using the http scheme". A client the host declares is not registered under
-    /// that document, so startup lets it use the claimed https redirect RFC 8252 section 7.2 offers.
-    /// </remarks>
     /// <param name="uri">An absolute URI.</param>
-    public static bool IsAllowed(Uri uri)
+    /// <param name="native">Whether the client is a native app.</param>
+    public static bool IsAllowed(Uri uri, bool native)
     {
         if (uri.Scheme == Uri.UriSchemeHttps)
             return true;
 
         if (uri.Scheme == Uri.UriSchemeHttp)
-            return LoopbackHosts.IsNativeLoopbackHost(uri);
+            return native && LoopbackHosts.IsNativeLoopbackHost(uri);
 
-        return uri.Scheme.Contains('.');
+        return native && uri.Scheme.Contains('.');
     }
 }

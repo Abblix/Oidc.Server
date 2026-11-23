@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -46,9 +47,10 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
         var uriValidator = UriValidatorFactory.CreateForRedirectUris(context.ClientInfo.RedirectUris);
 
         var redirectUri = context.Request.RedirectUri;
-        if (redirectUri == null ||
-            (exactHttps && redirectUri is not { IsAbsoluteUri: true, Scheme: "https" }) ||
-            !uriValidator.IsValid(redirectUri))
+
+        // A client the host's own store supplies never met the check of the settings, so its redirect URI is held to
+        // the schemes its kind of client may use here, once it matched a registered one and is known to be absolute
+        if (redirectUri is not { } uri || !Matches(uri) || !IsAllowedFor(context.ClientInfo, uri))
         {
             LogInvalidRedirectUri(redirectUri, context.ClientInfo.ClientId);
 
@@ -58,5 +60,11 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
         context.ValidRedirectUri = redirectUri;
 
         return null;
+
+        bool Matches(Uri uri)
+            => !(exactHttps && uri is not { IsAbsoluteUri: true, Scheme: "https" }) && uriValidator.IsValid(uri);
     }
+
+    private static bool IsAllowedFor(ClientInfo client, Uri uri)
+        => RedirectUriSchemes.IsAllowed(uri, native: client.ApplicationType == ApplicationTypes.Native);
 }

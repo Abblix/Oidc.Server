@@ -42,7 +42,7 @@ internal sealed class NativeClientsCheck : ITenantsCheck
         // includes a fragment or uses a script scheme is RedirectUrisCheck's to refuse, for every client
         foreach (var (member, uri) in redirects)
         {
-            if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri))
+            if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri, native: true))
             {
                 yield return $"The native client '{client.ClientId}' has the {member} " +
                              $"'{RedirectUrisCheck.Shown(uri)}': a native app redirects to a private-use scheme " +
