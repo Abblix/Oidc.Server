@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
@@ -20,12 +23,15 @@ public sealed record ClientAbsence(ClientAbsenceReason Reason)
     public static ClientAbsence Unknown { get; } = new(ClientAbsenceReason.Unknown);
 
     /// <summary>
-    /// The client's metadata document was had and refused.
+    /// The client's metadata document was had and refused (<see cref="ClientAbsenceReason.Refused"/>).
     /// </summary>
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
     public static ClientAbsence Refused { get; } = new(ClientAbsenceReason.Refused);
 
     /// <summary>
-    /// The client's metadata document could not be had for now, and no valid copy of it is held.
+    /// The client's metadata document could not be had for now, and no valid copy of it is held
+    /// (<see cref="ClientAbsenceReason.TemporarilyUnavailable"/>).
     /// </summary>
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
     public static ClientAbsence TemporarilyUnavailable { get; } = new(ClientAbsenceReason.TemporarilyUnavailable);
 }
