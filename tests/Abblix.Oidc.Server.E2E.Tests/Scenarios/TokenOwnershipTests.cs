@@ -38,6 +38,12 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
     /// <summary>The client that presents tokens which are not its own.</summary>
     private const string OtherClientId = TestConstants.EmptyAllowlistClientId;
 
+    /// <summary>
+    /// A client that exchanges tokens and may not present those of others: the token exchange grant is the one place
+    /// the token endpoint reads a token another client was issued.
+    /// </summary>
+    private const string ExchangingClientId = TestConstants.UnrestrictedClientId;
+
     [Fact]
     public async Task Another_client_revoking_a_superseded_refresh_token_leaves_the_owners_grant()
     {
@@ -79,19 +85,42 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
         Assert.True((await RefreshAsync(client, discovery, active)).IsSuccessStatusCode, "The owner's grant was revoked.");
     }
 
-    [Fact]
-    public async Task Another_client_cannot_revoke_a_registration_access_token()
+    /// <summary>
+    /// Token exchange reads a refresh token presented as the subject or the actor the same way, so another client
+    /// presenting a superseded one is refused and the owner's grant stays.
+    /// </summary>
+    [Theory]
+    [InlineData(TokenRequest.Parameters.SubjectToken, TokenRequest.Parameters.SubjectTokenType)]
+    [InlineData(TokenRequest.Parameters.ActorToken, TokenRequest.Parameters.ActorTokenType)]
+    public async Task Another_client_exchanging_a_superseded_refresh_token_leaves_the_owners_grant(
+        string tokenParameter,
+        string typeParameter)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
-        var registered = await RegisterClientAsync(client, discovery, NewClientMetadata());
-        var accessToken = registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>();
-        var configurationUri = new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>());
+        var (superseded, active, _) = await RotatedGrantAsync(client, discovery);
 
-        var revocation = await RevokeAsync(client, discovery, accessToken, OtherClientId);
-        Assert.Equal(HttpStatusCode.OK, revocation.StatusCode);
+        // The other client's own access token is the subject where the refresh token is the actor
+        var form = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = superseded,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.RefreshToken,
+            [ClientRequest.Parameters.ClientId] = ExchangingClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        };
+        if (tokenParameter == TokenRequest.Parameters.ActorToken)
+        {
+            form[TokenRequest.Parameters.SubjectToken] = await ExchangingClientsAccessTokenAsync(client, discovery);
+            form[TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken;
+        }
 
-        Assert.Equal(HttpStatusCode.OK, (await ReadRegistrationAsync(client, configurationUri, accessToken)).StatusCode);
+        form[tokenParameter] = superseded;
+        form[typeParameter] = TokenExchangeTokenTypes.RefreshToken;
+        var exchange = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
+        Assert.Equal(HttpStatusCode.BadRequest, exchange.StatusCode);
+
+        Assert.True((await RefreshAsync(client, discovery, active)).IsSuccessStatusCode, "The owner's grant was revoked.");
     }
 
     [Fact]
@@ -125,6 +154,36 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
         var status = await Factory.Services.GetRequiredService<ITokenRegistry>()
             .GetStatusAsync(tenant, issued.Token.Payload.JwtId!);
         Assert.Equal(JsonWebTokenStatus.Unknown, status);
+    }
+
+    /// <summary>
+    /// An access token of the client that exchanges tokens in these cases, issued to it through the authorization
+    /// code flow.
+    /// </summary>
+    private static async Task<string> ExchangingClientsAccessTokenAsync(HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = ExchangingClientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = ExchangingClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
     }
 
     /// <summary>
@@ -175,14 +234,6 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
-    }
-
-    private static async Task<HttpResponseMessage> ReadRegistrationAsync(
-        HttpClient client, Uri configurationUri, string accessToken)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, configurationUri);
         request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
