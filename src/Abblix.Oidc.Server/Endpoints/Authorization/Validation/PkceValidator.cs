@@ -80,6 +80,12 @@ public class PkceValidator(
 		SecurityProfileRequirements profile,
 		string codeChallenge)
 	{
+		// RFC 7636 section 4.3: code_challenge_method "Defaults to "plain" if not present in the request". Written into
+		// the request that goes on, so the plain rules below apply to it and the code it is issued is verified at the
+		// token endpoint by the method it was validated under
+		if (context.Request.CodeChallengeMethod is null)
+			context.Request = context.Request with { CodeChallengeMethod = CodeChallengeMethods.Plain };
+
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 		// rejected - including plain and the non-standard S512 - before the per-client plain check,
 		// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
