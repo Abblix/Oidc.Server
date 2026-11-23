@@ -53,6 +53,36 @@ public class NativeClientsCheckTests
     }
 
     /// <summary>
+    /// RFC 8252 section 8.2: "as the implicit flow cannot be protected by PKCE ... the use of the Implicit Flow with
+    /// native apps is NOT RECOMMENDED", and RFC 9700 section 2.1.2 has clients use a response type that issues its
+    /// tokens at the token endpoint. A native app may be allowed only response types that carry a code, which PKCE
+    /// protects.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.Token)]
+    [InlineData(ResponseTypes.IdToken)]
+    [InlineData(ResponseTypes.IdToken, ResponseTypes.Token)]
+    public void ANativeApp_AllowedAResponseTypeWithoutACode_IsRefused(params string[] responseType)
+    {
+        var client = NativeApp();
+        client.AllowedResponseTypes = [[ResponseTypes.Code], responseType];
+
+        Assert.Contains($"'{ClientId}'", Assert.Single(Check(client)));
+    }
+
+    /// <summary>
+    /// The hybrid response types carry a code, so a native app may be allowed them.
+    /// </summary>
+    [Fact]
+    public void ANativeApp_AllowedAResponseTypeWithACode_Starts()
+    {
+        var client = NativeApp();
+        client.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]];
+
+        Assert.Empty(Check(client));
+    }
+
+    /// <summary>
     /// RFC 8252 section 8.4 has native apps public except with per-instance secrets, and Appendix A item 4 has a server
     /// "Not assume that native app clients can keep a secret": a native app declared once in the tenant settings serves
     /// every installation, so it authenticates with none, whatever method it names.
