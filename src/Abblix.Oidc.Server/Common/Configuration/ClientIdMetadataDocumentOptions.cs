@@ -118,4 +118,15 @@ public record ClientIdMetadataDocumentOptions
     /// whose server answers slowly, so this is shorter than the server's other outbound fetches take.
     /// </remarks>
     public TimeSpan FetchTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Which addresses a document may be fetched from. Default: <see cref="ClientIdMetadataDocumentAddresses.PublicOnly"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ClientIdMetadataDocumentAddresses.AllowLoopback"/> lets a provider and a client running
+    /// on one development machine try the feature, by the exception section 10.7 of the draft makes. A value naming no
+    /// member is refused at startup.
+    /// </remarks>
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public ClientIdMetadataDocumentAddresses DocumentAddresses { get; set; } = ClientIdMetadataDocumentAddresses.PublicOnly;
 }

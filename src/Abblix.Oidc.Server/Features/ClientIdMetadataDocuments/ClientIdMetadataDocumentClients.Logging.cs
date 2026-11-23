@@ -36,4 +36,12 @@ partial class ClientIdMetadataDocumentClients
         Level = LogLevel.Warning,
         Message = "The client metadata document of {ClientId} is refused at tenant {TenantId}: {Reason}")]
     private partial void LogClientRefused(Sanitized ClientId, string TenantId, Sanitized Reason);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientInformation.ClientIdMetadataDocuments.LoopbackWithheld,
+        Level = LogLevel.Warning,
+        Message = "The client identifier URL {ClientId} names a loopback host, which " +
+                  "ClientIdMetadataDocuments.DocumentAddresses AllowLoopback reaches only for a tenant whose issuer is " +
+                  "itself on a loopback address; the issuer of tenant {TenantId} is {Issuer}")]
+    private partial void LogLoopbackWithheld(Sanitized ClientId, string TenantId, Uri Issuer);
 }

@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
 
@@ -100,6 +101,19 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
                 wiring.PrivateNetworksBlocked =
                     provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.BlockPrivateNetworks;
 
+                // A host built without the generic host registers no environment, and is taken for one that is not
+                // Production: nothing tells it apart from a development host, and the issuer-on-loopback gate still
+                // holds for each tenant
+                var loopback = provider.GetRequiredService<IOptions<OidcOptions>>().Value
+                    .ClientIdMetadataDocuments.DocumentAddresses == ClientIdMetadataDocumentAddresses.AllowLoopback;
+                wiring.LoopbackInProduction =
+                    loopback && provider.GetService<IHostEnvironment>() is { } environment && environment.IsProduction();
+
+                // The proxy resolves the name itself, on its own machine, so the address the server judged is not the
+                // one reached
+                wiring.LoopbackThroughProxy = loopback &&
+                    provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.OutboundProxy is not null;
+
                 wiring.ConsentGrantedToAnyUrl = GrantsConsentToEveryClient(services) &&
                     provider.GetRequiredService<IOptions<OidcOptions>>().Value
                         .ClientIdMetadataDocuments.AllowedClientIdPrefixes is null;
@@ -108,6 +122,8 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             .Validate(wiring => wiring.IssuerSent, ClientIdMetadataDocumentsWiring.IssuerNotSentMessage)
             .Validate(wiring => !wiring.ConsentGrantedToAnyUrl, ClientIdMetadataDocumentsWiring.ConsentGrantedToAnyUrlMessage)
             .Validate(wiring => wiring.PrivateNetworksBlocked, ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage)
+            .Validate(wiring => !wiring.LoopbackInProduction, ClientIdMetadataDocumentsWiring.LoopbackInProductionMessage)
+            .Validate(wiring => !wiring.LoopbackThroughProxy, ClientIdMetadataDocumentsWiring.LoopbackThroughProxyMessage)
             .ValidateOnStart();
 
         return builder;

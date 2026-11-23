@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -51,11 +52,11 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             return stored;
 
         var settings = options.CurrentValue;
-        var url = Fetched(tenant, clientId, settings);
+        var url = Fetched(tenant, clientId, settings, out var rule);
         if (url is null)
             return null;
 
-        var held = await documents.GetAsync(clientId, url);
+        var held = await documents.GetAsync(clientId, url, rule);
         if (held is null)
             return null;
 
@@ -73,9 +74,22 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     /// <summary>
     /// The URL to fetch <paramref name="clientId"/>'s document from, or null when it is not fetched.
     /// </summary>
-    private Uri? Fetched(TenantDefinition tenant, string clientId, OidcOptions settings)
+    private Uri? Fetched(TenantDefinition tenant, string clientId, OidcOptions settings, out OutboundAddressRule rule)
     {
-        var why = ClientIdentifierUrl.WhyNotFetched(clientId, out var url);
+        // Decided at each lookup, a held document's included, so a tenant whose issuer is not on loopback is never
+        // served a document another tenant's fetch reached loopback for
+        var addresses = settings.ClientIdMetadataDocuments.DocumentAddresses;
+        rule = SpecialPurposeFetches.DocumentRuleAt(tenant.Issuer, addresses);
+
+        // Said apart from every other refusal, so a host that set the exception reads why this tenant does not get it
+        if (Uri.TryCreate(clientId, UriKind.Absolute, out var named) &&
+            SpecialPurposeFetches.LoopbackWithheldAt(tenant.Issuer, addresses, named))
+        {
+            LogLoopbackWithheld(clientId, tenant.Id, tenant.Issuer);
+            return null;
+        }
+
+        var why = ClientIdentifierUrl.WhyNotFetched(clientId, rule, out var url);
         if (why is not null)
         {
             // An identifier that is no URL at all is an unknown client like any other, and says nothing worth a line
