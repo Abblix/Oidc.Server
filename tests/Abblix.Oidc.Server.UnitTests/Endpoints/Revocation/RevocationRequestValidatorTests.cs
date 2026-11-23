@@ -1034,19 +1034,39 @@ public class RevocationRequestValidatorTests
     }
 
     /// <summary>
-    /// A token that is not one this server issued, a forged signature here, is still a caller doing something
-    /// wrong, and still a warning: only a revocation already recorded is told apart.
+    /// Every refusal but a revocation already recorded is a warning, so moving a reason from one level to the other
+    /// turns one of these cases red.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithAForgedToken_ShouldWarn()
+    [Theory]
+    [InlineData(JwtError.InvalidToken)]
+    [InlineData(JwtError.TokenAlreadyUsed)]
+    [InlineData(JwtError.MalformedToken)]
+    [InlineData(JwtError.InvalidAlgorithm)]
+    [InlineData(JwtError.InvalidTokenType)]
+    [InlineData(JwtError.InvalidHeader)]
+    [InlineData(JwtError.InvalidSignature)]
+    public async Task ValidateAsync_WithAnyOtherRefusal_ShouldWarn(JwtError error)
     {
-        var recorded = await ValidateRecordingAsync(
-            new JwtValidationError(JwtError.InvalidSignature, "The signature does not verify"));
+        var recorded = await ValidateRecordingAsync(new JwtValidationError(error, "The token was not accepted"));
 
         var entry = Assert.Single(
             recorded,
             entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.TokenValidationFailed);
         Assert.Equal(LogLevel.Warning, entry.Level);
+    }
+
+    /// <summary>
+    /// Every refusal has a level, so a reason added later is answered as RFC 7009 Section 2.2 asks rather than
+    /// thrown, and the theory above names each one logged as a warning.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_LogsEveryRefusalAtSomeLevel()
+    {
+        foreach (var error in Enum.GetValues<JwtError>())
+        {
+            var recorded = await ValidateRecordingAsync(new JwtValidationError(error, "The token was not accepted"));
+            Assert.NotEmpty(recorded);
+        }
     }
 
     private async Task<List<LogRecord>> ValidateRecordingAsync(JwtValidationError refusal)

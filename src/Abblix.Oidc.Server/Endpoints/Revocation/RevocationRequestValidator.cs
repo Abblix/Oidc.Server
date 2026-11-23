@@ -238,8 +238,9 @@ public partial class RevocationRequestValidator(
 	/// </summary>
 	/// <remarks>
 	/// A token a revocation already reached is the ordinary end of a sign-out: ending the session revokes its
-	/// tokens, and the client then revokes its refresh token here as RFC 7009 asks. Every other refusal names a
-	/// token this server did not issue in this form, which a caller doing things right never presents.
+	/// tokens, and the client then revokes its refresh token here as RFC 7009 asks. Every other refusal is a warning:
+	/// a token that does not parse, verify or carry the expected type and header, one whose claims or lifetime this
+	/// server does not accept, or a superseded refresh token, whose replay is what revokes a grant.
 	/// </remarks>
 	private void LogRefusal(JwtValidationError error)
 	{
