@@ -115,12 +115,37 @@ public class ClientSecretEncryptionTests
     }
 
     [Fact]
-    public async Task ATenantWithoutAKey_EncryptsNothingAndReturnsNoSecret()
+    public async Task ATenantWithoutAKey_RefusesToEncryptAndReturnsNoSecret()
     {
         var tenant = TenantWith(null);
 
-        Assert.Null(Encryptor().Encrypt(tenant, ClientId, Secret));
+        Assert.Throws<InvalidOperationException>(() => Encryptor().Encrypt(tenant, ClientId, Secret));
         Assert.Null(await ReadSecretAsync(tenant, ClientHolding(new byte[40])));
+    }
+
+    /// <summary>
+    /// A server serving dynamic client registration refuses a tenant without the key, naming the setting, since a
+    /// client reading its registration is given its secret back; a server not serving it lets the tenant through.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public void ATenantWithoutAKey_IsRefusedWhileRegistrationIsServed(bool registrationServed, bool keyed, bool refused)
+    {
+        var options = new OidcOptions();
+        if (registrationServed)
+            options.EnabledEndpoints |= OidcEndpoints.RegisterClient;
+        else
+            options.EnabledEndpoints &= ~OidcEndpoints.RegisterClient;
+
+        var refusals = new TenantDefinitionsCheck()
+            .Check([TenantWith(keyed ? NewKey() : null)], options)
+            .Select(refusal => refusal.Message)
+            .ToArray();
+
+        Assert.Equal(refused, refusals.Any(
+            failure => failure.Contains(nameof(TenantDefinition.ClientSecretEncryption), StringComparison.Ordinal)));
     }
 
     /// <summary>

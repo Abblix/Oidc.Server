@@ -28,7 +28,7 @@ internal sealed class ClientSecretEncryptor
     private readonly DeterministicAeadEncryptor? _encryptor;
 
     /// <summary>
-    /// Creates the encryptor of a tenant, which encrypts nothing when <paramref name="settings"/> is null.
+    /// Creates the encryptor of a tenant, which decrypts nothing when <paramref name="settings"/> is null.
     /// </summary>
     /// <param name="settings">The tenant's key, or null when it has none.</param>
     /// <exception cref="ArgumentException">The settings carry a key or name a hash the encryption cannot use, which
@@ -48,8 +48,14 @@ internal sealed class ClientSecretEncryptor
     }
 
     /// <inheritdoc cref="IClientSecretEncryptor.Encrypt"/>
-    public byte[]? Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret)
-        => _encryptor?.Seal(Encoding.UTF8.GetBytes(secret), AssociatedData(tenant, clientId));
+    public byte[] Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret)
+    {
+        var encryptor = _encryptor ?? throw new InvalidOperationException(
+            $"The tenant '{tenant.Id}' has no {nameof(TenantDefinition.ClientSecretEncryption)}, which the check of " +
+            "the tenant list requires of every tenant while the server serves dynamic client registration");
+
+        return encryptor.Seal(Encoding.UTF8.GetBytes(secret), AssociatedData(tenant, clientId));
+    }
 
     /// <inheritdoc cref="IClientSecretEncryptor.Decrypt"/>
     public string? Decrypt(TenantDefinition tenant, string clientId, byte[] encryptedSecret)

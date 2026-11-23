@@ -18,11 +18,12 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </summary>
 /// <remarks>
 /// The secret is sealed the way pairwise subject identifiers are, by a deterministic authenticated encryption keyed by
-/// <see cref="Key"/>, and bound to the tenant and the client, so a value moved to another client opens nowhere. Without
-/// these settings the tenant stores no encrypted secret and a read answers without one, as it does for a client
-/// registered before the tenant had a key. Replacing the key is allowed, and then every secret encrypted under the
-/// former one no longer opens: those clients still authenticate with their secrets, and a read of their registration
-/// answers without the secret, with a warning in the log.
+/// <see cref="Key"/>, and bound to the tenant and the client, so a value moved to another client opens nowhere. A
+/// server serving dynamic client registration refuses a tenant without these settings. A client registered before the
+/// tenant had a key holds only the hash of its secret, so a read of its registration answers without the secret.
+/// Replacing the key is allowed, and then every secret encrypted under the former one no longer opens: those clients
+/// still authenticate with their secrets, and a read of their registration answers without the secret, with a warning
+/// in the log.
 /// </remarks>
 public record ClientSecretEncryptionSettings
 {
@@ -41,6 +42,30 @@ public record ClientSecretEncryptionSettings
     /// setting is absent, while a setting with no value is refused. Changing it is changing the key.
     /// </summary>
     public string HashAlgorithm { get; init; } = nameof(HashAlgorithmName.SHA256);
+
+    /// <summary>
+    /// Why a tenant declaring <paramref name="settings"/> cannot be served, each reason, or none when it can: a server
+    /// serving dynamic client registration needs the settings, since a client reading its registration is given its
+    /// secret back, and settings declared must key the encryption.
+    /// </summary>
+    /// <param name="settings">The settings the tenant declares, or null when it declares none.</param>
+    /// <param name="registrationServed">Whether the server serves dynamic client registration.</param>
+    internal static IEnumerable<string> RefusalsOf(ClientSecretEncryptionSettings? settings, bool registrationServed)
+    {
+        if (settings is not null)
+            return Refusals(settings);
+
+        if (registrationServed)
+            return [Missing];
+
+        return [];
+    }
+
+    private const string Missing =
+        $"{nameof(MultiTenancy.TenantDefinition.ClientSecretEncryption)} is required while the server serves dynamic " +
+        "client registration, so that a client reading its registration is given its secret back (RFC 7592 section " +
+        $"3): set {nameof(MultiTenancy.TenantDefinition.ClientSecretEncryption)}.{nameof(Key)} to a base64-encoded " +
+        "random key of at least 32 bytes, kept secret.";
 
     /// <summary>Why <paramref name="settings"/> cannot key the encryption, each reason, or none when they can.</summary>
     /// <param name="settings">The settings a deployment configured.</param>

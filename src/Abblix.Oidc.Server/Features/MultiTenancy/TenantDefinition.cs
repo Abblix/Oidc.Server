@@ -179,9 +179,12 @@ public sealed class TenantDefinition
 
     /// <summary>
     /// The key the client secrets this tenant issues on dynamic registration are also kept encrypted with, so a client
-    /// reading its registration at the client configuration endpoint (RFC 7592) is given its secret back; or null,
-    /// when only their hashes are kept and such a read answers without the secret.
+    /// reading its registration at the client configuration endpoint (RFC 7592 section 3) is given its secret back.
     /// </summary>
+    /// <remarks>
+    /// Required while the server serves dynamic client registration: a tenant without it stops the server at startup
+    /// when declared in the settings, and is refused, not served, when read from a store of tenants. Null otherwise.
+    /// </remarks>
     public ClientSecretEncryptionSettings? ClientSecretEncryption { get; init; }
 
     /// <summary>

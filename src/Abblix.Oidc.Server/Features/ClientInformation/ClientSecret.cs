@@ -116,8 +116,8 @@ public record ClientSecret
 	/// <summary>
 	/// The secret encrypted for the client it was issued to, by the client secret encryption key of its tenant
 	/// (<see cref="MultiTenancy.TenantDefinition.ClientSecretEncryption"/>), so the client configuration endpoint can
-	/// return it when the client reads its registration (RFC 7592 section 3). Null for a secret issued while the tenant
-	/// had no such key, and for one the host declares; a read then answers without the secret.
+	/// return it when the client reads its registration (RFC 7592 section 3). Null for a secret issued before the tenant
+	/// had such a key, and for one the host declares; a read then answers without the secret.
 	/// </summary>
 	/// <remarks>
 	/// Never used to authenticate the client, which is verified against the hashes alone. Without the key it was

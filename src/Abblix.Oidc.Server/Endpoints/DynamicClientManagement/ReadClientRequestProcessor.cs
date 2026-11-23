@@ -18,10 +18,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// Builds the RFC 7592 section 2.1 read-client response from stored client metadata. The <c>client_secret</c> is
-/// returned when the tenant kept it encrypted (<see cref="TenantDefinition.ClientSecretEncryption"/>), as section 3 and
-/// Appendix A.1 ask, and left out otherwise, since only its hash is kept; a registration access token bearing the
-/// client's current jti is re-issued so the client can keep using the management endpoint after the read, without
-/// invalidating the token it presented (read stays idempotent - only update rotates the jti).
+/// returned as section 3 and Appendix A.1 ask, decrypted by the key of the tenant
+/// (<see cref="TenantDefinition.ClientSecretEncryption"/>), and left out for a client registered before the tenant had
+/// the key, which holds only the hash of its secret, or under a key since replaced; a registration access token
+/// bearing the client's current jti is re-issued so the client can keep using the management endpoint after the read,
+/// without invalidating the token it presented (read stays idempotent - only update rotates the jti).
 /// </summary>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
 /// <param name="clock">Provides the issue time.</param>

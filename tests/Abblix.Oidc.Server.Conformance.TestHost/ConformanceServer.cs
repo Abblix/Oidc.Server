@@ -36,6 +36,12 @@ public static class ConformanceServer
 
         // The suite's sector identifier modules run only against a server advertising pairwise subjects
         PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) },
+
+        // The suite registers its clients dynamically, which needs the key their secrets are kept encrypted with
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
     };
 
     /// <summary>The server options the plans run under, serving <paramref name="tenant"/>.</summary>

@@ -30,7 +30,7 @@ internal sealed partial class IssuerClientSecretEncryptor(
     }
 
     /// <inheritdoc />
-    public byte[]? Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret)
+    public byte[] Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret)
         => EncryptorOf(tenant).Encrypt(tenant, clientId, secret);
 
     /// <inheritdoc />

@@ -115,9 +115,9 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         // Refused here rather than when the first client registers, which would answer with a 500
         failures.AddRange(TenantRefusal.EachOf(
             tenants,
-            tenant => tenant.ClientSecretEncryption is { } settings
-                ? ClientSecretEncryptionSettings.Refusals(settings)
-                : []));
+            tenant => ClientSecretEncryptionSettings.RefusalsOf(
+                tenant.ClientSecretEncryption,
+                options.EnabledEndpoints.HasFlag(OidcEndpoints.RegisterClient))));
 
         return failures;
     }

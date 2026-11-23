@@ -19,19 +19,21 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </summary>
 /// <remarks>
 /// Each tenant encrypts with the key of its own <see cref="TenantDefinition.ClientSecretEncryption"/>, and the value is
-/// bound to the tenant and the client, so it decrypts for no other client and in no other tenant. A tenant without
-/// the key encrypts nothing.
+/// bound to the tenant and the client, so it decrypts for no other client and in no other tenant. The key is required
+/// of every tenant while the server serves dynamic client registration.
 /// </remarks>
 public interface IClientSecretEncryptor
 {
     /// <summary>
     /// <paramref name="secret"/>, issued to the client <paramref name="clientId"/> of <paramref name="tenant"/>,
-    /// encrypted for that client, or null when the tenant has no key to encrypt it with.
+    /// encrypted for that client.
     /// </summary>
     /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="clientId">The client the secret is issued to.</param>
     /// <param name="secret">The secret issued.</param>
-    byte[]? Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret);
+    /// <exception cref="InvalidOperationException">The tenant has no key, which the check of the tenant list refuses
+    /// before the tenant is served while the server serves dynamic client registration.</exception>
+    byte[] Encrypt(TenantDefinition tenant, string clientId, [Credential] string secret);
 
     /// <summary>
     /// The secret <paramref name="encryptedSecret"/> holds for the client <paramref name="clientId"/> of

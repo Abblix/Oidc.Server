@@ -96,6 +96,12 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
     tenant.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
     tenant.RegistrationUri = new Uri("/register", UriKind.Relative);
     tenant.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+    // The host serves dynamic client registration, which needs the key a registered client's secret is kept
+    // encrypted with
+    tenant.ClientSecretEncryption = new ClientSecretEncryptionSettings
+    {
+        Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+    };
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
 
