@@ -167,8 +167,7 @@ public sealed class TenantDefinition
     /// <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>. When the end user declines, the page
     /// does not send them to the <c>post_logout_redirect_uri</c> its query carries: only the end-session endpoint
     /// checks that address against the client's registration (RP-Initiated Logout 1.0 section 3). The page's address
-    /// carries the hint and the issued value, so the redirect there sends no referrer, and the page sends none either
-    /// and loads nothing from another origin. Left unset, the endpoint answers such
+    /// carries the hint and the issued value, so the page sends no referrer and loads nothing from another origin. Left unset, the endpoint answers such
     /// a request with the <c>confirmation_required</c> error and the value in its body, for a host that asks the
     /// question through an end-session response formatter of its own.
     /// </remarks>
