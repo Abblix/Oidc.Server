@@ -101,6 +101,24 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
+    /// A pushed request is judged on the client its authentication found, so a valid document no cache holds is
+    /// fetched once by the push, client authentication included.
+    /// </summary>
+    [Fact]
+    public async Task AValidDocumentNoCacheHolds_IsFetchedOnceByAPushedRequest()
+    {
+        _origin.Serve(ClientId, PublicClientDocument().ToJsonString(), "no-store");
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await SendAsync(client, discovery, Arrival.Pushed);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
     /// A document that cannot be had for now, with no valid copy held, is asked for once by the request that needed it
     /// and again by the next one: section 6.2 has the server "MUST NOT cache error responses". The request is refused
     /// without a redirect (section 6.1).

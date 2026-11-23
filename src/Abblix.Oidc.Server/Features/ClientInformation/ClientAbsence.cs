@@ -23,7 +23,8 @@ public sealed record ClientAbsence(ClientAbsenceReason Reason)
     public static ClientAbsence Unknown { get; } = new(ClientAbsenceReason.Unknown);
 
     /// <summary>
-    /// The client's metadata document was had and refused (<see cref="ClientAbsenceReason.Refused"/>).
+    /// The client identifier URL is refused, its metadata document or the URL itself
+    /// (<see cref="ClientAbsenceReason.Refused"/>).
     /// </summary>
     [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
     public static ClientAbsence Refused { get; } = new(ClientAbsenceReason.Refused);

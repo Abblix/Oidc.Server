@@ -22,8 +22,8 @@ public enum ClientAbsenceReason
     Unknown,
 
     /// <summary>
-    /// The identifier is a client identifier URL whose metadata document was had and refused: it is invalid, or the
-    /// tenant does not accept the client it describes. Produced by client metadata documents as
+    /// The identifier is a client identifier URL the server refuses: its metadata document is invalid, the tenant does
+    /// not accept the client it describes, or the URL is one this server does not fetch from. Produced by client metadata documents as
     /// draft-ietf-oauth-client-id-metadata-document-03 section 6.1 describes a terminal failure, and may change with
     /// the final specification.
     /// </summary>
