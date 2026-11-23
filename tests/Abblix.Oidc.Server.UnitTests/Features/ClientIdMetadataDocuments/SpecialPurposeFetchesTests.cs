@@ -130,6 +130,36 @@ public class SpecialPurposeFetchesTests
         Assert.Equal(2, inner.Calls);
     }
 
+    /// <summary>
+    /// A fetch held for one rule a metadata document client's fetch is held to does not answer a fetch made by the
+    /// other: each rule has keys of its own.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AFetchUnderOneStrictRule_IsHeldApartFromTheOther(bool loopbackFirst)
+    {
+        var inner = new FailingFetcher();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var fetcher = new CachingSecureHttpFetcherDecorator(
+            inner,
+            cache,
+            TimeSpan.FromMinutes(5),
+            Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor =>
+                monitor.CurrentValue == new SecureHttpFetchOptions { RefetchInterval = TimeSpan.FromMinutes(1) }),
+            new CoalescingLoader<string, object>(TimeProvider.System));
+
+        foreach (var rule in loopbackFirst
+                     ? new[] { OutboundAddressRule.NoSpecialPurposeButLoopback, OutboundAddressRule.NoSpecialPurpose }
+                     : [OutboundAddressRule.NoSpecialPurpose, OutboundAddressRule.NoSpecialPurposeButLoopback])
+        {
+            using (SpecialPurposeFetches.Enter(rule))
+                await fetcher.FetchAsync<JsonWebKeySet>(new Uri(JwksUri));
+        }
+
+        Assert.Equal(2, inner.Calls);
+    }
+
     [Fact]
     public async Task OutsideAScope_TheHandlerJudgesNat64ByItsIPv4Address_AndInsideOneRefusesIt()
     {
