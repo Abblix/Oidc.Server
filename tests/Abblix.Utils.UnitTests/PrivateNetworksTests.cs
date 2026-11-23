@@ -189,4 +189,38 @@ public class PrivateNetworksTests
     [InlineData("::1:ffff:808:808", false)]
     public void ASpecialPurposeAddress_IsEveryBlockOfTheRegistry(string address, bool expected)
         => Assert.Equal(expected, PrivateNetworks.IsSpecialPurposeAddress(IPAddress.Parse(address)));
+
+    /// <summary>
+    /// Loopback as written is 127.0.0.0/8 and ::1; a mapped or NAT64 form of it is a block of its own, and so is no
+    /// other special-purpose address.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("127.255.255.254", true)]
+    [InlineData("::1", true)]
+    [InlineData("::ffff:127.0.0.1", false)]
+    [InlineData("64:ff9b::7f00:1", false)]
+    [InlineData("::", false)]
+    [InlineData("0.0.0.0", false)]
+    [InlineData("10.0.0.1", false)]
+    [InlineData("128.0.0.1", false)]
+    public void ALoopbackAddress_IsOneAsWritten(string address, bool expected)
+        => Assert.Equal(expected, PrivateNetworks.IsLoopbackAddress(IPAddress.Parse(address)));
+
+    /// <summary>
+    /// The rule a fetch reaching loopback is held to refuses what the registry reading refuses, loopback aside.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("::1", false)]
+    [InlineData("::ffff:127.0.0.1", true)]
+    [InlineData("64:ff9b::7f00:1", true)]
+    [InlineData("10.0.0.1", true)]
+    [InlineData("192.168.1.5", true)]
+    [InlineData("169.254.169.254", true)]
+    [InlineData("8.8.8.8", false)]
+    public void TheRuleReachingLoopback_RefusesEveryOtherSpecialPurposeAddress(string address, bool refused)
+        => Assert.Equal(
+            refused,
+            OutboundAddressRule.NoSpecialPurposeButLoopback.Refuses(IPAddress.Parse(address)));
 }

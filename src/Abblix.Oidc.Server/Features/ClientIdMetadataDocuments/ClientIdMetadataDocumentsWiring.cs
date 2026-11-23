@@ -54,7 +54,29 @@ internal sealed class ClientIdMetadataDocumentsWiring
         "URL naming itself a client could have the server fetch from a private or special-use address: " +
         "draft-ietf-oauth-client-id-metadata-document section 10.7 says the server \"MUST NOT fetch a Client ID " +
         "Metadata Document URL or any URLs contained within a Client ID Metadata Document that resolve to special-use " +
-        "IP addresses\". Keep BlockPrivateNetworks on, and name a service of your own in AllowedDestinations instead.";
+        "IP addresses\". Keep BlockPrivateNetworks on. To fetch documents served on this machine while developing, " +
+        "set ClientIdMetadataDocuments.DocumentAddresses to AllowLoopback and run the server on a " +
+        "loopback issuer such as " +
+        "https://localhost:5001: client identifiers are never fetched from AllowedDestinations.";
+
+    /// <summary>
+    /// What a host is told when it lets documents be fetched from loopback in production.
+    /// </summary>
+    internal const string LoopbackInProductionMessage =
+        "ClientIdMetadataDocuments.DocumentAddresses is AllowLoopback while the host environment is Production: " +
+        "draft-ietf-oauth-client-id-metadata-document section 10.7 makes that exception for \"authorization servers " +
+        "deployed for development or testing purposes\" and says they \"MUST NOT apply this exception in production " +
+        "deployments\". Set DocumentAddresses to PublicOnly, or run in a Development or test environment.";
+
+    /// <summary>
+    /// What a host is told when it lets documents be fetched from loopback through a forward proxy.
+    /// </summary>
+    internal const string LoopbackThroughProxyMessage =
+        "ClientIdMetadataDocuments.DocumentAddresses is AllowLoopback while SecureHttpFetchOptions.OutboundProxy is " +
+        "set, so a document on localhost would be requested from the proxy, which reaches its own loopback interface " +
+        "rather than this server's: draft-ietf-oauth-client-id-metadata-document section 10.7 allows only an address " +
+        "that \"matches the same loopback interface\". Unset OutboundProxy while developing, or set " +
+        "DocumentAddresses to PublicOnly.";
 
     /// <summary>
     /// Whether the client store the container resolves is the one looking clients up by their documents.
@@ -75,4 +97,14 @@ internal sealed class ClientIdMetadataDocumentsWiring
     /// Whether the server's outbound fetches refuse private and special-use addresses.
     /// </summary>
     public bool PrivateNetworksBlocked { get; set; }
+
+    /// <summary>
+    /// Whether documents may be fetched from loopback while the host environment is Production.
+    /// </summary>
+    public bool LoopbackInProduction { get; set; }
+
+    /// <summary>
+    /// Whether documents may be fetched from loopback while outbound requests go through a forward proxy.
+    /// </summary>
+    public bool LoopbackThroughProxy { get; set; }
 }

@@ -34,4 +34,11 @@ public enum OutboundAddressRule
     /// specification refuses the special-purpose address registries as written.
     /// </summary>
     NoSpecialPurpose,
+
+    /// <summary>
+    /// Every address <see cref="PrivateNetworks.IsSpecialPurposeAddress"/> reports is refused but a loopback one
+    /// (<see cref="PrivateNetworks.IsLoopbackAddress"/>), for such a fetch made where its specification lets a server
+    /// running on a loopback address reach a loopback one.
+    /// </summary>
+    NoSpecialPurposeButLoopback,
 }

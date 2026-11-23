@@ -49,7 +49,8 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
         NullLogger<ClientIdMetadataDocumentClients>.Instance,
         _services.Get<HeldMetadataDocuments>(),
         _services.Get<IServiceScopeFactory>(),
-        _services.Get<IOptionsMonitor<OidcOptions>>());
+        _services.Get<IOptionsMonitor<OidcOptions>>(),
+        new ProductionEnvironment(_services.Provider));
 
     /// <summary>
     /// Section 9.2: a server "MAY pre-register Client Identifier URLs", and a client so configured is served as

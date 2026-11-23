@@ -34,7 +34,10 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
         if (!settings.Enabled)
             return ValidateOptionsResult.Success;
 
-        if ((WhyLimitsRefused(settings) ?? WhyCacheBoundsRefused(settings) ?? WhyGrantTypesRefused(settings)) is { } refusal)
+        if ((WhyLimitsRefused(settings) ??
+             WhyCacheBoundsRefused(settings) ??
+             WhyGrantTypesRefused(settings) ??
+             WhyDocumentAddressesRefused(settings)) is { } refusal)
             return ValidateOptionsResult.Fail(refusal);
 
         return settings.AllowedClientIdPrefixes is { } prefixes
@@ -97,6 +100,14 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
               "client resolved from its document may use, or leave it unset for the authorization code and the refresh " +
               "token."
             : null;
+
+    // A number bound from configuration can name no member, and would otherwise be found on the first lookup of a client
+    // nobody configured, as a fault that names neither the client nor the setting
+    private static string? WhyDocumentAddressesRefused(ClientIdMetadataDocumentOptions settings)
+        => Enum.IsDefined(settings.DocumentAddresses)
+            ? null
+            : $"{Section}.{nameof(settings.DocumentAddresses)} is {settings.DocumentAddresses}, which names none of " +
+              $"{string.Join(", ", Enum.GetNames<ClientIdMetadataDocumentAddresses>())}. Set it to one of them.";
 
     private static ValidateOptionsResult WhyPrefixesRefused(string[] prefixes)
     {

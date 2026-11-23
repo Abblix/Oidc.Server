@@ -72,6 +72,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
+        services.TryAddSingleton<ProductionEnvironment>();
         // A cache of their own, so the number of documents held is bounded whatever the host's cache allows: the URLs
         // are chosen by whoever sends a request
         services.TryAddKeyedSingleton<IMemoryCache>(
@@ -100,6 +101,16 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
                 wiring.PrivateNetworksBlocked =
                     provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.BlockPrivateNetworks;
 
+                var loopback = provider.GetRequiredService<IOptions<OidcOptions>>().Value
+                    .ClientIdMetadataDocuments.DocumentAddresses == ClientIdMetadataDocumentAddresses.AllowLoopback;
+                wiring.LoopbackInProduction =
+                    loopback && provider.GetRequiredService<ProductionEnvironment>().IsCurrent;
+
+                // The proxy resolves the name itself, on its own machine, so the address the server judged is not the
+                // one reached
+                wiring.LoopbackThroughProxy = loopback &&
+                    provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.OutboundProxy is not null;
+
                 wiring.ConsentGrantedToAnyUrl = GrantsConsentToEveryClient(services) &&
                     provider.GetRequiredService<IOptions<OidcOptions>>().Value
                         .ClientIdMetadataDocuments.AllowedClientIdPrefixes is null;
@@ -108,6 +119,8 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             .Validate(wiring => wiring.IssuerSent, ClientIdMetadataDocumentsWiring.IssuerNotSentMessage)
             .Validate(wiring => !wiring.ConsentGrantedToAnyUrl, ClientIdMetadataDocumentsWiring.ConsentGrantedToAnyUrlMessage)
             .Validate(wiring => wiring.PrivateNetworksBlocked, ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage)
+            .Validate(wiring => !wiring.LoopbackInProduction, ClientIdMetadataDocumentsWiring.LoopbackInProductionMessage)
+            .Validate(wiring => !wiring.LoopbackThroughProxy, ClientIdMetadataDocumentsWiring.LoopbackThroughProxyMessage)
             .ValidateOnStart();
 
         return builder;

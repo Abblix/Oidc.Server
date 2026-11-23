@@ -1032,6 +1032,7 @@ internal static class LogEvents
             public const int DocumentRefused = Base + 4;
             public const int HeldCopyServed = Base + 5;
             public const int ClientRefused = Base + 6;
+            public const int LoopbackWithheld = Base + 7;
         }
     }
 

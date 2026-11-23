@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -33,7 +34,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+    private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose);
 
     /// <summary>
     /// Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use IP
@@ -61,7 +62,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
             }));
         services.Origin.Serve(Url, Document);
 
-        var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+        var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose);
 
         Assert.Equal(fetched, held is not null);
         Assert.Equal(fetched ? 1 : 0, services.Origin.RequestsTo(Url));
