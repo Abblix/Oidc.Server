@@ -23,10 +23,12 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// </summary>
 /// <param name="tokenRegistry">The token registry to be used by this processor for managing token statuses.</param>
 /// <param name="grantRevocation">Revokes the grant a refresh token was issued under.</param>
+/// <param name="registrationAccessTokenRevocation">Revokes a registration access token at its registration.</param>
 /// <param name="clock">Provides the current time for timestamping the revocation operation.</param>
 public class RevocationRequestProcessor(
 	ITokenRegistry tokenRegistry,
 	GrantRevocation grantRevocation,
+	RegistrationAccessTokenRevocation registrationAccessTokenRevocation,
 	TimeProvider clock) : IRevocationRequestProcessor
 {
 	/// <summary>
@@ -43,8 +45,18 @@ public class RevocationRequestProcessor(
 	public async Task<Result<TokenRevoked, OidcError>> ProcessAsync(TenantDefinition tenant, ValidRevocationRequest request)
 	{
 		var payload = request.Token?.Payload;
+
 		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
 			await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+
+		// A registration access token is revoked at its registration as well, which decides which token manages it
+		// for as long as the client exists: one issued without an expiry has no end a record in the registry could
+		// take, and the client configuration endpoint reads the registration
+		if (request.Token is { } registrationAccessToken &&
+		    JwtTypeName.Matches(registrationAccessToken.Header.Type, JwtTypes.RegistrationAccessToken))
+		{
+			await registrationAccessTokenRevocation.RevokeAsync(tenant, registrationAccessToken);
+		}
 
 		// RFC 7009 section 2.1: "If the particular token is a refresh token and the authorization server supports the
 		// revocation of access tokens, then the authorization server SHOULD also invalidate all access tokens based on
