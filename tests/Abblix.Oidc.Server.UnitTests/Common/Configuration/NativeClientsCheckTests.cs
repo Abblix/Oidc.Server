@@ -83,6 +83,18 @@ public class NativeClientsCheckTests
     }
 
     /// <summary>
+    /// The response type none issues nothing, so a native app may be allowed it as well.
+    /// </summary>
+    [Fact]
+    public void ANativeApp_AllowedTheResponseTypeNone_Starts()
+    {
+        var client = NativeApp();
+        client.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.None]];
+
+        Assert.Empty(Check(client));
+    }
+
+    /// <summary>
     /// RFC 8252 section 8.4 has native apps public except with per-instance secrets, and Appendix A item 4 has a server
     /// "Not assume that native app clients can keep a secret": a native app declared once in the tenant settings serves
     /// every installation, so it authenticates with none, whatever method it names.
