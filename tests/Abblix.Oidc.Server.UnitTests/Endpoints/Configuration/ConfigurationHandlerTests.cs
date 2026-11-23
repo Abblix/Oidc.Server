@@ -617,6 +617,43 @@ public class ConfigurationHandlerTests
     }
 
     /// <summary>
+    /// A server none of whose methods the tenant's profile admits lists no methods for any endpoint: OpenID Connect
+    /// Discovery 1.0 section 4.2, "Claims with zero elements MUST be omitted from the response".
+    /// </summary>
+    [Fact]
+    public async Task TheDocument_ListsNoMethods_WhereTheProfileAdmitsNone()
+    {
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions
+        {
+            EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.Revocation | OidcEndpoints.Introspection,
+        });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported)
+            .Returns([ClientAuthenticationMethods.None, ClientAuthenticationMethods.ClientSecretBasic]);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            Mock.Of<IJwtAlgorithmsProvider>(),
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant());
+
+        Assert.Null(document.TokenEndpointAuthMethodsSupported);
+        Assert.Null(document.RevocationEndpointAuthMethodsSupported);
+        Assert.Null(document.IntrospectionEndpointAuthMethodsSupported);
+    }
+
+    /// <summary>
     /// The profile check every client meets where it authenticates at the token endpoint, over an authenticator whose
     /// credential check <paramref name="client"/> passes. The service tokens are signed PS256, which every profile
     /// admits.

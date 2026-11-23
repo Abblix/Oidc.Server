@@ -122,7 +122,7 @@ public sealed class ConfigurationHandler(
 			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
-			TokenEndpointAuthMethodsSupported = authenticationMethods,
+			TokenEndpointAuthMethodsSupported = WhereAnyMethod(authenticationMethods, authenticationMethods),
 			RevocationEndpointAuthMethodsSupported = WhereAnyMethod(revocationMethods, revocationMethods),
 			RevocationEndpointAuthSigningAlgValuesSupported = WhereAssertionMethod(revocationMethods, assertionAlgorithms),
 			IntrospectionEndpointAuthMethodsSupported = WhereAnyMethod(introspectionMethods, introspectionMethods),
