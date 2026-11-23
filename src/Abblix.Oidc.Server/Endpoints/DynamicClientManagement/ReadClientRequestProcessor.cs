@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -24,31 +23,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// client's current jti is re-issued so the client can keep using the management endpoint after the read, without
 /// invalidating the token it presented (read stays idempotent - only update rotates the jti).
 /// </summary>
+/// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+/// <param name="clock">Provides the issue time.</param>
+/// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
 public class ReadClientRequestProcessor(
     IRegistrationAccessTokenService registrationAccessTokenService,
-    TimeProvider clock) : IReadClientRequestProcessor
+    TimeProvider clock,
+    IClientSecretEncryptor clientSecretEncryptor) : IReadClientRequestProcessor
 {
-    /// <summary>
-    /// Creates the processor returning the client its secret where the tenant kept it encrypted.
-    /// </summary>
-    /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
-    /// <param name="clock">Provides the issue time.</param>
-    /// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
-    [ActivatorUtilitiesConstructor]
-    public ReadClientRequestProcessor(
-        IRegistrationAccessTokenService registrationAccessTokenService,
-        TimeProvider clock,
-        IClientSecretEncryptor clientSecretEncryptor)
-        : this(registrationAccessTokenService, clock)
-    {
-        _clientSecretEncryptor = clientSecretEncryptor;
-    }
-
-    /// <summary>
-    /// Decrypts the secret, or null for a processor built without it, which answers without the secret.
-    /// </summary>
-    private readonly IClientSecretEncryptor? _clientSecretEncryptor;
-
     /// <inheritdoc />
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request)
     {
@@ -65,7 +47,7 @@ public class ReadClientRequestProcessor(
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(client))
         {
             ClientId = client.ClientId,
-            ClientSecret = IssuedClientSecret.Of(tenant, client, _clientSecretEncryptor),
+            ClientSecret = IssuedClientSecret.Of(tenant, client, clientSecretEncryptor),
             ClientSecretExpiresAt = IssuedClientSecret.ExpiresAt(client),
             RegistrationAccessToken = registrationAccessToken,
         };

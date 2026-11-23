@@ -37,7 +37,8 @@ public class ReadClientRequestProcessorTests
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
-        return new ReadClientRequestProcessor(_tokenService.Object, TimeProvider.System);
+        return new ReadClientRequestProcessor(
+            _tokenService.Object, TimeProvider.System, Mock.Of<IClientSecretEncryptor>());
     }
 
     /// <summary>

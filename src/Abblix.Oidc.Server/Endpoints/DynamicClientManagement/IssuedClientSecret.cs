@@ -24,12 +24,9 @@ internal static class IssuedClientSecret
     /// </summary>
     /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The registered client.</param>
-    /// <param name="encryptor">Decrypts the secret, or null when the processor was built without one.</param>
-    public static string? Of(TenantDefinition tenant, ClientInfo client, IClientSecretEncryptor? encryptor)
+    /// <param name="encryptor">Decrypts the secret.</param>
+    public static string? Of(TenantDefinition tenant, ClientInfo client, IClientSecretEncryptor encryptor)
     {
-        if (encryptor is null)
-            return null;
-
         // Of several, the one expiring last; one that never expires outlasts all
         return (client.ClientSecrets ?? [])
             .Where(secret => secret.EncryptedValue is not null)

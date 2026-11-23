@@ -53,7 +53,7 @@ public class UpdateClientRequestProcessorTests
 
         var processor = new UpdateClientRequestProcessor(
             clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
-            newClients ?? new NewClientOptions());
+            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }

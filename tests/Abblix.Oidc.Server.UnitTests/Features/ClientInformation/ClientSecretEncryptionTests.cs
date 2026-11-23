@@ -123,21 +123,6 @@ public class ClientSecretEncryptionTests
         Assert.Null(await ReadSecretAsync(tenant, ClientHolding(new byte[40])));
     }
 
-    [Fact]
-    public async Task AProcessorBuiltWithoutTheEncryptor_ReturnsNoSecret()
-    {
-        var tenant = TenantWith(NewKey());
-        var encrypted = Encryptor().Encrypt(tenant, ClientId, Secret);
-        var processor = new ReadClientRequestProcessor(
-            Mock.Of<IRegistrationAccessTokenService>(), TimeProvider.System);
-
-        var result = await processor.ProcessAsync(
-            tenant, new ValidClientRequest(new ClientRequest(), new RegisteredClient(ClientHolding(encrypted), TokenId)));
-
-        Assert.True(result.TryGetSuccess(out var response));
-        Assert.Null(response.ClientSecret);
-    }
-
     /// <summary>
     /// A secret stored by 3.0 carries no encrypted value: its JSON reads unchanged, and a read answers without it.
     /// </summary>
