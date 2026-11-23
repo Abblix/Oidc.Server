@@ -62,8 +62,8 @@ public sealed class ConfigurationHandler(
 		var requestObjectEncryption = await RequestObjectEncryptionAsync(tenant);
 
 		// The token, revocation and introspection endpoints authenticate their callers with this one authenticator,
-		// so each list is what it accepts, and the introspection endpoint's is narrowed by the same rule that
-		// endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
+		// so each lists the methods the token endpoint does, the introspection endpoint's narrowed by the same rule
+		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
 		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
 		// enabled accepts no caller at all, so nothing is said about it.
 		var authenticationMethods = clientAuthenticator.ClientAuthenticationMethodsSupported.ToArray();
