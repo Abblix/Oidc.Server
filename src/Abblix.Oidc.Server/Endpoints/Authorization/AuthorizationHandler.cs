@@ -62,7 +62,7 @@ public class AuthorizationHandler(
         // convergence point for success and every error variant, after session_state is finalised.
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
         var response = await ProduceResponseAsync(tenant, request, clients);
-        return await responseEncoder.EncodeAsync(tenant, response);
+        return await responseEncoder.EncodeAsync(tenant, response, clients);
     }
 
     private async Task<AuthorizationResponse> ProduceResponseAsync(

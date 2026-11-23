@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -56,7 +57,7 @@ public class AuthorizationResponseEncoderTests
             SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
         };
 
-        var encoded = await Encoder(Refusing()).EncodeAsync(SingleIssuer.Tenant, success);
+        var encoded = await Encoder(Refusing()).EncodeAsync(SingleIssuer.Tenant, success, Clients());
 
         var error = Assert.IsType<AuthorizationError>(encoded);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
@@ -83,7 +84,7 @@ public class AuthorizationResponseEncoderTests
         var refusal = new AuthorizationError(
             model, ErrorCodes.AccessDenied, "denied", ResponseModes.QueryJwt, TestConstants.DefaultRedirectUri);
 
-        var encoded = await Encoder(Refusing()).EncodeAsync(SingleIssuer.Tenant, refusal);
+        var encoded = await Encoder(Refusing()).EncodeAsync(SingleIssuer.Tenant, refusal, Clients());
 
         var error = Assert.IsType<AuthorizationError>(encoded);
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -120,7 +121,7 @@ public class AuthorizationResponseEncoderTests
         };
 
         var encoded = await Encoder(new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object)
-            .EncodeAsync(SingleIssuer.Tenant, success);
+            .EncodeAsync(SingleIssuer.Tenant, success, Clients());
 
         Assert.Equal(expectedScope, Assert.IsType<SuccessfullyAuthenticated>(encoded).Scope);
     }
@@ -131,10 +132,22 @@ public class AuthorizationResponseEncoderTests
         builder
             .Setup(b => b.BuildAsync(
                 It.IsAny<TenantDefinition>(),
-                TestConstants.DefaultClientId,
+                It.Is<ClientInfo>(client => client.ClientId == TestConstants.DefaultClientId),
                 It.IsAny<IReadOnlyList<(string name, string? value)>>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "no usable key"));
         return builder.Object;
+    }
+
+    /// <summary>
+    /// The clients of the request, which found <see cref="TestConstants.DefaultClientId"/>.
+    /// </summary>
+    private static IClientInfoProvider Clients()
+    {
+        var clients = new Mock<IClientInfoProvider>();
+        clients
+            .Setup(c => c.FindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
+        return clients.Object;
     }
 
     private static AuthorizationResponseEncoder Encoder(IResponseJwtBuilder builder)

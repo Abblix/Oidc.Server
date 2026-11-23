@@ -40,7 +40,6 @@ public class ResponseJwtBuilderTests
     private static readonly string Issuer = TestConstants.DefaultIssuer.OriginalString;
     private const string EncodedJwt = "header.payload.signature";
 
-    private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator = new(MockBehavior.Strict);
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
@@ -55,7 +54,6 @@ public class ResponseJwtBuilderTests
 
     public ResponseJwtBuilderTests()
     {
-        _clientInfoProvider.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_client);
         _timeProvider = new FakeTimeProvider(_now);
         _serviceKeys.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
         _jwtCreator
@@ -72,7 +70,6 @@ public class ResponseJwtBuilderTests
             _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
         _builder = new ResponseJwtBuilder(
-            _clientInfoProvider.Object,
             clientJwtFormatter,
             _timeProvider,
             Options.Create(new OidcOptions()));
@@ -117,7 +114,7 @@ public class ResponseJwtBuilderTests
 
         var result = await _builder.BuildAsync(
             SingleIssuer.Tenant,
-            ClientId, [(ResponseParameters.Code, "auth-code"), (ResponseParameters.State, "client-state")]);
+            _client, [(ResponseParameters.Code, "auth-code"), (ResponseParameters.State, "client-state")]);
 
         Assert.Equal(EncodedJwt, result);
 
@@ -139,7 +136,7 @@ public class ResponseJwtBuilderTests
     {
         var capture = CaptureIssue();
 
-        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -157,7 +154,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -175,7 +172,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         // AuthorizationEncryptedResponseEncryption omitted → JARM section 3 default
 
-        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
@@ -196,7 +193,7 @@ public class ResponseJwtBuilderTests
             }.ToAsyncEnumerable());
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
-        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
@@ -223,7 +220,6 @@ public class ResponseJwtBuilderTests
         });
 
         var builder = new ResponseJwtBuilder(
-            _clientInfoProvider.Object,
             new ClientJwtFormatter(
                 NullLogger<ClientJwtFormatter>.Instance,
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
@@ -233,7 +229,7 @@ public class ResponseJwtBuilderTests
             _timeProvider,
             options);
 
-        await builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        await builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
@@ -254,7 +250,7 @@ public class ResponseJwtBuilderTests
             .Returns(new JsonWebKey[] { other, plain }.ToAsyncEnumerable());
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
-        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capture.KeyAlgorithm);
@@ -280,7 +276,7 @@ public class ResponseJwtBuilderTests
                 : []).ToAsyncEnumerable());
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
-        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
@@ -298,7 +294,7 @@ public class ResponseJwtBuilderTests
             .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
             .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "plain" } }.ToAsyncEnumerable());
 
-        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Null(capture.EncryptionKey);
@@ -316,7 +312,7 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }
@@ -350,7 +346,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationSignedResponseAlgorithm = algorithm;
         _client.SecurityProfile = profile;
 
-        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, _client, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);

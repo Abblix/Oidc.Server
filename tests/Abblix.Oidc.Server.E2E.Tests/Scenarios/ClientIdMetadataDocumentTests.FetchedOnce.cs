@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Buffers.Text;
+using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -15,6 +16,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -67,6 +69,59 @@ public partial class ClientIdMetadataDocumentTests
 
         using (await SendAsync(client, discovery, Arrival.Query))
             Assert.Equal(2, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
+    /// A valid document its server marks "no-store" is held by no cache, so the server asks for it at each lookup
+    /// (section 6.2 has it "respect HTTP cache headers"); one request still asks once, up to the response JWT it is
+    /// answered with (JARM section 2.1), and the next request asks again.
+    /// </summary>
+    [Fact]
+    public async Task AValidDocumentNoCacheHolds_IsFetchedOncePerRequest_UpToItsResponseJwt()
+    {
+        _origin.Serve(ClientId, PublicClientDocument().ToJsonString(), "no-store");
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        for (var request = 1; request <= 2; request++)
+        {
+            var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+            parameters[AuthorizationRequest.Parameters.Prompt] = Prompts.None;
+            parameters[AuthorizationRequest.Parameters.ResponseMode] = ResponseModes.QueryJwt;
+
+            using var response = await client.GetAsync(
+                QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.SeeOther, response.StatusCode);
+            Assert.NotNull(System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query)[ResponseParameters.Response]);
+            Assert.Equal(request, _origin.RequestsTo(ClientId));
+        }
+    }
+
+    /// <summary>
+    /// A document that cannot be had for now, with no valid copy held, is asked for once by the request that needed it
+    /// and again by the next one: section 6.2 has the server "MUST NOT cache error responses". The request is refused
+    /// without a redirect (section 6.1).
+    /// </summary>
+    [Fact]
+    public async Task ADocumentUnavailableForNow_IsFetchedOncePerRequest()
+    {
+        _origin.Answer(ClientId, () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        for (var request = 1; request <= 2; request++)
+        {
+            using var response = await SendAsync(client, discovery, Arrival.Query);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Null(response.Headers.Location);
+            Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
+            Assert.Equal(request, _origin.RequestsTo(ClientId));
+        }
     }
 
     /// <summary>

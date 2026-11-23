@@ -177,7 +177,8 @@ public partial class AuthorizationRequestProcessorTests
             new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object);
 
         // Act
-        await encoder.EncodeAsync(SingleIssuer.Tenant, response);
+        await encoder.EncodeAsync(
+            SingleIssuer.Tenant, response, new Mock<IClientInfoProvider>(MockBehavior.Strict).Object);
 
         // Assert - the front-channel scope reflects the granted set, not the requested set.
         var success = Assert.IsType<SuccessfullyAuthenticated>(response);
