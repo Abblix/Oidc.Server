@@ -147,8 +147,8 @@ public sealed class LoopbackDocumentsTests
         await using var provider = services.BuildServiceProvider();
         await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(await provider.GetRequiredService<IClientInfoProvider>()
-            .TryFindClientAsync(Tenant("https://localhost:5001/"), clientId));
+        Assert.False((await provider.GetRequiredService<IClientInfoProvider>()
+            .FindClientAsync(Tenant("https://localhost:5001/"), clientId)).TryGetSuccess(out _));
         Assert.Equal(0, _origin.RequestsTo(clientId));
     }
 
@@ -215,7 +215,7 @@ public sealed class LoopbackDocumentsTests
                      : [OutboundAddressRule.NoSpecialPurpose, OutboundAddressRule.NoSpecialPurposeButLoopback])
         {
             var held = await documents.GetAsync(clientId, new Uri(clientId), rule);
-            Assert.Equal(rule == OutboundAddressRule.NoSpecialPurposeButLoopback, held is not null);
+            Assert.Equal(rule == OutboundAddressRule.NoSpecialPurposeButLoopback, held.TryGetSuccess(out _));
         }
 
         Assert.Equal(1, _origin.RequestsTo(clientId));
@@ -247,8 +247,8 @@ public sealed class LoopbackDocumentsTests
         var strict = documents.GetAsync(clientId, new Uri(clientId), OutboundAddressRule.NoSpecialPurpose);
         release.SetResult();
 
-        Assert.NotNull(await loopback);
-        Assert.Null(await strict);
+        Assert.True((await loopback).TryGetSuccess(out _));
+        Assert.False((await strict).TryGetSuccess(out _));
         Assert.Equal(1, _origin.RequestsTo(clientId));
     }
 
@@ -261,7 +261,7 @@ public sealed class LoopbackDocumentsTests
     {
         _origin.Serve(clientId, """{"client_id":"https://another.example.com/client.json"}""");
         await using var provider = Services(addresses).BuildServiceProvider();
-        Assert.Null(await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(Tenant(issuer), clientId));
+        Assert.False((await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(Tenant(issuer), clientId)).TryGetSuccess(out _));
         return _origin.RequestsTo(clientId);
     }
 

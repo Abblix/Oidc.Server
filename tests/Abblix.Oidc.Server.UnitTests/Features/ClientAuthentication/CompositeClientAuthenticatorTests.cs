@@ -462,7 +462,7 @@ public class CompositeClientAuthenticatorTests
     {
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "tls-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "tls-client"))
             .ReturnsAsync(new ClientInfo("tls-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth });
         using var key = System.Security.Cryptography.RSA.Create(2048);
         using var certificate = new System.Security.Cryptography.X509Certificates.CertificateRequest(
@@ -497,7 +497,7 @@ public class CompositeClientAuthenticatorTests
         publicClient = client;
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, client.ClientId))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, client.ClientId))
             .ReturnsAsync(client);
 
         return CreateCompositeAuthenticator(

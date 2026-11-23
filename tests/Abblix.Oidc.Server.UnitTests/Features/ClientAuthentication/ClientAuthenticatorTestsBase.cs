@@ -100,7 +100,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(ClientSecret);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -124,8 +124,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
-            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? CreateClientInfo(ClientSecret) : null);
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? CreateClientInfo(ClientSecret) : ClientAbsence.Unknown);
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
@@ -183,7 +183,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var clientInfo = CreateClientInfo(ClientSecret);
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, wrongSecret);
@@ -206,8 +206,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var authenticator = CreateAuthenticator(clientInfoProvider);
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
@@ -232,7 +232,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         clientInfo.TokenEndpointAuthMethod = GetWrongAuthenticationMethod();
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -261,7 +261,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -300,7 +300,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -327,7 +327,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(specialSecret, specialClientId);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, specialClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, specialClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(specialClientId, specialSecret);
@@ -372,7 +372,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareValidRequest(ClientId, ClientSecret);
@@ -415,7 +415,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
 
         var clientInfo = CreateClientInfo(ClientSecret);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = PrepareEmptyClientSecretRequest();

@@ -67,7 +67,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
     {
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(CreateClientInfo(ClientSecret));
         var valid = PrepareValidRequest(ClientId, ClientSecret);
         var request = valid with

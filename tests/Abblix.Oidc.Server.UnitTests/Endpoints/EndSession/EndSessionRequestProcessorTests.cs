@@ -339,11 +339,11 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_2"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_2"))
             .ReturnsAsync(client2);
 
         _logoutNotifier
@@ -385,12 +385,12 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_missing"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_missing"))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         _logoutNotifier
             .Setup(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()))
@@ -434,7 +434,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -478,7 +478,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -527,7 +527,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -598,7 +598,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -641,7 +641,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier

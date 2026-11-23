@@ -78,7 +78,7 @@ public class RegistrationManagementAcrossReloadTests
         _options.Reload(Configuring());
 
         Assert.Null(await ManagesAsync(clients, "first"));
-        Assert.Equal("configured", (await clients.TryFindClientAsync(_options.CurrentValue.ToTenant(), ClientId))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync(_options.CurrentValue.ToTenant(), ClientId)).GetSuccess().ClientName);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class RegistrationManagementAcrossReloadTests
         Assert.Null(await ManagesAsync(clients, "first"));
 
         _options.Reload(new TestIssuer());
-        Assert.Null(await clients.TryFindClientAsync(_options.CurrentValue.ToTenant(), ClientId));
+        Assert.False((await clients.FindClientAsync(_options.CurrentValue.ToTenant(), ClientId)).TryGetSuccess(out _));
         Assert.Null(await ManagesAsync(clients, "first"));
 
         await RegisterAsync(clients, "second");

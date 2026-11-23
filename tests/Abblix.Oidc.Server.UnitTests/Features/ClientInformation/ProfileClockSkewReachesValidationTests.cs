@@ -54,8 +54,8 @@ public class ProfileClockSkewReachesValidationTests
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,

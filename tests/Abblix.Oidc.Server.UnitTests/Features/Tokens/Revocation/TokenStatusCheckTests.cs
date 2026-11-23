@@ -75,7 +75,7 @@ public class TokenStatusCheckTests
         // A public client is what every test but the pairwise one carries, and for it the subject in the
         // token is already the subject a host would revoke.
         _clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo(ClientId) { SubjectType = SubjectTypes.Public });
     }
 
@@ -283,7 +283,7 @@ public class TokenStatusCheckTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         var pseudonym = SubjectConverter.Convert(SingleIssuer.Tenant, Subject, pairwiseClient);
         Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
@@ -431,7 +431,7 @@ public class TokenStatusCheckTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         Checking(new JsonWebToken
         {
@@ -466,7 +466,7 @@ public class TokenStatusCheckTests
     [Fact]
     public async Task CheckAsync_TokenNamingAClientThatIsGone_IsRefused()
     {
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync((ClientInfo?)null);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(ClientAbsence.Unknown);
 
         Checking(new JsonWebToken
         {

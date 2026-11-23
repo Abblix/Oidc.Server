@@ -161,7 +161,7 @@ public class ServiceCollectionOverrideTests
         };
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
+        clients.Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId)).ReturnsAsync(publicClient);
 
         services.AddLogging();
         services.AddSingleton(clients.Object);
@@ -211,8 +211,8 @@ public class ServiceCollectionOverrideTests
         };
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
-            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? publicClient : null);
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == globex.Id ? publicClient : ClientAbsence.Unknown);
 
         services.AddLogging();
         services.AddSingleton(clients.Object);

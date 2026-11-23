@@ -124,8 +124,7 @@ public class IntrospectionRequestProcessor(
 
 		// The parties in the token are what its own client sees, so they have to be opened against that client
 		// before they can be re-sealed for anybody else.
-		var owner = await clientInfoProvider.TryFindClientAsync(tenant, ownerId);
-		if (owner == null)
+		if (!(await clientInfoProvider.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
 			return null;
 
 		var real = subjectTypeConverter.Open(tenant, TokenSubjects.Of(token.Payload), owner);

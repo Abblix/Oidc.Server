@@ -53,8 +53,7 @@ public abstract partial class ClientSecretAuthenticator(
 			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
-		var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-		if (client == null)
+		if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
 		{
 			LogClientNotFound(clientId);
 			return ClientAuthenticationFailures.InvalidCredential;

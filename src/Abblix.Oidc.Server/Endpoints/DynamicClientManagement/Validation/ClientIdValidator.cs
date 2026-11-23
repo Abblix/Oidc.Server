@@ -35,14 +35,14 @@ public partial class ClientIdValidator(
         if (!clientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+        var exists = (await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out _);
         switch (context.Operation)
         {
             // For UPDATE: client MUST exist
-            case DynamicClientOperation.Update when clientInfo is not null:
+            case DynamicClientOperation.Update when exists:
 
             // For new registration: client must NOT exist
-            case DynamicClientOperation.Register when clientInfo is null:
+            case DynamicClientOperation.Register when !exists:
                 break;
 
             case DynamicClientOperation.Update:

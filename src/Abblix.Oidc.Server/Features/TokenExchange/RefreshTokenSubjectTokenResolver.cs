@@ -67,10 +67,9 @@ public sealed class RefreshTokenSubjectTokenResolver(
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
         // subject is opened against that client's sector.
         var originalClientId = jwt.OwnerOf();
-        var originalClient = originalClientId is null
-            ? null
-            : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
-        if (originalClient is null)
+        ClientInfo? originalClient = null;
+        if (originalClientId is null ||
+            !(await clientInfoProvider.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out originalClient))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }

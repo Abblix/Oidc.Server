@@ -52,8 +52,7 @@ internal sealed class MutualTlsCredential(IClientInfoProvider clientInfoProvider
             !clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
         {
             clientNotFound?.Invoke(clientId);
             return null;

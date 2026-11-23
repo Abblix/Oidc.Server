@@ -39,8 +39,7 @@ public partial class SessionLogoutNotifier(
         var tasks = new List<Task>();
         foreach (var clientId in await sessionClients.GetClientsAsync(tenant, sessionId))
         {
-            var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-            if (clientInfo == null)
+            if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
                 continue;
 
             tasks.Add(NotifyClientSafelyAsync(tenant, clientInfo, context));

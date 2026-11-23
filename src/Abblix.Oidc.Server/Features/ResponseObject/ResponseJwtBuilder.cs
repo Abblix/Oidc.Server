@@ -39,8 +39,8 @@ public class ResponseJwtBuilder(
         string? clientId,
         IReadOnlyList<(string name, string? value)> parameters)
     {
-        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
-            .NotNull(nameof(ClientInfo));
+        var clientInfo = (await clientInfoProvider.FindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
+            .GetSuccess();
 
         var now = timeProvider.GetUtcNow();
 

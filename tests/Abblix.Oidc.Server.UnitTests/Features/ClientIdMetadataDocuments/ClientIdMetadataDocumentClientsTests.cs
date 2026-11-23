@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -32,6 +34,13 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
 
     private readonly MetadataDocumentServices _services = new();
     private readonly Mock<IClientInfoProvider> _store = new();
+
+    public ClientIdMetadataDocumentClientsTests()
+    {
+        _store
+            .Setup(store => store.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync(ClientAbsence.Unknown);
+    }
 
     private static readonly TenantDefinition Tenant = new()
     {
@@ -60,32 +69,38 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     public async Task AClientTheStoreKnows_IsServedFromTheStore_WithoutAFetch()
     {
         var stored = new ClientInfo(ClientId);
-        _store.Setup(store => store.TryFindClientAsync(Tenant, ClientId)).ReturnsAsync(stored);
+        _store.Setup(store => store.FindClientAsync(Tenant, ClientId)).ReturnsAsync(stored);
         _services.Origin.Serve(ClientId, Document);
 
-        Assert.Same(stored, await CreateClients().TryFindClientAsync(Tenant, ClientId));
+        Assert.Same(stored, (await CreateClients().FindClientAsync(Tenant, ClientId)).GetSuccess());
         Assert.Empty(_services.Origin.Requests);
     }
 
+    /// <summary>
+    /// An identifier not written as an https URL names no document, so its client is unknown like any other; one that
+    /// is so written but is no client identifier URL (section 3) is a document the server refuses to fetch.
+    /// </summary>
     [Theory]
-    [InlineData("client-1")]
-    [InlineData("http://client.example.com/metadata.json")]
-    [InlineData("https://client.example.com/metadata.json?x=1")]
-    public async Task AnIdentifierThatIsNoClientIdentifierUrl_IsUnknown_WithoutAFetch(string clientId)
+    [InlineData("client-1", ClientAbsenceReason.Unknown)]
+    [InlineData("http://client.example.com/metadata.json", ClientAbsenceReason.Unknown)]
+    [InlineData("https://client.example.com/metadata.json?x=1", ClientAbsenceReason.Refused)]
+    public async Task AnIdentifierThatIsNoClientIdentifierUrl_IsAbsent_WithoutAFetch(
+        string clientId,
+        ClientAbsenceReason reason)
     {
         _services.Origin.Serve(clientId, Document);
 
-        Assert.Null(await CreateClients().TryFindClientAsync(Tenant, clientId));
+        Assert.Equal(reason, await AbsenceOf(clientId));
         Assert.Empty(_services.Origin.Requests);
     }
 
     [Fact]
-    public async Task AUrlOutsideTheAllowList_IsUnknown_WithoutAFetch()
+    public async Task AUrlOutsideTheAllowList_IsRefused_WithoutAFetch()
     {
         _services.Options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://trusted.example.com/"];
         _services.Origin.Serve(ClientId, Document);
 
-        Assert.Null(await CreateClients().TryFindClientAsync(Tenant, ClientId));
+        Assert.Equal(ClientAbsenceReason.Refused, await AbsenceOf(ClientId));
         Assert.Empty(_services.Origin.Requests);
     }
 
@@ -97,7 +112,7 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     [InlineData("https://issuer.example.com/tenants/acme")]
     [InlineData("https://api.example.com/orders")]
     [InlineData("https://trusted-issuer.example.com/jwt")]
-    public async Task AUrlNamingAServerThisOneTrusts_IsUnknown_WithoutAFetch(string clientId)
+    public async Task AUrlNamingAServerThisOneTrusts_IsRefused_WithoutAFetch(string clientId)
     {
         _services.Options.JwtBearer.TrustedIssuers =
         [
@@ -109,14 +124,49 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
         ];
         _services.Origin.Serve(clientId, Document);
 
-        Assert.Null(await CreateClients().TryFindClientAsync(Tenant, clientId));
+        Assert.Equal(ClientAbsenceReason.Refused, await AbsenceOf(clientId));
         Assert.Empty(_services.Origin.Requests);
     }
 
-    [Fact]
-    public async Task AUrlWhoseDocumentCannotBeHad_IsUnknown()
+    /// <summary>
+    /// Section 6.1: a document that "could not be retrieved or was invalid" ends the lookup, and a failure is transient
+    /// when it is "comparable in spirit to the temporarily_unavailable condition", as a server error or an unreachable
+    /// host is; any other answer of the client's server refuses the document.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, ClientAbsenceReason.Refused)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, ClientAbsenceReason.TemporarilyUnavailable)]
+    public async Task AUrlWhoseDocumentCannotBeHad_IsAbsent_ForTheReasonItsServerGives(
+        HttpStatusCode status,
+        ClientAbsenceReason reason)
     {
-        Assert.Null(await CreateClients().TryFindClientAsync(Tenant, ClientId));
+        _services.Origin.Answer(ClientId, () => new HttpResponseMessage(status));
+
+        Assert.Equal(reason, await AbsenceOf(ClientId));
         Assert.Equal(1, _services.Origin.RequestsTo(ClientId));
     }
+
+    [Fact]
+    public async Task AnUnreachableDocument_IsTemporarilyUnavailable()
+    {
+        _services.Origin.Unreachable(ClientId);
+
+        Assert.Equal(ClientAbsenceReason.TemporarilyUnavailable, await AbsenceOf(ClientId));
+    }
+
+    /// <summary>
+    /// A document read but refused by the tenant judging it is refused, as an invalid one is.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentTheTenantRefuses_IsRefused()
+    {
+        _services.Origin.Serve(
+            ClientId, """{"client_id":"https://client.example.com/metadata.json","redirect_uris":["javascript:x"]}""");
+
+        Assert.Equal(ClientAbsenceReason.Refused, await AbsenceOf(ClientId));
+        Assert.Equal(1, _services.Origin.RequestsTo(ClientId));
+    }
+
+    private async Task<ClientAbsenceReason> AbsenceOf(string clientId)
+        => (await CreateClients().FindClientAsync(Tenant, clientId)).GetFailure().Reason;
 }

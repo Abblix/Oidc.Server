@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -132,16 +133,19 @@ internal partial class ReloadableClientInfoStorage(
     /// <param name="tenant">The tenant whose clients are searched.</param>
     /// <param name="clientId">The unique identifier of the client to find.</param>
     /// <returns>
-    /// A task that returns the <see cref="ClientInfo"/> if found; otherwise, null.
+    /// A task that returns the <see cref="ClientInfo"/> if found; otherwise, <see cref="ClientAbsence.Unknown"/>.
     /// </returns>
-    public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
+    public async Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
         if (ConfiguredAt(tenant).TryGetValue(clientId, out var configuredClient))
             return configuredClient;
 
         var registration = await registrations.TryFindAsync(tenant, clientId);
-        return registration is null || await RecheckAsync(tenant, registration) ? null : registration.ClientInfo;
+        if (registration is null || await RecheckAsync(tenant, registration))
+            return ClientAbsence.Unknown;
+
+        return registration.ClientInfo;
     }
 
     /// <summary>

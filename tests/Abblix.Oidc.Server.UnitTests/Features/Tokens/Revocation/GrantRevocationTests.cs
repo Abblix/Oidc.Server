@@ -111,7 +111,7 @@ public class GrantRevocationTests
             });
 
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(provider => provider.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
+        clients.Setup(provider => provider.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(() => _knownClient ? _client : ClientAbsence.Unknown);
         var grants = new GrantRevocation(_registry, clients.Object);
 
         var options = Options.Create(new OidcOptions());

@@ -103,7 +103,7 @@ public class IntrospectionActorTests
     private async Task<JsonObject> IntrospectAsync(ClientInfo owner, ClientInfo caller)
     {
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, OwnerId)).ReturnsAsync(owner);
+        clients.Setup(p => p.FindClientAsync(TestTenant.Matched, OwnerId)).ReturnsAsync(owner);
         var processor = new IntrospectionRequestProcessor(clients.Object, new FixedSubjectTypeConverter(_converter));
 
         var token = new JsonWebToken();

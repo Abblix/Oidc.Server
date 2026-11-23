@@ -36,19 +36,19 @@ internal sealed partial class HeldMetadataDocuments(
 {
     // One fetch of a URL by one rule for the lookups naming it by that rule while it runs. Its outcome answers none that
     // starts after it ends: section 6.2 has the server "MUST NOT cache error responses", so a refused document is
-    // fetched again on the next lookup, even one of the same request
-    private readonly CoalescingLoader<string, HeldMetadataDocument?> _fetches = new(clock, StringComparer.Ordinal);
+    // fetched again on the next lookup
+    private readonly CoalescingLoader<string, Result<HeldMetadataDocument, MetadataDocumentFailure>> _fetches = new(clock, StringComparer.Ordinal);
 
     /// <summary>
     /// The document of <paramref name="clientId"/> as read, fetched when none is held or the one held is past its
-    /// lifetime; null when it cannot be had or is refused.
+    /// lifetime; the failure when it cannot be had or is refused.
     /// </summary>
     /// <param name="clientId">The client identifier URL, as the request carries it.</param>
     /// <param name="url">The URL to fetch it from.</param>
     /// <param name="rule">The rule the fetch is held to. A document fetched by one rule is held apart from one fetched
     /// by the other and never answers a lookup made by it, so a name reaching loopback for one tenant is reached afresh,
     /// and refused, for a tenant whose fetch may not.</param>
-    public async Task<HeldMetadataDocument?> GetAsync(string clientId, Uri url, OutboundAddressRule rule)
+    public async Task<Result<HeldMetadataDocument, MetadataDocumentFailure>> GetAsync(string clientId, Uri url, OutboundAddressRule rule)
     {
         var key = CacheKey(clientId, rule);
         var held = cache.Get<HeldMetadataDocument>(key);
@@ -58,7 +58,7 @@ internal sealed partial class HeldMetadataDocuments(
         return await _fetches.LoadAsync(key, _ => FetchAsync(key, clientId, url, rule, held), TimeSpan.Zero);
     }
 
-    private async Task<HeldMetadataDocument?> FetchAsync(
+    private async Task<Result<HeldMetadataDocument, MetadataDocumentFailure>> FetchAsync(
         string key,
         string clientId,
         Uri url,
@@ -112,7 +112,7 @@ internal sealed partial class HeldMetadataDocuments(
         // not, as it keeps no cutoff for every token of one client: the client is refused at the token endpoint while
         // its document is refused, and its refresh tokens are served again once a valid document returns
         cache.Remove(key);
-        return null;
+        return failure;
     }
 
     private async Task<Result<Model.ClientRegistrationRequest, MetadataDocumentFailure>> ReadAsync(

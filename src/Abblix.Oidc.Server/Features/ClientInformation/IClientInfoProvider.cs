@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
@@ -17,6 +18,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// and validation, by allowing the system to retrieve the configuration and settings for registered clients.
 /// It abstracts the underlying storage mechanism, whether it's a database, in-memory collection, or an external service.
 /// <para>
+/// A host implements it to supply its clients, and library code resolves it to ask for one.
+/// </para>
+/// <para>
 /// Every lookup names the tenant it is made for, and a client is found only among that tenant's: a client known at
 /// one tenant is unknown at another.
 /// </para>
@@ -24,18 +28,13 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 public interface IClientInfoProvider
 {
 	/// <summary>
-	/// Asynchronously attempts to find a client's information using its unique identifier.
+	/// Finds the client <paramref name="clientId"/> names at <paramref name="tenant"/>.
 	/// </summary>
 	/// <param name="tenant">The tenant whose clients are searched.</param>
-	/// <param name="clientId">The unique identifier of the client whose information is being requested.</param>
+	/// <param name="clientId">The identifier of the client.</param>
 	/// <returns>
-	/// A task that returns the client's information if found;
-	/// otherwise, null. This allows for non-blocking queries to the underlying client information storage.
+	/// The client, or why the identifier names none. A store answers <see cref="ClientAbsence.Unknown"/> for an
+	/// identifier it does not hold; the other reasons belong to clients resolved from their metadata documents.
 	/// </returns>
-	/// <remarks>
-	/// This method facilitates dynamic client management by enabling on-demand lookup of client configurations
-	/// during OAuth 2.0 and OpenID Connect flows, supporting scenarios such as dynamic client registration
-	/// and configuration updates.
-	/// </remarks>
-	Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId);
+	Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId);
 }

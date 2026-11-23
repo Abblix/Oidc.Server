@@ -38,7 +38,7 @@ public class RequestObjectFetchAdapterTests
     public RequestObjectFetchAdapterTests()
     {
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
+        clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
         _adapter = new RequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
     }
 
@@ -108,7 +108,7 @@ public class RequestObjectFetchAdapterTests
     public async Task FetchAsync_APushedObject_IsRefusedNamingNoClient(string algorithm, bool namesClient, bool refused)
     {
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
+        clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
         var adapter = new PushedRequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
 
         var whyRefused = await RuleHandedToTheFetcherAsync(adapter);

@@ -203,8 +203,7 @@ public partial class RevocationCutoffChecker(
         // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
         // on an ID token but may be a resource or this server's own address on another token, so one that names no
         // existing client leaves the subject as it is.
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo is null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
         if (clientInfo.SubjectType != SubjectTypes.Pairwise)

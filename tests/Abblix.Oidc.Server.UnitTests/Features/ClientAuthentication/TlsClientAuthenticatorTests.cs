@@ -121,8 +121,8 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "unknown-client"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "unknown-client"))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         // Act
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
@@ -156,7 +156,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         // Act
@@ -189,7 +189,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -227,7 +227,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -266,7 +266,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -304,7 +304,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -338,7 +338,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -377,7 +377,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -421,7 +421,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -459,7 +459,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -538,7 +538,7 @@ public class TlsClientAuthenticatorTests
     {
         var request = new ClientRequest { ClientId = "test-client", ClientCertificate = CreateRsaCertificate() };
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(new ClientInfo("test-client") { TokenEndpointAuthMethod = authMethod });
 
         Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
@@ -555,7 +555,7 @@ public class TlsClientAuthenticatorTests
     {
         var request = new ClientRequest { ClientId = "test-client", ClientCertificate = CreateRsaCertificate() };
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(new ClientInfo("test-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.SelfSignedTlsClientAuth });
 
         Assert.Equal(
@@ -583,8 +583,8 @@ public class TlsClientAuthenticatorTests
     {
         var request = new ClientRequest { ClientId = "unknown-client", ClientCertificate = CreateRsaCertificate() };
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "unknown-client"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "unknown-client"))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
     }

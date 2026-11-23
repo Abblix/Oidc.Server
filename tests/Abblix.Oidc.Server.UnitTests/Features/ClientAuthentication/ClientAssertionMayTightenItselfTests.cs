@@ -249,7 +249,7 @@ public class ClientAssertionMayTightenItselfTests
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var token = CreateAssertion(issuedAt, expiresAt, notBefore);

@@ -52,7 +52,7 @@ public class JwtSubjectTokenResolverTests
         // opening 'sub' leaves it as it is. Every named client is found as a public one; a converter with no pairwise
         // settings keeps these tests decoupled from licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
 
         _resolver = new JwtSubjectTokenResolver(
@@ -400,8 +400,8 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "pseudonym-of-client-gone", issuer: null);
         jwt.Payload.ClientId = "client-gone";
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client-gone"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client-gone"))
+            .ReturnsAsync(ClientAbsence.Unknown);
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);

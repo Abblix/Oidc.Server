@@ -119,19 +119,17 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(tenant, issuer))
+        if (!(await clientInfoProvider.FindClientAsync(tenant, issuer)).TryGetSuccess(out var clientInfo))
+            return false;
+
+        if (clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt)
         {
-            case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
-                LogWrongAuthMethod(issuer);
-                return false;
-
-            case { } clientInfo:
-                context.ClientInfo = clientInfo;
-                return true;
-
-            default:
-                return false;
+            LogWrongAuthMethod(issuer);
+            return false;
         }
+
+        context.ClientInfo = clientInfo;
+        return true;
     }
 
     /// <summary>

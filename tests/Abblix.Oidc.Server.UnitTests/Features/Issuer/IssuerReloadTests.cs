@@ -12,6 +12,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
@@ -72,9 +73,9 @@ public class IssuerReloadTests
 
         options.Reload(new TestIssuer { Clients = [new ClientInfo("configured"), new ClientInfo("added")] });
 
-        Assert.NotNull(await clients.TryFindClientAsync("added"));
-        Assert.NotNull(await clients.TryFindClientAsync("configured"));
-        Assert.NotNull(await clients.TryFindClientAsync("registered"));
+        Assert.True((await clients.FindClientAsync("added")).TryGetSuccess(out _));
+        Assert.True((await clients.FindClientAsync("configured")).TryGetSuccess(out _));
+        Assert.True((await clients.FindClientAsync("registered")).TryGetSuccess(out _));
     }
 
     [Fact]
@@ -82,11 +83,11 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new TestIssuer { Clients = [new ClientInfo("configured")] });
         var clients = ClientsOf(options);
-        Assert.NotNull(await clients.TryFindClientAsync("configured"));
+        Assert.True((await clients.FindClientAsync("configured")).TryGetSuccess(out _));
 
         options.Reload(new TestIssuer());
 
-        Assert.Null(await clients.TryFindClientAsync("configured"));
+        Assert.False((await clients.FindClientAsync("configured")).TryGetSuccess(out _));
     }
 
     private static ReloadedTenantClients ClientsOf(
@@ -114,7 +115,7 @@ public class IssuerReloadTests
 
         options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
 
-        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync("partner-app")).GetSuccess().ClientName);
     }
 
     /// <summary>
@@ -128,11 +129,11 @@ public class IssuerReloadTests
         var clients = ClientsOf(options);
         Assert.True(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
         options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app") { ClientName = "configured" }] });
-        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync("partner-app")).GetSuccess().ClientName);
 
         options.Reload(new TestIssuer());
 
-        Assert.Null(await clients.TryFindClientAsync("partner-app"));
+        Assert.False((await clients.FindClientAsync("partner-app")).TryGetSuccess(out _));
     }
 
     [Fact]
@@ -144,7 +145,7 @@ public class IssuerReloadTests
         Assert.True(await clients.TryAddClientAsync(Registration("partner-app")));
 
         options.Reload(new TestIssuer { Clients = [new ClientInfo("partner-app")] });
-        await clients.TryFindClientAsync("partner-app");
+        await clients.FindClientAsync("partner-app");
 
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
@@ -165,16 +166,16 @@ public class IssuerReloadTests
         });
         var logger = new CapturingLogger<ReloadableClientInfoStorage>();
         var clients = ClientsOf(options, logger);
-        Assert.NotNull(await clients.TryFindClientAsync("partner-app"));
+        Assert.True((await clients.FindClientAsync("partner-app")).TryGetSuccess(out _));
 
         Assert.False(await clients.TryAddClientAsync(Registration("partner-app", "registered")));
         Assert.Equal(
             LogEvents.ClientInformation.ReloadableClientInfoStorage.RegistrationEvicted,
             Assert.Single(logger.Entries).EventId.Id);
-        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync("partner-app")).GetSuccess().ClientName);
 
         options.Reload(new TestIssuer());
-        Assert.Null(await clients.TryFindClientAsync("partner-app"));
+        Assert.False((await clients.FindClientAsync("partner-app")).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -194,10 +195,10 @@ public class IssuerReloadTests
         });
 
         Assert.False(await clients.TryUpdateClientAsync(registration, Registration("partner-app", "updated", "jti-2")));
-        Assert.Equal("configured", (await clients.TryFindClientAsync("partner-app"))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync("partner-app")).GetSuccess().ClientName);
 
         options.Reload(new TestIssuer());
-        Assert.Null(await clients.TryFindClientAsync("partner-app"));
+        Assert.False((await clients.FindClientAsync("partner-app")).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -217,7 +218,7 @@ public class IssuerReloadTests
         Assert.Null(await clients.TryFindRegisteredClientAsync("app"));
         Assert.False(await clients.TryUpdateClientAsync(Registration("app"), Registration("app", "updated", "jti-2")));
         Assert.False(await clients.TryRemoveClientAsync(Registration("app")));
-        Assert.Equal("configured", (await clients.TryFindClientAsync("app"))?.ClientName);
+        Assert.Equal("configured", (await clients.FindClientAsync("app")).GetSuccess().ClientName);
     }
 
     [Fact]
@@ -225,12 +226,12 @@ public class IssuerReloadTests
     {
         var options = new ReloadableOptions(new TestIssuer { Clients = [new ClientInfo("app")] });
         var clients = ClientsOf(options);
-        Assert.NotNull(await clients.TryFindClientAsync("app"));
+        Assert.True((await clients.FindClientAsync("app")).TryGetSuccess(out _));
         options.Reload(new TestIssuer());
 
         Assert.True(await clients.TryAddClientAsync(Registration("app", "registered")));
 
-        Assert.Equal("registered", (await clients.TryFindClientAsync("app"))?.ClientName);
+        Assert.Equal("registered", (await clients.FindClientAsync("app")).GetSuccess().ClientName);
     }
 
     [Fact]
@@ -305,7 +306,7 @@ public class IssuerReloadTests
 
         options.Reload(new TestIssuer { Clients = [new ClientInfo("app")] });
 
-        Assert.NotNull(await clients.TryFindClientAsync("app"));
+        Assert.True((await clients.FindClientAsync("app")).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -347,7 +348,7 @@ public class IssuerReloadTests
     {
         private TenantDefinition Tenant => options.CurrentValue.ToTenant();
 
-        public Task<ClientInfo?> TryFindClientAsync(string clientId) => store.TryFindClientAsync(Tenant, clientId);
+        public Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(string clientId) => store.FindClientAsync(Tenant, clientId);
 
         public Task<bool> TryAddClientAsync(RegisteredClient client) => store.TryAddClientAsync(Tenant, client);
 

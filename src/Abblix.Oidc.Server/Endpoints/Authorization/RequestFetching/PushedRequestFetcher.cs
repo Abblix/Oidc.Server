@@ -153,8 +153,7 @@ public class PushedRequestFetcher(
         if (clientId is null)
             return false;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo is null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
             return false;
 
         return clientInfo.RequirePushedAuthorizationRequests ||

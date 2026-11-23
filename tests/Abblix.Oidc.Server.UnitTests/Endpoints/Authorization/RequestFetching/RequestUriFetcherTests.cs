@@ -59,7 +59,7 @@ public class RequestUriFetcherTests
         var requestUri = new Uri("https://client.example.com/request.jwt");
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
-            .Setup(provider => provider.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client"))
+            .Setup(provider => provider.FindClientAsync(It.IsAny<TenantDefinition>(), "client"))
             .ReturnsAsync(new ClientInfo("client") { RequestUris = [requestUri] });
         var http = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         http

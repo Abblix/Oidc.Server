@@ -71,7 +71,8 @@ public class RequestObjectFetchAdapter(
                     $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
             }
 
-            namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+            if ((await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found))
+                namedClient = found;
         }
 
         // Whether the object may leave its client_id to the one beside it is answered by WhyRefused on the read object,

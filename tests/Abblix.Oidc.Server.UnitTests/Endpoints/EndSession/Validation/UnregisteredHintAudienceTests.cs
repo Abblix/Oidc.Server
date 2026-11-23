@@ -52,8 +52,8 @@ public class UnregisteredHintAudienceTests
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, Unregistered))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, Unregistered))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -78,6 +78,6 @@ public class UnregisteredHintAudienceTests
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
         Assert.Equal(Unregistered, context.ClientId);
-        clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, Unregistered), Times.Once);
+        clientInfoProvider.Verify(p => p.FindClientAsync(TestTenant.Matched, Unregistered), Times.Once);
     }
 }

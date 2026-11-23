@@ -162,7 +162,7 @@ public class ReplayChecksThroughEntityStorageTests
             ClientSecrets = [new ClientSecret { Value = Secret }],
         };
         var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(Tenant, ClientId)).ReturnsAsync(client);
+        clients.Setup(p => p.FindClientAsync(Tenant, ClientId)).ReturnsAsync(client);
 
         var services = Services();
         services.AddSingleton<ProfiledJwtValidator>();

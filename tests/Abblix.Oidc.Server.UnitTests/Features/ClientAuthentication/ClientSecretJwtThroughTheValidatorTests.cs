@@ -92,8 +92,8 @@ public class ClientSecretJwtThroughTheValidatorTests
         };
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
-            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == Globex.Id ? client : null);
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
+            .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == Globex.Id ? client : ClientAbsence.Unknown);
         var replayCache = new Mock<IReplayCache>();
         replayCache
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))

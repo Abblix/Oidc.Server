@@ -59,8 +59,7 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo == null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
 

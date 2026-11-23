@@ -192,7 +192,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
@@ -242,7 +242,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -310,7 +310,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -366,7 +366,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -417,7 +417,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -502,7 +502,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -555,7 +555,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -609,7 +609,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest

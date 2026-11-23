@@ -85,8 +85,7 @@ public partial class RequestUriFetcher(
                 $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo == null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
             return AuthorizationErrorFactory.ValidationError(

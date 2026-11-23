@@ -183,7 +183,8 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
+                if ((await clientInfoProvider.FindClientAsync(tenant, clientIdFromJwt)).TryGetSuccess(out var named))
+                    context.ClientInfo = named;
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -292,7 +293,9 @@ public partial class ClientJwtValidator(
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, issuer);
+                if ((await clientInfoProvider.FindClientAsync(tenant, issuer)).TryGetSuccess(out var client))
+                    ClientInfo = client;
+
                 _clientLookupPerformed = true;
             }
 

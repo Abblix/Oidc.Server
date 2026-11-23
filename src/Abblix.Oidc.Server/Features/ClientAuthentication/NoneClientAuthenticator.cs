@@ -62,19 +62,16 @@ public partial class NoneClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return ClientAuthenticationFailures.NoCredential;
 
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        switch (client)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
         {
-            case null:
-                LogClientNotFound(clientId);
-                return ClientAuthenticationFailures.NoCredential;
-
-            case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:
-                return client;
-
-            default:
-                return ClientAuthenticationFailures.NoCredential;
+            LogClientNotFound(clientId);
+            return ClientAuthenticationFailures.NoCredential;
         }
+
+        if (client is not { TokenEndpointAuthMethod: ClientAuthenticationMethods.None })
+            return ClientAuthenticationFailures.NoCredential;
+
+        return client;
     }
 
     /// <summary>

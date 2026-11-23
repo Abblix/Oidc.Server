@@ -98,7 +98,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -132,7 +132,7 @@ public class ClientJwtValidatorTests
                 return CreateValidToken();
             });
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
         _clientKeysProvider
             .Setup(p => p.GetSigningKeys(clientInfo, It.IsAny<bool>()))
@@ -166,7 +166,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -204,7 +204,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -244,7 +244,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -310,7 +310,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -348,7 +348,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -390,7 +390,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -432,8 +432,8 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownIssuer))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, unknownIssuer))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
@@ -470,7 +470,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -520,7 +520,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -539,7 +539,7 @@ public class ClientJwtValidatorTests
 
         // Verify client lookup happened twice (each ValidateAsync creates new ValidationContext)
         // The flag prevents duplicate calls within a single validation, not across validations
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Exactly(2));
+        _clientInfoProvider.Verify(p => p.FindClientAsync(TestTenant.Matched, ValidClientId), Times.Exactly(2));
     }
 
     /// <summary>
@@ -611,8 +611,8 @@ public class ClientJwtValidatorTests
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownClientId))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, unknownClientId))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         var result = await _validator.ValidateAsync(
             SingleIssuer.Tenant, CreateClientInfo(ValidClientId), ValidJwt, TokenTypePolicy.CheckedByCaller);
@@ -649,7 +649,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -690,7 +690,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -728,8 +728,8 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownIssuer))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, unknownIssuer))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
@@ -767,7 +767,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -812,7 +812,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -852,7 +852,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -888,7 +888,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -904,7 +904,7 @@ public class ClientJwtValidatorTests
         Assert.Same(clientInfo, validToken.Client);
 
         _tokenValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.FindClientAsync(TestTenant.Matched, ValidClientId), Times.Once);
     }
 
     /// <summary>
@@ -921,7 +921,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid signature"));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -950,7 +950,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token expired"));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -988,7 +988,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -1027,7 +1027,7 @@ public class ClientJwtValidatorTests
             });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -1098,7 +1098,7 @@ public class ClientJwtValidatorTests
                 return token;
             });
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
@@ -1136,7 +1136,7 @@ public class ClientJwtValidatorTests
                 return token;
             });
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, jwe, TokenTypePolicy.CheckedByCaller);
@@ -1225,7 +1225,7 @@ public class ClientJwtValidatorTests
                     new JwtValidationError(JwtError.InvalidToken, "not under test"));
             });
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
         _clientKeysProvider
             .Setup(p => p.GetSigningKeys(clientInfo, false))

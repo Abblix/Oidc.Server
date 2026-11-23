@@ -86,7 +86,7 @@ public class ClientMayTightenItselfTests
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         var tokenValidator = new Mock<IJsonWebTokenValidator>();
         tokenValidator
