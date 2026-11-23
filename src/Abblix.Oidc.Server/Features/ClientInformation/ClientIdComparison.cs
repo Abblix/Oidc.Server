@@ -14,9 +14,11 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </summary>
 /// <remarks>
 /// draft-ietf-oauth-client-id-metadata-document section 3 has Client Identifier URLs "compared using simple string
-/// comparison, as defined in Section 6.2.1 of [RFC3986]", and every other client id is compared the same way, so one
-/// spelling never reaches a client registered under another. Holding the ids apart regardless of case keeps a client
-/// from being registered under a spelling of an id another client holds.
+/// comparison, as defined in Section 6.2.1 of [RFC3986]", and every other client id is compared the same way: the
+/// server's own client store, and the metadata document lookup over whichever store the host registers, take a
+/// client only under its exact id. A host replacing the client provider while metadata documents are off compares
+/// ids as its provider does. Holding the ids apart regardless of case keeps a client from being registered under a
+/// spelling of an id another client holds.
 /// </remarks>
 internal static class ClientIdComparison
 {
@@ -28,7 +30,8 @@ internal static class ClientIdComparison
 
     /// <summary>
     /// Whether <paramref name="clientId"/> names <paramref name="client"/>, being exactly its id: a store holding ids by
-    /// <see cref="Held"/>, the host's own included, may answer a lookup with a client held under another spelling.
+    /// <see cref="Held"/>, as a host's registration store may, answers a lookup with a client held under another
+    /// spelling.
     /// </summary>
     /// <param name="client">The client a store answered the lookup with.</param>
     /// <param name="clientId">The id the lookup asked for.</param>

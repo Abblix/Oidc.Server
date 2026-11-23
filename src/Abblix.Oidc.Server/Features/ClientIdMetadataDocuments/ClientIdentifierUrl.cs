@@ -82,13 +82,13 @@ internal static class ClientIdentifierUrl
 
     /// <summary>
     /// Whether <paramref name="clientId"/> is withheld from dynamic registration as a URL a metadata document may name:
-    /// every client identifier this server fetches, and every https URL in any other spelling.
+    /// every client identifier this server fetches, and every id <see cref="Uri"/> reads as an absolute https URL.
     /// </summary>
     /// <remarks>
     /// Section 9.1 has a server issuing client identifiers of its own beside documents "ensure that the client_id
-    /// strings it generates do not start with https://". A spelling the server never fetches is withheld as well -
-    /// the scheme in capitals, white space around it - so no registration holds an id that reads as a document's URL
-    /// to whoever compares it less strictly than section 3 does.
+    /// strings it generates do not start with https://". An id the server never fetches is withheld as well when
+    /// <see cref="Uri"/> reads it as https, as it does with the scheme in capitals or with the white space it trims
+    /// around the id.
     /// </remarks>
     /// <param name="clientId">The client identifier a registration proposes.</param>
     public static bool IsWithheldFromRegistration(string clientId)
