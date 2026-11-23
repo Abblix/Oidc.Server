@@ -66,7 +66,8 @@ public sealed class ConfigurationHandler(
 		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
 		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
 		// enabled accepts no caller at all, so nothing is said about it.
-		var authenticationMethods = clientAuthenticator.ClientAuthenticationMethodsSupported.ToArray();
+		var authenticationMethods = AdmittedAuthenticationMethods(
+			tenant, clientAuthenticator.ClientAuthenticationMethodsSupported);
 		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported).ToArray();
 		var revocationMethods = WhereEnabled(OidcEndpoints.Revocation, authenticationMethods);
 		var introspectionMethods = WhereEnabled(
@@ -123,9 +124,10 @@ public sealed class ConfigurationHandler(
 
 			TokenEndpointAuthMethodsSupported = authenticationMethods,
 			RevocationEndpointAuthMethodsSupported = WhereAnyMethod(revocationMethods, revocationMethods),
-			RevocationEndpointAuthSigningAlgValuesSupported = WhereAnyMethod(revocationMethods, assertionAlgorithms),
+			RevocationEndpointAuthSigningAlgValuesSupported = WhereAssertionMethod(revocationMethods, assertionAlgorithms),
 			IntrospectionEndpointAuthMethodsSupported = WhereAnyMethod(introspectionMethods, introspectionMethods),
-			IntrospectionEndpointAuthSigningAlgValuesSupported = WhereAnyMethod(introspectionMethods, assertionAlgorithms),
+			IntrospectionEndpointAuthSigningAlgValuesSupported =
+				WhereAssertionMethod(introspectionMethods, assertionAlgorithms),
 
 			// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
 			// authentication method is available - the server then both issues bound tokens and
@@ -136,7 +138,7 @@ public sealed class ConfigurationHandler(
 				? true
 				: null,
 
-			TokenEndpointAuthSigningAlgValuesSupported = assertionAlgorithms,
+			TokenEndpointAuthSigningAlgValuesSupported = WhereAssertionMethod(authenticationMethods, assertionAlgorithms),
 			IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
@@ -173,6 +175,36 @@ public sealed class ConfigurationHandler(
 	/// </summary>
 	private static string[]? WhereAnyMethod(string[] methods, string[] values)
 		=> methods.Length > 0 ? values : null;
+
+	/// <summary>
+	/// <paramref name="algorithms"/>, the algorithms of a client authentication assertion, where
+	/// <paramref name="methods"/> lists a method authenticating with one: RFC 8414 section 2 has the list present "if
+	/// either of these authentication methods", private_key_jwt and client_secret_jwt, is listed, and without one it
+	/// describes nothing. Null as well where no algorithm is left: OpenID Connect Discovery 1.0 section 4.2, "Claims
+	/// with zero elements MUST be omitted from the response".
+	/// </summary>
+	private static string[]? WhereAssertionMethod(string[] methods, string[] algorithms)
+		=> algorithms.Length > 0 && methods.Any(method => method
+			is ClientAuthenticationMethods.PrivateKeyJwt
+			or ClientAuthenticationMethods.ClientSecretJwt)
+			? algorithms
+			: null;
+
+	/// <summary>
+	/// The client authentication methods of <paramref name="methods"/> the tenant's profile admits a client
+	/// authenticating with: FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 admit mutual
+	/// TLS and the private key JWT alone, and refuse a public client. The tenant's profile binds every client it
+	/// serves, which is refused where it authenticates by the same rule, so a method it refuses is one no endpoint of
+	/// the tenant authenticates a client with, and RFC 8414 section 2 lists the methods "supported by this token
+	/// endpoint".
+	/// </summary>
+	private static string[] AdmittedAuthenticationMethods(TenantDefinition tenant, IEnumerable<string> methods)
+	{
+		var profile = SecurityProfileRequirements.For(tenant, client: null);
+		return methods
+			.Where(method => SecurityProfileConsistency.FindAuthenticationMethodViolations(method, profile).Count == 0)
+			.ToArray();
+	}
 
 	/// <summary>
 	/// <paramref name="methods"/> where <paramref name="endpoint"/> is enabled, otherwise none.
