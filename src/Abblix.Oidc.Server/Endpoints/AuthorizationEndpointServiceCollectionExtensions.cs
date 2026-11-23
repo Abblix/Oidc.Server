@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -44,6 +45,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
             .AddAuthorizationContextValidators();
 
         services.TryAddScoped<AuthorizationHandler>();
+        services.TryAddSingleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
         services.AddTelemetryDecorator<IAuthorizationRequestValidator, ObservedAuthorizationRequestValidator>();
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();

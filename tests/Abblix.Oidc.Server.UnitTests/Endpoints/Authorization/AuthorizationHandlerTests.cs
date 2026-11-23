@@ -34,6 +34,8 @@ public class AuthorizationHandlerTests
     private readonly Mock<IAuthorizationRequestValidator> _validator;
     private readonly Mock<IAuthorizationRequestProcessor> _processor;
     private readonly Mock<IAuthorizationResponseEncoder> _encoder;
+    private readonly Mock<IClientInfoProvider> _clients;
+    private readonly Mock<IRedirectUriTrustPolicy> _redirectUriTrust;
     private readonly AuthorizationHandler _handler;
 
     public AuthorizationHandlerTests()
@@ -46,12 +48,96 @@ public class AuthorizationHandlerTests
                 TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>(), It.IsAny<IClientInfoProvider>()))
             .Returns<TenantDefinition, Core.AuthorizationResponse, IClientInfoProvider>(
                 (_, response, _) => Task.FromResult(response));
+        _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        _clients
+            .Setup(c => c.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
+        _redirectUriTrust = new Mock<IRedirectUriTrustPolicy>(MockBehavior.Strict);
+        _redirectUriTrust
+            .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(true);
         _handler = new AuthorizationHandler(
-            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object,
+            _clients.Object,
             _fetcher.Object,
             _validator.Object,
             _processor.Object,
-            _encoder.Object);
+            _encoder.Object,
+            _redirectUriTrust.Object);
+    }
+
+    /// <summary>
+    /// RFC 9700 section 4.11.2: the server "SHOULD only automatically redirect the user agent if it trusts the
+    /// redirection URI". An error for a client the policy does not trust, or for one no longer found, is answered by the
+    /// server without its redirect URI or a packed JWT, so the adapters answer it with status 400; a trusted client's
+    /// error is redirected as before.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    public async Task HandleAsync_AnError_ReachesTheClientOnlyWhenItsRedirectUrisAreTrusted(
+        bool found, bool trusted, bool redirected)
+    {
+        var request = CreateRequest();
+        var fetchError = new AuthorizationRequestValidationError(
+            ErrorCodes.InvalidScope, "The scope is not allowed", request.RedirectUri, ResponseModes.QueryJwt);
+        _fetcher
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)fetchError);
+        _encoder.Setup(e => e.EncodeAsync(
+                TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>(), It.IsAny<IClientInfoProvider>()))
+            .Returns<TenantDefinition, Core.AuthorizationResponse, IClientInfoProvider>((_, response, _) =>
+            {
+                ((ClientDeliveredResponse)response).ResponseJwt = "packed";
+                return Task.FromResult(response);
+            });
+        if (!found)
+        {
+            _clients
+                .Setup(c => c.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+                .ReturnsAsync(ClientAbsence.Unknown);
+        }
+        _redirectUriTrust
+            .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(trusted);
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
+        Assert.Equal(redirected ? request.RedirectUri : null, error.RedirectUri);
+        Assert.Equal(redirected ? "packed" : null, error.ResponseJwt);
+    }
+
+    /// <summary>
+    /// A successful authorization follows the end user's consent to the client, so it reaches an untrusted client too,
+    /// and the policy is not asked.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ASuccess_ReachesAnUntrustedClient()
+    {
+        var request = CreateRequest();
+        var validRequest = new ValidAuthorizationRequest(new AuthorizationValidationContext(request)
+        {
+            Clients = Mock.Of<IClientInfoProvider>(),
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
+        });
+        var success = new SuccessfullyAuthenticated(request, ResponseModes.Query, "session", [])
+        {
+            SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
+        };
+        _fetcher
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)request);
+        _validator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)validRequest);
+        _processor.Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest)).ReturnsAsync(success);
+        _redirectUriTrust
+            .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(false);
+
+        Assert.Same(success, await _handler.HandleAsync(SingleIssuer.Tenant, request));
+        _redirectUriTrust.VerifyNoOtherCalls();
     }
 
     private static AuthorizationRequest CreateRequest() => new()

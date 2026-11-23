@@ -34,4 +34,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- What a test host registers to have the errors of the clients it registers openly redirected. -->
+  <ItemGroup>
+    <Compile Include="../Shared/EveryRedirectUriTrusted.cs" Link="Shared/EveryRedirectUriTrusted.cs" />
+  </ItemGroup>
+
 </Project>
