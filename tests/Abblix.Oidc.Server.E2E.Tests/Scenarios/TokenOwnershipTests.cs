@@ -111,7 +111,8 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
         };
         if (tokenParameter == TokenRequest.Parameters.ActorToken)
         {
-            form[TokenRequest.Parameters.SubjectToken] = await ExchangingClientsAccessTokenAsync(client, discovery);
+            form[TokenRequest.Parameters.SubjectToken] = await ObtainAccessTokenAsync(
+                client, discovery, ExchangingClientId, TestConstants.ConfidentialClientSecret);
             form[TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken;
         }
 
@@ -157,36 +158,6 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// An access token of the client that exchanges tokens in these cases, issued to it through the authorization
-    /// code flow.
-    /// </summary>
-    private static async Task<string> ExchangingClientsAccessTokenAsync(HttpClient client, DiscoveryDocument discovery)
-    {
-        var (verifier, challenge) = GeneratePkcePair();
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = ExchangingClientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = code,
-            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [ClientRequest.Parameters.ClientId] = ExchangingClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
-    }
-
-    /// <summary>
     /// A grant whose first refresh token was rotated: the superseded token, the active one, and an access token of
     /// the grant.
     /// </summary>
@@ -210,25 +181,6 @@ public class TokenOwnershipTests(TestFactory factory) : TestBase(factory)
     {
         [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
     };
-
-    private static async Task<HttpResponseMessage> RevokeAsync(
-        HttpClient client, DiscoveryDocument discovery, string token, string clientId) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
-        {
-            [RevocationRequest.Parameters.Token] = token,
-            [ClientRequest.Parameters.ClientId] = clientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-
-    private static async Task<HttpResponseMessage> RefreshAsync(
-        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
 
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)

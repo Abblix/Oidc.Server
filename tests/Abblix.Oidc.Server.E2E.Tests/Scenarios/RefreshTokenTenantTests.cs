@@ -55,7 +55,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, await ResignAsync(RefreshTokenOf(tokens), _ => { }));
+        var (status, body) = await RefreshReadAsync(client, discovery, await ResignAsync(RefreshTokenOf(tokens), _ => { }));
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(TestTenantSettings.TenantId, DecodeJwtPayload(RefreshTokenOf(body!))[TenantClaim]!.GetValue<string>());
@@ -69,7 +69,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, await WithoutTenantAsync(tokens));
+        var (status, body) = await RefreshReadAsync(client, discovery, await WithoutTenantAsync(tokens));
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Equal(ErrorCodes.InvalidGrant, body![ErrorMember]!.GetValue<string>());
@@ -138,7 +138,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
-        var (status, _) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (status, _) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
 
         Assert.Equal(HttpStatusCode.OK, revocation);
         Assert.Equal(renewal, status);
@@ -153,7 +153,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (status, body) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
         var accessToken = body![TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var introspected = await IntrospectAsync(client, discovery, accessToken, TestConstants.ConfidentialClientId);
 
@@ -183,8 +183,8 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
             RefreshTokenOf(tokens),
             payload => payload[TenantClaim] = TestTenantSettings.TenantId,
             host.Services);
-        var (refused, body) = await RefreshAsync(client, discovery, tenantAlone);
-        var (renewed, _) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (refused, body) = await RefreshReadAsync(client, discovery, tenantAlone);
+        var (renewed, _) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
 
         Assert.Equal(HttpStatusCode.BadRequest, refused);
         Assert.Equal(ErrorCodes.InvalidGrant, body![ErrorMember]!.GetValue<string>());
@@ -217,7 +217,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
                 if (anotherIssuer)
                     payload[IanaClaimTypes.Iss] = "https://another.example.com";
             });
-        var (status, _) = await RefreshAsync(client, discovery, resigned);
+        var (status, _) = await RefreshReadAsync(client, discovery, resigned);
 
         Assert.Equal(expected, status);
     }
@@ -252,7 +252,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         return await JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
     }
 
-    private static Task<(HttpStatusCode, JsonObject?)> RefreshAsync(
+    private static Task<(HttpStatusCode, JsonObject?)> RefreshReadAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         string refreshToken)

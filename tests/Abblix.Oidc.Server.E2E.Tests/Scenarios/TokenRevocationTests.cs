@@ -153,25 +153,6 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         return document[member]!.AsArray().Select(value => value!.GetValue<string>()).ToArray();
     }
 
-    private static async Task<HttpResponseMessage> RevokeAsync(
-        HttpClient client, DiscoveryDocument discovery, string token) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
-        {
-            [RevocationRequest.Parameters.Token] = token,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-
-    private static async Task<HttpResponseMessage> RefreshAsync(
-        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
