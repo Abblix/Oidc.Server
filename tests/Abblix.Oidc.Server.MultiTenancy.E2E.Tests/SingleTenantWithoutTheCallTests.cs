@@ -681,6 +681,10 @@ public sealed class SingleTenantWithoutTheCallTests
     {
         Id = id,
         Issuer = new Uri(issuer),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         LoginUri = new Uri("/login", UriKind.Relative),
         Clients =
         [

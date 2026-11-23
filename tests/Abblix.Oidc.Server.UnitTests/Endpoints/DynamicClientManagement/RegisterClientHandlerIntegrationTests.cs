@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -78,6 +80,10 @@ public class RegisterClientHandlerIntegrationTests
             {
                 Id = TestIssuer.TenantId,
                 Issuer = TestConstants.DefaultIssuer,
+                ClientSecretEncryption = new ClientSecretEncryptionSettings
+                {
+                    Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
             });
 
