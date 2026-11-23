@@ -34,9 +34,9 @@ internal sealed partial class HeldMetadataDocuments(
     IOptionsMonitor<OidcOptions> options,
     TimeProvider clock)
 {
-    // One fetch of a URL for the lookups naming it while it runs. Its outcome answers none that starts after it ends:
-    // section 6.2 has the server "MUST NOT cache error responses", so a refused document is fetched again on the next
-    // lookup, even one of the same request
+    // One fetch of a URL by one rule for the lookups naming it by that rule while it runs. Its outcome answers none that
+    // starts after it ends: section 6.2 has the server "MUST NOT cache error responses", so a refused document is
+    // fetched again on the next lookup, even one of the same request
     private readonly CoalescingLoader<string, HeldMetadataDocument?> _fetches = new(clock, StringComparer.Ordinal);
 
     /// <summary>
@@ -45,27 +45,31 @@ internal sealed partial class HeldMetadataDocuments(
     /// </summary>
     /// <param name="clientId">The client identifier URL, as the request carries it.</param>
     /// <param name="url">The URL to fetch it from.</param>
-    public async Task<HeldMetadataDocument?> GetAsync(string clientId, Uri url)
+    /// <param name="rule">The rule the fetch is held to. A document fetched by one rule is held apart from one fetched
+    /// by the other and never answers a lookup made by it, so a name reaching loopback for one tenant is reached afresh,
+    /// and refused, for a tenant whose fetch may not.</param>
+    public async Task<HeldMetadataDocument?> GetAsync(string clientId, Uri url, OutboundAddressRule rule)
     {
-        var key = CacheKey(clientId);
+        var key = CacheKey(clientId, rule);
         var held = cache.Get<HeldMetadataDocument>(key);
         if (held is not null && clock.GetUtcNow() < held.FreshUntil)
             return held;
 
-        return await _fetches.LoadAsync(clientId, _ => FetchAsync(key, clientId, url, held), TimeSpan.Zero);
+        return await _fetches.LoadAsync(key, _ => FetchAsync(key, clientId, url, rule, held), TimeSpan.Zero);
     }
 
     private async Task<HeldMetadataDocument?> FetchAsync(
         string key,
         string clientId,
         Uri url,
+        OutboundAddressRule rule,
         HeldMetadataDocument? previous)
     {
         var settings = options.CurrentValue.ClientIdMetadataDocuments;
         var fetchedAt = clock.GetUtcNow();
 
         Result<FetchedDocument, MetadataDocumentFailure> fetched;
-        using (SpecialPurposeFetches.Enter())
+        using (SpecialPurposeFetches.Enter(rule))
             fetched = await fetcher.FetchAsync(url);
         var result = fetched.TryGetSuccess(out var document)
             ? (await ReadAsync(clientId, document)).MapSuccess(
@@ -120,6 +124,7 @@ internal sealed partial class HeldMetadataDocuments(
             .Read(clientId, document.Content);
     }
 
-    private static string CacheKey(string clientId)
-        => $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(ClientIdMetadataDocuments)}:{clientId}";
+    // The rule's name stands before the colon, so no client identifier makes the key of one rule the key of the other
+    private static string CacheKey(string clientId, OutboundAddressRule rule)
+        => $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(ClientIdMetadataDocuments)}.{rule}:{clientId}";
 }

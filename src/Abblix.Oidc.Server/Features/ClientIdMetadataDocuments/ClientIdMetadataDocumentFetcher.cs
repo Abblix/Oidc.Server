@@ -62,15 +62,8 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
         var settings = options.CurrentValue.ClientIdMetadataDocuments;
         var transport = fetchOptions.CurrentValue;
 
-        // Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use
-        // IP addresses". The handler judges the address the name resolves to again before the request is sent
-        if (uriValidator.Validate(url) is { } rejection)
-            return Refused(url, MetadataDocumentFailure.Terminal($"the URL is not one this server may reach: {rejection}"));
-
-        // A destination the host named reaches past those rules for its own services, chosen by the host or by a
-        // registered client; a client identifier is chosen by whoever sends a request, so it is never one of them
-        if (SecureUriValidator.IsAllowedDestination(url, transport.AllowedDestinations))
-            return Refused(url, MetadataDocumentFailure.Terminal("the URL is one the host allows for its own services"));
+        if (ClientIdentifierUrl.WhyNotReached(url, uriValidator, transport.AllowedDestinations) is { } refusal)
+            return Refused(url, MetadataDocumentFailure.Terminal(refusal));
 
         // The client's timeout ends only the wait for the headers, so the whole fetch, body included, has its own
         using var deadline = new CancellationTokenSource(settings.FetchTimeout);

@@ -24,6 +24,8 @@ public static class OutboundAddressRuleExtensions
         OutboundAddressRule.Unrestricted => false,
         OutboundAddressRule.NoPrivateOrReserved => PrivateNetworks.IsPrivateOrReservedAddress(address),
         OutboundAddressRule.NoSpecialPurpose => PrivateNetworks.IsSpecialPurposeAddress(address),
+        OutboundAddressRule.NoSpecialPurposeButLoopback
+            => PrivateNetworks.IsSpecialPurposeAddress(address) && !PrivateNetworks.IsLoopbackAddress(address),
         _ => throw new ArgumentOutOfRangeException(nameof(rule), rule, "An address rule this library does not know."),
     };
 }

@@ -211,6 +211,22 @@ public static class PrivateNetworks
             || ReservedNetworks.Any(network => network.Contains(address));
     }
 
+    /// <summary>
+    /// Whether <paramref name="address"/> is a loopback address as written: one of 127.0.0.0/8 (RFC 1122 section
+    /// 3.2.1.3) or ::1 (RFC 4291 section 2.5.3).
+    /// </summary>
+    /// <param name="address">The address a fetch would reach.</param>
+    /// <remarks>
+    /// An IPv4-mapped or NAT64 form of a loopback address is not one: each is a block of its own in the special-purpose
+    /// address registries, and reaches loopback only through a translation this judgement does not make.
+    /// </remarks>
+    public static bool IsLoopbackAddress(IPAddress address) => address.AddressFamily switch
+    {
+        AddressFamily.InterNetwork => address.GetAddressBytes()[0] == 127,
+        AddressFamily.InterNetworkV6 => address.Equals(IPAddress.IPv6Loopback),
+        _ => false,
+    };
+
     private static readonly IPNetwork Nat64WellKnownPrefix = IPNetwork.Parse("64:ff9b::/96");
 
     /// <summary>

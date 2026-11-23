@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientIdMetadataDocuments;
@@ -82,6 +84,49 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
             MinimumCacheDuration = TimeSpan.FromMinutes(10),
             MaximumCacheDuration = TimeSpan.FromMinutes(5),
         }));
+
+    /// <summary>
+    /// A number bound from configuration that names no member is refused at startup, naming the setting.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientIdMetadataDocumentAddresses.PublicOnly, true)]
+    [InlineData(ClientIdMetadataDocumentAddresses.AllowLoopback, true)]
+    [InlineData((ClientIdMetadataDocumentAddresses)2, false)]
+    [InlineData((ClientIdMetadataDocumentAddresses)(-1), false)]
+    public void AddressesNamingNoMember_AreRefused(ClientIdMetadataDocumentAddresses addresses, bool accepted)
+    {
+        var settings = new ClientIdMetadataDocumentOptions { DocumentAddresses = addresses, Enabled = true };
+
+        var result = new ClientIdMetadataDocumentOptionsValidator()
+            .Validate(null, new OidcOptions { ClientIdMetadataDocuments = settings });
+
+        Assert.Equal(accepted, result.Succeeded);
+        if (!accepted)
+            Assert.Contains(
+                $"{nameof(OidcOptions.ClientIdMetadataDocuments)}.{nameof(ClientIdMetadataDocumentOptions.DocumentAddresses)}",
+                result.FailureMessage);
+    }
+
+    /// <summary>
+    /// The value a configuration file binds by the member's name, and the startup check refusing a number naming none.
+    /// </summary>
+    [Theory]
+    [InlineData("AllowLoopback", true)]
+    [InlineData("7", false)]
+    public void AddressesBoundFromConfiguration_AreJudgedAtStartup(string value, bool accepted)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{nameof(OidcOptions.ClientIdMetadataDocuments)}:{nameof(ClientIdMetadataDocumentOptions.DocumentAddresses)}"]
+                    = value,
+            })
+            .Build();
+        var options = new OidcOptions { ClientIdMetadataDocuments = { Enabled = true } };
+        configuration.Bind(options);
+
+        Assert.Equal(accepted, new ClientIdMetadataDocumentOptionsValidator().Validate(null, options).Succeeded);
+    }
 
     [Fact]
     public void NoHolding_IsAccepted()

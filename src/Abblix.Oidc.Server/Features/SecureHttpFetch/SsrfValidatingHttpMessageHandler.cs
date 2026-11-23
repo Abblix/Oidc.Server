@@ -58,6 +58,10 @@ public class SsrfValidatingHttpMessageHandler(
     /// </summary>
     protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
     {
+        // A loopback host the metadata document fetch may reach is judged by the address it resolves to alone
+        if (SpecialPurposeFetches.PermitsLoopbackHost(requestUri))
+            return Task.CompletedTask;
+
         // Synchronous policy (scheme, internal hostname, private/reserved IP literal), shared with
         // registration-time validation. A null result means the URI passed these checks.
         var rejection = uriValidator.Validate(requestUri);
@@ -72,8 +76,9 @@ public class SsrfValidatingHttpMessageHandler(
     /// <summary>
     /// Which addresses this request's connection refuses: none for a destination the host named or when the host
     /// switched the blocking off; every special-purpose one (<see cref="PrivateNetworks.IsSpecialPurposeAddress"/>)
-    /// for a fetch made on behalf of a client resolved from its metadata document; otherwise every private or reserved
-    /// one (<see cref="PrivateNetworks.IsPrivateOrReservedAddress"/>).
+    /// for a fetch made on behalf of a client resolved from its metadata document, but loopback for the fetch of such a
+    /// document the scope lets reach it; otherwise every private or reserved one
+    /// (<see cref="PrivateNetworks.IsPrivateOrReservedAddress"/>).
     /// </summary>
     /// <remarks>
     /// A destination the host named is exempt, and it has to be: such a service is reached at a private address by
@@ -93,8 +98,6 @@ public class SsrfValidatingHttpMessageHandler(
             return OutboundAddressRule.Unrestricted;
         }
 
-        return SpecialPurposeFetches.Active
-            ? OutboundAddressRule.NoSpecialPurpose
-            : OutboundAddressRule.NoPrivateOrReserved;
+        return SpecialPurposeFetches.Rule ?? OutboundAddressRule.NoPrivateOrReserved;
     }
 }

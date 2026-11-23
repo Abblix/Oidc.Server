@@ -8,12 +8,14 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -104,6 +106,57 @@ public class ClientIdMetadataDocumentsWiringTests
         Register(services);
 
         Assert.Equal([ClientIdMetadataDocumentsWiring.PrivateNetworksReachedMessage], await Refusals(services));
+    }
+
+    /// <summary>
+    /// Draft section 10.7: servers "MUST NOT apply this exception in production deployments", so a host in the
+    /// Production environment does not start with loopback documents on; any other environment, and a host that
+    /// registers none, starts.
+    /// </summary>
+    [Theory]
+    [InlineData("Production", ClientIdMetadataDocumentAddresses.AllowLoopback, false)]
+    [InlineData("Development", ClientIdMetadataDocumentAddresses.AllowLoopback, true)]
+    [InlineData("Staging", ClientIdMetadataDocumentAddresses.AllowLoopback, true)]
+    [InlineData("Production", ClientIdMetadataDocumentAddresses.PublicOnly, true)]
+    [InlineData(null, ClientIdMetadataDocumentAddresses.AllowLoopback, true)]
+    public async Task LoopbackDocuments_AreRefusedInProduction(
+        string? environment,
+        ClientIdMetadataDocumentAddresses addresses,
+        bool starts)
+    {
+        var services = Hosting();
+        if (environment is not null)
+            services.AddSingleton(Mock.Of<IHostEnvironment>(host => host.EnvironmentName == environment));
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        Register(services);
+
+        Assert.Equal(
+            starts ? [] : [ClientIdMetadataDocumentsWiring.LoopbackInProductionMessage],
+            await Refusals(services));
+    }
+
+    /// <summary>
+    /// A proxy resolves the name on its own machine, so a loopback document would come from the proxy's loopback
+    /// interface, not the one section 10.7 allows.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientIdMetadataDocumentAddresses.AllowLoopback, true, false)]
+    [InlineData(ClientIdMetadataDocumentAddresses.AllowLoopback, false, true)]
+    [InlineData(ClientIdMetadataDocumentAddresses.PublicOnly, true, true)]
+    public async Task LoopbackDocuments_AreRefusedThroughAProxy(
+        ClientIdMetadataDocumentAddresses addresses,
+        bool proxied,
+        bool starts)
+    {
+        var services = Hosting();
+        if (proxied)
+            services.Configure<SecureHttpFetchOptions>(options => options.OutboundProxy = new Uri("http://proxy.example.com:3128"));
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        Register(services);
+
+        Assert.Equal(
+            starts ? [] : [ClientIdMetadataDocumentsWiring.LoopbackThroughProxyMessage],
+            await Refusals(services));
     }
 
     private static void Register(IServiceCollection services) => new Registered(services).AddClientIdMetadataDocuments();
