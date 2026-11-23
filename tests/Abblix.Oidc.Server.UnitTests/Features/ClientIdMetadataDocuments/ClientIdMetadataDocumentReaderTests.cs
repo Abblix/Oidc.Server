@@ -501,11 +501,12 @@ public class ClientIdMetadataDocumentReaderTests
     }
 
     /// <summary>
-    /// A delivery mode without the backchannel grant serves no flow, so it goes as the grant would.
+    /// A poll mode the document names without declaring the backchannel grant is left as written: it may be what the
+    /// pairwise sector is taken from, and nothing was dropped for it to go with.
     /// </summary>
     [Fact]
-    public void ADocumentNamingAModeWithoutTheBackchannelGrant_LosesTheMode()
-        => Assert.Null(Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
+    public void ADocumentPollingForBackchannelTokens_IsKept()
+        => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
 
     [Fact]
     public void ANamedApplicationType_IsKept()

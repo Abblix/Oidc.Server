@@ -126,15 +126,15 @@ internal sealed class ClientIdMetadataDocumentReader(
         // A ping or push notification is posted from the stored backchannel authentication request, where the client
         // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
         // for. The backchannel grant goes with the mode, as any grant this server does not serve such a client, and
-        // the document is refused only when nothing is left of it. Whenever the backchannel grant goes, for this
-        // reason or because the client authenticates with none, the delivery mode and its endpoint go with it, so
-        // the client is served without the flow rather than refused for naming a mode
+        // the document is refused only when nothing is left of it. A backchannel grant the document declares and loses
+        // otherwise, as one authenticating with none does, takes the delivery mode and its endpoint along too, so the
+        // client is not refused for naming a mode of a flow it no longer has
         var notified = metadata.BackChannelTokenDeliveryMode is
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
             grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
-        var backChannel = grantTypes.Contains(GrantTypes.Ciba, StringComparer.Ordinal);
+        var backChannelLost = BackChannelLost(notified, metadata.GrantTypes, grantTypes);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -159,13 +159,22 @@ internal sealed class ClientIdMetadataDocumentReader(
             PkceRequired = true,
             GrantTypes = grantTypes,
             ResponseTypes = responseTypes,
-            BackChannelTokenDeliveryMode = backChannel ? metadata.BackChannelTokenDeliveryMode : null,
-            BackChannelClientNotificationEndpoint = backChannel ? metadata.BackChannelClientNotificationEndpoint : null,
+            BackChannelTokenDeliveryMode = backChannelLost ? null : metadata.BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = backChannelLost ? null : metadata.BackChannelClientNotificationEndpoint,
             ApplicationType = document.ContainsKey(Parameters.ApplicationType)
                 ? metadata.ApplicationType
                 : ApplicationTypeOf(metadata.RedirectUris),
         };
     }
+
+    /// <summary>
+    /// Whether the client the document describes goes without the backchannel flow it asks for: its notifications are
+    /// not served, or it declares the backchannel grant and does not keep it.
+    /// </summary>
+    private static bool BackChannelLost(bool notified, string[] declared, string[] kept)
+        => notified ||
+           (declared.Contains(GrantTypes.Ciba, StringComparer.Ordinal) &&
+            !kept.Contains(GrantTypes.Ciba, StringComparer.Ordinal));
 
     /// <summary>
     /// Why the document carries credentials a public document must not, section 4.1.
