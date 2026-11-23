@@ -126,15 +126,15 @@ internal sealed class ClientIdMetadataDocumentReader(
         // A ping or push notification is posted from the stored backchannel authentication request, where the client
         // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
         // for. The backchannel grant goes with the mode, as any grant this server does not serve such a client, and
-        // the document is refused only when nothing is left of it. A backchannel grant the document declares and loses
-        // otherwise, as one authenticating with none does, takes the delivery mode and its endpoint along too, so the
-        // client is not refused for naming a mode of a flow it no longer has
+        // the document is refused only when nothing is left of it. A client authenticating with none never holds the
+        // flow, so it loses the delivery mode and its endpoint too, whether it declares the grant or not, and is not
+        // refused for naming a mode of a flow it cannot have
         var notified = metadata.BackChannelTokenDeliveryMode is
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
             grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
-        var backChannelLost = BackChannelLost(notified, metadata.GrantTypes, grantTypes);
+        var backChannelLost = BackChannelLost(notified, authenticationMethod);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -168,13 +168,11 @@ internal sealed class ClientIdMetadataDocumentReader(
     }
 
     /// <summary>
-    /// Whether the client the document describes goes without the backchannel flow it asks for: its notifications are
-    /// not served, or it declares the backchannel grant and does not keep it.
+    /// Whether the client the document describes goes without the backchannel delivery mode it names: its
+    /// notifications are not served, or it authenticates in a way that never holds the backchannel grant.
     /// </summary>
-    private static bool BackChannelLost(bool notified, string[] declared, string[] kept)
-        => notified ||
-           (declared.Contains(GrantTypes.Ciba, StringComparer.Ordinal) &&
-            !kept.Contains(GrantTypes.Ciba, StringComparer.Ordinal));
+    private static bool BackChannelLost(bool notified, string authenticationMethod)
+        => notified || ConfidentialGrantTypes.Refuses(authenticationMethod, GrantTypes.Ciba);
 
     /// <summary>
     /// Why the document carries credentials a public document must not, section 4.1.

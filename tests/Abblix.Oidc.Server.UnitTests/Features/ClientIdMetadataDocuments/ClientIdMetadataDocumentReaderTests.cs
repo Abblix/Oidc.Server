@@ -469,44 +469,47 @@ public class ClientIdMetadataDocumentReaderTests
 
     /// <summary>
     /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at the endpoints of the flow, so a client
-    /// authenticating with none loses the backchannel grant in poll mode as well, and the mode with it, so the
-    /// registration checks the document is judged by serve it without the flow rather than refuse it; one proving
-    /// itself keeps both.
+    /// authenticating with none loses the backchannel grant in poll mode as well, and the mode with it, whether it
+    /// declares the grant or not, so the registration checks the document is judged by serve it without the flow
+    /// rather than refuse it. A client proving itself keeps the mode as written, also when the host does not serve it
+    /// the grant or it declares none: the mode may be what its pairwise sector is taken from.
     /// </summary>
     [Theory]
-    [InlineData(null, false)]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true)]
-    public async Task ADocumentPollingForBackchannelTokens_KeepsTheFlowOnlyForAClientProvingItself(
+    [InlineData(null, true, true, false, false)]
+    [InlineData(null, false, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, true, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false, true, false)]
+    public async Task ADocumentPollingForBackchannelTokens_KeepsTheModeOnlyForAClientProvingItself(
         string? authenticationMethod,
-        bool kept)
+        bool declaresGrant,
+        bool hostServesGrant,
+        bool modeKept,
+        bool grantKept)
     {
         var authentication = authenticationMethod is null
             ? string.Empty
             : $$""","token_endpoint_auth_method":"{{authenticationMethod}}","jwks_uri":"https://client.example.com/jwks" """;
+        var grantTypes = declaresGrant
+            ? $"\"authorization_code\",\"{GrantTypes.Ciba}\""
+            : "\"authorization_code\"";
+        string[] served = hostServesGrant
+            ? [GrantTypes.AuthorizationCode, GrantTypes.Ciba]
+            : [GrantTypes.AuthorizationCode];
         var metadata = Read(
             Document($$"""
-                {"grant_types":["authorization_code","{{GrantTypes.Ciba}}"],"backchannel_token_delivery_mode":"poll"{{authentication}}}
+                {"grant_types":[{{grantTypes}}],"backchannel_token_delivery_mode":"poll"{{authentication}}}
                 """),
-            CreateReader(
-                grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba],
-                documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
+            CreateReader(grantTypes: served, documentGrantTypes: served));
 
-        Assert.Equal(kept, metadata.GrantTypes.Contains(GrantTypes.Ciba));
+        Assert.Equal(grantKept, metadata.GrantTypes.Contains(GrantTypes.Ciba));
         Assert.Contains(GrantTypes.AuthorizationCode, metadata.GrantTypes);
-        Assert.Equal(kept ? BackchannelTokenDeliveryModes.Poll : null, metadata.BackChannelTokenDeliveryMode);
+        Assert.Equal(modeKept ? BackchannelTokenDeliveryModes.Poll : null, metadata.BackChannelTokenDeliveryMode);
 
         var backChannelCheck = new BackChannelAuthenticationValidator(Mock.Of<IJsonWebTokenValidator>());
         Assert.Null(await backChannelCheck.ValidateAsync(
             SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
     }
-
-    /// <summary>
-    /// A poll mode the document names without declaring the backchannel grant is left as written: it may be what the
-    /// pairwise sector is taken from, and nothing was dropped for it to go with.
-    /// </summary>
-    [Fact]
-    public void ADocumentPollingForBackchannelTokens_IsKept()
-        => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
 
     [Fact]
     public void ANamedApplicationType_IsKept()
