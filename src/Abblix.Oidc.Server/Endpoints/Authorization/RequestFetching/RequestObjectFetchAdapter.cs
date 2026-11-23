@@ -60,7 +60,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
         // or "request_uri" Request Object's (Section 2.1) "client_id"", and section 6.3 has a failed client ID check
         // answered as "specified in Section 5.2 of [RFC6749]". So the client is known before the object
-        // is read, and the object is held to its profile up front
+        // is read, and the object is held to its profile up front; a request naming no client it may be read for is
+        // refused as one naming no client, before any layer of the object is decrypted or its keys fetched
         ClientInfo? namedClient = null;
         if (request.Request is not null)
         {
@@ -71,8 +72,9 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                     $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
             }
 
-            if ((await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found))
-                namedClient = found;
+            var found = await clients.FindClientAsync(tenant, clientId);
+            if (!found.TryGetSuccess(out namedClient))
+                return ErrorFactory.AbsentClient(found.GetFailure());
         }
 
         // Whether the object may leave its client_id to the one beside it is answered by WhyRefused on the read object,

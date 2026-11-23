@@ -85,11 +85,11 @@ public partial class RequestUriFetcher(
                 $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
-        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
+        var found = await clients.FindClientAsync(tenant, clientId);
+        if (!found.TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
-            return AuthorizationErrorFactory.ValidationError(
-                ErrorCodes.UnauthorizedClient, "The client is not authorized");
+            return AuthorizationErrorFactory.AbsentClient(found.GetFailure());
         }
 
         var requestUriValidator = UriValidatorFactory.Create(true, clientInfo.RequestUris);
