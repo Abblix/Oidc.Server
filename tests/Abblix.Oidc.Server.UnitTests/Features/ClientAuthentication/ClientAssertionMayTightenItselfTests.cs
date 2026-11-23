@@ -41,7 +41,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// The subject is <see cref="ClientSecretJwtAuthenticator"/> rather than its sibling, because this is
 /// where the base class's second pass is the ONLY one: it validates through
 /// <see cref="IJsonWebTokenValidator"/> directly, while <see cref="PrivateKeyJwtAuthenticator"/> goes
-/// through the client JWT validator, which now performs the same check itself.
+/// through the client JWT validator, which now performs the same check itself. Under a tenant naming a
+/// FAPI profile the subject is <see cref="PrivateKeyJwtAuthenticator"/> with that validator a stub, since
+/// such a profile admits no algorithm a client secret signs with.
 ///
 /// Every assertion here carries the identifier and the expiry the specification demands and names the
 /// issuer as its audience, so the only thing separating acceptance from refusal is which profile the

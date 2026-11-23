@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
 
@@ -30,11 +31,8 @@ public sealed class JwtAlgorithmsProvider(
 	/// itself still supports HMAC signers - the constraint is about key availability here,
 	/// not signing capability.
 	/// </summary>
-	private static readonly string[] HmacAlgorithms =
-		[SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512];
-
 	private IEnumerable<string> ClientAddressedSigningAlgorithms
-		=> jwtCreator.SignedResponseAlgorithmsSupported.Where(alg => !HmacAlgorithms.Contains(alg));
+		=> jwtCreator.SignedResponseAlgorithmsSupported.Where(alg => !HmacAlgorithms.All.Contains(alg));
 
 	/// <inheritdoc />
 	public IEnumerable<string> SignedResponseAlgorithmsSupported => ClientAddressedSigningAlgorithms;
@@ -57,7 +55,7 @@ public sealed class JwtAlgorithmsProvider(
 	/// </summary>
 	public IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported
 		=> jwtValidator.SigningAlgorithmsSupported.Where(
-			alg => alg != SigningAlgorithms.None && !HmacAlgorithms.Contains(alg));
+			alg => alg != SigningAlgorithms.None && !HmacAlgorithms.All.Contains(alg));
 
 	/// <inheritdoc />
 	public IEnumerable<string> DpopSigningAlgorithmsSupported

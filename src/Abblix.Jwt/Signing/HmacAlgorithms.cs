@@ -12,6 +12,11 @@ namespace Abblix.Jwt.Signing;
 /// <summary>The hash each HS algorithm of RFC 7518 section 3.2 names.</summary>
 internal static class HmacAlgorithms
 {
+	/// <summary>The HS algorithms of RFC 7518 section 3.2, each keyed by a shared secret.</summary>
+	public static readonly IReadOnlySet<string> All = new HashSet<string>(
+		[SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512],
+		StringComparer.Ordinal);
+
 	/// <summary>
 	/// Computes the HMAC of <paramref name="data"/> under <paramref name="keyValue"/> with the hash
 	/// <paramref name="algorithm"/> names.

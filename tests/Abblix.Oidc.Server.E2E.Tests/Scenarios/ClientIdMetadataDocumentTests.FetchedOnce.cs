@@ -101,6 +101,32 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
+    /// A pushed request authenticated with a private_key_jwt assertion is offered to every assertion method, and a
+    /// refused document is still fetched once: client_secret_jwt refuses an assertion no client secret signs before
+    /// it looks the issuer up.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedDocument_IsFetchedOnceByAPushedRequestWithAPrivateKeyAssertion()
+    {
+        Arrange(Unavailable.NotFound);
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+        parameters[ClientRequest.Parameters.ClientAssertion] =
+            await ClientSecretJwtAssertion.IssueWithKeyAsync(ClientId, key, discovery.Issuer.OriginalString);
+
+        using var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+
+        Assert.False(response.IsSuccessStatusCode);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
     /// A pushed request is judged on the client its authentication found, so a valid document no cache holds is
     /// fetched once by the push, client authentication included.
     /// </summary>

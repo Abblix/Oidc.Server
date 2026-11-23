@@ -8,6 +8,7 @@
 
 using System.Text;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -45,17 +46,6 @@ public partial class ClientSecretJwtAuthenticator(
     : JwtAssertionAuthenticatorBase(logger, replayCache, clock, serviceProvider)
 {
     /// <summary>
-    /// The algorithms a client secret signs with, the HMAC family OpenID Connect Core section 9 names for
-    /// client_secret_jwt. Each is both admitted for the assertion and offered as a key, so an assertion signed
-    /// with any other algorithm is refused before its issuer is looked up.
-    /// </summary>
-    private static readonly string[] SecretSigningAlgorithms =
-        [SigningAlgorithms.HS512, SigningAlgorithms.HS384, SigningAlgorithms.HS256];
-
-    private static readonly IReadOnlySet<string> AdmittedSigningAlgorithms =
-        SecretSigningAlgorithms.ToHashSet(StringComparer.Ordinal);
-
-    /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
     /// This indicates that the authenticator handles client authentication using JSON Web Tokens (JWT) for
     /// the client secret, as defined in the OpenID Connect specification. It involves using JWTs as
@@ -92,7 +82,9 @@ public partial class ClientSecretJwtAuthenticator(
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
                 ClockSkew = profile.ClockSkewOrDefault(),
-                AllowedSigningAlgorithms = AdmittedSigningAlgorithms,
+                // The client secret signs with HMAC alone (OpenID Connect Core section 9), and the same list
+                // offers its keys: an assertion signed otherwise is refused before its issuer is looked up
+                AllowedSigningAlgorithms = HmacAlgorithms.All,
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });
@@ -179,7 +171,7 @@ public partial class ClientSecretJwtAuthenticator(
 
             // The JWT validator uses the key matching the JWT's alg header
             var secretBytes = Encoding.UTF8.GetBytes(clientSecret.Value);
-            foreach (var algorithm in SecretSigningAlgorithms)
+            foreach (var algorithm in HmacAlgorithms.All)
                 yield return CreateSymmetricKey(algorithm, secretBytes);
         }
     }
