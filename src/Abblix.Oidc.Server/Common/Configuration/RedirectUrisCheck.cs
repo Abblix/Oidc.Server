@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
 /// Refuses a tenant declaring a client whose redirect or post-logout redirect URI is not absolute, includes a fragment,
-/// or uses a scheme the user agent runs as script: javascript, data or vbscript.
+/// or uses a scheme the user agent runs as script: javascript, data or vbscript, and one other than a native app whose
+/// redirect URI is not https (RFC 9700 section 2.6).
 /// </summary>
 /// <remarks>
 /// RFC 6749 section 3.1.2: "The redirection endpoint URI MUST be an absolute URI as defined by [RFC3986] Section 4.3",
@@ -28,10 +29,9 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// relative may still be a script URI to a browser, whose URL parser removes a tab or a newline anywhere in it and a
 /// control character in front of it.
 /// <para>
-/// A response posted to a script URI runs in this server's origin, whichever kind of client names it. A web client the
-/// host declares is otherwise held to no scheme rule, unlike a native app (<see cref="NativeClientsCheck"/>): the host
-/// may send its own web clients wherever it trusts, so only the URIs that do not name a redirection endpoint, or that
-/// turn a redirect into script, are refused.
+/// A response posted to a script URI runs in this server's origin, whichever kind of client names it. A web client's
+/// redirect URIs are held to https besides, since an authorization response rides them, while its post-logout redirect
+/// URIs are not; a native app's URIs are <see cref="NativeClientsCheck"/>'s to judge.
 /// </para>
 /// </remarks>
 internal sealed class RedirectUrisCheck : ITenantsCheck

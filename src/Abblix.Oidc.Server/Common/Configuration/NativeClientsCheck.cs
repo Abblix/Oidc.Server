@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
 /// Refuses a tenant declaring a native app that RFC 8252, OAuth 2.0 for Native Apps, has an authorization server
-/// refuse: one redirecting to a private-use scheme without a period or to http off the loopback host, or one
-/// authenticating at the token endpoint with any credential.
+/// refuse: one redirecting to a private-use scheme without a period or to http off the loopback host, one allowed a
+/// response type carrying no code (section 8.2), or one authenticating at the token endpoint with any credential.
 /// </summary>
 /// <remarks>
 /// A native app turning PKCE off is not refused here: the authorization endpoint holds it to PKCE whatever it states
