@@ -973,6 +973,34 @@ public class AuthServiceJwtValidatorTests
     }
 
     /// <summary>
+    /// A registration access token is created under the tenant's profile, as this server alone creates and reads it,
+    /// so it is read under that profile too, whatever profile a host holds the client it manages to: signed RS256
+    /// at a tenant held to none, it is accepted for a client held to FAPI 2.0 as for one held to none.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(null)]
+    public async Task ValidateAsync_ARegistrationAccessToken_IsReadUnderTheTenantsProfile(
+        ClientSecurityProfile? ownerProfile)
+    {
+        const string ownerId = "owner";
+        var token = CreateValidToken();
+        token.Header.Type = JwtTypes.RegistrationAccessToken;
+        token.Header.Algorithm = SigningAlgorithms.RS256;
+        token.Payload.Subject = ownerId;
+        token.Payload.Audiences = [ExpectedIssuer];
+        SetupHonouringValidator(token, keyManagement: null);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// The same for each JWE layer the token came in: one encrypted with RSA1_5 is refused for an owner held to FAPI
     /// 1.0 Advanced (Part 2 section 8.6.1), though the presenter is held to no profile.
     /// </summary>

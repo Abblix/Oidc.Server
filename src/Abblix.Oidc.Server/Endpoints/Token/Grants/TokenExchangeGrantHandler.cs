@@ -383,31 +383,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         SubjectTokenContext token,
         ClientInfo clientInfo)
     {
-        // The confused-deputy check needs an origin to compare against, and an absent one is the case
-        // it cannot decide: a token whose issuing client is undeterminable may or may not belong to the
-        // presenting client, and the guard exists precisely because the difference matters. Refusing is
-        // the only reading that keeps the check meaningful - skipping on absence would let a subject_token
-        // shaped to hide its origin pass the guard that a token naming another client fails.
-        // AllowCrossClientSubjectTokenExchange remains the single opt-out: a client trusted to present
-        // tokens it was not issued is equally trusted to present one whose issuer cannot be read.
-        if (!clientInfo.AllowCrossClientSubjectTokenExchange)
-        {
-            if (token.OriginalClientId is not { Length: > 0 } originalClient)
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The client the token was issued to could not be determined.");
-            }
-
-            if (!string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal))
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The token was issued to a different client than the one presenting it.");
-            }
-        }
-
-        return null;
+        return TokenOrigin.Check(token.OriginalClientId, clientInfo);
     }
 
     /// <summary>

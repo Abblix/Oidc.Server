@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -59,6 +60,18 @@ public sealed class ConfigurationHandler(
 	public async Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant)
 	{
 		var requestObjectEncryption = await RequestObjectEncryptionAsync(tenant);
+
+		// The token, revocation and introspection endpoints authenticate their callers with this one authenticator,
+		// so each lists the methods the token endpoint does, the introspection endpoint's narrowed by the same rule
+		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
+		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
+		// enabled accepts no caller at all, so nothing is said about it.
+		var authenticationMethods = clientAuthenticator.ClientAuthenticationMethodsSupported.ToArray();
+		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported).ToArray();
+		var revocationMethods = WhereEnabled(OidcEndpoints.Revocation, authenticationMethods);
+		var introspectionMethods = WhereEnabled(
+			OidcEndpoints.Introspection,
+			IntrospectionCallers.Admitted(authenticationMethods).ToArray());
 
 		return new ConfigurationResponse
 		{
@@ -108,19 +121,22 @@ public sealed class ConfigurationHandler(
 			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
-			TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+			TokenEndpointAuthMethodsSupported = authenticationMethods,
+			RevocationEndpointAuthMethodsSupported = WhereAnyMethod(revocationMethods, revocationMethods),
+			RevocationEndpointAuthSigningAlgValuesSupported = WhereAnyMethod(revocationMethods, assertionAlgorithms),
+			IntrospectionEndpointAuthMethodsSupported = WhereAnyMethod(introspectionMethods, introspectionMethods),
+			IntrospectionEndpointAuthSigningAlgValuesSupported = WhereAnyMethod(introspectionMethods, assertionAlgorithms),
 
 			// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
 			// authentication method is available - the server then both issues bound tokens and
 			// enforces the binding at its protected resources (MtlsUserInfoValidator).
-			TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
+			TlsClientCertificateBoundAccessTokens = authenticationMethods.Any(
 				method => method is ClientAuthenticationMethods.TlsClientAuth
 					or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
 				? true
 				: null,
 
-			TokenEndpointAuthSigningAlgValuesSupported =
-				Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
+			TokenEndpointAuthSigningAlgValuesSupported = assertionAlgorithms,
 			IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
@@ -149,6 +165,20 @@ public sealed class ConfigurationHandler(
 			ClientIdMetadataDocumentSupported = options.Value.ClientIdMetadataDocuments.Enabled ? true : null,
 		};
 	}
+
+	/// <summary>
+	/// <paramref name="values"/> describing how an endpoint authenticates its callers, or null where it admits a caller
+	/// by none of the methods the server has: OpenID Connect Discovery 1.0 section 4.2, "Claims with zero elements
+	/// MUST be omitted from the response".
+	/// </summary>
+	private static string[]? WhereAnyMethod(string[] methods, string[] values)
+		=> methods.Length > 0 ? values : null;
+
+	/// <summary>
+	/// <paramref name="methods"/> where <paramref name="endpoint"/> is enabled, otherwise none.
+	/// </summary>
+	private string[] WhereEnabled(OidcEndpoints endpoint, string[] methods)
+		=> options.Value.EnabledEndpoints.HasFlag(endpoint) ? methods : [];
 
 	/// <summary>
 	/// The key management algorithms a client can encrypt a request object to <paramref name="tenant"/> under: those

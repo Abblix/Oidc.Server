@@ -205,16 +205,6 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
-    private static async Task<HttpResponseMessage> RefreshAsync(
-        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-
     /// <summary>
     /// Refreshes with <paramref name="refreshToken"/>, asserts the rotation succeeded, and returns the newly
     /// issued refresh token - the next member of the same grant family.

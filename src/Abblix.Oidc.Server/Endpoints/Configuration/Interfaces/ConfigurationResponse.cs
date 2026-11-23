@@ -106,6 +106,30 @@ public record ConfigurationResponse
 	public IEnumerable<string>? TokenEndpointAuthSigningAlgValuesSupported { get; init; }
 
 	/// <summary>
+	/// Lists the client authentication methods the revocation endpoint accepts.
+	/// OPTIONAL per RFC 8414 section 2, which defines the omitted case as client_secret_basic.
+	/// </summary>
+	public IEnumerable<string>? RevocationEndpointAuthMethodsSupported { get; init; }
+
+	/// <summary>
+	/// Lists the signing algorithms supported for authenticating clients at the revocation endpoint, which RFC 8414
+	/// section 2 requires once a JWT-based method is listed for it.
+	/// </summary>
+	public IEnumerable<string>? RevocationEndpointAuthSigningAlgValuesSupported { get; init; }
+
+	/// <summary>
+	/// Lists the client authentication methods the introspection endpoint accepts.
+	/// OPTIONAL per RFC 8414 section 2, which leaves the omitted case to be "determined by other means".
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEndpointAuthMethodsSupported { get; init; }
+
+	/// <summary>
+	/// Lists the signing algorithms supported for authenticating clients at the introspection endpoint, which RFC
+	/// 8414 section 2 requires once a JWT-based method is listed for it.
+	/// </summary>
+	public IEnumerable<string>? IntrospectionEndpointAuthSigningAlgValuesSupported { get; init; }
+
+	/// <summary>
 	/// Lists the ID token signing algorithm values supported by the OpenID Provider.
 	/// REQUIRED by OpenID Connect Discovery 1.0 section 3.
 	/// </summary>

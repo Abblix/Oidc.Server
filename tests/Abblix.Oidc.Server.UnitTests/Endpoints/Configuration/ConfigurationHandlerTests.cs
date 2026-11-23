@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -146,6 +147,61 @@ public class ConfigurationHandlerTests
         Assert.Equal(encryption, document.RequestObjectEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.AuthorizationEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.IntrospectionEncryptionAlgValuesSupported);
+    }
+
+    /// <summary>
+    /// The revocation and introspection endpoints authenticate with the authenticator the token endpoint does, so
+    /// each publishes its methods from it: the revocation endpoint every one, the introspection endpoint those it
+    /// admits a caller by, and each the assertion algorithms beside them, which RFC 8414 section 2 requires once a
+    /// JWT-based method is listed. An endpoint that is not enabled has nothing published about it.
+    /// </summary>
+    [Theory]
+    [InlineData(OidcEndpoints.Revocation | OidcEndpoints.Introspection)]
+    [InlineData(OidcEndpoints.Revocation)]
+    [InlineData(OidcEndpoints.Introspection)]
+    public async Task TheDocument_ListsTheMethodsTheRevocationAndIntrospectionEndpointsAccept(OidcEndpoints enabled)
+    {
+        string[] methods =
+        [
+            ClientAuthenticationMethods.None,
+            ClientAuthenticationMethods.ClientSecretBasic,
+            ClientAuthenticationMethods.ClientSecretPost,
+            ClientAuthenticationMethods.PrivateKeyJwt,
+        ];
+        string[] signing = [SigningAlgorithms.RS256, SigningAlgorithms.PS256];
+        var algorithms = new Mock<IJwtAlgorithmsProvider>();
+        algorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns(signing);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions { EnabledEndpoints = OidcEndpoints.Base | enabled });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(methods);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            algorithms.Object,
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(SingleIssuer.Tenant);
+
+        var revocation = enabled.HasFlag(OidcEndpoints.Revocation);
+        Assert.Equal(revocation ? methods : null, document.RevocationEndpointAuthMethodsSupported);
+        Assert.Equal(revocation ? signing : null, document.RevocationEndpointAuthSigningAlgValuesSupported);
+
+        // Tied to the rule the introspection endpoint refuses a caller by, so the two cannot drift apart
+        var introspection = enabled.HasFlag(OidcEndpoints.Introspection);
+        Assert.Equal(
+            introspection ? methods.Where(IntrospectionCallers.Admit) : null,
+            document.IntrospectionEndpointAuthMethodsSupported);
+        Assert.Equal(introspection ? signing : null, document.IntrospectionEndpointAuthSigningAlgValuesSupported);
+        Assert.DoesNotContain(ClientAuthenticationMethods.None, document.IntrospectionEndpointAuthMethodsSupported ?? []);
     }
 
     /// <summary>

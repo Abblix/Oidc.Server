@@ -58,37 +58,6 @@ public class SignedUserInfoTests(TestFactory factory) : TestBase(factory)
             registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>());
     }
 
-    /// <summary>Runs the auth-code flow for the given client and returns its access token.</summary>
-    private static async Task<string> ObtainAccessTokenAsync(
-        HttpClient client, DiscoveryDocument discovery, string clientId, string clientSecret)
-    {
-        var (verifier, challenge) = GeneratePkcePair();
-
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-
-        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = code,
-            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [ClientRequest.Parameters.ClientId] = clientId,
-            [ClientRequest.Parameters.ClientSecret] = clientSecret,
-        });
-
-        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
-    }
-
     private static async Task<HttpResponseMessage> CallUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {

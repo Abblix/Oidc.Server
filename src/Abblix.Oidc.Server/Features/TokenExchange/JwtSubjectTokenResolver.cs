@@ -112,9 +112,9 @@ public sealed class JwtSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The token is missing the required 'sub' claim.");
         }
 
-        // The client the subject_token names (client_id, else azp, else the sole audience): used both to open
-        // pairwise identifiers back to the real parties and as the confused-deputy origin below.
-        var originalClientId = jwt.Payload.NamedClientId();
+        // The client the subject_token belongs to: used both to open pairwise identifiers back to the real parties and
+        // as the confused-deputy origin below.
+        var originalClientId = jwt.OwnerOf();
 
         var opened = await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId);
         if (opened.TryGetFailure(out var openError))

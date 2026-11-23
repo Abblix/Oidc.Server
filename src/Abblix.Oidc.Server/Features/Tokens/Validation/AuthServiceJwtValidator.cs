@@ -39,7 +39,7 @@ public class AuthServiceJwtValidator(
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
 	IOptions<OidcOptions> oidcOptions,
-	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator
+	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator, IAuthServiceJwtReader
 {
 
 	/// <summary>
@@ -59,6 +59,21 @@ public class AuthServiceJwtValidator(
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
+	{
+		var authentic = await ReadAuthenticAsync(tenant, client, jwt, tokenTypes, options);
+		if (!authentic.TryGetSuccess(out var token))
+			return authentic;
+
+		return await ReadRecordsAsync(tenant, token, options);
+	}
+
+	/// <inheritdoc/>
+	public async Task<Result<JsonWebToken, JwtValidationError>> ReadAuthenticAsync(
+		TenantDefinition tenant,
+		ClientInfo? client,
+		string jwt,
+		TokenTypePolicy tokenTypes,
+		ValidationOptions options)
 	{
 		// The profile of the client presenting the token where it is known, else the tenant's, so a token this server
 		// signed or encrypted otherwise before that profile was in force is refused. Each JWE layer is recorded for
@@ -108,8 +123,15 @@ public class AuthServiceJwtValidator(
 			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
 
-		return await statusCheck.CheckAsync(tenant, token, options);
+		return token;
 	}
+
+	/// <inheritdoc/>
+	public Task<Result<JsonWebToken, JwtValidationError>> ReadRecordsAsync(
+		TenantDefinition tenant,
+		JsonWebToken token,
+		ValidationOptions options)
+		=> statusCheck.CheckAsync(tenant, token, options);
 
 	/// <summary>
 	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
@@ -121,8 +143,13 @@ public class AuthServiceJwtValidator(
 	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
 	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
 	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
-	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
-	/// token's azp or sole audience.
+	/// processing JWTs". The owner is the one <see cref="TokenOwnership.OwnerOf"/> names.
+	/// <para>
+	/// A registration access token is the exception: this server alone creates and reads it, and creates it under the
+	/// tenant's profile (<see cref="Endpoints.DynamicClientManagement.RegistrationAccessTokenService"/>), which is
+	/// what it is read under here as well. Holding it to the profile a host raised the managed client to would refuse
+	/// every token the client was issued for its own registration.
+	/// </para>
 	/// </remarks>
 	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
@@ -130,8 +157,12 @@ public class AuthServiceJwtValidator(
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
+		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RegistrationAccessToken) ||
+		    token.OwnerOf() is not { } ownerId ||
+		    ownerId == presenter?.ClientId)
+		{
 			return null;
+		}
 
 		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
 			return null;

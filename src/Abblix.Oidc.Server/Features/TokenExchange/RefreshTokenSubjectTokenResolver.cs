@@ -37,14 +37,15 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// to refresh-token rotation, so a token already redeemed will reject here exactly as it would
 /// in the refresh_token grant.
 /// </remarks>
-/// <param name="jwtValidator">Validates the refresh-token JWT's signature and lifetime.</param>
+/// <param name="jwtValidator">Reads the refresh token: first that it is authentic, then, once the requesting client
+/// is found entitled to present it, what is recorded about it.</param>
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
 /// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
 /// pairwise subject back to the real subject.</param>
 /// <param name="cutoffChecker">Asks whether a revocation refuses the session the refresh token continues, as the
 /// refresh grant asks.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
-    IAuthServiceJwtValidator jwtValidator,
+    IAuthServiceJwtReader jwtValidator,
     IRefreshTokenService refreshTokenService,
     IClientInfoProvider clientInfoProvider,
     IRevocationCutoffChecker cutoffChecker) : ISubjectTokenResolver
@@ -59,22 +60,13 @@ public sealed class RefreshTokenSubjectTokenResolver(
     {
         // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
         // need not name this server
-        var validation = await jwtValidator.ValidateAsync(
-            tenant,
-            client,
-            subjectToken,
-            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
-            ServiceTokenValidation.AnyAudience);
+        var validation = await ReadAsync(tenant, client, subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The token is invalid or has expired.");
-        }
+            return validation.GetFailure();
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
         // subject is opened against that client's sector.
-        var originalClientId = jwt.Payload.ClientId;
+        var originalClientId = jwt.OwnerOf();
         var originalClient = originalClientId is null
             ? null
             : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
@@ -123,10 +115,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             Act = act,
 
-            // Origin tracking from the recovered grant -- the refresh_token's storage record
-            // names the client it was issued to. Mismatch with the requesting client triggers
-            // the handler's cross-client guard.
-            OriginalClientId = grant.Context.ClientId,
+            // The client the token belongs to, which the handler's cross-client guard judges as it does here
+            OriginalClientId = originalClientId,
 
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
@@ -137,4 +127,37 @@ public sealed class RefreshTokenSubjectTokenResolver(
             AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
         };
     }
+
+    /// <summary>
+    /// <paramref name="subjectToken"/> as a refresh token this server issued and still honors, which
+    /// <paramref name="client"/> may present.
+    /// </summary>
+    private async Task<Result<JsonWebToken, OidcError>> ReadAsync(
+        TenantDefinition tenant,
+        ClientInfo client,
+        string subjectToken)
+    {
+        var authentic = await jwtValidator.ReadAuthenticAsync(
+            tenant,
+            client,
+            subjectToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            ServiceTokenValidation.AnyAudience);
+        if (!authentic.TryGetSuccess(out var token))
+            return InvalidToken;
+
+        // The handler's cross-client guard, decided here before the token's records are read, because reading them
+        // revokes the grant of a superseded refresh token, which a client holding another client's token would
+        // otherwise do to it from here
+        if (TokenOrigin.Check(token.OwnerOf(), client) is { } refusal)
+            return refusal;
+
+        var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
+        return recorded.TryGetSuccess(out var valid) ? valid : InvalidToken;
+    }
+
+    /// <summary>
+    /// The answer to a token that is not a refresh token this server issued and still honors.
+    /// </summary>
+    private static OidcError InvalidToken => new(ErrorCodes.InvalidRequest, "The token is invalid or has expired.");
 }

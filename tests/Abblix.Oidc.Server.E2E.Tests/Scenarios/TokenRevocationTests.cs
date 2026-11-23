@@ -102,24 +102,56 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(discovery.RevocationEndpoint);
     }
 
-    private static async Task<HttpResponseMessage> RevokeAsync(
-        HttpClient client, DiscoveryDocument discovery, string token) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
-        {
-            [RevocationRequest.Parameters.Token] = token,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
+    /// <summary>
+    /// RFC 8414 section 2 reads an omitted <c>revocation_endpoint_auth_methods_supported</c> as client_secret_basic
+    /// alone, which would tell a public client it cannot revoke its tokens. The endpoint authenticates as the token
+    /// endpoint does, so it publishes the same methods, and the assertion algorithms the section requires beside a
+    /// JWT-based one.
+    /// </summary>
+    [Fact]
+    public async Task Discovery_names_the_methods_the_revocation_endpoint_accepts()
+    {
+        var document = await FetchDiscoveryJsonAsync(CreateClient());
 
-    private static async Task<HttpResponseMessage> RefreshAsync(
-        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
+        var tokenMethods = Strings(document, ConfigurationResponse.Parameters.TokenEndpointAuthMethodsSupported);
+        var revocationMethods = Strings(document, ConfigurationResponse.Parameters.RevocationEndpointAuthMethodsSupported);
+        Assert.Equal(tokenMethods, revocationMethods);
+        Assert.Contains(ClientAuthenticationMethods.None, revocationMethods);
+        Assert.Equal(
+            Strings(document, ConfigurationResponse.Parameters.TokenEndpointAuthSigningAlgValuesSupported),
+            Strings(document, ConfigurationResponse.Parameters.RevocationEndpointAuthSigningAlgValuesSupported));
+    }
+
+    /// <summary>
+    /// The introspection endpoint refuses a client authenticating with none, so it publishes every method of the
+    /// token endpoint but that one.
+    /// </summary>
+    [Fact]
+    public async Task Discovery_names_the_methods_the_introspection_endpoint_accepts()
+    {
+        var document = await FetchDiscoveryJsonAsync(CreateClient());
+
+        var tokenMethods = Strings(document, ConfigurationResponse.Parameters.TokenEndpointAuthMethodsSupported);
+        Assert.Equal(
+            tokenMethods.Where(method => method != ClientAuthenticationMethods.None),
+            Strings(document, ConfigurationResponse.Parameters.IntrospectionEndpointAuthMethodsSupported));
+        Assert.Equal(
+            Strings(document, ConfigurationResponse.Parameters.TokenEndpointAuthSigningAlgValuesSupported),
+            Strings(document, ConfigurationResponse.Parameters.IntrospectionEndpointAuthSigningAlgValuesSupported));
+    }
+
+    private static async Task<JsonObject> FetchDiscoveryJsonAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await ReadJsonAsync(response);
+    }
+
+    private static string[] Strings(JsonObject document, string member)
+    {
+        Assert.True(document.ContainsKey(member), $"Discovery does not publish {member}.");
+        return document[member]!.AsArray().Select(value => value!.GetValue<string>()).ToArray();
+    }
 
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
