@@ -66,7 +66,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
         // subject is opened against that client's sector.
-        var originalClientId = jwt.Payload.ClientId;
+        var originalClientId = jwt.OwnerOf();
         var originalClient = originalClientId is null
             ? null
             : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
@@ -115,10 +115,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             Act = act,
 
-            // Origin tracking from the recovered grant -- the refresh_token's storage record
-            // names the client it was issued to. Mismatch with the requesting client triggers
-            // the handler's cross-client guard.
-            OriginalClientId = grant.Context.ClientId,
+            // The client the token belongs to, which the handler's cross-client guard judges as it does here
+            OriginalClientId = originalClientId,
 
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
@@ -148,15 +146,11 @@ public sealed class RefreshTokenSubjectTokenResolver(
         if (!authentic.TryGetSuccess(out var token))
             return InvalidToken;
 
-        // Decided before the token's records are read, because reading them revokes the grant of a superseded refresh
-        // token, which a client holding another client's token would otherwise do to it from here. A client trusted to
-        // present tokens it was not issued is trusted with that too, as at the handler's own origin check.
-        if (!client.AllowCrossClientSubjectTokenExchange && !token.BelongsTo(client.ClientId))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The token was issued to a different client than the one presenting it.");
-        }
+        // The handler's cross-client guard, decided here before the token's records are read, because reading them
+        // revokes the grant of a superseded refresh token, which a client holding another client's token would
+        // otherwise do to it from here
+        if (TokenOrigin.Check(token.OwnerOf(), client) is { } refusal)
+            return refusal;
 
         var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
         return recorded.TryGetSuccess(out var valid) ? valid : InvalidToken;

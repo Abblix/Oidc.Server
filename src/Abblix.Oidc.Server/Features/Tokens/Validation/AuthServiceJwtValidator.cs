@@ -143,8 +143,7 @@ public class AuthServiceJwtValidator(
 	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
 	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
 	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
-	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
-	/// token's azp or sole audience.
+	/// processing JWTs". The owner is the one <see cref="TokenOwnership.OwnerOf"/> names.
 	/// </remarks>
 	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
@@ -152,7 +151,7 @@ public class AuthServiceJwtValidator(
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
+		if (token.OwnerOf() is not { } ownerId || ownerId == presenter?.ClientId)
 			return null;
 
 		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)

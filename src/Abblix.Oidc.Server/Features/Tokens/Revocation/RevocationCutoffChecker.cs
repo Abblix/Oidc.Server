@@ -194,6 +194,9 @@ public partial class RevocationCutoffChecker(
     /// </remarks>
     private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(TenantDefinition tenant, JsonWebTokenPayload payload)
     {
+        // The client whose sector sealed the subject, which the payload names, rather than the client the token belongs
+        // to: a registration access token belongs to the client its subject names, and that subject is a client
+        // identifier no sector sealed
         if (payload.Subject is not { Length: > 0 } subject || payload.NamedClientId() is not { Length: > 0 } clientId)
             return (true, payload.Subject);
 
