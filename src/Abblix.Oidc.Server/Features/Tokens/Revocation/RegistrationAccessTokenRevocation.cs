@@ -19,11 +19,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </summary>
 /// <remarks>
 /// A token may carry no expiry: RFC 7592 section 5 has it not expire "while a client is still actively registered",
-/// and one this server issues on an update carries none. What it reaches is already decided by its registration, which holds the identifier of the one token managing it
-/// and refuses every other, and loses it when the client is deleted. So the revocation is recorded there, by binding
-/// the registration to an identifier no token carries: it lasts exactly as long as the client, and no record of it
-/// outlives the client. A revoked token leaves the client without a token for its registration, which RFC 7592
-/// appendix A.1 warns of; the client asked for it.
+/// and one this server issues on a read or an update carries none. What it reaches is already decided by its
+/// registration, which holds the identifier of the one token managing it and refuses every other, and loses it when
+/// the client is deleted. So the revocation is recorded there, by binding the registration to an identifier no token
+/// carries: it lasts exactly as long as the client, and no record of it outlives the client. A revoked token
+/// leaves the client without a token for its registration, which RFC 7592 appendix A.1 warns of; the client asked for
+/// it.
 /// </remarks>
 /// <param name="clientInfoManager">Holds each registration with the identifier of the token managing it.</param>
 /// <param name="tokenIdGenerator">Generates the identifier no token carries.</param>
