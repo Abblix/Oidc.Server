@@ -1107,7 +1107,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          token: ${{ secrets.RELEASE_UPDATE_GETTING_STARTED_TOKEN }}
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -1122,7 +1122,7 @@ jobs:
         timeout-minutes: 3
       - name: Open a pull request with a signed commit
         env:
-          GH_TOKEN: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_UPDATE_GETTING_STARTED_TOKEN }}
         run: |
           REPO="Abblix/Oidc.Server.GettingStarted"
           BRANCH="chore/bump-abblix-v$VERSION"
