@@ -24,6 +24,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <item>An addition, change or removal names the registration it is about, and takes effect only while the store
 /// still allows it: an addition only where no client is known under the id, a change or removal only while the store
 /// holds the token identifier of the registration it was decided on. It answers whether it took effect.</item>
+/// <item>Every change to a registration, a host's own included, is made through TryUpdateClientAsync with the
+/// registration it was decided on: rotating or revoking its token compares the token identifier alone, so a write
+/// made around it is lost or undoes theirs.</item>
 /// <item>Every call names the tenant it is made for, and a registration made at one tenant is never found, changed
 /// or removed at another.</item>
 /// </list>

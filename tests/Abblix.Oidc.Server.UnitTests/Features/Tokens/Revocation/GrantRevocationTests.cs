@@ -118,7 +118,11 @@ public class GrantRevocationTests
         _service = new RefreshTokenService(
             _clock, ids.Object, formatter.Object, _registry, grants, new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options, SingleIssuer.LicensedCatalog);
-        _processor = new RevocationRequestProcessor(_registry, grants, _clock);
+        _processor = new RevocationRequestProcessor(
+            _registry,
+            grants,
+            new RegistrationAccessTokenRevocation(Mock.Of<IClientInfoManager>(MockBehavior.Strict), Mock.Of<ITokenIdGenerator>()),
+            _clock);
 
         var cutoff = new Mock<IRevocationCutoffChecker>();
         cutoff.Setup(checker => checker.CheckAsync(TestTenant.Matched, It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
