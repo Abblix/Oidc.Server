@@ -46,16 +46,16 @@ public class RevocationRequestProcessor(
 	{
 		var payload = request.Token?.Payload;
 
-		// A registration access token is revoked where its registration decides which token manages it, which holds
-		// for as long as the client does: the token has no expiry a record in the registry could end with
+		if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
+			await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+
+		// A registration access token is revoked at its registration as well, which decides which token manages it
+		// for as long as the client exists: one issued without an expiry has no end a record in the registry could
+		// take, and the client configuration endpoint reads the registration
 		if (request.Token is { } registrationAccessToken &&
 		    JwtTypeName.Matches(registrationAccessToken.Header.Type, JwtTypes.RegistrationAccessToken))
 		{
 			await registrationAccessTokenRevocation.RevokeAsync(tenant, registrationAccessToken);
-		}
-		else if (payload is { JwtId: {} jwtId, ExpiresAt: {} expiresAt })
-		{
-			await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 		}
 
 		// RFC 7009 section 2.1: "If the particular token is a refresh token and the authorization server supports the

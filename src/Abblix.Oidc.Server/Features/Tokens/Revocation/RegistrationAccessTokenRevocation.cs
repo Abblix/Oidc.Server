@@ -18,8 +18,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// Revokes a registration access token (RFC 7592), so the client configuration endpoint refuses it from then on.
 /// </summary>
 /// <remarks>
-/// The token carries no expiry: RFC 7592 section 5 has it not expire "while a client is still actively registered".
-/// What it reaches is already decided by its registration, which holds the identifier of the one token managing it
+/// A token may carry no expiry: RFC 7592 section 5 has it not expire "while a client is still actively registered",
+/// and one this server issues on an update carries none. What it reaches is already decided by its registration, which holds the identifier of the one token managing it
 /// and refuses every other, and loses it when the client is deleted. So the revocation is recorded there, by binding
 /// the registration to an identifier no token carries: it lasts exactly as long as the client, and no record of it
 /// outlives the client. A revoked token leaves the client without a token for its registration, which RFC 7592
