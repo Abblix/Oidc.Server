@@ -33,11 +33,16 @@ namespace Abblix.Oidc.Server.UnitTests.Model;
 public class RegisteredClientMetadataTests
 {
     /// <summary>
-    /// The two request members that are not client metadata: the identifier the server assigns, and a software
-    /// statement the server reads and does not keep, which the registration response returns from the request.
+    /// The request members that are not client metadata: the identifier the server assigns, a software statement the
+    /// server reads and does not keep, which the registration response returns from the request, and the secret an
+    /// update carries back, which the server issued and the response returns beside the metadata.
     /// </summary>
     private static readonly string[] NotMetadata =
-        [ClientRegistrationRequest.Parameters.ClientId, ClientRegistrationRequest.Parameters.SoftwareStatement];
+    [
+        ClientRegistrationRequest.Parameters.ClientId,
+        ClientRegistrationRequest.Parameters.SoftwareStatement,
+        ClientRegistrationRequest.Parameters.ClientSecret,
+    ];
 
     /// <summary>
     /// Every member the registration request accepts comes back under the same name, so a member added to the

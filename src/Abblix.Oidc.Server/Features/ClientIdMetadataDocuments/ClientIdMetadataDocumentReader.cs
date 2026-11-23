@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
@@ -125,12 +126,15 @@ internal sealed class ClientIdMetadataDocumentReader(
         // A ping or push notification is posted from the stored backchannel authentication request, where the client
         // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
         // for. The backchannel grant goes with the mode, as any grant this server does not serve such a client, and
-        // the document is refused only when nothing is left of it
+        // the document is refused only when nothing is left of it. A client authenticating with none never holds the
+        // flow, so it loses the delivery mode and its endpoint too, whether it declares the grant or not, and is not
+        // refused for naming a mode of a flow it cannot have
         var notified = metadata.BackChannelTokenDeliveryMode is
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
-            grantTypes = Array.FindAll(grantTypes, grantType => grantType != GrantTypes.Ciba);
+            grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
+        var backChannelLost = BackChannelLost(notified, authenticationMethod);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -155,13 +159,20 @@ internal sealed class ClientIdMetadataDocumentReader(
             PkceRequired = true,
             GrantTypes = grantTypes,
             ResponseTypes = responseTypes,
-            BackChannelTokenDeliveryMode = notified ? null : metadata.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = notified ? null : metadata.BackChannelClientNotificationEndpoint,
+            BackChannelTokenDeliveryMode = backChannelLost ? null : metadata.BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = backChannelLost ? null : metadata.BackChannelClientNotificationEndpoint,
             ApplicationType = document.ContainsKey(Parameters.ApplicationType)
                 ? metadata.ApplicationType
                 : ApplicationTypeOf(metadata.RedirectUris),
         };
     }
+
+    /// <summary>
+    /// Whether the client the document describes goes without the backchannel delivery mode it names: its
+    /// notifications are not served, or it authenticates in a way that never holds the backchannel grant.
+    /// </summary>
+    private static bool BackChannelLost(bool notified, string authenticationMethod)
+        => notified || ConfidentialGrantTypes.Refuses(authenticationMethod, GrantTypes.Ciba);
 
     /// <summary>
     /// Why the document carries credentials a public document must not, section 4.1.
@@ -257,12 +268,6 @@ internal sealed class ClientIdMetadataDocumentReader(
     private static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
-    /// The grant types that issue tokens on the client's word alone, which a client proving nothing never gets.
-    /// </summary>
-    private static readonly string[] ConfidentialGrantTypes =
-        [GrantTypes.ClientCredentials, GrantTypes.Password, GrantTypes.JwtBearer];
-
-    /// <summary>
     /// The grant types of <paramref name="declared"/> this server supports and the host allows a document client.
     /// </summary>
     /// <remarks>
@@ -270,7 +275,8 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// a document is filtered: section 6 has the server keep "the intersection of what the Client ID Metadata Document
     /// declares and what the Authorization Servers supports", and what the host allows is what it supports for such a
     /// client, so one document can serve servers allowing different grant types. A client authenticating with
-    /// <c>none</c> loses the grants RFC 6749 section 4.4 keeps for confidential clients, whatever the host allows.
+    /// <c>none</c> loses the grants <see cref="ConfidentialGrantTypes"/> keeps for a client that authenticates itself,
+    /// whatever the host allows.
     /// </remarks>
     private string[] SupportedGrantTypes(string[] declared, string authenticationMethod)
     {
@@ -284,8 +290,7 @@ internal sealed class ClientIdMetadataDocumentReader(
         if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
             supported.IntersectWith(allowed);
 
-        if (authenticationMethod == ClientAuthenticationMethods.None)
-            supported.ExceptWith(ConfidentialGrantTypes);
+        supported.ExceptWith(ConfidentialGrantTypes.RefusedTo(authenticationMethod, supported));
 
         return declared.Where(grantType => grantType is not null && supported.Contains(grantType))
             .Distinct(StringComparer.Ordinal)

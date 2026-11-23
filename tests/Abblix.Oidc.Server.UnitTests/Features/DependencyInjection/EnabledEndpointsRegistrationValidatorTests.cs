@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Security.Cryptography;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features;
@@ -65,6 +67,10 @@ public class EnabledEndpointsRegistrationValidatorTests
                 {
                     Id = TestIssuer.TenantId,
                     Issuer = TestConstants.DefaultIssuer,
+                    ClientSecretEncryption = new ClientSecretEncryptionSettings
+                    {
+                        Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                    },
                     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
                 });
                 o.DeviceAuthorization = new DeviceAuthorizationOptions

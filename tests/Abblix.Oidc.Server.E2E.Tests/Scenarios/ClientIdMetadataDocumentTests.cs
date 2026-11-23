@@ -507,6 +507,29 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at the endpoints of the flow, so a public
+    /// client declaring the backchannel grant in poll mode loses the grant and the mode with it, and still resolves:
+    /// the registration checks would refuse a client authenticating with none that kept the mode.
+    /// </summary>
+    [Fact]
+    public async Task APublicDocumentPollingForBackchannelTokens_ResolvesWithoutTheFlow()
+    {
+        var document = PublicClientDocument();
+        document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.Ciba);
+        document[RegistrationMembers.BackChannelTokenDeliveryMode] = "poll";
+        Serve(document);
+
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(ClientId, challenge));
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, CodeExchange(code, verifier));
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
     /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
     /// strings it generates do not start with https://", so a registrant cannot take a document's URL.
     /// </summary>

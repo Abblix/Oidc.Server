@@ -157,6 +157,28 @@ public class AuthorizationGrantValidatorTests
     }
 
     /// <summary>
+    /// RFC 6749 section 4.4.2: for the client credentials grant "The client MUST authenticate", so a client the host's
+    /// store serves with the method none and a confidential grant among its own is refused it with
+    /// unauthorized_client before the grant's handler is reached.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    [InlineData(GrantTypes.Ciba)]
+    public async Task APublicClient_IsRefusedAGrantKeptForConfidentialClients(string grantType)
+    {
+        var context = CreateContext(grantType);
+        context.ClientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.None;
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        _grantHandler.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// Verifies error propagation from grant handler.
     /// Grant handler errors should be returned as-is.
     /// </summary>

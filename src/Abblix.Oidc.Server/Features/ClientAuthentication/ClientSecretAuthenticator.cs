@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using CryptographicOperations = System.Security.Cryptography.CryptographicOperations;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -30,6 +29,8 @@ public abstract partial class ClientSecretAuthenticator(
 	TimeProvider clock,
 	IHashService hashService)
 {
+	private readonly ClientSecretMatcher _matcher = new(hashService);
+
 	/// <summary>
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
 	/// against stored values, considering the authentication method and secret expiration.
@@ -89,15 +90,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// </returns>
 	private bool TryValidateClientSecret(ClientInfo client, [Credential] string secret)
 	{
-		// We store only client secret hashes, so we have to hash the raw secret to compare. And we do it lazy.
-		var matchingSha512Secrets = FindMatchingSecrets(
-			client, clientSecret => clientSecret.Sha512Hash, HashAlgorithm.Sha512, secret);
-
-		var matchingSha256Secrets = FindMatchingSecrets(
-			client, clientSecret => clientSecret.Sha256Hash, HashAlgorithm.Sha256, secret);
-
-		var matchingSecret = matchingSha512Secrets.Concat(matchingSha256Secrets)
-			.MaxBy(item => item.ExpiresAt);
+		var matchingSecret = _matcher.FindMatching(client, secret).MaxBy(item => item.ExpiresAt);
 
 		if (matchingSecret == null)
 		{
@@ -113,40 +106,5 @@ public abstract partial class ClientSecretAuthenticator(
 
 		LogAuthenticated(client.ClientId);
 		return true;
-	}
-
-	/// <summary>
-	/// Identifies stored secrets that match a provided secret value for a client. It hashes the provided
-	/// secret using the specified algorithm and compares it against stored hashes.
-	/// </summary>
-	/// <param name="client">Client owning the secrets.</param>
-	/// <param name="hashSelector">Function selecting the hash from a client secret.</param>
-	/// <param name="hashAlgorithm">Algorithm used for hashing the provided secret.</param>
-	/// <param name="secretValue">Secret value to hash and compare.</param>
-	/// <returns>
-	/// Enumerable of matching client secrets.
-	/// </returns>
-	private IEnumerable<ClientSecret> FindMatchingSecrets(
-		ClientInfo client,
-		Func<ClientSecret, byte[]?> hashSelector,
-		HashAlgorithm hashAlgorithm,
-		[Credential] string secretValue)
-	{
-		var validSecretHashes =
-			from clientSecret in client.ClientSecrets
-			let secretHash = hashSelector(clientSecret)
-			where secretHash != null
-			select (clientSecret, secretHash);
-
-		byte[]? hash = null;
-		foreach (var (clientSecret, validSecretHash) in validSecretHashes)
-		{
-			hash ??= hashService.Sha(hashAlgorithm, secretValue);
-
-			// Constant-time compare of the secret hashes (both are fixed-length digests of the
-			// same algorithm) so the token endpoint does not leak a timing oracle on the hash.
-			if (CryptographicOperations.FixedTimeEquals(validSecretHash, hash))
-				yield return clientSecret;
-		}
 	}
 }

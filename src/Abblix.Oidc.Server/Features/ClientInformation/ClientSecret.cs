@@ -114,6 +114,18 @@ public record ClientSecret
 	public string? Value { get; init; }
 
 	/// <summary>
+	/// The secret encrypted for the client it was issued to, by the client secret encryption key of its tenant
+	/// (<see cref="MultiTenancy.TenantDefinition.ClientSecretEncryption"/>), so the client configuration endpoint can
+	/// return it when the client reads its registration (RFC 7592 section 3). Null for a secret issued before the tenant
+	/// had such a key, and for one the host declares; a read then answers without the secret.
+	/// </summary>
+	/// <remarks>
+	/// Never used to authenticate the client, which is verified against the hashes alone. Without the key it was
+	/// encrypted with it opens to nothing.
+	/// </remarks>
+	public byte[]? EncryptedValue { get; init; }
+
+	/// <summary>
 	/// The expiration date and time for the client secret. Secrets past this date are considered
 	/// invalid and cannot be used for authentication.
 	/// </summary>
@@ -135,6 +147,7 @@ public record ClientSecret
 		builder.Append("Sha256Hash = ").Append(Sha256Hash is null ? "none" : "set");
 		builder.Append(", Sha512Hash = ").Append(Sha512Hash is null ? "none" : "set");
 		builder.Append(", Value = ").Append(Value is null ? "none" : "set");
+		builder.Append(", EncryptedValue = ").Append(EncryptedValue is null ? "none" : "set");
 		builder.Append(", ExpiresAt = ").Append(ExpiresAt);
 		return true;
 	}

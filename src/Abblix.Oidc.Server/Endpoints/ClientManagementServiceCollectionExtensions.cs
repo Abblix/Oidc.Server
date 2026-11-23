@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -41,6 +42,7 @@ internal static class ClientManagementServiceCollectionExtensions
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
         services.TryAddSingleton<IInitialAccessTokenValidator, InitialAccessTokenValidator>();
         services.TryAddTransient(newClientOptionsFactory);
+        services.TryAddSingleton<IClientSecretEncryptor, IssuerClientSecretEncryptor>();
 
         // Refuse at startup an offline access for new clients the enumeration does not define, which every
         // registration takes and would otherwise fail on

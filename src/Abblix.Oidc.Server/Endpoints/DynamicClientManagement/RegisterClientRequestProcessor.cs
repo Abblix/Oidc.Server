@@ -31,6 +31,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
 /// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
+/// <param name="clientSecretEncryptor">Encrypts the secret issued with the key of the tenant, so a client reading its
+/// registration is given its secret back (RFC 7592 section 3).</param>
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
@@ -38,7 +40,8 @@ public partial class RegisterClientRequestProcessor(
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    NewClientOptions newClientOptions) : IRegisterClientRequestProcessor
+    NewClientOptions newClientOptions,
+    IClientSecretEncryptor clientSecretEncryptor) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -119,7 +122,7 @@ public partial class RegisterClientRequestProcessor(
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
+            .WithClientSecrets(ToClientSecrets(tenant, model.TokenEndpointAuthMethod, credentials))
             .Build();
 
     /// <summary>
@@ -133,17 +136,21 @@ public partial class RegisterClientRequestProcessor(
     /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
+    private ClientSecret[]? ToClientSecrets(
+        TenantDefinition tenant,
+        string tokenEndpointAuthMethod,
+        ClientCredentials credentials)
     {
-        if (!credentials.ClientSecret.HasValue())
+        if (credentials.ClientSecret is not { Length: > 0 } secret)
             return null;
 
         return
         [
             new ClientSecret
             {
-                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? credentials.ClientSecret : null,
+                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? secret : null,
                 Sha512Hash = credentials.Sha512Hash,
+                EncryptedValue = clientSecretEncryptor.Encrypt(tenant, credentials.ClientId, secret),
                 ExpiresAt = credentials.ExpiresAt,
             }
         ];

@@ -93,6 +93,22 @@ public partial class MultiTenancyRegistrationTests
             {
                 Id = "acme",
                 Issuer = new Uri(AcmeIssuer),
+                Clients =
+                [
+                    new ClientInfo("machine")
+                    {
+                        TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+                        AllowedGrantTypes = [GrantTypes.ClientCredentials],
+                    },
+                ],
+            },
+            $"Client 'machine' may use {GrantTypes.ClientCredentials}"
+        },
+        {
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = new Uri(AcmeIssuer),
                 DefaultResourceIndicator = new Uri("https://api.acme.example"),
             },
             nameof(TenantDefinition.DefaultResourceIndicator)

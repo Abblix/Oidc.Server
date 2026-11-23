@@ -157,7 +157,8 @@ public class UpdateClientMemberCoverageTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, NewClients);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, NewClients,
+            Mock.Of<IClientSecretEncryptor>());
 
         await processor.ProcessAsync(
             SingleIssuer.Tenant,

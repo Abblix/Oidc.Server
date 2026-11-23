@@ -9,6 +9,7 @@
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -64,6 +65,10 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
     {
         Id = "acme",
         Issuer = new Uri(Host + Acme),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2MessageSigning,
         Clients = [Client()],
         LoginUri = new Uri(LoginPath, UriKind.Relative),

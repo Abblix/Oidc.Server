@@ -32,6 +32,7 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             // Before the check that the client_id is free, which would fetch the document a URL names
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdentifierUrlRegistrationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, UpdateClientSecretValidator>(),
             ..ClientRegistrationMetadataChecks.All,
         ]);
         return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();

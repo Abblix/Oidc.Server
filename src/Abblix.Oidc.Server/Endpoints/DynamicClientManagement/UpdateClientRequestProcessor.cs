@@ -28,12 +28,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
 /// </param>
+/// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock,
-    NewClientOptions newClientOptions) : IUpdateClientRequestProcessor
+    NewClientOptions newClientOptions,
+    IClientSecretEncryptor clientSecretEncryptor) : IUpdateClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
@@ -46,7 +48,7 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint
+    /// - Client secrets cannot be updated via this endpoint; the one issued is returned as a read returns it
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
@@ -98,30 +100,11 @@ public class UpdateClientRequestProcessor(
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // The update issues no new secret, so there is none to return
-            ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
+            // RFC 7592 Appendix A.1: the client's current credentials "MUST be included in the client information
+            // response" of a read or an update alike, and the update keeps the secret issued
+            ClientSecret = IssuedClientSecret.Of(tenant, updatedClient, clientSecretEncryptor),
+            ClientSecretExpiresAt = IssuedClientSecret.ExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
         };
-    }
-
-    /// <summary>
-    /// Determines the latest expiration time among all client secrets.
-    /// </summary>
-    private static DateTimeOffset? GetClientSecretExpiresAt(ClientInfo client)
-    {
-        if (client.ClientSecrets == null)
-            return null;
-
-        DateTimeOffset? result = null;
-        foreach (var secretExpiresAt in client.ClientSecrets.Select(s => s.ExpiresAt))
-        {
-            if (!secretExpiresAt.HasValue)
-                continue;
-
-            if (!result.HasValue || result.Value < secretExpiresAt.Value)
-                result = secretExpiresAt;
-        }
-
-        return result;
     }
 }

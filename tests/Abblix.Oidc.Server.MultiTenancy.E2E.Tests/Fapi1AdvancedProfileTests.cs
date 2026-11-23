@@ -105,6 +105,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     {
         Id = "acme",
         Issuer = new Uri(Host + Acme),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
         Clients = [Client()],
         LoginUri = new Uri(LoginPath, UriKind.Relative),
@@ -572,6 +576,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         {
             Id = "acme",
             Issuer = new Uri(Host + Acme),
+            ClientSecretEncryption = new ClientSecretEncryptionSettings
+            {
+                Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            },
             DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
             Clients = [client],
             SigningKeys = [JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)],
@@ -695,6 +703,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         {
             Id = "acme",
             Issuer = new Uri(Host + Acme),
+            ClientSecretEncryption = new ClientSecretEncryptionSettings
+            {
+                Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            },
             DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
             Clients = [client],
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],

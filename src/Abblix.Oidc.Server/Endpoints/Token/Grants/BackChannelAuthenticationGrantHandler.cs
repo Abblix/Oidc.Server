@@ -378,7 +378,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// </remarks>
     private static OidcError? TokenEndpointRefusal(ClientInfo clientInfo, IBackChannelGrantProcessor processor)
     {
-        if (clientInfo is { ClientType: ClientType.Public })
+        if (ConfidentialGrantTypes.Refuses(clientInfo.TokenEndpointAuthMethod, GrantTypes.Ciba))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");

@@ -59,7 +59,7 @@ public class RegisterClientRequestProcessorTests
         return new RegisterClientRequestProcessor(
             _logger,
             credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
-            newClients ?? new NewClientOptions());
+            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
     }
 
     private static ValidClientRegistrationRequest Request() => new(

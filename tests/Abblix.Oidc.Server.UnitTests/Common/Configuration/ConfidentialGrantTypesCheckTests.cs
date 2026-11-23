@@ -17,17 +17,21 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 
 /// <summary>
-/// A tenant's client that may use backchannel authentication must authenticate itself, so one registered with the
-/// method "none" stops the server at startup, while the same client with a method that authenticates does not, and a
-/// public client that does not use the flow is left alone.
+/// A tenant's client authenticating with none that may use a grant kept for confidential clients stops the server at
+/// startup, while the same client authenticating itself does not, and a public client using the grants an end user
+/// takes part in is left alone.
 /// </summary>
-public class BackChannelClientAuthenticationCheckTests
+public class ConfidentialGrantTypesCheckTests
 {
     [Theory]
+    [InlineData(ClientAuthenticationMethods.None, GrantTypes.ClientCredentials, true)]
+    [InlineData(ClientAuthenticationMethods.None, GrantTypes.Password, true)]
+    [InlineData(ClientAuthenticationMethods.None, GrantTypes.JwtBearer, true)]
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.Ciba, true)]
     [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, GrantTypes.Ciba, false)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost, GrantTypes.ClientCredentials, false)]
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.AuthorizationCode, false)]
-    public void ATenantsClient_IsRefusedOnlyWhenItUsesTheFlowWithoutAuthenticating(
+    public void ATenantsClient_IsRefusedOnlyWhenItMayUseAConfidentialGrantWithoutAuthenticating(
         string authenticationMethod,
         string grantType,
         bool refused)
@@ -41,12 +45,12 @@ public class BackChannelClientAuthenticationCheckTests
                 new ClientInfo("client")
                 {
                     TokenEndpointAuthMethod = authenticationMethod,
-                    AllowedGrantTypes = [grantType],
+                    AllowedGrantTypes = [GrantTypes.AuthorizationCode, grantType],
                 },
             ],
         };
 
-        var refusals = new BackChannelClientAuthenticationCheck().Check([tenant], new OidcOptions());
+        var refusals = new ConfidentialGrantTypesCheck().Check([tenant], new OidcOptions());
 
         Assert.Equal(refused, refusals.Any());
     }

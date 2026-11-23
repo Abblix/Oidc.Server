@@ -178,6 +178,16 @@ public sealed class TenantDefinition
     public PairwiseSubjectSettings? PairwiseSubject { get; init; }
 
     /// <summary>
+    /// The key the client secrets this tenant issues on dynamic registration are also kept encrypted with, so a client
+    /// reading its registration at the client configuration endpoint (RFC 7592 section 3) is given its secret back.
+    /// </summary>
+    /// <remarks>
+    /// Required while the server serves dynamic client registration: a tenant without it stops the server at startup
+    /// when declared in the settings, and is refused, not served, when read from a store of tenants. Null otherwise.
+    /// </remarks>
+    public ClientSecretEncryptionSettings? ClientSecretEncryption { get; init; }
+
+    /// <summary>
     /// The keys this tenant signs its tokens with and publishes in its JWKS, when the keys come from each tenant's
     /// settings. Each tenant keeps its own, so a party trusting one tenant's keys cannot verify another tenant's
     /// tokens.

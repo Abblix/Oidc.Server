@@ -135,6 +135,15 @@ public record ClientRegistrationRequest
     public string? ClientId { get; init; }
 
     /// <summary>
+    /// The <c>client_secret</c> an RFC 7592 section 2.2 update carries back, which "MUST match the currently issued
+    /// client secret for that client": an update carrying another is refused, and none ever replaces the secret
+    /// issued. A registration carrying one is not given it either, since the server issues every secret.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientSecret)]
+    [Credential]
+    public string? ClientSecret { get; init; }
+
+    /// <summary>
     /// The <c>client_name</c> (RFC 7591 section 2): a human-readable display name for the client, shown to end-users
     /// on consent screens.
     /// </summary>
@@ -781,7 +790,7 @@ public record ClientRegistrationRequest
         public const string ClientId = "client_id";
 
         /// <summary>The <c>client_secret</c> a client update request carries when the server issued one
-        /// (RFC 7592 section 2.2); the update keeps the issued secret whatever this member says.</summary>
+        /// (RFC 7592 section 2.2), which must be the secret issued; the update keeps that secret.</summary>
         public const string ClientSecret = "client_secret";
 
         /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name
