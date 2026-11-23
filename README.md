@@ -53,7 +53,7 @@ Abblix OIDC Server turns your ASP.NET Core application into an OpenID Connect pr
 - Security profiles the server enforces per client or per tenant, not certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced, which also holds CIBA clients to FAPI-CIBA. Every 3.x release runs their OpenID Foundation conformance plans.
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: a large automated test suite, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
-- Modern .NET, minimal friction: requires .NET 11 and the .NET 11 SDK, with drop-in adapters for both MVC and Minimal API. A host on an earlier .NET uses 2.x, which still receives security fixes (see the [Security Policy](SECURITY.md)).
+- Modern .NET, minimal friction: requires .NET 11 and the .NET 11 SDK, with drop-in adapters for both MVC and Minimal API. A host on .NET 8, 9 or 10 uses 2.x, which still receives security fixes (see the [Security Policy](SECURITY.md)).
 - Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
 
 Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
@@ -101,13 +101,13 @@ The issuer comes from configuration, so add it to `appsettings.json` first, for 
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. Some hosts also call `app.UseMultiTenancy()`; [Upgrading to 3.0](#%EF%B8%8F-upgrading-to-30) says which.
 
-This is the outline, not a complete application: it serves discovery and the signing keys, and it issues a token once it has a client, a login page and your user store. The server keeps authorization codes, pushed requests and other short-lived state in your `IDistributedCache`, and documents it fetches in your `IMemoryCache`; with neither registered it uses in-process caches of its own, which is enough for one instance. Several instances need a shared distributed cache, such as Redis. The server finds a cache registered without a key, so a cache registered only as a keyed service has to be registered without one too. The key in the outline is generated anew at every start, so production keys come from configuration or a secret store as JSON Web Keys, or from HashiCorp Vault, OpenBao or Azure Key Vault through the packages described in [External key custodians](EXTERNAL_KEYS.md), and every replica uses the same keys. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) uses the MVC adapter and builds a complete, runnable solution step by step.
+This is the outline, not a complete application: it serves discovery and the signing keys, and it issues a token once it has a client, a login page and your user store. The server keeps authorization codes, pushed requests and other short-lived state in your `IDistributedCache`, and documents it fetches in your `IMemoryCache`; for either one not registered it uses an in-process one of its own, which is enough for one instance. Several instances need a shared distributed cache, such as Redis. The server finds a cache registered without a key, so a cache registered only as a keyed service has to be registered without one too. The key in the outline is generated anew at every start, so production keys come from configuration or a secret store as JSON Web Keys, or from HashiCorp Vault, OpenBao or Azure Key Vault through the packages described in [External key custodians](EXTERNAL_KEYS.md), and every replica uses the same keys. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) uses the MVC adapter and builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
 [![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
-Versions 1.x and 2.x are certified in every OpenID Provider profile and every logout profile. In the 2.x certification we skipped no tests and received no warnings: every test ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
+Versions 1.x and 2.x are certified in every OpenID Connect provider profile and every logout profile listed below. In the 2.x certification we skipped no tests and received no warnings: every test ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
 Version 3.x is being prepared for certification. Until then, every 3.x release is held to the same suite: the release workflow runs the OpenID Foundation conformance plans for the certified OpenID Connect profiles and for FAPI 2.0, FAPI 2.0 Message Signing, FAPI 1.0 Advanced and FAPI-CIBA, and a release is not published unless they pass, apart from the few checks the suite cannot complete unattended, which the repository lists. The FAPI plans are run, not certified.
 
@@ -177,10 +177,10 @@ What fails to build:
 
 What stops the host at startup or leaves a stored tenant unserved:
 
-- A tenant read from a tenant store that fails a check is left out while the others are served, so the host looks healthy: run 3.1 in staging against a copy of the store and search the log for `are left out of the tenants served` (event id 10700).
+- A tenant read from a tenant store that fails a check is left out while the others are served, so the host looks healthy: run 3.1 in staging against a copy of the store and search the log for `left out of the tenants served` (event ids 10700 and 10701). A tenant catalog of the host's own gets none of these checks.
 - A host serving dynamic client registration sets `TenantDefinition.ClientSecretEncryption` on every tenant, with a random `Key` of at least 32 bytes, base64-encoded, kept secret and not reused as the pairwise salt.
 - A client whose redirect or post-logout redirect URIs include a relative URI, a URI with a fragment, or a `javascript`, `data` or `vbscript` URI is refused, and the library does not drop the entry: the host removes it before upgrading.
-- A native client declared in the tenant settings needs `TokenEndpointAuthMethod` `none` and redirect URIs on a private-use scheme containing a period, on `https`, or on `http` to a loopback host.
+- A native client declared in the tenant settings needs `TokenEndpointAuthMethod` `none` and redirect and post-logout redirect URIs on a private-use scheme containing a period, on `https`, or on `http` to a loopback host.
 - A client authenticating with `none` gives up the `client_credentials`, `password`, JWT bearer and CIBA grants, or moves to a method that authenticates it.
 - A tenant definition holding a null where its types declare a value is refused, a stored client's `TokenEndpointAuthMethod` included.
 - An invalid `OutboundProxy` or `SecureHttpFetchOptions.AllowedDestinations` value stops the host.
@@ -189,12 +189,13 @@ What behaves differently at runtime, with no error:
 
 - Signing out revokes the tokens of the session, native clients that signed in through that browser included: set `RevokeSessionTokensOnLogout = false` to keep 3.0 behavior.
 - A client without `refresh_token` in `AllowedGrantTypes` (or token exchange admitting refresh tokens) gets no refresh token, even when its `OfflineAccess` allows offline access.
-- A host that replaced or decorated `IAuthServiceJwtValidator` registers the same for `IAuthServiceJwtReader`, which revocation, introspection and refresh token exchange read tokens through.
+- A host that replaced or decorated `IAuthServiceJwtValidator` registers the same for `IAuthServiceJwtReader`, which revocation, introspection and the token exchange of a refresh token read tokens through.
 - Discovery and `registration_client_uri` name the tenant's `Issuer` host, not the host the request came by.
 - A request object or CIBA `login_hint_token` carrying an `aud` names the issuer identifier exactly.
 - Native and public clients always use PKCE.
-- Outbound requests to client-supplied addresses use no system proxy and no HTTP/3, download no missing intermediate certificates, and, with `BlockPrivateNetworks` on, refuse every special-purpose address block: a deployment behind a forward proxy sets `OutboundProxy`.
+- Outbound requests to client-supplied addresses use no system proxy and no HTTP/3, download no missing intermediate certificates, and, with `BlockPrivateNetworks` on, refuse every special-purpose address block: a deployment behind a forward proxy sets `SecureHttpFetchOptions.OutboundProxy`, and `SharedSignalsTransmitterOptions.OutboundProxy` for Shared Signals push delivery.
 - An ID token carries `sid` only for a client with session logout, and a token exchange keeps the session, `auth_time`, `acr` and `amr` of its subject token.
+- A host that derives from `AddressValidatingHttpMessageHandler`, replaces the primary handler of the server's outbound clients, writes its own `IAuthorizationGrantHandler`, stores client JSON naming a secret hash only through a `Base64` or `Hex` alias, or alerts on event id 2015 reads the guide: each of these changes with no error, and a delegated access token 3.0 issued to a pairwise client is refused until it expires.
 - An RFC 7592 update carrying a `client_secret` other than the issued one is refused, and a read returns `client_secret` for clients registered under 3.1.
 
 Client ID Metadata Documents are new and experimental in 3.1: the feature implements an IETF Internet-Draft, its API may change in a minor release until the draft becomes an RFC, and the compiler reports `ABX9001` wherever code uses it ([details](src/Abblix.Oidc.Server/README.md#client-id-metadata-documents)).
