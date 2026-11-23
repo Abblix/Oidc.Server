@@ -464,6 +464,32 @@ public class ClientIdMetadataDocumentReaderTests
                 """),
             CreateReader(grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba], documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
 
+    /// <summary>
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at both endpoints of the flow, so a client
+    /// authenticating with none loses the backchannel grant in poll mode as well, while one proving itself keeps it.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true)]
+    public void ADocumentPollingForBackchannelTokens_KeepsTheGrantOnlyForAClientProvingItself(
+        string? authenticationMethod,
+        bool kept)
+    {
+        var authentication = authenticationMethod is null
+            ? string.Empty
+            : $$""","token_endpoint_auth_method":"{{authenticationMethod}}","jwks_uri":"https://client.example.com/jwks" """;
+        var metadata = Read(
+            Document($$"""
+                {"grant_types":["authorization_code","{{GrantTypes.Ciba}}"],"backchannel_token_delivery_mode":"poll"{{authentication}}}
+                """),
+            CreateReader(
+                grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba],
+                documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
+
+        Assert.Equal(kept, metadata.GrantTypes.Contains(GrantTypes.Ciba));
+        Assert.Contains(GrantTypes.AuthorizationCode, metadata.GrantTypes);
+    }
+
     [Fact]
     public void ADocumentPollingForBackchannelTokens_IsKept()
         => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);

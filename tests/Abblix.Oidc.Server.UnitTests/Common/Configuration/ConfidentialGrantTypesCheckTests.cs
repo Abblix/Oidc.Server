@@ -27,6 +27,8 @@ public class ConfidentialGrantTypesCheckTests
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.ClientCredentials, true)]
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.Password, true)]
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.JwtBearer, true)]
+    [InlineData(ClientAuthenticationMethods.None, GrantTypes.Ciba, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, GrantTypes.Ciba, false)]
     [InlineData(ClientAuthenticationMethods.ClientSecretPost, GrantTypes.ClientCredentials, false)]
     [InlineData(ClientAuthenticationMethods.None, GrantTypes.AuthorizationCode, false)]
     public void ATenantsClient_IsRefusedOnlyWhenItMayUseAConfidentialGrantWithoutAuthenticating(
