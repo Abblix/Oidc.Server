@@ -570,16 +570,19 @@ public class ConfigurationHandlerTests
     }
 
     /// <summary>
-    /// A server whose methods include no JWT-based one, or whose algorithms the profile admits none of, lists no
-    /// assertion algorithms for any endpoint: RFC 8414 section 2 asks for them where such a method is listed, and an
-    /// empty list says nothing (OpenID Connect Discovery 1.0 section 4.2).
+    /// Each endpoint lists the assertion algorithms beside either JWT-based method and nowhere else: RFC 8414 section 2
+    /// asks for them where such a method is listed. A server whose algorithms the profile admits none of lists none,
+    /// since an empty list says nothing (OpenID Connect Discovery 1.0 section 4.2).
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.ClientSecretBasic)]
-    [InlineData(ClientSecurityProfile.Fapi2, ClientAuthenticationMethods.PrivateKeyJwt)]
-    public async Task TheDocument_ListsNoAssertionAlgorithms_WhereNoMethodSignsAnAssertion(
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.ClientSecretBasic, false)]
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.ClientSecretJwt, true)]
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.PrivateKeyJwt, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAuthenticationMethods.PrivateKeyJwt, false)]
+    public async Task TheDocument_ListsAssertionAlgorithms_OnlyBesideAMethodSigningAnAssertion(
         ClientSecurityProfile profile,
-        string method)
+        string method,
+        bool listed)
     {
         var algorithms = new Mock<IJwtAlgorithmsProvider>();
         algorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns([SigningAlgorithms.RS256]);
@@ -607,9 +610,10 @@ public class ConfigurationHandlerTests
 
         var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
 
-        Assert.Null(document.TokenEndpointAuthSigningAlgValuesSupported);
-        Assert.Null(document.RevocationEndpointAuthSigningAlgValuesSupported);
-        Assert.Null(document.IntrospectionEndpointAuthSigningAlgValuesSupported);
+        string[]? expected = listed ? [SigningAlgorithms.RS256] : null;
+        Assert.Equal(expected, document.TokenEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(expected, document.RevocationEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(expected, document.IntrospectionEndpointAuthSigningAlgValuesSupported);
     }
 
     /// <summary>
