@@ -260,7 +260,7 @@ public class EncryptedResponseAlgorithmsValidator(
 
             case DynamicClientOperation.Update:
                 if (request.ClientId is null ||
-                    await clientInfoProvider.TryFindClientAsync(tenant, request.ClientId) is not { } stored)
+                    !(await clientInfoProvider.FindClientAsync(tenant, request.ClientId)).TryGetSuccess(out var stored))
                 {
                     return false;
                 }

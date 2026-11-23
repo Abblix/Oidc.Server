@@ -30,8 +30,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// <param name="validator">Validates the resolved request against client metadata and protocol rules.</param>
 /// <param name="processor">Persists the authentication request and produces the
 /// <c>auth_req_id</c>/<c>expires_in</c>/<c>interval</c> response.</param>
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
 public class BackChannelAuthenticationHandler(
     IClientAuthenticator clientAuthenticator,
+    IClientInfoProvider clientInfoProvider,
     IBackChannelAuthenticationRequestFetcher fetcher,
     IBackChannelAuthenticationRequestValidator validator,
     IBackChannelAuthenticationRequestProcessor processor) : IBackChannelAuthenticationHandler
@@ -60,7 +62,8 @@ public class BackChannelAuthenticationHandler(
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the

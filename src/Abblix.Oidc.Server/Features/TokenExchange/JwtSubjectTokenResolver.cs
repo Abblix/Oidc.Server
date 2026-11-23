@@ -185,7 +185,7 @@ public sealed class JwtSubjectTokenResolver(
         if (originalClientId is null)
             return seen;
 
-        if (await clientInfoProvider.TryFindClientAsync(tenant, originalClientId) is not { } originalClient)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out var originalClient))
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
 
         if (subjectTypeConverter.Open(tenant, seen, originalClient) is not { } real)

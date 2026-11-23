@@ -34,8 +34,7 @@ public partial class ClientValidator(
         if (!context.ClientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, context.ClientId);
-        if (clientInfo == null)
+        if (!(await clientInfoProvider.FindClientAsync(tenant, context.ClientId)).TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(context.ClientId);
             return new OidcError(

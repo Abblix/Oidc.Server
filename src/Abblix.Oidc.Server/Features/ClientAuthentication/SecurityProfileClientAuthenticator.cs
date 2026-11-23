@@ -49,12 +49,18 @@ internal partial class SecurityProfileClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
-    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
-        => inner.FindPresentedCredentialsAsync(tenant, request);
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
+        => inner.FindPresentedCredentialsAsync(tenant, request, clients);
 
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
     {
-        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        var result = await inner.TryAuthenticateClientAsync(tenant, request, clients);
         if (!result.TryGetSuccess(out var clientInfo))
             return result;
 

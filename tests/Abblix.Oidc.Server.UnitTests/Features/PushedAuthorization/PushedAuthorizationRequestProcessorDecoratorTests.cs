@@ -80,6 +80,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         };
         var context = new AuthorizationValidationContext(model)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         return new ValidAuthorizationRequest(context);

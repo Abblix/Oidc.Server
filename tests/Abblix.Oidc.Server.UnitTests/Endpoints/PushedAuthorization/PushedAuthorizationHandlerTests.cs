@@ -46,7 +46,7 @@ public class PushedAuthorizationHandlerTests
             result = client;
 
         authenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(result);
         return authenticator.Object;
     }
@@ -65,6 +65,7 @@ public class PushedAuthorizationHandlerTests
     {
         var fetcher = new Mock<IAuthorizationRequestFetcher>(MockBehavior.Strict);
         var handler = new PushedAuthorizationHandler(
+            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object,
             Authenticating(authenticates ? new ClientInfo(TestConstants.DefaultClientId) : null),
             fetcher.Object,
             new Mock<IPushedAuthorizationRequestValidator>(MockBehavior.Strict).Object,
@@ -77,7 +78,7 @@ public class PushedAuthorizationHandlerTests
 
         Assert.Equal(expectedError, Assert.IsType<AuthorizationError>(response).Error);
         fetcher.Verify(
-            f => f.FetchAsync(It.IsAny<TenantDefinition>(), It.IsAny<AuthorizationRequest>()), Times.Never);
+            f => f.FetchAsync(It.IsAny<TenantDefinition>(), It.IsAny<AuthorizationRequest>(), It.IsAny<IClientInfoProvider>()), Times.Never);
     }
 
     [Fact]
@@ -97,18 +98,21 @@ public class PushedAuthorizationHandlerTests
 
         var fetcher = new Mock<IAuthorizationRequestFetcher>(MockBehavior.Strict);
         fetcher
-            .Setup(f => f.FetchAsync(TestTenant.Matched, received))
+            .Setup(f => f.FetchAsync(TestTenant.Matched, received, It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(rebuiltFromTheObjectAlone);
 
         AuthorizationRequest? validated = null;
         var validator = new Mock<IPushedAuthorizationRequestValidator>(MockBehavior.Strict);
         validator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<AuthorizationRequest>(), It.IsAny<ClientRequest>()))
-            .Callback((TenantDefinition _, ClientInfo _, AuthorizationRequest request, ClientRequest _) => validated = request)
+                TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<AuthorizationRequest>(), It.IsAny<ClientRequest>(),
+                It.IsAny<IClientInfoProvider>()))
+            .Callback((TenantDefinition _, ClientInfo _, AuthorizationRequest request, ClientRequest _, IClientInfoProvider _) =>
+                validated = request)
             .ReturnsAsync(ErrorFactory.InvalidRequest("refused"));
 
         var handler = new PushedAuthorizationHandler(
+            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object,
             Authenticating(new ClientInfo(TestConstants.DefaultClientId)),
             fetcher.Object,
             validator.Object,

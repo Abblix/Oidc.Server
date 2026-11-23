@@ -35,7 +35,6 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="requestInfoProvider">Names the address a token whose audience is refused arrived at; no audience is
 /// taken from it.</param>
 /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
-/// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
@@ -45,7 +44,6 @@ public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
     ProfiledJwtValidator tokenValidator,
-    IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
     TimeProvider timeProvider) : IClientJwtValidator
@@ -57,8 +55,12 @@ public partial class ClientJwtValidator(
     /// </summary>
     /// <param name="tenant">The tenant the token is for.</param>
     /// <param name="client">The client the request names outside the token, or null.</param>
+    /// <param name="clients">The clients of the request being served, where a client the token names is looked
+    /// up.</param>
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="tokenTypes">The token types the caller accepts.</param>
+    /// <param name="signingAlgorithms">The signature algorithms the caller admits, within those the security
+    /// profile admits, refused before any client is looked up; null where the caller narrows nothing.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
     /// A task that returns a Result containing either a ValidJsonWebToken on success,
@@ -67,11 +69,13 @@ public partial class ClientJwtValidator(
     public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         TenantDefinition tenant,
         ClientInfo? client,
+        IClientInfoProvider clients,
         string jwt,
         TokenTypePolicy tokenTypes,
+        IReadOnlySet<string>? signingAlgorithms,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
+        var context = new ValidationContext(clients, clientJwksProvider, tenant, client);
 
         // The token is validated under the profile of the client the request names outside it, or what the
         // deployment demands of every client where it names none, the guard holding its signature and each JWE layer
@@ -86,6 +90,7 @@ public partial class ClientJwtValidator(
             {
                 Options = options,
                 TokenTypes = tokenTypes,
+                AllowedSigningAlgorithms = signingAlgorithms,
                 ValidateAudience = audiences => ValidateAudience(tenant, audiences),
                 ValidateIssuer = context.ValidateIssuer,
                 ResolveIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer),
@@ -114,7 +119,7 @@ public partial class ClientJwtValidator(
 
         var validatedToken = result.GetSuccess();
 
-        var determined = await DetermineClientAsync(tenant, client, context, validatedToken);
+        var determined = await DetermineClientAsync(tenant, clients, client, context, validatedToken);
         if (determined.TryGetFailure(out var undetermined))
             return undetermined;
 
@@ -173,6 +178,7 @@ public partial class ClientJwtValidator(
     /// <returns>The client, or the refusal when the token names two clients or none can be determined.</returns>
     private async Task<Result<ClientInfo, JwtValidationError>> DetermineClientAsync(
         TenantDefinition tenant,
+        IClientInfoProvider clients,
         ClientInfo? client,
         ValidationContext context,
         JsonWebToken validatedToken)
@@ -183,7 +189,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
+                context.ClientInfo = await FindClientAsync(tenant, clients, client, clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -251,13 +257,31 @@ public partial class ClientJwtValidator(
     }
 
     /// <summary>
+    /// The client <paramref name="clientId"/> names: the one the request names outside the token when it is that one,
+    /// as it is already found, else the one the store holds, or null.
+    /// </summary>
+    private static async Task<ClientInfo?> FindClientAsync(
+        TenantDefinition tenant, IClientInfoProvider clients, ClientInfo? named, string clientId)
+    {
+        if (named?.ClientId == clientId)
+            return named;
+
+        return (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var found) ? found : null;
+    }
+
+    /// <summary>
     /// Encapsulates the validation context for a single JWT validation operation.
     /// Holds client information that gets populated during the validation process.
     /// </summary>
+    /// <param name="clients">Finds the client the token's issuer names.</param>
+    /// <param name="clientJwksProvider">Reads the keys the client signs with.</param>
+    /// <param name="tenant">The tenant the token is for.</param>
+    /// <param name="named">The client the request names outside the token, already found, or null.</param>
     private sealed class ValidationContext(
-        IClientInfoProvider clientInfoProvider,
+        IClientInfoProvider clients,
         IClientKeysProvider clientJwksProvider,
-        TenantDefinition tenant)
+        TenantDefinition tenant,
+        ClientInfo? named)
     {
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
@@ -291,8 +315,12 @@ public partial class ClientJwtValidator(
 
             if (!_clientLookupPerformed)
             {
-                // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, issuer);
+                // Attempt to find the client by issuer, unless it is the one the request already found
+                if (named?.ClientId == issuer)
+                    ClientInfo = named;
+                else if ((await clients.FindClientAsync(tenant, issuer)).TryGetSuccess(out var client))
+                    ClientInfo = client;
+
                 _clientLookupPerformed = true;
             }
 

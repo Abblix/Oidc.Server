@@ -69,6 +69,7 @@ public class ConsentConstraintEnforcerTests
 
         return new ValidAuthorizationRequest(new AuthorizationValidationContext(model)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(ClientId),
             ResponseMode = ResponseModes.Query,
             Scope = scopes ?? [new ScopeDefinition(Scopes.OpenId)],

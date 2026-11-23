@@ -426,7 +426,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
         bool secretKept, string authenticationMethod, string? expected)
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 ClientSecrets = [new ClientSecret { Sha512Hash = [1], Value = secretKept ? "a-client-secret" : null }],

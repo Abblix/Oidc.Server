@@ -82,7 +82,7 @@ public class ClientIdMetadataDocumentTransportTests
         await using var provider = services.BuildServiceProvider();
         var tenant = new TenantDefinition { Id = "tenant", Issuer = new Uri("https://issuer.example.com/") };
 
-        Assert.Null(await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(tenant, clientId));
+        Assert.False((await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(tenant, clientId)).TryGetSuccess(out _));
         Assert.Equal(1, origin.RequestsTo(clientId));
     }
 
@@ -105,7 +105,7 @@ public class ClientIdMetadataDocumentTransportTests
         var documents = provider.GetRequiredService<HeldMetadataDocuments>();
 
         foreach (var url in new[] { first, first, second, second })
-            Assert.NotNull(await documents.GetAsync(url, new Uri(url), OutboundAddressRule.NoSpecialPurpose));
+            Assert.True((await documents.GetAsync(url, new Uri(url), OutboundAddressRule.NoSpecialPurpose)).TryGetSuccess(out _));
 
         Assert.Equal(1, origin.RequestsTo(first));
         Assert.Equal(2, origin.RequestsTo(second));
@@ -128,7 +128,7 @@ public class ClientIdMetadataDocumentTransportTests
         Assert.Null(provider.GetService<Microsoft.Extensions.Caching.Memory.IMemoryCache>());
         var first = await documents.GetAsync(clientId, new Uri(clientId), OutboundAddressRule.NoSpecialPurpose);
         var second = await documents.GetAsync(clientId, new Uri(clientId), OutboundAddressRule.NoSpecialPurpose);
-        Assert.Same(first, second);
+        Assert.Same(first.GetSuccess(), second.GetSuccess());
         Assert.Equal(1, origin.RequestsTo(clientId));
     }
 

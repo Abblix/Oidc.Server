@@ -60,6 +60,7 @@ public class AuthSessionSelectorTests
             MaxAge = maxAge,
         })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         });
 
@@ -240,6 +241,7 @@ public class AuthSessionSelectorTests
             Scope = [Scopes.OpenId],
         })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = client,
         })
         {

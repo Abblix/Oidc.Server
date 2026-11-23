@@ -28,10 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
-public class RequestObjectFetchAdapter(
-    IRequestObjectFetcher requestObjectFetcher,
-    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
+public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
@@ -41,6 +38,8 @@ public class RequestObjectFetchAdapter(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be processed.</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.
+    /// The client named outside the object is found in them.</param>
     /// <returns>
     /// A task that returns a <see cref="Result{AuthorizationRequest, AuthorizationRequestValidationError}"/>
     /// which either represents a successfully processed request with merged JWT claims or an error indicating
@@ -48,7 +47,8 @@ public class RequestObjectFetchAdapter(
     /// </returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
         TenantDefinition tenant,
-        AuthorizationRequest request)
+        AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
         // A request read back from storage had its object validated and applied before it was stored, and carries what
         // the server set on it since: the URN it is consumed under, the pages the end user was sent to, the DPoP key the
@@ -60,7 +60,8 @@ public class RequestObjectFetchAdapter(
         // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
         // or "request_uri" Request Object's (Section 2.1) "client_id"", and section 6.3 has a failed client ID check
         // answered as "specified in Section 5.2 of [RFC6749]". So the client is known before the object
-        // is read, and the object is held to its profile up front
+        // is read, and the object is held to its profile up front; a request naming no client it may be read for is
+        // refused as one naming no client, before any layer of the object is decrypted or its keys fetched
         ClientInfo? namedClient = null;
         if (request.Request is not null)
         {
@@ -71,7 +72,9 @@ public class RequestObjectFetchAdapter(
                     $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
             }
 
-            namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+            var found = await clients.FindClientAsync(tenant, clientId);
+            if (!found.TryGetSuccess(out namedClient))
+                return ErrorFactory.AbsentClient(found.GetFailure());
         }
 
         // Whether the object may leave its client_id to the one beside it is answered by WhyRefused on the read object,

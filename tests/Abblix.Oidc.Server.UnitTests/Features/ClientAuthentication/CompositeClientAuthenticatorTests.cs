@@ -30,6 +30,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// </summary>
 public class CompositeClientAuthenticatorTests
 {
+    /// <summary>The clients of the request, which the authenticators under test receive and pass on.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     /// <summary>
     /// Verifies composite with no authenticators returns null.
     /// Edge case: empty authenticator list.
@@ -42,7 +45,7 @@ public class CompositeClientAuthenticatorTests
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -59,19 +62,19 @@ public class CompositeClientAuthenticatorTests
         var clientInfo = new ClientInfo("test-client");
         var authenticator = Presenting();
         authenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo);
 
         var composite = CreateCompositeAuthenticator(authenticator.Object);
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal("test-client", result.GetSuccess().ClientId);
-        authenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
+        authenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
     }
 
     /// <summary>
@@ -84,18 +87,18 @@ public class CompositeClientAuthenticatorTests
         // Arrange
         var authenticator = Presenting();
         authenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var composite = CreateCompositeAuthenticator(authenticator.Object);
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
-        authenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
+        authenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
     }
 
     /// <summary>
@@ -110,7 +113,7 @@ public class CompositeClientAuthenticatorTests
 
         var firstAuthenticator = Presenting();
         firstAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo);
 
         var secondAuthenticator = Presenting();
@@ -120,13 +123,13 @@ public class CompositeClientAuthenticatorTests
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal("test-client", result.GetSuccess().ClientId);
-        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
-        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Never);
+        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
+        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Never);
     }
 
     /// <summary>
@@ -141,25 +144,25 @@ public class CompositeClientAuthenticatorTests
 
         var firstAuthenticator = Presenting();
         firstAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var secondAuthenticator = Presenting();
         secondAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo);
 
         var composite = CreateCompositeAuthenticator(firstAuthenticator.Object, secondAuthenticator.Object);
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal("test-client-2", result.GetSuccess().ClientId);
-        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
-        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
+        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
+        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
     }
 
     /// <summary>
@@ -172,17 +175,17 @@ public class CompositeClientAuthenticatorTests
         // Arrange
         var firstAuthenticator = Presenting();
         firstAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var secondAuthenticator = Presenting();
         secondAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var thirdAuthenticator = Presenting();
         thirdAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var composite = CreateCompositeAuthenticator(
@@ -192,13 +195,13 @@ public class CompositeClientAuthenticatorTests
         var request = new ClientRequest();
 
         // Act
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
-        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
-        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
-        thirdAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request), Times.Once);
+        firstAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
+        secondAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
+        thirdAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, request, Clients), Times.Once);
     }
 
     /// <summary>
@@ -288,19 +291,19 @@ public class CompositeClientAuthenticatorTests
 
         var firstAuthenticator = Presenting();
         firstAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential)
             .Callback(() => callOrder.Add(1));
 
         var secondAuthenticator = Presenting();
         secondAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential)
             .Callback(() => callOrder.Add(2));
 
         var thirdAuthenticator = Presenting();
         thirdAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential)
             .Callback(() => callOrder.Add(3));
 
@@ -311,7 +314,7 @@ public class CompositeClientAuthenticatorTests
         var request = new ClientRequest();
 
         // Act
-        await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.Equal(new[] { 1, 2, 3 }, callOrder);
@@ -329,8 +332,8 @@ public class CompositeClientAuthenticatorTests
 
         var firstAuthenticator = Presenting();
         firstAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync((TenantDefinition _, ClientRequest r) =>
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((TenantDefinition _, ClientRequest r, IClientInfoProvider _) =>
             {
                 capturedRequests.Add(r);
                 return ClientAuthenticationFailures.NoCredential;
@@ -338,8 +341,8 @@ public class CompositeClientAuthenticatorTests
 
         var secondAuthenticator = Presenting();
         secondAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync((TenantDefinition _, ClientRequest r) =>
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((TenantDefinition _, ClientRequest r, IClientInfoProvider _) =>
             {
                 capturedRequests.Add(r);
                 return ClientAuthenticationFailures.NoCredential;
@@ -349,7 +352,7 @@ public class CompositeClientAuthenticatorTests
         var request = new ClientRequest { ClientId = "test-client" };
 
         // Act
-        await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, Clients);
 
         // Assert
         Assert.Equal(2, capturedRequests.Count);
@@ -372,7 +375,7 @@ public class CompositeClientAuthenticatorTests
     {
         var authenticator = new Mock<IClientAuthenticator>();
         authenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(answer);
         return authenticator.Object;
     }
@@ -389,11 +392,11 @@ public class CompositeClientAuthenticatorTests
         var refused = ClientAuthenticationFailures.InvalidCredential;
 
         var allNone = await CreateCompositeAuthenticator(Answering(none), Answering(none))
-            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
         var oneRefused = await CreateCompositeAuthenticator(Answering(none), Answering(refused), Answering(none))
-            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
         var oneAuthenticates = await CreateCompositeAuthenticator(Answering(refused), Answering(client))
-            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
 
         Assert.Same(none, allNone.GetFailure());
         Assert.Same(refused, oneRefused.GetFailure());
@@ -404,7 +407,7 @@ public class CompositeClientAuthenticatorTests
     {
         var authenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
         authenticator
-            .Setup(a => a.FindPresentedCredentialsAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.FindPresentedCredentialsAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(places);
         return authenticator;
     }
@@ -422,7 +425,7 @@ public class CompositeClientAuthenticatorTests
         var none = Presenting();
 
         var result = await CreateCompositeAuthenticator(none.Object, header.Object, body.Object)
-            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
 
         Assert.Same(ClientAuthenticationFailures.MoreThanOneMethod, result.GetFailure());
         Assert.Equal(ErrorCodes.InvalidRequest, result.GetFailure().Error);
@@ -437,20 +440,20 @@ public class CompositeClientAuthenticatorTests
         var client = new ClientInfo("test-client");
         var first = Presenting(nameof(ClientRequest.ClientAssertion));
         first
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
         var second = Presenting(nameof(ClientRequest.ClientAssertion));
         second
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
 
         var composite = CreateCompositeAuthenticator(first.Object, second.Object);
-        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+        var result = await composite.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
 
         Assert.Same(client, result.GetSuccess());
         Assert.Equal(
             [nameof(ClientRequest.ClientAssertion)],
-            await composite.FindPresentedCredentialsAsync(SingleIssuer.Tenant, new ClientRequest()));
+            await composite.FindPresentedCredentialsAsync(SingleIssuer.Tenant, new ClientRequest(), Clients));
     }
 
     /// <summary>
@@ -462,7 +465,7 @@ public class CompositeClientAuthenticatorTests
     {
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "tls-client"))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, "tls-client"))
             .ReturnsAsync(new ClientInfo("tls-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth });
         using var key = System.Security.Cryptography.RSA.Create(2048);
         using var certificate = new System.Security.Cryptography.X509Certificates.CertificateRequest(
@@ -475,14 +478,14 @@ public class CompositeClientAuthenticatorTests
         var composite = CreateCompositeAuthenticator(
             new ClientSecretPostAuthenticator(
                 NullLogger<ClientSecretPostAuthenticator>.Instance,
-                clients.Object,
                 TimeProvider.System,
                 new Mock<IHashService>().Object),
-            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, clients.Object));
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance));
 
         var result = await composite.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
-            new ClientRequest { ClientId = "tls-client", ClientSecret = "secret", ClientCertificate = certificate });
+            new ClientRequest { ClientId = "tls-client", ClientSecret = "secret", ClientCertificate = certificate },
+            clients.Object);
 
         Assert.Same(ClientAuthenticationFailures.MoreThanOneMethod, result.GetFailure());
     }
@@ -491,28 +494,27 @@ public class CompositeClientAuthenticatorTests
     /// The client a public client's request names, with its secret authenticators and the none one composed in the
     /// order the server registers them.
     /// </summary>
-    private static IClientAuthenticator PublicClientComposite(out ClientInfo publicClient)
+    private static IClientAuthenticator PublicClientComposite(out ClientInfo publicClient, out IClientInfoProvider store)
     {
         var client = new ClientInfo("public-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None };
         publicClient = client;
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, client.ClientId))
+            .Setup(x => x.FindClientAsync(TestTenant.Matched, client.ClientId))
             .ReturnsAsync(client);
+        store = clients.Object;
 
         return CreateCompositeAuthenticator(
-            new NoneClientAuthenticator(NullLogger<NoneClientAuthenticator>.Instance, clients.Object),
+            new NoneClientAuthenticator(NullLogger<NoneClientAuthenticator>.Instance),
             new ClientSecretPostAuthenticator(
                 NullLogger<ClientSecretPostAuthenticator>.Instance,
-                clients.Object,
                 TimeProvider.System,
                 new Mock<IHashService>().Object),
             new ClientSecretBasicAuthenticator(
                 NullLogger<ClientSecretBasicAuthenticator>.Instance,
-                clients.Object,
                 TimeProvider.System,
                 new Mock<IHashService>().Object),
-            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, clients.Object));
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance));
     }
 
     /// <summary>
@@ -524,11 +526,12 @@ public class CompositeClientAuthenticatorTests
     [Fact]
     public async Task PublicClientPresentingABodySecret_IsRefused()
     {
-        var composite = PublicClientComposite(out var publicClient);
+        var composite = PublicClientComposite(out var publicClient, out var store);
 
         var result = await composite.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
-            new ClientRequest { ClientId = publicClient.ClientId, ClientSecret = "wrong-secret" });
+            new ClientRequest { ClientId = publicClient.ClientId, ClientSecret = "wrong-secret" },
+            store);
 
         Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
     }
@@ -539,7 +542,7 @@ public class CompositeClientAuthenticatorTests
     [Fact]
     public async Task PublicClientPresentingABasicHeader_IsRefused()
     {
-        var composite = PublicClientComposite(out var publicClient);
+        var composite = PublicClientComposite(out var publicClient, out var store);
         var credentials = Convert.ToBase64String(
             System.Text.Encoding.UTF8.GetBytes($"{publicClient.ClientId}:wrong-secret"));
 
@@ -549,7 +552,8 @@ public class CompositeClientAuthenticatorTests
             {
                 ClientId = publicClient.ClientId,
                 AuthorizationHeaderLines = [$"{TokenTypes.Basic} {credentials}"],
-            });
+            },
+            store);
 
         Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
     }
@@ -563,14 +567,14 @@ public class CompositeClientAuthenticatorTests
     {
         var reader = Presenting(nameof(ClientRequest.ClientAssertion));
         reader
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         // Strict and set up for no authentication: it would throw if asked
         var bystander = Presenting();
 
         var result = await CreateCompositeAuthenticator(bystander.Object, reader.Object)
-            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), Clients);
 
         Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
     }
@@ -583,7 +587,7 @@ public class CompositeClientAuthenticatorTests
     [Fact]
     public async Task PublicClientPresentingNoCredential_IsServed()
     {
-        var composite = PublicClientComposite(out var publicClient);
+        var composite = PublicClientComposite(out var publicClient, out var store);
         using var key = System.Security.Cryptography.RSA.Create(2048);
         using var certificate = new System.Security.Cryptography.X509Certificates.CertificateRequest(
                 "CN=public-client",
@@ -593,10 +597,11 @@ public class CompositeClientAuthenticatorTests
             .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
 
         var alone = await composite.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { ClientId = publicClient.ClientId });
+            SingleIssuer.Tenant, new ClientRequest { ClientId = publicClient.ClientId }, store);
         var besideACertificate = await composite.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
-            new ClientRequest { ClientId = publicClient.ClientId, ClientCertificate = certificate });
+            new ClientRequest { ClientId = publicClient.ClientId, ClientCertificate = certificate },
+            store);
 
         Assert.Same(publicClient, alone.GetSuccess());
         Assert.Same(publicClient, besideACertificate.GetSuccess());

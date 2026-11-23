@@ -34,7 +34,11 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose);
+    private async Task<HeldMetadataDocument?> GetAsync()
+        => (await _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose))
+            .TryGetSuccess(out var held)
+            ? held
+            : null;
 
     /// <summary>
     /// Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use IP
@@ -64,7 +68,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
         var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose);
 
-        Assert.Equal(fetched, held is not null);
+        Assert.Equal(fetched, held.TryGetSuccess(out _));
         Assert.Equal(fetched ? 1 : 0, services.Origin.RequestsTo(Url));
     }
 

@@ -46,11 +46,17 @@ internal sealed partial class ThrottledClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
     /// <inheritdoc />
-    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
-        => inner.FindPresentedCredentialsAsync(tenant, request);
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
+        => inner.FindPresentedCredentialsAsync(tenant, request, clients);
 
     /// <inheritdoc />
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
     {
         var source = budget.Source;
         if (source is null)
@@ -64,7 +70,7 @@ internal sealed partial class ThrottledClientAuthenticator(
 
         // A request using more than one method is refused before any credential is looked at, as a repeated
         // Authorization header is refused before the authenticator, so it spent nothing the budget prices
-        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        var result = await inner.TryAuthenticateClientAsync(tenant, request, clients);
         if (!result.TryGetSuccess(out _) && result.GetFailure() is not MoreThanOneClientAuthenticationMethodError)
             budget.RecordFailure(source);
 

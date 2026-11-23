@@ -164,7 +164,7 @@ public class AuthServiceJwtValidator(
 			return null;
 		}
 
-		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
+		if (!(await clientInfoProvider.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
 			return null;
 
 		return SecurityProfileRequirements.For(tenant, owner).AlgorithmOutside(token, keyManagementAlgorithms);

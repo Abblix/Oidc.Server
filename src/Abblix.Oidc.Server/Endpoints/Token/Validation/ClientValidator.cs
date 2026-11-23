@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -23,7 +24,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// to the validation context. If the authentication fails, it returns an error indicating that the client is not authorized.
 /// </remarks>
 /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator)
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientInfoProvider clientInfoProvider)
     : ITokenContextValidator
 {
     /// <summary>
@@ -49,7 +51,7 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
         var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenant, clientRequest);
+            tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the

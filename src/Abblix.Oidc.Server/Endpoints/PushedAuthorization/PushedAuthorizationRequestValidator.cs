@@ -42,13 +42,15 @@ public class PushedAuthorizationRequestValidator(
     /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 section 2. Also carries an
     /// optional DPoP header used to pre-bind the request to a proof-of-possession key
     /// (RFC 9449 section 10).</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.</param>
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         TenantDefinition tenant,
         ClientInfo clientInfo,
         AuthorizationRequest authorizationRequest,
-        ClientRequest clientRequest)
+        ClientRequest clientRequest,
+        IClientInfoProvider clients)
     {
         // RFC 9126 section 2.1: request_uri "MUST NOT be provided" here, and section 2.3 takes its codes from RFC 6749,
         // where a request carrying it is malformed: invalid_request
@@ -67,7 +69,7 @@ public class PushedAuthorizationRequestValidator(
 
         authorizationRequest = dpopResult.GetSuccess();
 
-        var result = await authorizationRequestValidator.ValidateAsync(tenant, authorizationRequest);
+        var result = await authorizationRequestValidator.ValidateAsync(tenant, authorizationRequest, clients);
 
         if (result.TryGetSuccess(out var validRequest))
         {

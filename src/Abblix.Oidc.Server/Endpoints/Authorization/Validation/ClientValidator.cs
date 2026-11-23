@@ -28,14 +28,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// only valid and authorized clients can initiate authorization requests.
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
-/// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
 /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to, judged against its
 /// profile.</param>
 /// <param name="options">Supplies the service token settings the client's access and refresh tokens are issued with.
 /// </param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider,
     ClientEncryptionKeyResolver encryptionKeyResolver,
     IOptions<OidcOptions> options) : IAuthorizationContextValidator
 {
@@ -59,21 +57,11 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo == null)
+        var found = await context.Clients.FindClientAsync(tenant, clientId);
+        if (!found.TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
-
-            // draft-ietf-oauth-client-id-metadata-document has a server aborting the authorization request "with
-            // invalid_client" when a client identifier URL's document is refused (sections 5 and 6), and section 6.1
-            // has it "MUST NOT redirect the user agent to the client" when the document could not be had: no redirect
-            // URI is validated yet, so the error is shown rather than sent
-            var error = options.Value.ClientIdMetadataDocuments.Enabled &&
-                        clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal)
-                ? ErrorCodes.InvalidClient
-                : ErrorCodes.UnauthorizedClient;
-
-            return context.Error(error, "The client is not authorized");
+            return ErrorFactory.AbsentClient(found.GetFailure());
         }
 
         // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: the server signs only with the profile's algorithms,

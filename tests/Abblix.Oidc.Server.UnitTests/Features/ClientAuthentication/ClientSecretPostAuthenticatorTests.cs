@@ -40,7 +40,6 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
 
         return new ClientSecretPostAuthenticator(
             logger.Object,
-            clientInfoProvider.Object,
             timeProvider ?? TimeProvider.System,
             hashService);
     }
@@ -103,10 +102,11 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
     [Fact]
     public async Task AWhitespaceSecret_IsAPresentedCredentialRefused()
     {
-        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var authenticator = CreateAuthenticator(clientInfoProvider);
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId, ClientSecret = "   " });
+            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId, ClientSecret = "   " }, clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var failure));
         Assert.IsNotType<UnauthenticatedCallerError>(failure);
@@ -118,10 +118,11 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
     [Fact]
     public async Task ASecretWithoutAClientId_IsAPresentedCredentialRefused()
     {
-        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var authenticator = CreateAuthenticator(clientInfoProvider);
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { ClientSecret = ClientSecret });
+            SingleIssuer.Tenant, new ClientRequest { ClientSecret = ClientSecret }, clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var failure));
         Assert.IsNotType<UnauthenticatedCallerError>(failure);
