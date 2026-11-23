@@ -163,7 +163,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         var audience = token.Payload.Json[JwtClaimTypes.Audience];
         if (audiences.HasFlag(ClientAssertionAudiences.Issuer) &&
-            Names(audience, allowArray, tenant.IssuerIsNamedBy))
+            AudienceClaim.Names(audience, allowArray, tenant.IssuerIsNamedBy))
         {
             return true;
         }
@@ -223,40 +223,24 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return false;
 
         var spellings = tenant.AcceptedSpellings(serviceProvider, endpoint);
-        return Names(
+        return AudienceClaim.Names(
             audience,
             audiences.HasFlag(ClientAssertionAudiences.AllowArray),
             written => spellings.Contains(written, StringComparer.Ordinal));
     }
 
     /// <summary>
-    /// Answers whether the audience claim names a value <paramref name="accepts"/> takes, as a string, or, when
-    /// <paramref name="allowArray"/>, in an array of strings beside others.
-    /// </summary>
-    /// <remarks>
-    /// An array is still an array of strings, as RFC 7519 section 4.1.3 has it: a member of another kind refuses the
-    /// claim rather than being stepped over.
-    /// </remarks>
-    private static bool Names(JsonNode? audience, bool allowArray, Func<string, bool> accepts) => audience switch
-    {
-        JsonValue value => AsString(value) is { } written && accepts(written),
-        JsonArray array when allowArray => array.Select(AsString).ToArray() is var members &&
-                                           members.All(member => member is not null) &&
-                                           members.Any(member => accepts(member!)),
-        _ => false,
-    };
-
-    private static string? AsString(JsonNode? node)
-        => node is JsonValue value && value.TryGetValue<string>(out var written) ? written : null;
-
-    /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <returns>The authenticated <see cref="ClientInfo"/>, or why it is not one: no assertion presented, or one
     /// presented and refused.</returns>
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
     {
         if (!IsPresented(request))
             return ClientAuthenticationFailures.NoCredential;
@@ -266,7 +250,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return ClientAuthenticationFailures.InvalidCredential;
         }
 
-        var validationResult = await ValidateJwtAsync(tenant, assertion);
+        var validationResult = await ValidateJwtAsync(tenant, clients, assertion);
         if (!validationResult.TryGetSuccess(out var validJwt))
         {
             var error = validationResult.GetFailure();
@@ -307,7 +291,10 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     }
 
     /// <inheritdoc />
-    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
         => Task.FromResult<IEnumerable<string>>(IsPresented(request) ? [nameof(ClientRequest.ClientAssertion)] : []);
 
     /// <summary>
@@ -491,10 +478,11 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// This method must be implemented by derived classes to provide their specific validation logic.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
     protected abstract Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
-        TenantDefinition tenant, string jwt);
+        TenantDefinition tenant, IClientInfoProvider clients, string jwt);
 }

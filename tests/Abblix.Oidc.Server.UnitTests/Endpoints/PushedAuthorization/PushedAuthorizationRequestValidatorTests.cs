@@ -40,6 +40,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.PushedAuthorization;
 /// </summary>
 public class PushedAuthorizationRequestValidatorTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     private const string ProofJwt = "eyJ.dummy.proof";
     private const string DerivedThumbprint = "Wv1eDD8H4U6oOyVD0Y8GbqYAh8mXJTfjOcfZ4nVbA9Y";
     private const string DifferentThumbprint = "00000000000000000000000000000000000000000000";
@@ -54,7 +57,7 @@ public class PushedAuthorizationRequestValidatorTests
     public PushedAuthorizationRequestValidatorTests()
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
         _innerValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationRequest>(), It.IsAny<IClientInfoProvider>()))
@@ -65,6 +68,7 @@ public class PushedAuthorizationRequestValidatorTests
                     new ValidAuthorizationRequest(
                         new AuthorizationValidationContext(req)
                         {
+                            Clients = Mock.Of<IClientInfoProvider>(),
                             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
                             ResponseMode = ResponseModes.Query,
                             ValidRedirectUri = req.RedirectUri,
@@ -83,7 +87,7 @@ public class PushedAuthorizationRequestValidatorTests
         AuthorizationRequest request,
         ClientRequest clientRequest)
     {
-        var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest);
+        var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest, Clients);
         return await _validator.ValidateAsync(
             SingleIssuer.Tenant, client.GetSuccess(), request, clientRequest,
             new Mock<IClientInfoProvider>().Object);
@@ -133,7 +137,7 @@ public class PushedAuthorizationRequestValidatorTests
     public async Task ValidateAsync_Fapi1Advanced_ADPoPProof_IsRefusedUnread()
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
 
         var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
@@ -234,7 +238,7 @@ public class PushedAuthorizationRequestValidatorTests
         ClientSecurityProfile? profile, string? challenge, string? method, bool accepted)
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile });
         var request = BuildRequest() with { CodeChallenge = challenge, CodeChallengeMethod = method };
 
@@ -259,7 +263,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SecurityProfileRequirements? judgedUnder = null;
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 });
         var token = new JsonWebToken { Header = { Algorithm = algorithm } };
         _proofValidator

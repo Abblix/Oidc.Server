@@ -278,7 +278,6 @@ public class ClientAssertionMayTightenItselfTests
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
             new ProfiledJwtValidator(tokenValidator.Object),
-            clientInfoProvider.Object,
             new FakeTimeProvider(Now),
             replayCache.Object,
             new ServiceCollection().BuildServiceProvider());
@@ -288,7 +287,7 @@ public class ClientAssertionMayTightenItselfTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, clientInfoProvider.Object);
     }
 
     /// <summary>
@@ -308,8 +307,10 @@ public class ClientAssertionMayTightenItselfTests
             .Setup(v => v.ValidateAsync(
                 It.IsAny<TenantDefinition>(),
                 null,
+                It.IsAny<IClientInfoProvider>(),
                 JwtAssertion,
                 It.IsAny<TokenTypePolicy>(),
+                It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
@@ -329,7 +330,7 @@ public class ClientAssertionMayTightenItselfTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, clientInfoProvider.Object);
     }
 
     private static JsonWebToken CreateAssertion(

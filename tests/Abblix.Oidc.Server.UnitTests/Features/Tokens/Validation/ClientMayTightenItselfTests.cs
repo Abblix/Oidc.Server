@@ -105,15 +105,15 @@ public class ClientMayTightenItselfTests
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
             new ProfiledJwtValidator(tokenValidator.Object),
-            clientInfoProvider.Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
             new FakeTimeProvider(Now));
 
         return await validator.ValidateAsync(
             new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = deploymentProfile }.ToTenant(),
-            null, "header.payload.signature",
+            null, clientInfoProvider.Object, "header.payload.signature",
             TokenTypePolicy.CheckedByCaller,
+            signingAlgorithms: null,
             options);
     }
 

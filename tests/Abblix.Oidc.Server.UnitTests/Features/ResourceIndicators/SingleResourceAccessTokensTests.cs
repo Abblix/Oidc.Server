@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -78,7 +79,7 @@ public class SingleResourceAccessTokensTests
                     RedirectUri = new Uri("https://client.example.com/callback"),
                     Scope = [],
                     Resources = resources,
-                }) { ClientInfo = client }))?.Error,
+                }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client }))?.Error,
             "back-channel" => (await new BackChannelResourceValidator(SingleIssuer.ResourceManager()).ValidateAsync(
                 Tenant,
                 new BackChannelAuthenticationValidationContext(

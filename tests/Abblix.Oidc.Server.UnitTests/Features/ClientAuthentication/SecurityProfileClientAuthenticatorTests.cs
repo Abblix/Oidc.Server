@@ -37,6 +37,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// </summary>
 public class SecurityProfileClientAuthenticatorTests
 {
+    /// <summary>The clients of the request, which the authenticators under test receive and pass on.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     private const string ClientId = "stored-client";
 
     /// <summary>
@@ -103,7 +106,7 @@ public class SecurityProfileClientAuthenticatorTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -140,7 +143,7 @@ public class SecurityProfileClientAuthenticatorTests
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -162,7 +165,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         // Selected by EVENT, not by level: this class emits a second warning of its own, and a
         // fixture that also tripped it would satisfy both assertions off the wrong line.
@@ -194,7 +197,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         var entry = Assert.Single(
             logger.Entries,
@@ -221,7 +224,7 @@ public class SecurityProfileClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         var entry = Assert.Single(
             logger.Entries,
@@ -248,7 +251,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         var entry = Assert.Single(
             logger.Entries,
@@ -278,7 +281,7 @@ public class SecurityProfileClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         var entry = Assert.Single(
             logger.Entries,
@@ -308,7 +311,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         Assert.DoesNotContain(
             logger.Entries,
@@ -333,13 +336,13 @@ public class SecurityProfileClientAuthenticatorTests
             ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest(), Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
-        => inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+        => inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(clientInfo);
 
     /// <summary>
@@ -356,7 +359,7 @@ public class SecurityProfileClientAuthenticatorTests
         var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId) { TokenEndpointAuthMethod = method });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         Assert.False(result.TryGetSuccess(out _));
 
@@ -389,7 +392,7 @@ public class SecurityProfileClientAuthenticatorTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         Assert.False(result.TryGetSuccess(out _));
     }
@@ -413,7 +416,7 @@ public class SecurityProfileClientAuthenticatorTests
             AllowedResponseTypes = [],
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -433,7 +436,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         Assert.False(result.TryGetSuccess(out _));
     }
@@ -459,7 +462,7 @@ public class SecurityProfileClientAuthenticatorTests
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         Assert.Same(clientInfo, result.GetSuccess());
     }
@@ -483,7 +486,7 @@ public class SecurityProfileClientAuthenticatorTests
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         Assert.Same(clientInfo, result.GetSuccess());
     }
@@ -511,7 +514,7 @@ public class SecurityProfileClientAuthenticatorTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -546,7 +549,7 @@ public class SecurityProfileClientAuthenticatorTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -574,7 +577,7 @@ public class SecurityProfileClientAuthenticatorTests
         Authenticates(inner, clientInfo);
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest(), Clients);
 
         Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
@@ -593,7 +596,7 @@ public class SecurityProfileClientAuthenticatorTests
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients);
 
         Assert.Same(clientInfo, result.GetSuccess());
     }
@@ -617,7 +620,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.False((await underFloor.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest())).TryGetSuccess(out _));
+        Assert.False((await underFloor.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients)).TryGetSuccess(out _));
 
         var (tightened, tightenedInner) = CreateAuthenticator();
         Authenticates(tightenedInner, new ClientInfo(ClientId)
@@ -626,7 +629,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        Assert.False((await tightened.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest())).TryGetSuccess(out _));
+        Assert.False((await tightened.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -644,7 +647,7 @@ public class SecurityProfileClientAuthenticatorTests
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.True((await unprofiled.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest())).TryGetSuccess(out _));
+        Assert.True((await unprofiled.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest(), Clients)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -655,10 +658,10 @@ public class SecurityProfileClientAuthenticatorTests
     public async Task InnerRefuses_ShouldReturnNull()
     {
         var (authenticator, inner) = CreateAuthenticator();
-        inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+        inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest())).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest(), Clients)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -719,7 +722,7 @@ public class SecurityProfileClientAuthenticatorTests
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest(), Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -749,7 +752,7 @@ public class SecurityProfileClientAuthenticatorTests
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.None), new ClientRequest { ClientId = named });
+            TenantAt(ClientSecurityProfile.None), new ClientRequest { ClientId = named }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -802,7 +805,7 @@ public class SecurityProfileClientAuthenticatorTests
             EncryptionAlgorithms.KeyManagement.RsaOaep256));
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest(), Clients);
 
         Assert.Equal(withKey, result.TryGetSuccess(out _));
     }

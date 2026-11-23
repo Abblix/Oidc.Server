@@ -25,7 +25,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public abstract partial class ClientSecretAuthenticator(
 	ILogger<ClientSecretAuthenticator> logger,
-	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
 	IHashService hashService)
 {
@@ -36,6 +35,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// against stored values, considering the authentication method and secret expiration.
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
+	/// <param name="clients">The clients of the request being served, where the client is looked up.</param>
 	/// <param name="clientId">Client ID for identification.</param>
 	/// <param name="secret">Client secret for verification.</param>
 	/// <param name="authenticationMethod">Authentication method used, ensuring compatibility with client configuration.</param>
@@ -44,6 +44,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// </returns>
 	protected async Task<Result<ClientInfo, OidcError>> TryAuthenticateAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		string? clientId,
 		[Credential] string? secret,
 		string authenticationMethod)
@@ -53,7 +54,7 @@ public abstract partial class ClientSecretAuthenticator(
 			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
-		if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
+		if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
 		{
 			LogClientNotFound(clientId);
 			return ClientAuthenticationFailures.InvalidCredential;

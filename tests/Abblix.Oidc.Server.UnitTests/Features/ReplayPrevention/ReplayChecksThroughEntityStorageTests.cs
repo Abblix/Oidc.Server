@@ -51,6 +51,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ReplayPrevention;
 /// </remarks>
 public class ReplayChecksThroughEntityStorageTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     private const string Prefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
     private const string ClientId = "client-a";
     private const string Secret = "0123456789abcdef0123456789abcdef0123456789";
@@ -172,8 +175,8 @@ public class ReplayChecksThroughEntityStorageTests
         var jwtId = Guid.NewGuid().ToString("N");
         var request = await AssertionAsync(provider, jwtId);
 
-        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request)).TryGetSuccess(out _));
-        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request)).TryGetFailure(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, Clients)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, Clients)).TryGetFailure(out _));
         Assert.Equal([Prefix + jwtId, Prefix + jwtId], _storage.Claimed);
     }
 

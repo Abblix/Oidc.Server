@@ -74,6 +74,7 @@ public class AuthorizationHandlerTests
         var fetchedRequest = CreateRequest();
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);
@@ -189,6 +190,7 @@ public class AuthorizationHandlerTests
         };
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);
@@ -258,6 +260,7 @@ public class AuthorizationHandlerTests
         var fetchedRequest = CreateRequest();
         var validationContext = new AuthorizationValidationContext(fetchedRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         };
         var validRequest = new ValidAuthorizationRequest(validationContext);

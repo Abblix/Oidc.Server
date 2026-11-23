@@ -54,8 +54,7 @@ public sealed class JwtAlgorithmsProvider(
 	/// algorithm, so both "none" and the symmetric HS* algorithms are excluded here.
 	/// </summary>
 	public IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported
-		=> jwtValidator.SigningAlgorithmsSupported.Where(
-			alg => alg != SigningAlgorithms.None && !HmacAlgorithms.All.Contains(alg));
+		=> AsymmetricAlgorithms.Among(jwtValidator.SigningAlgorithmsSupported);
 
 	/// <inheritdoc />
 	public IEnumerable<string> DpopSigningAlgorithmsSupported

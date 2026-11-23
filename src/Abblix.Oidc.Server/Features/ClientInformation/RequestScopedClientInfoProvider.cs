@@ -16,10 +16,10 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// The clients one request names, each found once however many of its steps ask (Decorator).
 /// </summary>
 /// <remarks>
-/// An authorization request names its client at several steps - the per-client rule on pushed requests, the request
-/// object or request_uri it arrives with, the client validation, the response it is answered with - and each would
-/// otherwise ask the store, and fetch a client metadata document the store does not hold, again. The first answer for
-/// a tenant and a client identifier, found or absent, answers every later step.
+/// A request names its client at several steps - client authentication, the per-client rule on pushed requests, the
+/// request object or request_uri it arrives with, the client validation, the response it is answered with - and each
+/// would otherwise ask the store, and fetch a client metadata document the store does not hold, again. The first answer
+/// for a tenant and a client identifier, found or absent, answers every later step.
 /// <para>
 /// Its lifetime is the one its creator gives it: a handler creates one for the request it serves and passes it on, and
 /// it is never registered in the container. A verdict on a client metadata document therefore dies with the request
@@ -30,9 +30,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// </para>
 /// </remarks>
 /// <param name="inner">The store the clients are found in.</param>
-/// <param name="known">A client the request already established, as the pushed authorization request endpoint
-/// authenticates its client before anything else, answered without asking the store.</param>
-internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner, ClientInfo? known = null)
+internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner)
     : IClientInfoProvider
 {
     private readonly ConcurrentDictionary<(string TenantId, string ClientId), Task<Result<ClientInfo, ClientAbsence>>>
@@ -41,9 +39,6 @@ internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner,
     /// <inheritdoc />
     public Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
-        if (known is not null && string.Equals(known.ClientId, clientId, StringComparison.Ordinal))
-            return Task.FromResult<Result<ClientInfo, ClientAbsence>>(known);
-
         return _answers.GetOrAdd((tenant.Id, clientId), _ => inner.FindClientAsync(tenant, clientId));
     }
 }

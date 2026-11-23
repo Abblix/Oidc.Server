@@ -60,7 +60,6 @@ public class ProfileClockSkewReachesValidationTests
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
             new ProfiledJwtValidator(tokenValidator.Object),
-            clientInfoProvider.Object,
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
             new ServiceCollection().BuildServiceProvider());
@@ -69,7 +68,7 @@ public class ProfileClockSkewReachesValidationTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = "header.payload.signature",
-        });
+        }, clientInfoProvider.Object);
 
         return captured.NotNull(nameof(captured));
     }
@@ -157,12 +156,11 @@ public class ProfileClockSkewReachesValidationTests
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
             new ProfiledJwtValidator(tokenValidator.Object),
-            new Mock<IClientInfoProvider>().Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
             TimeProvider.System);
 
-        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, "header.payload.signature", TokenTypePolicy.CheckedByCaller);
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, new Mock<IClientInfoProvider>().Object, "header.payload.signature", TokenTypePolicy.CheckedByCaller, signingAlgorithms: null);
 
         Assert.Equal(
             SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),

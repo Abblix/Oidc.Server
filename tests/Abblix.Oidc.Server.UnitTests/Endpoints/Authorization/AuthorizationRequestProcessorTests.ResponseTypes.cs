@@ -325,6 +325,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var context = new AuthorizationValidationContext(authRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             ResponseMode = ResponseModes.Query,
             Scope = grantedScopes,

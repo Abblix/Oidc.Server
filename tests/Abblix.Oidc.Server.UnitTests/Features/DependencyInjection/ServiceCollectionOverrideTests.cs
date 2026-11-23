@@ -60,6 +60,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 /// </summary>
 public class ServiceCollectionOverrideTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     [Fact]
     public void AddAuthServiceJwt_HostPreregisteredKeysProvider_Wins()
     {
@@ -188,7 +191,8 @@ public class ServiceCollectionOverrideTests
 
         var authenticated = await authenticator.TryAuthenticateClientAsync(
             fapi2.ToTenant(),
-            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+            new ClientRequest { ClientId = TestConstants.DefaultClientId },
+            Clients);
 
         Assert.False(authenticated.TryGetSuccess(out _));
     }
@@ -234,8 +238,8 @@ public class ServiceCollectionOverrideTests
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
         var request = new ClientRequest { ClientId = TestConstants.DefaultClientId };
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
-        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request, Clients)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request, Clients)).TryGetSuccess(out _));
     }
 
     [Fact]

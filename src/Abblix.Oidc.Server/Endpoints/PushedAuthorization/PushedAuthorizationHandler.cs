@@ -72,7 +72,11 @@ public class PushedAuthorizationHandler(
                 authorizationRequest,
                 ErrorFactory.InvalidRequest(Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader.ErrorDescription));
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        // One lookup of the client for the whole request: authentication finds it, and every later step asking for the
+        // client the request names gets the one authentication found, without asking the store again
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -90,10 +94,6 @@ public class PushedAuthorizationHandler(
                 authorizationRequest,
                 ErrorFactory.InvalidRequest("The pushed authorization request must be bound to the client that posted it"));
         }
-
-        // Every later step asking for the client the request names gets the one that authenticated, without asking the
-        // store again
-        var clients = new RequestScopedClientInfoProvider(clientInfoProvider, clientInfo);
 
         // RFC 9126 section 3: "Request parameters required by a given client authentication method are included in the
         // "application/x-www-form-urlencoded" request directly and are the only parameters other than "request" in the

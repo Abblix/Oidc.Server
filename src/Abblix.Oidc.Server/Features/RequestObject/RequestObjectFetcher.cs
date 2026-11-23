@@ -229,38 +229,20 @@ public partial class RequestObjectFetcher(
         // every layer of it up front rather than once the object names its client (FAPI 1.0 Part 2 section 8.6.1)
         // The type is judged below, where a refusal speaks the request object's error vocabulary
         var result = await tokenValidator.ValidateAsync(
-            tenant, namedClient, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
+            tenant,
+            namedClient,
+            scope.ServiceProvider.GetRequiredService<IClientInfoProvider>(),
+            requestObject,
+            TokenTypePolicy.CheckedByCaller,
+            signingAlgorithms: null,
+            validationOptions);
 
         return result.Match<Result<(JsonWebToken Token, ClientInfo Client), OidcError>>(
             validJwt =>
             {
-                // A request object carries authorization request parameters; it is not a token. RFC 9101 section 4
-                // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
-                // deployments may alternatively be using the type application/jwt", so the exact value cannot
-                // be demanded of a conformant client. What can be refused is a JWT declaring itself some
-                // other type this class names, which is one being replayed where request parameters belong -
-                // the confusion RFC 8725 section 3.11 describes. The client signs this one, so the kinds within its
-                // reach are not only the ones this server issued.
-                var tokenType = validJwt.Token.Header.Type;
-                if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.RequestObject))
-                {
-                    return new OidcError(
-                        ErrorCodes.InvalidRequestObject,
-                        $"A token of type '{tokenType}' cannot be used as a request object");
-                }
-
-                // RFC 9101 section 10.5: a client registered with require_signed_request_object committed
-                // to SIGNED request objects - an unsigned (alg=none) object satisfies the
-                // structural check but not the commitment. A profile requiring signed request objects
-                // (FAPI 1.0 Part 2 section 5.2.2) commits the client the same way.
                 var profile = SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile);
-                if ((validJwt.Client.RequireSignedRequestObject || profile.RequireSignedRequestObject) &&
-                    UnsecuredToken.Is(validJwt.Token))
-                {
-                    return new OidcError(
-                        ErrorCodes.InvalidRequestObject,
-                        "The client is required to sign its request objects");
-                }
+                if (RequestObjectHeaderRules.WhyRefused(validJwt.Token, validJwt.Client, profile) is { } headerRefusal)
+                    return new OidcError(ErrorCodes.InvalidRequestObject, headerRefusal);
 
                 // Pin the request object's alg to what the resolved client registered for this
                 // request-object kind. The signature is already verified; this rejects a request

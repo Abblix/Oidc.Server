@@ -8,6 +8,8 @@
 
 using System.Buffers.Text;
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -15,6 +17,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
@@ -142,6 +146,93 @@ public partial class ClientIdMetadataDocumentTests
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(1, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
+    /// The mirror of <see cref="ARefusedDocument_IsFetchedOnceByAPushedRequestWithAPrivateKeyAssertion"/>: an assertion
+    /// signed with a shared secret is refused by private_key_jwt before it looks the issuer up, so client_secret_jwt
+    /// alone fetches the document.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedDocument_IsFetchedOnceByAPushedRequestWithASecretAssertion()
+    {
+        Arrange(Unavailable.NotFound);
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var key = JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+        parameters[ClientRequest.Parameters.ClientAssertion] =
+            await ClientSecretJwtAssertion.IssueWithKeyAsync(ClientId, key, discovery.Issuer.OriginalString);
+
+        using var response = await FormPostHelpers.PostFormAsync(
+            client, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+
+        Assert.False(response.IsSuccessStatusCode);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
+    /// A client certificate on the connection offers the push to the mutual TLS methods too, and each of them finds
+    /// the client the request names: the document is still fetched once, whether its client is refused or valid.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADocument_IsFetchedOnceByAPushedRequestOverAConnectionWithACertificate(bool valid)
+    {
+        if (valid)
+            _origin.Serve(ClientId, PublicClientDocument().ToJsonString(), "no-store");
+        else
+            Arrange(Unavailable.NotFound);
+
+        await using var host = CreateHost();
+        var discovery = await FetchDiscoveryAsync(CreateClientFor(host));
+
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        if (!valid)
+        {
+            parameters[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+            parameters[ClientRequest.Parameters.ClientAssertion] =
+                await ClientSecretJwtAssertion.IssueWithKeyAsync(ClientId, key, discovery.Issuer.OriginalString);
+        }
+
+        var status = await PostWithCertificateAsync(host, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+
+        Assert.Equal(valid, status == StatusCodes.Status201Created);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
+    }
+
+    /// <summary>
+    /// Posts <paramref name="form"/> over a connection carrying a fresh self-signed TLS client certificate, which an
+    /// HTTP client of the test server cannot present, and returns the status it is answered with.
+    /// </summary>
+    private static async Task<int> PostWithCertificateAsync(
+        WebApplicationFactory<Program> host, Uri endpoint, Dictionary<string, string> form)
+    {
+        using var key = RSA.Create(2048);
+        using var certificate = new CertificateRequest("CN=client", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
+        using var content = new FormUrlEncodedContent(form);
+        var body = await content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+
+        var context = await host.Server.SendAsync(
+            http =>
+            {
+                http.Connection.ClientCertificate = certificate;
+                http.Request.Method = HttpMethods.Post;
+                http.Request.Scheme = endpoint.Scheme;
+                http.Request.Host = new HostString(endpoint.Authority);
+                http.Request.Path = endpoint.AbsolutePath;
+                http.Request.ContentType = content.Headers.ContentType!.ToString();
+                http.Request.Body = new MemoryStream(body);
+            },
+            TestContext.Current.CancellationToken);
+
+        return context.Response.StatusCode;
     }
 
     /// <summary>

@@ -135,7 +135,7 @@ public class RequestObjectFetcherTests
         AddressedTo(SingleIssuer.Tenant, token.Payload);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, fapiClient));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
@@ -179,7 +179,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("c1")));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
@@ -252,7 +252,7 @@ public class RequestObjectFetcherTests
         var boundRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, "newstate");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -295,7 +295,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, originalRequest))
@@ -337,7 +337,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -370,7 +370,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -401,7 +401,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo(TestConstants.DefaultClientId)));
 
         return await fetcher.FetchAsync(SingleIssuer.Tenant, null, originalRequest, jwt, null, [], _ => null);
@@ -453,7 +453,7 @@ public class RequestObjectFetcherTests
         var clientInfo = new ClientInfo("test-client") { RequestObjectSigningAlgorithm = SigningAlgorithms.RS256 };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         // Act - the binder is strict and unset, so the alg pin must reject before any binding.
@@ -484,7 +484,7 @@ public class RequestObjectFetcherTests
         var clientInfo = new ClientInfo("test-client") { RequestObjectSigningAlgorithm = SigningAlgorithms.RS256 };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, request))
@@ -512,7 +512,7 @@ public class RequestObjectFetcherTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Invalid JWT format");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -544,7 +544,7 @@ public class RequestObjectFetcherTests
         ValidationOptions? capturedOptions = null;
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .Callback<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
@@ -582,7 +582,7 @@ public class RequestObjectFetcherTests
         ValidationOptions? capturedOptions = null;
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .Callback<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options)
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
@@ -618,7 +618,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -652,7 +652,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -693,7 +693,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync((TenantDefinition _, ClientInfo? _, string jwt, TokenTypePolicy _, ValidationOptions _) =>
             {
                 var token = jwt == jwt1 ? token1 : token2;
@@ -728,7 +728,7 @@ public class RequestObjectFetcherTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Token has expired");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -753,7 +753,7 @@ public class RequestObjectFetcherTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Invalid signature");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -791,7 +791,7 @@ public class RequestObjectFetcherTests
         var boundRequest = new TestRequest(TestConstants.DefaultClientId, "https://new.example.com/callback", "complex_state_123");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -826,7 +826,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -856,7 +856,7 @@ public class RequestObjectFetcherTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Malformed JWT");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -886,7 +886,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -921,7 +921,7 @@ public class RequestObjectFetcherTests
         var boundRequest = new { ClientId = TestConstants.DefaultClientId, Scope = "openid profile" };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -965,7 +965,7 @@ public class RequestObjectFetcherTests
         var boundRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, "test_state");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, unsignedJwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), unsignedJwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         _jsonObjectBinder
@@ -982,8 +982,8 @@ public class RequestObjectFetcherTests
         // Verify that RequireSignedTokens flag was NOT set
         _jwtValidator.Verify(
             v => v.ValidateAsync(
-                TestTenant.Matched, null, unsignedJwt,
-                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(opts => !opts.HasFlag(ValidationOptions.RequireSignedTokens))),
+                TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), unsignedJwt,
+                It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.Is<ValidationOptions>(opts => !opts.HasFlag(ValidationOptions.RequireSignedTokens))),
             Times.Once);
     }
 
@@ -1004,7 +1004,7 @@ public class RequestObjectFetcherTests
         var validationError = new JwtValidationError(JwtError.InvalidToken, "Unsigned tokens are not allowed");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, unsignedJwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), unsignedJwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -1017,8 +1017,8 @@ public class RequestObjectFetcherTests
         // Verify that RequireSignedTokens flag WAS set
         _jwtValidator.Verify(
             v => v.ValidateAsync(
-                TestTenant.Matched, null, unsignedJwt,
-                It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(opts => opts.HasFlag(ValidationOptions.RequireSignedTokens))),
+                TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), unsignedJwt,
+                It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.Is<ValidationOptions>(opts => opts.HasFlag(ValidationOptions.RequireSignedTokens))),
             Times.Once);
     }
 
@@ -1042,7 +1042,7 @@ public class RequestObjectFetcherTests
         var committedClient = new ClientInfo("test-client") { RequireSignedRequestObject = true };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, committedClient));
 
         // Act
@@ -1071,7 +1071,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, Fapi1AdvancedClient));
 
         var result = await fetcher.FetchAsync(SingleIssuer.Tenant, null, request, jwt, null, [], _ => null);
@@ -1109,7 +1109,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("c1") { SecurityProfile = clientProfile }));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
@@ -1203,7 +1203,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
 
         // The binder must receive a FRESH target, not the outer request - that is what makes the
@@ -1290,7 +1290,7 @@ public class RequestObjectFetcherTests
         };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, client));
         _jsonObjectBinder
             .Setup(b => b.BindModelAsync(It.IsAny<JsonObject>(), It.IsAny<JarTestRequest>()))
@@ -1414,7 +1414,7 @@ public class RequestObjectFetcherTests
         var token = new JsonWebToken { Header = new JsonWebTokenHeader(new JsonObject()), Payload = payload };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, Fapi1AdvancedClient));
 
         AssertInvalidRequestObject(await CreateFetcher().FetchAsync(SingleIssuer.Tenant, null, request, jwt, null, [], _ => null));

@@ -25,10 +25,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public class ClientSecretBasicAuthenticator(
 	ILogger<ClientSecretBasicAuthenticator> logger,
-	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
 	IHashService hashService)
-	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
+	: ClientSecretAuthenticator(logger, clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.
@@ -52,12 +51,16 @@ public class ClientSecretBasicAuthenticator(
 	/// <param name="request">
 	/// The client request containing the authentication information in the 'Authorization' header.
 	/// </param>
+	/// <param name="clients">The clients of the request being served, where the client is looked up.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
 	/// <see cref="ClientInfo"/>, or why it is not one: no Authorization header presented, or one presented that is
 	/// malformed, of another scheme or not a client's credentials.
 	/// </returns>
-	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 	{
 		if (!IsPresented(request))
 			return ClientAuthenticationFailures.NoCredential;
@@ -83,13 +86,17 @@ public class ClientSecretBasicAuthenticator(
 
 		return await TryAuthenticateAsync(
 			tenant,
+			clients,
 			clientId: value[..colonIndex],
 			secret: value[(colonIndex + 1)..],
 			ClientAuthenticationMethods.ClientSecretBasic);
 	}
 
 	/// <inheritdoc />
-	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 		=> Task.FromResult<IEnumerable<string>>(
 			IsPresented(request) ? [nameof(ClientRequest.AuthorizationHeaderLines)] : []);
 

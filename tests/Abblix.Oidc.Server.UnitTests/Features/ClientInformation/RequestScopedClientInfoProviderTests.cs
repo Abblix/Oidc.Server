@@ -65,25 +65,4 @@ public sealed class RequestScopedClientInfoProviderTests
 
         _store.Verify(store => store.FindClientAsync(TestTenant.Matched, ClientId), Times.Exactly(2));
     }
-
-    [Fact]
-    public async Task AClientTheRequestEstablished_IsAnsweredWithoutAsking()
-    {
-        var known = new ClientInfo(ClientId);
-        var clients = new RequestScopedClientInfoProvider(_store.Object, known);
-
-        Assert.Same(known, (await clients.FindClientAsync(Tenant, ClientId)).GetSuccess());
-        _store.VerifyNoOtherCalls();
-    }
-
-    [Fact]
-    public async Task AnotherClient_IsAskedOfTheStore_BesideTheEstablishedOne()
-    {
-        const string other = "other";
-        _store.Setup(store => store.FindClientAsync(TestTenant.Matched, other)).ReturnsAsync(ClientAbsence.Unknown);
-        var clients = new RequestScopedClientInfoProvider(_store.Object, new ClientInfo(ClientId));
-
-        Assert.Equal(ClientAbsence.Unknown, (await clients.FindClientAsync(Tenant, other)).GetFailure());
-        _store.Verify(store => store.FindClientAsync(TestTenant.Matched, other), Times.Once);
-    }
 }

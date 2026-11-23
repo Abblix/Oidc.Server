@@ -102,11 +102,11 @@ public sealed class StageObservationTests : IDisposable
     {
         var inner = new Mock<IClientAuthenticator>();
         inner
-            .Setup(authenticator => authenticator.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>()))
+            .Setup(authenticator => authenticator.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
         var observed = new ObservedClientAuthenticator(inner.Object);
 
-        var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest()));
+        var (_, stages) = await UnderAnEndpointSpan(() => observed.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest(), new Mock<IClientInfoProvider>().Object));
 
         var stage = Assert.Single(stages);
         Assert.Equal(TelemetryStages.ClientAuthentication, stage.GetTagItem(TelemetryTags.Stage));
@@ -125,7 +125,7 @@ public sealed class StageObservationTests : IDisposable
             .ReturnsAsync(new UserConsents());
         var reader = new UserConsentsReader(inner.Object, TimeProvider.System);
         var request = new ValidAuthorizationRequest(
-            new AuthorizationValidationContext(new AuthorizationRequest()) { ClientInfo = new ClientInfo("client") });
+            new AuthorizationValidationContext(new AuthorizationRequest()) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = new ClientInfo("client") });
 
         var (_, stages) = await UnderAnEndpointSpan(() => reader.ReadAsync(SingleIssuer.Tenant, request, null!));
 

@@ -49,11 +49,12 @@ public class ClientSecretJwtThroughTheValidatorTests
     {
         await using var jwt = JsonWebTokenServices();
         var authenticator = Authenticator(jwt);
+        var clients = Clients().Object;
 
         // Each assertion names the issuer of the tenant it is presented at, so the client lookup alone
         // decides the second one
-        Assert.True((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString]))).TryGetSuccess(out _));
-        Assert.False((await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString]))).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString]), clients)).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString]), clients)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -71,7 +72,7 @@ public class ClientSecretJwtThroughTheValidatorTests
         var authenticator = Authenticator(jwt);
 
         string[] audiences = audience is null ? [] : [audience];
-        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences))).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences), Clients().Object)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -83,13 +84,13 @@ public class ClientSecretJwtThroughTheValidatorTests
     public async Task AnAssertionNotSignedWithASecret_IsRefusedWithoutLookingTheClientUp()
     {
         await using var jwt = JsonWebTokenServices();
-        var clients = new Mock<IClientInfoProvider>();
-        var authenticator = Authenticator(jwt, clients);
+        var clients = Clients();
+        var authenticator = Authenticator(jwt);
 
         var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
         var request = await RequestAsync(jwt, [Globex.Issuer.OriginalString], key);
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, request)).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, request, clients.Object)).TryGetSuccess(out _));
         clients.Verify(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -102,19 +103,25 @@ public class ClientSecretJwtThroughTheValidatorTests
         return services.BuildServiceProvider();
     }
 
-    private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt)
-        => Authenticator(jwt, new Mock<IClientInfoProvider>());
-
-    private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt, Mock<IClientInfoProvider> clients)
+    /// <summary>
+    /// A store holding the client at one tenant alone.
+    /// </summary>
+    private static Mock<IClientInfoProvider> Clients()
     {
         var client = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
             ClientSecrets = [new ClientSecret { Value = Secret }],
         };
+        var clients = new Mock<IClientInfoProvider>();
         clients
             .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == Globex.Id ? client : ClientAbsence.Unknown);
+        return clients;
+    }
+
+    private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt)
+    {
         var replayCache = new Mock<IReplayCache>();
         replayCache
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
@@ -123,7 +130,6 @@ public class ClientSecretJwtThroughTheValidatorTests
         return new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
             new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()),
-            clients.Object,
             TimeProvider.System,
             replayCache.Object,
             new ServiceCollection().BuildServiceProvider());

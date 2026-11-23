@@ -58,10 +58,10 @@ public class ClientSecretAuthenticatorTests
         IClientInfoProvider clientInfoProvider,
         TimeProvider clock,
         IHashService hashService)
-        : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService)
+        : ClientSecretAuthenticator(logger, clock, hashService)
     {
         public Task<Result<ClientInfo, OidcError>> TestTryAuthenticateAsync(string? clientId, string? secret, string authMethod)
-            => TryAuthenticateAsync(SingleIssuer.Tenant, clientId, secret, authMethod);
+            => TryAuthenticateAsync(SingleIssuer.Tenant, clientInfoProvider, clientId, secret, authMethod);
     }
 
     private static byte[] ComputeSha256(string value)

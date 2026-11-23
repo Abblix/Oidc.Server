@@ -66,7 +66,6 @@ public class ClientSecretJwtAuthenticatorTests
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
             new ProfiledJwtValidator(_tokenValidator.Object),
-            _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,
             new ServiceCollection().BuildServiceProvider());
@@ -87,7 +86,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -108,7 +107,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -129,7 +128,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -150,7 +149,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -199,7 +198,7 @@ public class ClientSecretJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
-        });
+        }, _clientInfoProvider.Object);
 
         Assert.False(result.TryGetSuccess(out _));
     }
@@ -257,7 +256,6 @@ public class ClientSecretJwtAuthenticatorTests
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
             new ProfiledJwtValidator(_tokenValidator.Object),
-            _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,
             services.BuildServiceProvider(validateScopes: true));
@@ -266,7 +264,7 @@ public class ClientSecretJwtAuthenticatorTests
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
-        });
+        }, _clientInfoProvider.Object);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -324,7 +322,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -376,7 +374,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -431,7 +429,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -459,7 +457,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -512,7 +510,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -565,7 +563,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -619,7 +617,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));

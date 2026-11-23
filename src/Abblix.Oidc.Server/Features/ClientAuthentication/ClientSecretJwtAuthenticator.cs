@@ -30,7 +30,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="tokenValidator">Validator for JSON Web Tokens.</param>
-/// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Resolves per request where the token and backchannel authentication endpoints are
@@ -39,7 +38,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     ProfiledJwtValidator tokenValidator,
-    IClientInfoProvider clientInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache,
     IServiceProvider serviceProvider)
@@ -60,14 +58,15 @@ public partial class ClientSecretJwtAuthenticator(
     /// Validates the JWT assertion using HMAC signature with the client secret.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
     protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
-        TenantDefinition tenant, string jwt)
+        TenantDefinition tenant, IClientInfoProvider clients, string jwt)
     {
-        var context = new ValidationContext();
+        var context = new ValidationContext(clients);
         var profile = DefaultProfileRequirementsOf(tenant);
 
         var result = await tokenValidator.ValidateAsync(
@@ -95,8 +94,14 @@ public partial class ClientSecretJwtAuthenticator(
     /// <summary>
     /// Context object used to pass state between validation methods during JWT validation process.
     /// </summary>
-    private sealed class ValidationContext
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
+    private sealed class ValidationContext(IClientInfoProvider clients)
     {
+        /// <summary>
+        /// The clients of the request being served.
+        /// </summary>
+        public IClientInfoProvider Clients => clients;
+
         /// <summary>
         /// The client information resolved during the validation process.
         /// </summary>
@@ -123,7 +128,7 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        if (!(await clientInfoProvider.FindClientAsync(tenant, issuer)).TryGetSuccess(out var clientInfo))
+        if (!(await context.Clients.FindClientAsync(tenant, issuer)).TryGetSuccess(out var clientInfo))
             return false;
 
         if (clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt)

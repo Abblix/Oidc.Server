@@ -46,7 +46,7 @@ public class PushedAuthorizationHandlerTests
             result = client;
 
         authenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(result);
         return authenticator.Object;
     }

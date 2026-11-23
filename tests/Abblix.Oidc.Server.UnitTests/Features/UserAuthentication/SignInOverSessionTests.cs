@@ -238,6 +238,7 @@ public class SignInOverSessionTests
 
         var context = new Abblix.Oidc.Server.Endpoints.Authorization.Validation.AuthorizationValidationContext(model)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(clientId),
             ResponseMode = ResponseModes.Query,
             Scope = [new ScopeDefinition(Scopes.OpenId)],

@@ -45,19 +45,23 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// <param name="tenant">The tenant the request is served at, handed to each authenticator.</param>
 	/// <param name="request">The <see cref="ClientRequest"/> to authenticate. This object contains details
 	/// about the request that may be used by authenticators to determine the client's identity.</param>
+	/// <param name="clients">The clients of the request being served, where the client is looked up.</param>
 	/// <returns><see cref="ClientAuthenticationFailures.MoreThanOneMethod"/> for a request presenting credentials in
 	/// more than one place, before any authenticator checks one; otherwise the client the first authenticator to
 	/// succeed proves, where a credential is presented only those reading it being asked; otherwise the refusal of the
 	/// first one a credential was presented to, or, where none was presented to any,
 	/// <see cref="ClientAuthenticationFailures.NoCredential"/>.
 	/// </returns>
-	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 	{
 		var presented = new HashSet<string>(StringComparer.Ordinal);
 		var readingIt = new List<IClientAuthenticator>();
 		foreach (var clientAuthenticator in clientAuthenticators)
 		{
-			var places = (await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request)).ToArray();
+			var places = (await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request, clients)).ToArray();
 			if (places.Length == 0)
 				continue;
 
@@ -80,7 +84,7 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 		OidcError? refused = null;
 		foreach (var clientAuthenticator in asked)
 		{
-			var result = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request);
+			var result = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request, clients);
 			if (result.TryGetSuccess(out var clientInfo))
 				return clientInfo;
 
@@ -95,11 +99,14 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// Every place a credential is presented in that any authenticator reads, each named once, so a credential two
 	/// authenticators read counts as one.
 	/// </summary>
-	public async Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 	{
 		var presented = new HashSet<string>(StringComparer.Ordinal);
 		foreach (var clientAuthenticator in clientAuthenticators)
-			presented.UnionWith(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request));
+			presented.UnionWith(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request, clients));
 
 		return presented;
 	}
