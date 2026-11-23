@@ -287,23 +287,28 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts URIs with same host different casing.
-    /// Per RFC 3986 Section 3.2.2, host names are case-insensitive.
-    /// Tests validator correctly handles host case-insensitivity.
+    /// RFC 9700 section 4.1.3: the server "MUST ensure that the two URIs are equal; see Section 6.2.1 of [RFC3986],
+    /// Simple String Comparison". A spelling RFC 3986 normalizes to the registered URI is not that URI: host case, a
+    /// scheme in capitals, a default port written out, an encoded unreserved character, a dot segment, and an IPv6
+    /// loopback literal written in full, whose port alone may differ (RFC 8252 section 7.3).
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithDifferentHostCasing_ShouldSucceed()
+    [Theory]
+    [InlineData("https://client.example.com/callback", "https://CLIENT.EXAMPLE.COM/callback")]
+    [InlineData("https://client.example.com/callback", "HTTPS://client.example.com/callback")]
+    [InlineData("https://client.example.com/callback", "https://client.example.com:443/callback")]
+    [InlineData("https://client.example.com:443/callback", "https://client.example.com/callback")]
+    [InlineData("https://client.example.com/~user", "https://client.example.com/%7Euser")]
+    [InlineData("https://client.example.com/callback", "https://client.example.com/a/../callback")]
+    [InlineData("http://[::1]:61023/oauth2redirect", "http://[0:0:0:0:0:0:0:1]:61024/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2REDIRECT")]
+    public async Task ValidateAsync_ASpellingNormalizedToTheRegisteredUri_ShouldReturnError(
+        string registered, string requested)
     {
-        // Arrange
-        var registeredUri = new Uri("https://client.example.com/callback");
-        var redirectUri = new Uri("https://CLIENT.EXAMPLE.COM/callback");
-        var context = CreateContext(redirectUri, registeredUri);
+        var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
 
     /// <summary>
@@ -612,6 +617,7 @@ public class RedirectUriValidatorTests
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
     [InlineData("http://[::1]:61023/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
     [InlineData("http://127.0.0.1/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
+    [InlineData("http://[::1]/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
     public async Task ValidateAsync_LoopbackIpWithAnotherPort_ShouldSucceed(string registered, string requested)
     {
         var redirectUri = new Uri(requested);

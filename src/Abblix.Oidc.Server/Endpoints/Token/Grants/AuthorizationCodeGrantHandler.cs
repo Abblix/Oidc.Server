@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -86,7 +87,8 @@ public class AuthorizationCodeGrantHandler(
         // "redirect_uri" parameter was included in the initial authorization request ... and if included ensure
         // that their values are identical". Only this grant has an authorization request to compare with; every
         // other grant ignores the parameter, as section 3.2 has the server ignore unrecognized request parameters.
-        if (grant.Context.RedirectUri != request.RedirectUri)
+        // Identical as written, as RFC 9700 section 4.1.3 has redirect URIs compared, not as URIs equal once normalized
+        if (!RedirectUriComparison.AreIdentical(grant.Context.RedirectUri, request.RedirectUri))
         {
             return new OidcError(
                 ErrorCodes.InvalidGrant,
