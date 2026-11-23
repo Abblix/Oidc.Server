@@ -13,7 +13,9 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -27,7 +29,9 @@ using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Tests.Shared;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -57,6 +61,7 @@ public sealed class LoopbackDocumentsTests
         ["dev.example.com"] = [IPAddress.Loopback],
         ["intranet.example.com"] = [IPAddress.Parse("10.0.0.5")],
         ["mixed.example.com"] = [IPAddress.Loopback, IPAddress.Parse("192.168.1.5")],
+        ["keys.example.com"] = [IPAddress.Parse("93.184.216.34")],
     };
 
     private readonly MetadataDocumentOrigin _origin = new();
@@ -120,6 +125,62 @@ public sealed class LoopbackDocumentsTests
             told,
             _events.Ids.Contains(LogEvents.ClientInformation.ClientIdMetadataDocuments.LoopbackWithheld));
     }
+
+    /// <summary>
+    /// Section 10.7: servers "MUST NOT apply this exception in production deployments". A Production host that started
+    /// with the exception off and had it turned on by a configuration reload still fetches nothing from loopback, at a
+    /// tenant whose issuer is on loopback.
+    /// </summary>
+    [Fact]
+    public async Task AProductionHost_FetchesNoLoopbackDocument_WhenTheSettingChangesAfterStart()
+    {
+        const string clientId = "https://localhost:5002/client.json";
+        var services = Services(ClientIdMetadataDocumentAddresses.PublicOnly);
+        services.AddSingleton(Mock.Of<IHostEnvironment>(host => host.EnvironmentName == Environments.Production));
+        var reloaded = new OidcOptions
+        {
+            ClientIdMetadataDocuments = { Enabled = true, DocumentAddresses = Loopback },
+        };
+        services.AddSingleton(Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == reloaded));
+        _origin.Serve(clientId, """{"client_id":"https://another.example.com/client.json"}""");
+
+        await using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Null(await provider.GetRequiredService<IClientInfoProvider>()
+            .TryFindClientAsync(Tenant("https://localhost:5001/"), clientId));
+        Assert.Equal(0, _origin.RequestsTo(clientId));
+    }
+
+    /// <summary>
+    /// The exception covers the document's own URL alone: a key set the document names on loopback is fetched by the
+    /// strict rule, even from inside a scope that reaches loopback, while one on a public name is fetched.
+    /// </summary>
+    [Theory]
+    [InlineData("https://localhost:5003/jwks", 0)]
+    [InlineData("https://127.0.0.1:5003/jwks", 0)]
+    [InlineData("https://keys.example.com/jwks", 1)]
+    public async Task AKeySetADocumentNames_IsHeldToTheStrictRule(string jwksUri, int requests)
+    {
+        _origin.Serve(jwksUri, KeySet);
+        await using var provider = Services(Loopback).BuildServiceProvider();
+        var keys = new ClientKeysProvider(NullLogger<ClientKeysProvider>.Instance, provider);
+        var client = new ClientInfo("https://localhost:5002/client.json")
+        {
+            JwksUri = new Uri(jwksUri),
+            ResolvedFromMetadataDocument = true,
+        };
+
+        using (SpecialPurposeFetches.Enter(OutboundAddressRule.NoSpecialPurposeButLoopback))
+            await keys.GetSigningKeys(client).ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(requests, _origin.RequestsTo(jwksUri));
+    }
+
+    private static readonly string KeySet = JsonSerializer.Serialize(new JsonWebKeySet(
+    [
+        JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256).Sanitize(includePrivateKeys: false),
+    ]));
 
     /// <summary>
     /// The exception reaches loopback alone: a private network, written as a literal or reached through a name, and a
@@ -208,15 +269,18 @@ public sealed class LoopbackDocumentsTests
 
     private ServiceCollection Services(ClientIdMetadataDocumentAddresses addresses)
     {
-        var services = new ServiceCollection();
-        services.AddLogging(logging => logging.AddProvider(_events));
-        services.AddOptions();
-        services.AddSecureHttpFetch();
-        services.AddSingleton(Mock.Of<IClientInfoProvider>());
-        new Registered(services).AddClientIdMetadataDocuments();
-        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        var services = Unguarded(addresses);
+        Guard(services, ClientIdMetadataDocumentTransport.HttpClientName);
+        Guard(services, SecureFetchTransport.HttpClientName);
+        return services;
+    }
 
-        services.AddHttpClient(ClientIdMetadataDocumentTransport.HttpClientName)
+    /// <summary>
+    /// Makes the client registered as <paramref name="name"/> send through the SSRF validation over the names this
+    /// class resolves, to the origin.
+    /// </summary>
+    private void Guard(IServiceCollection services, string name)
+        => services.AddHttpClient(name)
             .ConfigurePrimaryHttpMessageHandler(provider =>
             {
                 var guard = new SsrfValidatingHttpMessageHandler(
@@ -229,6 +293,16 @@ public sealed class LoopbackDocumentsTests
                 guard.InnerHandler = _origin;
                 return guard;
             });
+
+    private ServiceCollection Unguarded(ClientIdMetadataDocumentAddresses addresses)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(logging => logging.AddProvider(_events));
+        services.AddOptions();
+        services.AddSecureHttpFetch();
+        services.AddSingleton(Mock.Of<IClientInfoProvider>());
+        new Registered(services).AddClientIdMetadataDocuments();
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
 
         services.AddSingleton(Mock.Of<IClientAuthenticator>(authenticator =>
             authenticator.ClientAuthenticationMethodsSupported == new[] { ClientAuthenticationMethods.None }));

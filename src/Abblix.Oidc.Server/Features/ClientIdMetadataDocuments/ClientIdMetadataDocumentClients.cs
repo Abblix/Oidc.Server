@@ -37,12 +37,14 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// <param name="scopes">Opens the container a document is judged in, since the checks it passes are scoped services.
 /// </param>
 /// <param name="options">The host's settings, read on each lookup.</param>
+/// <param name="environment">Whether the host runs in Production, where no document is fetched from loopback.</param>
 internal sealed partial class ClientIdMetadataDocumentClients(
     IClientInfoProvider inner,
     ILogger<ClientIdMetadataDocumentClients> logger,
     HeldMetadataDocuments documents,
     IServiceScopeFactory scopes,
-    IOptionsMonitor<OidcOptions> options) : IClientInfoProvider
+    IOptionsMonitor<OidcOptions> options,
+    ProductionEnvironment environment) : IClientInfoProvider
 {
     /// <inheritdoc />
     public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
@@ -79,11 +81,11 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         // Decided at each lookup, a held document's included, so a tenant whose issuer is not on loopback is never
         // served a document another tenant's fetch reached loopback for
         var addresses = settings.ClientIdMetadataDocuments.DocumentAddresses;
-        rule = SpecialPurposeFetches.DocumentRuleAt(tenant.Issuer, addresses);
+        rule = SpecialPurposeFetches.DocumentRuleAt(tenant.Issuer, addresses, environment.IsCurrent);
 
         // Said apart from every other refusal, so a host that set the exception reads why this tenant does not get it
         if (Uri.TryCreate(clientId, UriKind.Absolute, out var named) &&
-            SpecialPurposeFetches.LoopbackWithheldAt(tenant.Issuer, addresses, named))
+            SpecialPurposeFetches.LoopbackWithheldAt(tenant.Issuer, addresses, environment.IsCurrent, named))
         {
             LogLoopbackWithheld(clientId, tenant.Id, tenant.Issuer);
             return null;

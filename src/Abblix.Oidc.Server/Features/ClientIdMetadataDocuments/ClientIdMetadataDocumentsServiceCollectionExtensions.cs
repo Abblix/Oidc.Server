@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
 
@@ -73,6 +72,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
+        services.TryAddSingleton<ProductionEnvironment>();
         // A cache of their own, so the number of documents held is bounded whatever the host's cache allows: the URLs
         // are chosen by whoever sends a request
         services.TryAddKeyedSingleton<IMemoryCache>(
@@ -101,13 +101,10 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
                 wiring.PrivateNetworksBlocked =
                     provider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.BlockPrivateNetworks;
 
-                // A host built without the generic host registers no environment, and is taken for one that is not
-                // Production: nothing tells it apart from a development host, and the issuer-on-loopback gate still
-                // holds for each tenant
                 var loopback = provider.GetRequiredService<IOptions<OidcOptions>>().Value
                     .ClientIdMetadataDocuments.DocumentAddresses == ClientIdMetadataDocumentAddresses.AllowLoopback;
                 wiring.LoopbackInProduction =
-                    loopback && provider.GetService<IHostEnvironment>() is { } environment && environment.IsProduction();
+                    loopback && provider.GetRequiredService<ProductionEnvironment>().IsCurrent;
 
                 // The proxy resolves the name itself, on its own machine, so the address the server judged is not the
                 // one reached

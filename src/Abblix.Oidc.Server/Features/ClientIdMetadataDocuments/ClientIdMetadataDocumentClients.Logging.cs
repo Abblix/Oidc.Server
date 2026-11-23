@@ -42,6 +42,7 @@ partial class ClientIdMetadataDocumentClients
         Level = LogLevel.Warning,
         Message = "The client identifier URL {ClientId} names a loopback host, which " +
                   "ClientIdMetadataDocuments.DocumentAddresses AllowLoopback reaches only for a tenant whose issuer is " +
-                  "itself on a loopback address; the issuer of tenant {TenantId} is {Issuer}")]
+                  "itself on a loopback address, and never in the Production environment; the issuer of tenant " +
+                  "{TenantId} is {Issuer}")]
     private partial void LogLoopbackWithheld(Sanitized ClientId, string TenantId, Uri Issuer);
 }

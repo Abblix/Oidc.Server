@@ -78,12 +78,18 @@ internal static class SpecialPurposeFetches
     /// <param name="issuer">The tenant's issuer, judged as written, never resolved.</param>
     /// <param name="addresses">The host's
     /// <see cref="ClientIdMetadataDocumentOptions.DocumentAddresses"/>.</param>
-    public static OutboundAddressRule DocumentRuleAt(Uri issuer, ClientIdMetadataDocumentAddresses addresses)
+    /// <param name="production">Whether the host runs in the Production environment.</param>
+    public static OutboundAddressRule DocumentRuleAt(
+        Uri issuer,
+        ClientIdMetadataDocumentAddresses addresses,
+        bool production)
         => addresses switch
         {
             ClientIdMetadataDocumentAddresses.PublicOnly => OutboundAddressRule.NoSpecialPurpose,
 
-            ClientIdMetadataDocumentAddresses.AllowLoopback => IsLoopbackHost(issuer)
+            // Section 10.7: "MUST NOT apply this exception in production deployments", whatever the setting became
+            // after the startup refusal read it
+            ClientIdMetadataDocumentAddresses.AllowLoopback => !production && IsLoopbackHost(issuer)
                 ? OutboundAddressRule.NoSpecialPurposeButLoopback
                 : OutboundAddressRule.NoSpecialPurpose,
 
@@ -102,13 +108,17 @@ internal static class SpecialPurposeFetches
     /// <summary>
     /// Whether <paramref name="url"/>, a client identifier URL, names loopback at a tenant whose issuer is
     /// <paramref name="issuer"/> while <paramref name="addresses"/> would reach loopback only for an issuer on loopback,
-    /// which that issuer is not.
+    /// which that issuer is not, or the host runs in the Production environment.
     /// </summary>
     /// <remarks>
     /// A name resolving to loopback is not seen here: it is refused when the connection is judged.
     /// </remarks>
-    public static bool LoopbackWithheldAt(Uri issuer, ClientIdMetadataDocumentAddresses addresses, Uri url)
-        => DocumentRuleAt(issuer, addresses) == OutboundAddressRule.NoSpecialPurpose &&
+    public static bool LoopbackWithheldAt(
+        Uri issuer,
+        ClientIdMetadataDocumentAddresses addresses,
+        bool production,
+        Uri url)
+        => DocumentRuleAt(issuer, addresses, production) == OutboundAddressRule.NoSpecialPurpose &&
            addresses == ClientIdMetadataDocumentAddresses.AllowLoopback &&
            IsLoopbackHost(url);
 

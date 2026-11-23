@@ -42,8 +42,9 @@ public enum ClientIdMetadataDocumentAddresses
     /// applies only where the tenant's issuer, as written, names <c>localhost</c>, an address of 127.0.0.0/8 or
     /// <c>::1</c>, and a client identifier naming a loopback host at any other tenant is refused with a warning that
     /// says why. A host whose environment is Production (<c>IHostEnvironment.IsProduction()</c>) does not start with this
-    /// set; one registering no <c>IHostEnvironment</c>, built without the generic host, is not taken for Production,
-    /// and is held by the issuer rule alone. Nor does a host that sends outbound requests through
+    /// set, and fetches no document from loopback should the setting change after it started; one registering no
+    /// <c>IHostEnvironment</c>, built without the generic host, is not taken for Production, and is held by the issuer
+    /// rule alone. Nor does a host that sends outbound requests through
     /// <see cref="Features.SecureHttpFetch.SecureHttpFetchOptions.OutboundProxy"/>, which would reach the proxy's own
     /// loopback interface. A machine has one loopback interface, which carries all of these
     /// addresses, so a document is reached at any of them whichever one the issuer names.
