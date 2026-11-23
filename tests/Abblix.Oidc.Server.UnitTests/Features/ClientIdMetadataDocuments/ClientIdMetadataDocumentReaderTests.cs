@@ -511,6 +511,25 @@ public class ClientIdMetadataDocumentReaderTests
             SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
     }
 
+    /// <summary>
+    /// A client authenticating with none loses the notification endpoint along with the poll mode, so a document
+    /// naming both is served without either rather than refused for an endpoint poll mode does not take.
+    /// </summary>
+    [Fact]
+    public async Task APublicDocumentPollingWithANotificationEndpoint_LosesBoth()
+    {
+        var metadata = Read(Document("""
+            {"backchannel_token_delivery_mode":"poll","backchannel_client_notification_endpoint":"https://client.example.com/notify"}
+            """));
+
+        Assert.Null(metadata.BackChannelTokenDeliveryMode);
+        Assert.Null(metadata.BackChannelClientNotificationEndpoint);
+
+        var backChannelCheck = new BackChannelAuthenticationValidator(Mock.Of<IJsonWebTokenValidator>());
+        Assert.Null(await backChannelCheck.ValidateAsync(
+            SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
+    }
+
     [Fact]
     public void ANamedApplicationType_IsKept()
         => Assert.Equal(
