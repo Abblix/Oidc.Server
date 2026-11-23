@@ -144,6 +144,12 @@ public class AuthServiceJwtValidator(
 	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
 	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
 	/// processing JWTs". The owner is the one <see cref="TokenOwnership.OwnerOf"/> names.
+	/// <para>
+	/// A registration access token is the exception: this server alone creates and reads it, and creates it under the
+	/// tenant's profile (<see cref="Endpoints.DynamicClientManagement.RegistrationAccessTokenService"/>), which is
+	/// what it is read under here as well. Holding it to the profile a host raised the managed client to would refuse
+	/// every token the client was issued for its own registration.
+	/// </para>
 	/// </remarks>
 	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
@@ -151,8 +157,12 @@ public class AuthServiceJwtValidator(
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (token.OwnerOf() is not { } ownerId || ownerId == presenter?.ClientId)
+		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RegistrationAccessToken) ||
+		    token.OwnerOf() is not { } ownerId ||
+		    ownerId == presenter?.ClientId)
+		{
 			return null;
+		}
 
 		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
 			return null;

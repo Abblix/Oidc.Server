@@ -973,15 +973,15 @@ public class AuthServiceJwtValidatorTests
     }
 
     /// <summary>
-    /// A registration access token belongs to the client whose registration it manages, which its subject names while
-    /// its audience names this server, and is held to that client's profile: signed RS256, it is refused for a client
-    /// held to FAPI 2.0 and accepted for one held to none.
+    /// A registration access token is created under the tenant's profile, as this server alone creates and reads it,
+    /// so it is read under that profile too, whatever profile a host holds the client it manages to: signed RS256
+    /// at a tenant held to none, it is accepted for a client held to FAPI 2.0 as for one held to none.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.Fapi2, false)]
-    [InlineData(null, true)]
-    public async Task ValidateAsync_ARegistrationAccessToken_IsHeldToTheProfileOfTheClientItManages(
-        ClientSecurityProfile? ownerProfile, bool accepted)
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(null)]
+    public async Task ValidateAsync_ARegistrationAccessToken_IsReadUnderTheTenantsProfile(
+        ClientSecurityProfile? ownerProfile)
     {
         const string ownerId = "owner";
         var token = CreateValidToken();
@@ -997,7 +997,7 @@ public class AuthServiceJwtValidatorTests
         var result = await _validator.ValidateAsync(
             SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
-        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
