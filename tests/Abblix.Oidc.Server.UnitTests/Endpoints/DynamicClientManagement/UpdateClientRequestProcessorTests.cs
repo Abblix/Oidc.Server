@@ -203,7 +203,7 @@ public class UpdateClientRequestProcessorTests
             ForceUserClaimsInIdentityToken = true,
             ForceAuthorizationDetailsInIdentityToken = true,
             ResourceLocations = [new Uri("https://payments.example.com/")],
-            AllowCrossClientSubjectTokenExchange = true,
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.AddressedToClient,
             AllowCrossClientIntrospection = true,
             ParseLoginHintTokenAsJwt = false,
             DefaultScope = [Scopes.Profile],
@@ -237,7 +237,7 @@ public class UpdateClientRequestProcessorTests
         Assert.Equal(
             hostSet.ForceAuthorizationDetailsInIdentityToken, saved.ForceAuthorizationDetailsInIdentityToken);
         Assert.Equal(hostSet.ResourceLocations, saved.ResourceLocations);
-        Assert.Equal(hostSet.AllowCrossClientSubjectTokenExchange, saved.AllowCrossClientSubjectTokenExchange);
+        Assert.Equal(hostSet.CrossClientSubjectTokenExchange, saved.CrossClientSubjectTokenExchange);
         Assert.Equal(hostSet.AllowCrossClientIntrospection, saved.AllowCrossClientIntrospection);
         Assert.Equal(hostSet.ParseLoginHintTokenAsJwt, saved.ParseLoginHintTokenAsJwt);
         Assert.Equal(hostSet.DefaultScope, saved.DefaultScope);

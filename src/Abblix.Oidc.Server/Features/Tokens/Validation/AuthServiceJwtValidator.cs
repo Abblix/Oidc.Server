@@ -197,7 +197,8 @@ public class AuthServiceJwtValidator(
 	/// The issuer is the only acceptable audience. Registration and initial access tokens round-trip here naming it,
 	/// and an access token whose request named no resource carries the issuer for the same reason, since RFC 9068
 	/// Section 4 has a resource server reject a token whose audience does not name it. A reader whose token may be
-	/// addressed to somebody else, such as a refresh token whose audience holds its grant's resources, does not ask
+	/// addressed to somebody else, such as a refresh token issued by 3.0, whose audience holds its grant's resources
+	/// (<see cref="RefreshTokenResources"/>), does not ask
 	/// for this check (<see cref="ServiceTokenValidation.AnyAudience"/>).
 	/// <para>
 	/// A client identifier is deliberately not accepted. An audience names the party meant to consume the
