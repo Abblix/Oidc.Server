@@ -865,6 +865,7 @@ internal static class LogEvents
             public const int ProofRequiredButMissing = Base + 2;
             public const int ProofKeyMismatch = Base + 3;
             public const int ProofRejected = Base + 4;
+            public const int CertificateRequiredButMissing = Base + 5;
         }
     }
 

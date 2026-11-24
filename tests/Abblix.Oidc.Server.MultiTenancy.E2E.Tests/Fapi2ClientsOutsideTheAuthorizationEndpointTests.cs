@@ -56,6 +56,8 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
     private const string ResourceServerId = "resource-server";
+    private const string MachineId = "machine";
+    private const string CertificateBoundMachineId = "machine-certificate-bound";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri a registration names; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
@@ -82,7 +84,7 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             },
-            new ClientInfo("machine")
+            new ClientInfo(MachineId)
             {
                 TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
                 Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
@@ -90,6 +92,16 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
                 AllowedResponseTypes = [],
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            },
+            new ClientInfo(CertificateBoundMachineId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
+                AllowedGrantTypes = [GrantTypes.ClientCredentials],
+                AllowedResponseTypes = [],
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                TlsClientCertificateBoundAccessTokens = true,
             },
         ],
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
@@ -166,22 +178,7 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
     [Fact]
     public async Task TheResourceServer_Introspects()
     {
-        var now = TimeProvider.System.GetUtcNow();
-        var assertion = await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
-            new JsonWebToken
-            {
-                Header = { Algorithm = SigningAlgorithms.PS256, KeyId = ClientKey.KeyId },
-                Payload =
-                {
-                    Issuer = ResourceServerId,
-                    Subject = ResourceServerId,
-                    Audiences = [Host + Acme],
-                    JwtId = Guid.NewGuid().ToString("N"),
-                    IssuedAt = now,
-                    ExpiresAt = now.AddMinutes(1),
-                },
-            },
-            ClientKey);
+        var assertion = await ClientAssertionAsync(ResourceServerId);
 
         var response = await _http!.PostAsync(
             Acme + "/connect/introspect",
@@ -196,6 +193,56 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.False(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 has the server "only issue sender-constrained access tokens", so a token
+    /// request carrying neither a DPoP proof nor a client certificate is refused. A client registered for
+    /// certificate-bound tokens lacks the certificate, as when it calls the token endpoint outside
+    /// mtls_endpoint_aliases (RFC 8705 section 5), and is answered invalid_client; any other client lacks the proof.
+    /// </summary>
+    [Theory]
+    [InlineData(CertificateBoundMachineId, ErrorCodes.InvalidClient, HttpStatusCode.Unauthorized)]
+    [InlineData(MachineId, ErrorCodes.InvalidDPoPProof, HttpStatusCode.BadRequest)]
+    public async Task ATokenRequestWithoutASenderConstraint_IsRefusedForWhatItLacks(
+        string clientId, string expectedError, HttpStatusCode expectedStatus)
+    {
+        var response = await _http!.PostAsync(
+            Acme + "/connect/token",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(clientId),
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A private key JWT authenticating <paramref name="clientId"/> at the FAPI 2.0 tenant, signed PS256.
+    /// </summary>
+    private async Task<string> ClientAssertionAsync(string clientId)
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+            new JsonWebToken
+            {
+                Header = { Algorithm = SigningAlgorithms.PS256, KeyId = ClientKey.KeyId },
+                Payload =
+                {
+                    Issuer = clientId,
+                    Subject = clientId,
+                    Audiences = [Host + Acme],
+                    JwtId = Guid.NewGuid().ToString("N"),
+                    IssuedAt = now,
+                    ExpiresAt = now.AddMinutes(1),
+                },
+            },
+            ClientKey);
     }
 
     /// <summary>
