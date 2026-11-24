@@ -134,7 +134,7 @@ internal sealed partial class HeldMetadataDocuments(
     {
         await using var scope = scopes.CreateAsyncScope();
         var offered = Offered(scope.ServiceProvider);
-        var admitted = TenantClientAuthenticationMethods.Admitted(tenant, offered);
+        var admitted = tenant.AdmittedAuthenticationMethods(offered);
         var read = ReaderIn(scope.ServiceProvider)
             .Read(clientId, JsonNode.Parse(document.Content)!.AsObject(), admitted);
 
@@ -144,7 +144,7 @@ internal sealed partial class HeldMetadataDocuments(
         if (refusedHere.Length == 0 || !read.TryGetFailure(out var failure))
             return read;
 
-        var why = refusedHere.Select(method => $"{method}: {TenantClientAuthenticationMethods.WhyRefused(tenant, method)}");
+        var why = refusedHere.Select(method => $"{method}: {tenant.WhyAuthenticationMethodRefused(method)}");
         return failure with { Reason = $"{failure.Reason}; this tenant refuses {string.Join("; ", why)}" };
     }
 

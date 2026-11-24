@@ -67,8 +67,8 @@ public sealed class ConfigurationHandler(
 		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
 		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
 		// enabled accepts no caller at all, so nothing is said about it.
-		var authenticationMethods = TenantClientAuthenticationMethods.Admitted(
-			tenant, clientAuthenticator.ClientAuthenticationMethodsSupported);
+		var authenticationMethods = tenant.AdmittedAuthenticationMethods(
+			clientAuthenticator.ClientAuthenticationMethodsSupported);
 		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported)
 			.Where(options.Value.NewClientOptions.ClientSecret.Keys)
 			.ToArray();

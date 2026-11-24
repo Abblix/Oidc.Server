@@ -117,7 +117,7 @@ public class TenantAuthenticationMethodsCheckTests
         Assert.Equal(refused, refusals.Any());
         Assert.Equal(refused, document.TokenEndpointAuthMethodsSupported is null);
         if (!refused)
-            Assert.Equal(TenantClientAuthenticationMethods.Admitted(tenant, offered), document.TokenEndpointAuthMethodsSupported);
+            Assert.Equal(tenant.AdmittedAuthenticationMethods(offered), document.TokenEndpointAuthMethodsSupported);
     }
 
     /// <summary>

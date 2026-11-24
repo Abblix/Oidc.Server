@@ -43,8 +43,9 @@ public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthent
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }
 
+        // The profile half of the answer repeats SecurityProfileValidator, and stands for a host whose chain lacks it
         if (request.TokenEndpointAuthMethod.HasValue() &&
-            TenantClientAuthenticationMethods.WhyRefused(tenant, request.TokenEndpointAuthMethod) is { } refused)
+            tenant.WhyAuthenticationMethodRefused(request.TokenEndpointAuthMethod) is { } refused)
         {
             return ErrorFactory.InvalidClientMetadata(
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not " +

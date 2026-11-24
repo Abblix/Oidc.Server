@@ -25,14 +25,14 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 internal static class TenantClientAuthenticationMethods
 {
     /// <summary>
-    /// The methods of <paramref name="methods"/> <paramref name="tenant"/> admits a client authenticating with.
+    /// The methods of <paramref name="offered"/> <paramref name="tenant"/> admits a client authenticating with.
     /// </summary>
     /// <param name="tenant">The tenant asked about.</param>
-    /// <param name="methods">The methods the server authenticates clients with.</param>
-    public static string[] Admitted(TenantDefinition tenant, IEnumerable<string> methods)
+    /// <param name="offered">The methods the server authenticates clients with.</param>
+    public static string[] AdmittedAuthenticationMethods(this TenantDefinition tenant, IEnumerable<string> offered)
     {
         var profile = SecurityProfileRequirements.For(tenant, client: null);
-        return methods.Where(method => WhyRefused(tenant, profile, method) is null).ToArray();
+        return offered.Where(method => WhyRefused(tenant, profile, method) is null).ToArray();
     }
 
     /// <summary>
@@ -41,17 +41,10 @@ internal static class TenantClientAuthenticationMethods
     /// </summary>
     /// <param name="tenant">The tenant asked about.</param>
     /// <param name="method">The client authentication method.</param>
-    public static string? WhyRefused(TenantDefinition tenant, string method)
+    public static string? WhyAuthenticationMethodRefused(this TenantDefinition tenant, string method)
         => WhyRefused(tenant, SecurityProfileRequirements.For(tenant, client: null), method);
 
-    /// <summary>
-    /// Why <paramref name="tenant"/>, held to <paramref name="profile"/>, admits no client authenticating with
-    /// <paramref name="method"/>, or null where it admits one.
-    /// </summary>
-    /// <param name="tenant">The tenant asked about.</param>
-    /// <param name="profile">The control bundle of the tenant's own security profile.</param>
-    /// <param name="method">The client authentication method.</param>
-    public static string? WhyRefused(TenantDefinition tenant, SecurityProfileRequirements profile, string method)
+    private static string? WhyRefused(TenantDefinition tenant, SecurityProfileRequirements profile, string method)
     {
         var violations = SecurityProfileConsistency.FindAuthenticationMethodViolations(method, profile);
         if (violations.Count > 0)

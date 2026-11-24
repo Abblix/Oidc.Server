@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,24 +36,23 @@ internal sealed class TenantAuthenticationMethodsCheck(IServiceProvider serviceP
 
         return
             from tenant in tenants
-            where TenantClientAuthenticationMethods.Admitted(tenant, offered).Length == 0
+            where tenant.AdmittedAuthenticationMethods(offered).Length == 0
             select TenantRefusal.Of(tenant, RefusalOf(tenant, offered));
     }
 
     private static string RefusalOf(TenantDefinition tenant, string[] offered)
     {
-        var start = $"Tenant '{tenant.Id}': its security profile {tenant.DefaultSecurityProfile} admits none of the " +
-                    "client authentication methods the server offers at the token endpoint, so no client of the " +
-                    "tenant could be issued a token";
-
         if (offered.Length == 0)
-            return $"{start}: the server offers none.";
+        {
+            return $"Tenant '{tenant.Id}': the server offers no client authentication method at the token endpoint, so " +
+                   "no client of the tenant could be issued a token.";
+        }
 
-        var profile = SecurityProfileRequirements.For(tenant, client: null);
         var reasons = offered.Select(method =>
-            $"A client authenticating with {method} is refused: " +
-            TenantClientAuthenticationMethods.WhyRefused(tenant, profile, method));
+            $"a client authenticating with {method} is refused: {tenant.WhyAuthenticationMethodRefused(method)}");
 
-        return $"{start}. {string.Join(". ", reasons)}.";
+        return $"Tenant '{tenant.Id}' (security profile {tenant.DefaultSecurityProfile}) admits none of the client " +
+               "authentication methods the server offers at the token endpoint, so no client of the tenant could be " +
+               $"issued a token: {string.Join("; ", reasons)}.";
     }
 }
