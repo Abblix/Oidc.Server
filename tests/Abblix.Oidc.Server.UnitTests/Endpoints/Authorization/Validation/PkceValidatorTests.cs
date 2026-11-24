@@ -31,7 +31,7 @@ public class PkceValidatorTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
     private const string CodeChallengeS256 = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
-    private const string CodeChallengePlain = "test_code_verifier_plain";
+    private const string CodeChallengePlain = "test_code_verifier_plain_of_43_characters__";
 
     private readonly PkceValidator _validator;
 
@@ -421,64 +421,71 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts whitespace-only code challenge as valid PKCE.
-    /// Per RFC 7636, code challenge is opaque string that may contain whitespace.
-    /// Tests edge case of unusual but technically valid code challenges.
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.1 and RFC 7636 section 4.2: "code-challenge =
+    /// 43*128unreserved". A challenge of either bound and one using every unreserved punctuation character is accepted,
+    /// for either method.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithWhitespaceCodeChallenge_ShouldSucceed()
+    [Theory]
+    [InlineData(43, CodeChallengeMethods.S256)]
+    [InlineData(128, CodeChallengeMethods.S256)]
+    [InlineData(43, CodeChallengeMethods.Plain)]
+    [InlineData(128, CodeChallengeMethods.Plain)]
+    public async Task ValidateAsync_WithAWellFormedCodeChallenge_ShouldSucceed(int length, string method)
     {
-        // Arrange
         var context = CreateContext(
-            codeChallenge: "   ",
-            codeChallengeMethod: CodeChallengeMethods.S256);
+            codeChallenge: "a-b_c.d~e" + new string('x', length - 9),
+            codeChallengeMethod: method,
+            plainPkceAllowed: true);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
         Assert.Null(result);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts very long code challenge.
-    /// Per RFC 7636 Section 4.1, code challenge length is 43-128 characters.
-    /// Tests validator doesn't enforce length constraints (handled elsewhere).
+    /// A challenge shorter than 43 or longer than 128 characters, or carrying a character outside the unreserved set,
+    /// is a malformed request, refused with invalid_request at the redirect URI before any code is issued for it.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithVeryLongCodeChallenge_ShouldSucceed()
+    [Theory]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-c")]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM=")]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw+cM")]
+    [InlineData("a-b_c.d~e")]
+    [InlineData("   ")]
+    public async Task ValidateAsync_WithAMalformedCodeChallenge_IsRefused(string codeChallenge)
     {
-        // Arrange
-        var longChallenge = new string('a', 200);
-        var context = CreateContext(
-            codeChallenge: longChallenge,
-            codeChallengeMethod: CodeChallengeMethods.S256);
+        var context = CreateContext(codeChallenge: codeChallenge, codeChallengeMethod: CodeChallengeMethods.S256);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Equal(context.ValidRedirectUri, result?.RedirectUri);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge with special characters.
-    /// Per RFC 7636, code challenge uses base64url encoding allowing specific characters.
-    /// Tests handling of valid base64url character set.
+    /// A request issuing no code has no code for the challenge to protect, so a malformed one is not refused there.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithSpecialCharactersInCodeChallenge_ShouldSucceed()
+    public async Task ValidateAsync_WithAMalformedCodeChallengeAndNoCodeIssued_Succeeds()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: "a-b_c.d~e",
-            codeChallengeMethod: CodeChallengeMethods.S256);
+            codeChallengeMethod: CodeChallengeMethods.S256,
+            responseType: [ResponseTypes.IdToken]);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithACodeChallengeLongerThan128Characters_IsRefused()
+    {
+        var context = CreateContext(codeChallenge: new string('a', 129), codeChallengeMethod: CodeChallengeMethods.S256);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
 
     /// <summary>
