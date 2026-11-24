@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -40,7 +41,10 @@ public class RegisterClientRequestProcessorTests
 
     private RegisterClientRequestProcessor Processor() => Processor(_clients.Object);
 
-    private RegisterClientRequestProcessor Processor(IClientInfoManager clients, NewClientOptions? newClients = null)
+    private RegisterClientRequestProcessor Processor(
+        IClientInfoManager clients,
+        NewClientOptions? newClients = null,
+        OidcOptions? settings = null)
     {
         var credentials = new Mock<IClientCredentialFactory>(MockBehavior.Strict);
         credentials
@@ -59,7 +63,8 @@ public class RegisterClientRequestProcessorTests
         return new RegisterClientRequestProcessor(
             _logger,
             credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
-            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
+            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == (settings ?? new OidcOptions())));
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -69,6 +74,41 @@ public class RegisterClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
         },
         SectorIdentifier: null);
+
+    /// <summary>
+    /// A client registered while anybody may register one is unreviewed, and one registered while registration asks
+    /// an initial access token, or a software statement from an issuer the host trusts, is reviewed. Decided as the
+    /// client registers and kept in its record: a later change of the settings leaves the stored client as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false, ClientTrust.Unreviewed)]
+    [InlineData(true, false, false, ClientTrust.Reviewed)]
+    [InlineData(false, true, true, ClientTrust.Reviewed)]
+    [InlineData(false, true, false, ClientTrust.Unreviewed)]
+    [InlineData(false, false, true, ClientTrust.Unreviewed)]
+    public async Task ARegistration_IsReviewedOnlyWhileRegistrationIsClosed(
+        bool requireInitialAccessToken, bool requireSoftwareStatement, bool trustedIssuer, ClientTrust expected)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var settings = new OidcOptions
+        {
+            RequireInitialAccessToken = requireInitialAccessToken,
+            SoftwareStatement =
+            {
+                RequireSoftwareStatement = requireSoftwareStatement,
+                TrustedIssuers = trustedIssuer ? [new TrustedIssuer { Issuer = "https://statements.example.com", JwksUri = new Uri("https://statements.example.com/jwks") }] : [],
+            },
+        };
+
+        await Processor(_clients.Object, settings: settings).ProcessAsync(SingleIssuer.Tenant, Request());
+        settings.RequireInitialAccessToken = !requireInitialAccessToken;
+
+        Assert.Equal(expected, stored!.ClientInfo.Trust);
+    }
 
     [Fact]
     public async Task ARegistrationTheStoreKeeps_IsAnsweredWithItsToken()
@@ -273,6 +313,28 @@ public class RegisterClientRequestProcessorTests
         Assert.True((await processor.ProcessAsync(SingleIssuer.Tenant, Request())).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
         Assert.NotNull(await store.TryFindRegisteredClientAsync(SingleIssuer.Tenant, "client-1"));
+    }
+
+    /// <summary>
+    /// The trust a client is registered with travels in its record: the server's own store answers it back as it was
+    /// decided, whatever the settings say when the client is read.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustOfARegistration_IsWhatTheStoreAnswersLater()
+    {
+        var store = new ReloadableClientInfoStorage(
+            NullLogger<ReloadableClientInfoStorage>.Instance,
+            SingleIssuer.Catalog,
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
+            new IssuerClientRegistrations(
+                SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>()));
+        var settings = new OidcOptions { RequireInitialAccessToken = false };
+
+        Assert.True((await Processor(store, settings: settings).ProcessAsync(SingleIssuer.Tenant, Request())).TryGetSuccess(out _));
+        settings.RequireInitialAccessToken = true;
+
+        Assert.True((await store.FindClientAsync(SingleIssuer.Tenant, "client-1")).TryGetSuccess(out var client));
+        Assert.Equal(ClientTrust.Unreviewed, client.Trust);
     }
 
     /// <summary>

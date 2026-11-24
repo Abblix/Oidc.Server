@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -23,6 +24,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -30,6 +32,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
@@ -123,6 +126,33 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
     private WebApplication? _app;
     private HttpClient? _http;
+    private readonly EndUser _endUser = new();
+
+    /// <summary>
+    /// The end user, signed in only where a test says so: a conformant request without a session reaches the login
+    /// page, and a refused one reaches its error only once somebody is signed in (RFC 9700 section 4.11.2).
+    /// </summary>
+    private sealed class EndUser : IAuthSessionService
+    {
+        public bool SignedIn { get; set; }
+
+        private readonly AuthSession _session = new("alice", "session-1", TimeProvider.System.GetUtcNow(), "local");
+
+        public async IAsyncEnumerable<AuthSession> GetAvailableAuthSessions()
+        {
+            if (SignedIn)
+                yield return _session;
+
+            await Task.CompletedTask;
+        }
+
+        public Task<AuthSession?> AuthenticateAsync() => Task.FromResult(SignedIn ? _session : null);
+
+        public Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
+            => Task.FromResult(new AuthSessionSignInResult(authSession, []));
+
+        public Task SignOutAsync() => Task.CompletedTask;
+    }
 
     public async ValueTask InitializeAsync()
     {
@@ -134,7 +164,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddConsentGrantedForEveryClient();
+        EveryConsentGiven.Register(builder.Services);
+        builder.Services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(_endUser));
         builder.Services.AddDynamicClientRegistration();
         // A deployment that opted in to RSA1_5 for its legacy peers, which the profile then forbids its FAPI clients
         builder.Services.AddRsaPkcs1KeyManagement();
@@ -359,6 +390,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         var request = ConformantRequest();
         request.Remove(AuthorizationRequest.Parameters.ResponseMode);
 
+        _endUser.SignedIn = true;
+
         Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
     }
 
@@ -412,6 +445,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     {
         var request = ConformantRequest();
         request.Remove(AuthorizationRequest.Parameters.Nonce);
+
+        _endUser.SignedIn = true;
 
         Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
     }
@@ -618,6 +653,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         if (state != null)
             request[AuthorizationRequest.Parameters.State] = state;
 
+        _endUser.SignedIn = expectedError != null;
         var response = await AuthorizeAsync(request, scope: Scopes.Profile);
 
         if (expectedError == null)

@@ -26,6 +26,7 @@ using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -113,6 +114,41 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         Assert.Contains(
             _origin.Requests,
             request => request.Headers.Accept.Contains(new MediaTypeWithQualityHeaderValue("application/json")));
+    }
+
+    /// <summary>
+    /// A client resolved from its document is unreviewed while any URL may name itself a client, so its authorization
+    /// error is answered by the server; under a list of prefixes, the host's own assessment of the URLs it serves, it is
+    /// reviewed and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
+    /// own policy reads only it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AClientFromItsDocument_IsReviewedOnlyUnderAPrefixList(bool listed)
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost(
+            listed ? options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://client.example.com/"] : null,
+            services => services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>()));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters[AuthorizationRequest.Parameters.CodeChallengeMethod] = "S384";
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters), TestContext.Current.CancellationToken);
+
+        var location = response.Headers.Location?.OriginalString;
+        if (listed)
+        {
+            Assert.StartsWith(TestConstants.RedirectUri, location);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Null(location);
+        }
     }
 
     /// <summary>

@@ -198,6 +198,10 @@ internal sealed partial class ClientIdMetadataDocumentClients(
 
         // Every later fetch of the client's URIs is held to the registries as written (section 10.7)
         client.ResolvedFromMetadataDocument = true;
+
+        // Decided as the client is resolved and held with it: a list of prefixes is the host's own assessment of the URLs
+        // it serves, and without one any URL may name itself a client
+        client.Trust = OpenRegistration.AdmitsAnyDocument(options.CurrentValue) ? ClientTrust.Unreviewed : ClientTrust.Reviewed;
         return client;
     }
 }

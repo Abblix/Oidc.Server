@@ -37,13 +37,15 @@ public static class ResponseTypesExtensions
 
     /// <summary>
     /// Determines whether a native app may use a <c>response_type</c> combination: only one carrying a code, which
-    /// PKCE protects. RFC 8252 section 8.2: "as the implicit flow cannot be protected by PKCE [RFC7636] (which is
-    /// required in Section 8.1), the use of the Implicit Flow with native apps is NOT RECOMMENDED", and RFC 9700
-    /// section 2.1.2 has clients use a response type "that causes the authorization server to issue access tokens in
-    /// the token response". The response type <c>none</c> issues nothing at all, so a native app may use it too. The
+    /// PKCE protects, and issuing no access token at the authorization endpoint. RFC 8252 section 8.2: "as the implicit
+    /// flow cannot be protected by PKCE [RFC7636] (which is required in Section 8.1), the use of the Implicit Flow with
+    /// native apps is NOT RECOMMENDED", and RFC 9700 section 2.1.2 has clients use a response type "that causes the
+    /// authorization server to issue access tokens in the token response", which a hybrid one carrying
+    /// <c>token</c> does not. The response type <c>none</c> issues nothing at all, so a native app may use it too. The
     /// single definition the check of the settings, dynamic registration and the authorization endpoint hold a native
     /// app to.
     /// </summary>
     internal static bool ServesNativeApps(this string[]? responseType)
-        => responseType.HasFlag(ResponseTypes.Code) || responseType is [ResponseTypes.None];
+        => (responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token)) ||
+           responseType is [ResponseTypes.None];
 }

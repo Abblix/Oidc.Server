@@ -28,6 +28,8 @@ internal sealed class AuthSessionSelector(
 	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock)
 {
+	private readonly UnrevokedSessions _unrevoked = new(cutoffChecker);
+
 	/// <summary>
 	/// The values of <c>prompt</c> whose pages a session answers, in the order the pages come: account creation or
 	/// account selection, then authentication. Consent is asked after a session is chosen.
@@ -289,7 +291,7 @@ internal sealed class AuthSessionSelector(
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
 		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
 		// lookup.
-		var candidates = await KeepUnrevokedAsync(tenant, authSessions);
+		var candidates = await _unrevoked.KeepAsync(tenant, authSessions);
 
 		// An essential acr naming acceptable values is the same question acr_values asks, with an obligation
 		// attached: section 5.5.1.1 says the server "MUST return an acr Claim Value that matches one of the
@@ -312,39 +314,5 @@ internal sealed class AuthSessionSelector(
 			session => AuthenticationLevels.Accept(requiredAcrValues, session.AuthContextClassRef));
 
 		return (atRequiredLevel, candidates.Count > 0 && atRequiredLevel.Count == 0, heldByHost.Count > 0);
-	}
-
-	/// <summary>
-	/// Drops the sessions a revocation cutoff refuses, keeping the order of the rest.
-	/// </summary>
-	/// <remarks>
-	/// A request left with no session takes the arms above, so <c>prompt=none</c> answers
-	/// <c>login_required</c>, which OpenID Connect Core 1.0 Section 3.1.2.6 defines as "The Authorization
-	/// Server requires End-User authentication. This error MAY be returned when the prompt parameter value
-	/// in the Authentication Request is none, but the Authentication Request cannot be completed without
-	/// displaying a user interface for End-User authentication." Any other request reaches the login page.
-	/// </remarks>
-	/// <remarks>
-	/// A dropped session is ignored rather than signed out. Signing out would be the tidier outcome for the
-	/// one adapter this library ships, where the session being judged is the requester's own cookie; it is
-	/// wrong for an adapter holding several, where the session dropped need not be the one whose cookie the
-	/// response would clear. Ignoring is correct for both, at the price of judging the same session again on
-	/// the next request - two store reads per candidate, since a cutoff can be recorded against either the
-	/// subject or the session and the common answer is that neither exists.
-	///
-	/// What that leaves behind is a browser-state cookie the provider no longer honours, so a relying party
-	/// polling check_session sees no change and does not learn the session ended. It corrects itself on the
-	/// next successful sign-in, which rewrites the cookie; until then the two views disagree.
-	/// </remarks>
-	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(TenantDefinition tenant, IEnumerable<AuthSession> sessions)
-	{
-		var kept = new List<AuthSession>();
-		foreach (var session in sessions)
-		{
-			if (!await cutoffChecker.IsSessionRefusedAsync(tenant, session))
-				kept.Add(session);
-		}
-
-		return kept;
 	}
 }

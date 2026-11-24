@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -32,10 +35,27 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Whether the client was resolved from the metadata document its identifier names, so the server's fetches of
-    /// its URIs are held to the special-purpose address registries as written. Set by the server, never by
-    /// configuration.
+    /// its URIs are held to the special-purpose address registries as written, and a host's
+    /// <see cref="IRedirectUriTrustPolicy"/> can tell such a client from one somebody registered. Set by the server,
+    /// never by configuration or a stored record: it is neither written to nor read from JSON.
     /// </summary>
-    internal bool ResolvedFromMetadataDocument { get; set; }
+    [JsonIgnore]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public bool ResolvedFromMetadataDocument { get; internal set; }
+
+    /// <summary>
+    /// Whether somebody answering for the deployment let the client in, decided when the client was created and kept
+    /// with it: <see cref="ClientTrust.Reviewed"/>, the default, for a client the host declares, and the value the
+    /// server set for one it registered or resolved. A record naming none is reviewed.
+    /// </summary>
+    /// <remarks>
+    /// A host changing it writes the client's record, and every replica answers from that record once it reads it
+    /// again: a registration in the host's <see cref="MultiTenancy.ITenantClientRegistrationStore"/> on its next lookup,
+    /// a client declared in a tenant read from a tenant store at the next reading of the store
+    /// (<see cref="OidcOptions.RefreshTenantsEvery"/>). A client resolved from its metadata document has it decided
+    /// again as the document is fetched again, within <see cref="ClientIdMetadataDocumentOptions.MaximumCacheDuration"/>.
+    /// </remarks>
+    public ClientTrust Trust { get; set; }
 
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from

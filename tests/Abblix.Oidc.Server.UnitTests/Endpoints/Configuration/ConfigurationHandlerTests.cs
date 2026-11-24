@@ -25,6 +25,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -758,6 +759,54 @@ public class ConfigurationHandlerTests
 
         Assert.Null(document.RequestObjectEncryptionAlgValuesSupported);
         Assert.Null(document.RequestObjectEncryptionEncValuesSupported);
+    }
+
+    /// <summary>
+    /// The document lists plain among the code challenge methods exactly where the authorization endpoint accepts a
+    /// plain challenge from some client of the tenant: one allowed plain and not held to S256 by its security profile.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, true)]
+    [InlineData(true, ClientSecurityProfile.Fapi2, false)]
+    public async Task TheDocument_ListsPlainWhereAClientIsAcceptedWithIt(
+        bool plainPkceAllowed, ClientSecurityProfile? securityProfile, bool listed)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            PlainPkceAllowed = plainPkceAllowed,
+            SecurityProfile = securityProfile,
+        };
+        var tenant = new TestIssuer { Clients = [client] }.ToTenant();
+        var handler = HandlerFor(KeysProviderOf(), new AuthorizationMetadataProvider([]));
+
+        var document = await handler.HandleAsync(tenant);
+        var refusal = await new PkceValidator(Mock.Of<IAuthorizationValueReuseDetector>())
+            .ValidateAsync(tenant, PlainChallengeOf(client));
+
+        Assert.Contains(CodeChallengeMethods.S256, document.CodeChallengeMethodsSupported!);
+        Assert.Equal(listed, document.CodeChallengeMethodsSupported!.Contains(CodeChallengeMethods.Plain));
+        Assert.Equal(listed, refusal is null);
+    }
+
+    private static AuthorizationValidationContext PlainChallengeOf(ClientInfo client)
+    {
+        var request = new AuthorizationRequest
+        {
+            ClientId = client.ClientId,
+            ResponseType = [ResponseTypes.Code],
+            RedirectUri = new Uri("https://client.example.com/callback"),
+            Scope = [Scopes.OpenId],
+            CodeChallenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            CodeChallengeMethod = CodeChallengeMethods.Plain,
+        };
+        return new AuthorizationValidationContext(request)
+        {
+            Clients = Clients,
+            ClientInfo = client,
+            ResponseMode = ResponseModes.Query,
+            ValidRedirectUri = request.RedirectUri,
+        };
     }
 
     /// <summary>

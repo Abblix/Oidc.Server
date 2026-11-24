@@ -71,15 +71,12 @@ public record AuthorizationEndpointMetadata
     ];
 
     /// <summary>
-    /// The code challenge methods supported for PKCE (Proof Key for Code Exchange). Both methods in
-    /// the IANA "PKCE Code Challenge Methods" registry are advertised because the server genuinely
-    /// supports both: <c>S256</c> always, and <c>plain</c> for any client that opts into it via
-    /// <c>PlainPkceAllowed</c>. The FAPI 2.0 profile restricts a profiled client to <c>S256</c> at
-    /// request time (enforced in <c>PkceValidator</c>), but that is a per-client policy - a mixed
-    /// deployment still supports <c>plain</c> server-wide, so dropping it from discovery would
-    /// understate the actual capability. The non-standard <c>S512</c> transformation stays accepted
-    /// at runtime as an undocumented extension but is not advertised, since announcing an
-    /// unregistered wire value in discovery is a false conformance claim.
+    /// The code challenge methods supported for PKCE (Proof Key for Code Exchange): both methods in
+    /// the IANA "PKCE Code Challenge Methods" registry, <c>S256</c> for every client and <c>plain</c>
+    /// for a client that opts into it via <c>PlainPkceAllowed</c>. The discovery document of a tenant
+    /// lists <c>plain</c> only where one of its clients is accepted with it. The non-standard
+    /// <c>S512</c> transformation stays accepted at runtime as an undocumented extension but is not
+    /// advertised, since announcing an unregistered wire value in discovery is a false conformance claim.
     /// </summary>
     public List<string> CodeChallengeMethodsSupported { get; init; } =
     [

@@ -233,7 +233,7 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// A code_challenge without code_challenge_method is a plain one: RFC 7636 section 4.3, "Defaults to "plain" if not
+    /// A code_challenge without code_challenge_method is a plain one: RFC 7636 section 4.3, "defaults to "plain" if not
     /// present in the request". A client allowed plain is served, and the request that goes on carries the method, so
     /// the code it is issued is verified the same way at the token endpoint.
     /// </summary>
@@ -273,6 +273,25 @@ public class PkceValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// A request issuing no code has no code for a code_challenge to protect, so a challenge it carries without a method
+    /// is not read as plain, and a client not allowed plain is not refused for it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithCodeChallengeWithoutMethodAndNoCode_IsNotReadAsPlain()
+    {
+        var context = CreateContext(
+            codeChallenge: CodeChallengePlain,
+            codeChallengeMethod: null,
+            plainPkceAllowed: false,
+            responseType: [ResponseTypes.IdToken]);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Null(context.Request.CodeChallengeMethod);
     }
 
     /// <summary>

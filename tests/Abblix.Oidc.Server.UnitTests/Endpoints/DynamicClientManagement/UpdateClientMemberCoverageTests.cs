@@ -57,6 +57,7 @@ public class UpdateClientMemberCoverageTests
         nameof(ClientInfo.ClientSecrets),
         nameof(ClientInfo.SectorIdentifier),
         nameof(ClientInfo.SecurityProfile),
+        nameof(ClientInfo.Trust),
         nameof(ClientInfo.PlainPkceAllowed),
         nameof(ClientInfo.AuthorizationCodeExpiresIn),
         nameof(ClientInfo.AccessTokenExpiresIn),

@@ -22,6 +22,11 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// another spelling of the id for none, so a store may hold ids regardless of case, refusing an addition under an id
 /// that differs from one it holds only in case, as the server's own store does.
 /// <para>
+/// A registration is kept whole, <see cref="ClientInformation.ClientInfo.Trust"/> included: the server decides it once,
+/// when the client registers, and answers the trust in the client's redirect URIs from it alone, so a store dropping it
+/// serves the client as reviewed.
+/// </para>
+/// <para>
 /// The clients a tenant's definition configures stay in the definition, and the server keeps them apart from what
 /// this store holds: a configured client is served over a registration under its id, a registration the server meets
 /// under such an id - found, added or changed - is removed and answered as not found or not made, and one no request

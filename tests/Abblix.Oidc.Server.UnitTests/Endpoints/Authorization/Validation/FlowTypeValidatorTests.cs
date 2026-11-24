@@ -959,7 +959,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// A native app is refused a response type without a code even when its client lists it, as a client from the
+    /// A native app is refused a response type without a code, or one with a token, even when its client lists it, as a client from the
     /// host's own store may: RFC 8252 section 8.2 has the implicit flow NOT RECOMMENDED for native apps, since PKCE
     /// cannot protect it, and RFC 9700 section 2.1.2 has the tokens issued at the token endpoint. One carrying a code
     /// is served.
@@ -968,6 +968,8 @@ public class FlowTypeValidatorTests
     [InlineData(false, ResponseTypes.Token)]
     [InlineData(false, ResponseTypes.IdToken)]
     [InlineData(false, ResponseTypes.IdToken, ResponseTypes.Token)]
+    [InlineData(false, ResponseTypes.Code, ResponseTypes.Token)]
+    [InlineData(false, ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token)]
     [InlineData(true, ResponseTypes.Code, ResponseTypes.IdToken)]
     [InlineData(true, ResponseTypes.Code)]
     public async Task ValidateAsync_ANativeApp_IsServedOnlyAResponseTypeWithACode(bool served, params string[] responseType)

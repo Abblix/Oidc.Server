@@ -13,6 +13,7 @@ using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -96,7 +97,8 @@ public sealed class ConfigurationHandler(
 			ResponseModesSupported = authorizationMetadata.ResponseModesSupported,
 
 			PromptValuesSupported = authorizationMetadata.PromptValuesSupported,
-			CodeChallengeMethodsSupported = authorizationMetadata.CodeChallengeMethodsSupported,
+			CodeChallengeMethodsSupported =
+				AdmittedCodeChallengeMethods(tenant, authorizationMetadata.CodeChallengeMethodsSupported),
 			RequestParameterSupported = authorizationMetadata.RequestParameterSupported,
 			RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
 				? Signing(tenant, jwtAlgorithms.SigningAlgorithmsSupported)
@@ -238,6 +240,18 @@ public sealed class ConfigurationHandler(
 		return grantTypes.Where(grantType =>
 			(!profile.RequireCodeResponseTypeOnly || grantType != GrantTypes.Implicit) &&
 			SecurityProfileConsistency.FindGrantTypeViolations([grantType], profile).Count == 0);
+	}
+
+	/// <summary>
+	/// The code challenge methods of <paramref name="methods"/> a client of <paramref name="tenant"/> can use: plain
+	/// only where a client declared in the tenant's settings is accepted with it, as the authorization endpoint
+	/// decides. A client registered dynamically or resolved from a metadata document is never allowed plain, and the
+	/// clients of a host's own store are not known here, so plain is not listed for them.
+	/// </summary>
+	private static IEnumerable<string> AdmittedCodeChallengeMethods(TenantDefinition tenant, IEnumerable<string> methods)
+	{
+		var plainAccepted = tenant.Clients.Any(client => PkceValidator.AcceptsPlain(tenant, client));
+		return methods.Where(method => plainAccepted || method != CodeChallengeMethods.Plain);
 	}
 
 	/// <summary>
