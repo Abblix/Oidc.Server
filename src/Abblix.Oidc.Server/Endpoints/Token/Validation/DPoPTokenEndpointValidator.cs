@@ -115,9 +115,10 @@ public partial class DPoPTokenEndpointValidator(
     /// <summary>
     /// The refusal of a request presenting no proof and no certificate from a client whose tokens are
     /// certificate-bound, under a profile requiring sender-constrained tokens. RFC 8705 section 3.4 leaves it to the
-    /// server "whether to return an error or issue an unbound token", and the profile rules out the second. The code
-    /// is RFC 8705 section 2's for a missing certificate, invalid_client, the certificate being what such a client
-    /// lacks; <paramref name="requirement"/> states what else the profile accepts, a DPoP proof under FAPI 2.0.
+    /// server "whether to return an error or issue an unbound token" and names no code, and the profile rules out the
+    /// second. The code, invalid_client, follows RFC 8705 section 2's answer to a missing certificate and is the one
+    /// the FAPI 1.0 Advanced branch gives; <paramref name="requirement"/> states what else the profile accepts, a
+    /// DPoP proof under FAPI 2.0.
     /// </summary>
     private OidcError CertificateMissing(string requirement)
     {
