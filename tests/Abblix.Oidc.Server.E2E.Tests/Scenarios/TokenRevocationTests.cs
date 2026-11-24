@@ -84,7 +84,9 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
             discovery.RevocationEndpoint!,
             new Dictionary<string, string> { [RevocationRequest.Parameters.Token] = refreshToken });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         // The token survives the unauthenticated attempt, which is the half that matters: a rejected request
         // that revoked anyway would be the denial of service this check exists to prevent.

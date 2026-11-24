@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -68,7 +69,7 @@ public partial class DPoPTokenEndpointValidator(
             if (WillIssueCertificateBoundToken(context, profile))
                 return null;
 
-            return CertificateMissing("The security profile issues certificate-bound access tokens only:");
+            return CertificateMissing(context, "The security profile issues certificate-bound access tokens only:");
         }
 
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
@@ -99,6 +100,7 @@ public partial class DPoPTokenEndpointValidator(
             if (CertificateBoundAccessTokens.AreIssuedTo(context.ClientInfo, profile))
             {
                 return CertificateMissing(
+                    context,
                     "The security profile requires a sender-constrained token: present a DPoP proof, or");
             }
 
@@ -120,13 +122,16 @@ public partial class DPoPTokenEndpointValidator(
     /// the FAPI 1.0 Advanced branch gives; <paramref name="requirement"/> states what else the profile accepts, a
     /// DPoP proof under FAPI 2.0.
     /// </summary>
-    private OidcError CertificateMissing(string requirement)
+    private OidcError CertificateMissing(TokenValidationContext context, string requirement)
     {
         LogCertificateRequiredButMissing();
         return new OidcError(
             ErrorCodes.InvalidClient,
             requirement + " present the client certificate over mutual TLS, at the token endpoint of " +
-            "mtls_endpoint_aliases when the server publishes one.");
+            "mtls_endpoint_aliases when the server publishes one.")
+        {
+            BasicChallengeOwed = BasicChallenge.IsOwed(context.ClientRequest, context.ClientInfo),
+        };
     }
 
     /// <summary>

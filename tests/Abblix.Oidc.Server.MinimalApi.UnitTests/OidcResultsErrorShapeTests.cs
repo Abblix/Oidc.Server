@@ -86,7 +86,7 @@ public class OidcResultsErrorShapeTests
     [Fact]
     public async Task Invalid_client_answers_401_with_a_basic_challenge_and_the_error_in_the_body()
     {
-        var error = new OidcError(ErrorCodes.InvalidClient, "Client authentication failed");
+        var error = new OidcError(ErrorCodes.InvalidClient, "Client authentication failed") { BasicChallengeOwed = true };
 
         var response = await HttpResultRunner.RunAsync(
             error.Format(StatusCodes.Status400BadRequest, Realm));
@@ -94,6 +94,25 @@ public class OidcResultsErrorShapeTests
         Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
         Assert.Contains(TokenTypes.Basic, Challenge(response));
         Assert.DoesNotContain(ErrorCodes.InvalidClient, Challenge(response));
+        Assert.Contains(ErrorCodes.InvalidClient, response.Body);
+    }
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: "Client authentication methods that do not use an HTTP
+    /// authentication scheme have no corresponding challenge", so a refusal owing no Basic challenge takes the status
+    /// its endpoint asks for without one: 400 at the token endpoint, 401 where the endpoint's specification names it.
+    /// </summary>
+    [Theory]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    [InlineData(StatusCodes.Status401Unauthorized)]
+    public async Task Invalid_client_owing_no_challenge_takes_the_requested_status_without_one(int requested)
+    {
+        var error = new OidcError(ErrorCodes.InvalidClient, "Client authentication failed");
+
+        var response = await HttpResultRunner.RunAsync(error.Format(requested, Realm));
+
+        Assert.Equal(requested, response.StatusCode);
+        Assert.Empty(Challenge(response));
         Assert.Contains(ErrorCodes.InvalidClient, response.Body);
     }
 
@@ -308,7 +327,7 @@ public class OidcResultsErrorShapeTests
     /// no challenge at all.
     /// </summary>
     [Theory]
-    [InlineData(ErrorCodes.InvalidClient, StatusCodes.Status401Unauthorized, TokenTypes.Basic)]
+    [InlineData(ErrorCodes.InvalidClient, StatusCodes.Status401Unauthorized, null)]
     [InlineData(ErrorCodes.InvalidRequest, StatusCodes.Status400BadRequest, null)]
     public async Task An_error_answered_without_a_bearer_challenge_keeps_its_status_whatever_its_scope_holds(
         string errorCode, int expectedStatusCode, string? expectedScheme)

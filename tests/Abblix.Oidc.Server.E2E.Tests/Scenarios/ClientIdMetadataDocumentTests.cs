@@ -336,7 +336,9 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
@@ -353,7 +355,9 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         using var response = await FormPostHelpers.PostFormAsync(
             client, discovery.TokenEndpoint, CodeExchange("code", GeneratePkcePair().Verifier));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
     }
 

@@ -63,11 +63,89 @@ public class ClientAuthenticationFailureTests(TestFactory factory) : TestBase(fa
         Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
+    public const string Token = "token";
+    public const string Revocation = "revocation";
+    public const string Introspection = "introspection";
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: "Client authentication methods that do not use an HTTP
+    /// authentication scheme have no corresponding challenge", so a client authenticating in the request body, and
+    /// registered for that, is refused with the endpoint's own status and no WWW-Authenticate field: 400 where the
+    /// token endpoint's rules apply, 401 where the endpoint's specification names it (CIBA Core 1.0 section 13,
+    /// RFC 7662 section 2.3).
+    /// </summary>
+    [Theory]
+    [InlineData(Token, HttpStatusCode.BadRequest)]
+    [InlineData(Revocation, HttpStatusCode.BadRequest)]
+    [InlineData(PushedAuthorization, HttpStatusCode.BadRequest)]
+    [InlineData(DeviceAuthorization, HttpStatusCode.BadRequest)]
+    [InlineData(BackChannelAuthentication, HttpStatusCode.Unauthorized)]
+    [InlineData(Introspection, HttpStatusCode.Unauthorized)]
+    public async Task A_wrong_secret_in_the_body_is_answered_invalid_client_without_a_challenge(
+        string endpoint, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, EndpointOf(discovery, endpoint), new Dictionary<string, string>
+        {
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = "wrong-secret",
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [RevocationRequest.Parameters.Token] = "any-token",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [BackChannelAuthenticationRequest.Parameters.LoginHint] = "e2e-subject",
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+        });
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Empty(response.Headers.WwwAuthenticate);
+        var body = JsonNode.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A client registered for client_secret_basic is owed the Basic challenge even when the request carried its
+    /// credential elsewhere: the challenge names the scheme it is to use.
+    /// </summary>
+    [Theory]
+    [InlineData(Token)]
+    [InlineData(Revocation)]
+    [InlineData(Introspection)]
+    [InlineData(PushedAuthorization)]
+    [InlineData(DeviceAuthorization)]
+    [InlineData(BackChannelAuthentication)]
+    public async Task A_basic_client_failing_without_the_header_is_challenged_with_basic(string endpoint)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, EndpointOf(discovery, endpoint), new Dictionary<string, string>
+        {
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientSecretBasicClientId,
+            [ClientRequest.Parameters.ClientSecret] = "wrong-secret",
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [RevocationRequest.Parameters.Token] = "any-token",
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [BackChannelAuthenticationRequest.Parameters.LoginHint] = "e2e-subject",
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.Basic);
+    }
+
     private static Uri EndpointOf(DiscoveryDocument discovery, string endpoint) => endpoint switch
     {
         BackChannelAuthentication => discovery.BackChannelAuthenticationEndpoint!,
         DeviceAuthorization => discovery.DeviceAuthorizationEndpoint!,
         PushedAuthorization => discovery.PushedAuthorizationRequestEndpoint!,
+        Token => discovery.TokenEndpoint,
+        Revocation => discovery.RevocationEndpoint!,
+        Introspection => discovery.IntrospectionEndpoint!,
         _ => throw new ArgumentOutOfRangeException(nameof(endpoint), endpoint, null),
     };
 }

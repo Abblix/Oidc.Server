@@ -78,7 +78,8 @@ public class ClientValidator(
             // meet that client's outage too, but the answer to such a token does not depend on it, so only a failed
             // authentication is answered as one
             return clients.RefusalOf(authenticated.GetFailure() as MoreThanOneClientAuthenticationMethodError
-                                     ?? new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"));
+                                     ?? await BasicChallenge.InvalidClientAsync(
+                                         tenant, clientRequest, clients, "The client is not authorized"));
         }
 
         context.ClientInfo = clientInfo;

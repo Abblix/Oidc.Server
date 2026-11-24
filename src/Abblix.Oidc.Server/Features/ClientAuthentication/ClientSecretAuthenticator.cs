@@ -60,7 +60,7 @@ public abstract partial class ClientSecretAuthenticator(
 			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
-		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
+		if (!IsRegisteredFor(client, authenticationMethod)) {
 			LogWrongAuthMethod(clientId);
 			return ClientAuthenticationFailures.InvalidCredential;
 		}
@@ -109,4 +109,11 @@ public abstract partial class ClientSecretAuthenticator(
 		LogAuthenticated(client.ClientId);
 		return true;
 	}
+
+	/// <summary>
+	/// Whether <paramref name="client"/> is registered to authenticate by <paramref name="authenticationMethod"/>, the
+	/// one answer this authenticator admits a client by and the Basic challenge is owed by.
+	/// </summary>
+	internal static bool IsRegisteredFor(ClientInfo client, string authenticationMethod)
+		=> authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal);
 }
