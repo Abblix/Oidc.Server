@@ -488,6 +488,25 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
+    /// While anybody may register and the host names no resources, a registered client may get an access token for no
+    /// resource, and the response says so.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringOpenlyWithoutAHostSet_IsAllowedNoResource()
+    {
+        var provider = BuildProvider();
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.Equal([], success.Metadata.AllowedResources!);
+        var stored = await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(tenant, success.ClientId);
+        Assert.True(stored.TryGetSuccess(out var client));
+        Assert.False(client.MayGetTokenFor(new Uri("https://orders.example.com")));
+    }
+
+    /// <summary>
     /// A host naming the grant types decides them under open registration too.
     /// </summary>
     [Fact]

@@ -341,7 +341,9 @@ public record OidcOptions
 	/// point, and a host that wants open registration opts into it in one line. The trade the specification
 	/// names in return is interoperability, since client software cannot register itself unattended.
 	/// While registration is open, a client registering without a token may request only <c>authorization_code</c>
-	/// and <c>refresh_token</c> unless <see cref="Configuration.NewClientOptions.AllowedGrantTypes"/> names others.
+	/// and <c>refresh_token</c> unless <see cref="Configuration.NewClientOptions.AllowedGrantTypes"/> names others, and
+	/// gets an access token for no resource unless <see cref="Configuration.NewClientOptions.AllowedResources"/> names
+	/// some.
 	/// </remarks>
 	public bool RequireInitialAccessToken { get; set; } = true;
 

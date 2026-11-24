@@ -56,11 +56,14 @@ public record NewClientOptions
     /// <summary>
     /// The resources a dynamically registered client may get an access token for: the list a client registering
     /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
-    /// client registering without the member may get a token for any registered resource, and one sending a resource
-    /// is refused, since which resources a client reaches is the server's policy rather than the client's choice.
+    /// client registering without the member may get a token for any registered resource while
+    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>true</c>, and for none while it is <c>false</c>; one
+    /// sending a resource is refused, since which resources a client reaches is the server's policy rather than the
+    /// client's choice.
     /// </summary>
     /// <remarks>
-    /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole.
+    /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client
+    /// registered openly before this default keeps every resource until its next update.
     /// </remarks>
     public Uri[]? AllowedResources { get; init; }
 
