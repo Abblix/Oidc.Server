@@ -79,12 +79,6 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     public DateTimeOffset ClientSecretExpiresAt { get; init; }
 
     /// <summary>
-    /// The software statement JWT echoed back per RFC 7591 Section 3.2.1.
-    /// </summary>
-    [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
-    public string? SoftwareStatement { get; init; }
-
-    /// <summary>
     /// Wire-level member names of the client registration response (RFC 7591 section 3.2.1, RFC 7592 section 3,
     /// OIDC Dynamic Client Registration section 3.2).
     /// </summary>

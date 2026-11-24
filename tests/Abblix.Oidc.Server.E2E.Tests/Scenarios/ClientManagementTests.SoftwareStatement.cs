@@ -87,6 +87,7 @@ public partial class ClientManagementTests
                 registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>()),
             TestContext.Current.CancellationToken));
         Assert.Equal([LegitRedirectUri], RedirectUrisOf(read));
+        Assert.Equal(statement, read[RequestMembers.SoftwareStatement]!.GetValue<string>());
 
         var refused = await AuthorizeAsync(client, discovery, clientId, AttackerRedirectUri);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
@@ -111,10 +112,11 @@ public partial class ClientManagementTests
         var client = CreateStatementClient(host);
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = StatementClientMetadata(LegitRedirectUri);
-        metadata[RequestMembers.SoftwareStatement] = await IssueStatementAsync(new JsonObject
+        var statement = await IssueStatementAsync(new JsonObject
         {
             [RequestMembers.RedirectUris] = new JsonArray(LegitRedirectUri),
         });
+        metadata[RequestMembers.SoftwareStatement] = statement;
         var registered = await RegisterClientAsync(client, discovery, metadata);
         var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
         var configurationUri = new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>());
@@ -133,6 +135,7 @@ public partial class ClientManagementTests
 
         Assert.Equal([LegitRedirectUri], RedirectUrisOf(updated));
         Assert.Equal("renamed", updated[RequestMembers.ClientName]!.GetValue<string>());
+        Assert.Equal(statement, updated[RequestMembers.SoftwareStatement]!.GetValue<string>());
 
         var read = await ReadJsonAsync(await client.SendAsync(
             Request(HttpMethod.Get, configurationUri, updated[ResponseMembers.RegistrationAccessToken]!.GetValue<string>()),
@@ -141,6 +144,36 @@ public partial class ClientManagementTests
 
         var refused = await AuthorizeAsync(client, discovery, clientId, AttackerRedirectUri);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
+    /// <summary>
+    /// An empty <c>software_statement</c> presents no statement, so the client is registered without one: its read
+    /// returns none and its update is served as any client's.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_statement_registers_a_client_without_one()
+    {
+        await using var host = CreateStatementHost();
+        var client = CreateStatementClient(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = StatementClientMetadata(LegitRedirectUri);
+        metadata[RequestMembers.SoftwareStatement] = string.Empty;
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        var configurationUri = new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>());
+
+        var replacement = StatementClientMetadata(AttackerRedirectUri);
+        replacement[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var update = Request(
+            HttpMethod.Put,
+            configurationUri,
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(replacement);
+        var updateResponse = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await ReadJsonAsync(updateResponse);
+        Assert.Equal([AttackerRedirectUri], RedirectUrisOf(updated));
+        Assert.Null(updated[RequestMembers.SoftwareStatement]);
     }
 
     /// <summary>

@@ -104,6 +104,9 @@ public partial class SoftwareStatementValidator(
                 return ErrorFactory.InvalidClientMetadata(
                     "A software_statement is required for client registration");
 
+            // An empty one presents no statement, so none is registered: what the request leaves carries only a
+            // statement this step validated
+            context.Request = context.Request with { SoftwareStatement = null };
             return null;
         }
 

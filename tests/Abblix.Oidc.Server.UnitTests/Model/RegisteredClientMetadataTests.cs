@@ -34,8 +34,8 @@ public class RegisteredClientMetadataTests
 {
     /// <summary>
     /// The request members that are not client metadata: the identifier the server assigns, a software statement the
-    /// server reads and does not keep, which the registration response returns from the request, and the secret an
-    /// update carries back, which the server issued and the response returns beside the metadata.
+    /// server keeps beside the metadata and returns as the client was registered with it, and the secret an update
+    /// carries back, which the server issued and the response returns beside the metadata.
     /// </summary>
     private static readonly string[] NotMetadata =
     [
@@ -96,6 +96,21 @@ public class RegisteredClientMetadataTests
 
         Assert.Null(metadata.UserInfoSignedResponseAlg);
         Assert.Null(metadata.IntrospectionSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// The software statement a client was registered with comes back unmodified (RFC 7591 section 3.2.1), and a
+    /// client registered without one returns none.
+    /// </summary>
+    [Theory]
+    [InlineData("eyJhbGciOiJSUzI1NiJ9.eyJyZWRpcmVjdF91cmlzIjpbXX0.c2lnbmF0dXJl")]
+    [InlineData(null)]
+    public void TheRegisteredStatement_ComesBackUnmodified(string? statement)
+    {
+        var client = Registered(FullRequest());
+        client.SoftwareStatement = statement;
+
+        Assert.Equal(statement, RegisteredClientMetadata.Of(client).SoftwareStatement);
     }
 
     /// <summary>

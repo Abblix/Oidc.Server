@@ -22,9 +22,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <remarks>
 /// A member is the statement's when the statement names it, whatever its value, so a stated default or an explicit
-/// null replaces the body's value as any other does. Members are matched by the serializer's own contract of
-/// <see cref="ClientRegistrationRequest"/>, the one a request body is read with, so a member the request models is
-/// laid over under the name it is read by; a member it does not model joins
+/// null replaces the body's value as any other does. Members are matched by the serializer's default contract of
+/// <see cref="ClientRegistrationRequest"/>, the one a client metadata document is read with, so a member the request
+/// models is laid over under its registered name; a member it does not model joins
 /// <see cref="ClientRegistrationRequest.AdditionalMembers"/> in the same way.
 /// </remarks>
 internal static class SoftwareStatementMetadata

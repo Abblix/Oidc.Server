@@ -361,6 +361,13 @@ public record RegisteredClientMetadata
     public string? SoftwareVersion { get; init; }
 
     /// <summary>
+    /// The software statement the client was registered with, returned unmodified (RFC 7591 section 3.2.1).
+    /// </summary>
+    [JsonPropertyOrder(162)]
+    [JsonPropertyName(Parameters.SoftwareStatement)]
+    public string? SoftwareStatement { get; init; }
+
+    /// <summary>
     /// The metadata the server holds for <paramref name="client"/>.
     /// </summary>
     /// <remarks>
@@ -428,6 +435,7 @@ public record RegisteredClientMetadata
         AllowedResources = client.AllowedResources,
         SoftwareId = client.SoftwareId,
         SoftwareVersion = client.SoftwareVersion,
+        SoftwareStatement = client.SoftwareStatement,
     });
 
     /// <summary>
