@@ -57,8 +57,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
         Uri tokenType,
         CancellationToken cancellationToken)
     {
-        // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
-        // need not name this server
+        // A refresh token issued by 3.0 holds the resources of the grant it continues in its audience
+        // (RefreshTokenResources), so the audience need not name this server
         var validation = await ReadAsync(tenant, client, subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
             return validation.GetFailure();

@@ -1191,6 +1191,113 @@ public class RefreshTokenServiceTests
     }
 
 
+    /// <summary>
+    /// A refresh token of a grant for a resource names this server as its audience, so a resource server checking
+    /// the audience of a token presented to it (RFC 9068 section 4) refuses it, and keeps the grant's resources in
+    /// the server's own claim instead.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_ForAResourceGrant_NamesTheIssuer_AndKeepsTheResourcesInTheServersClaim()
+    {
+        var authContext = CreateAuthorizationContext() with { Resources = [ApiResource, OtherApiResource] };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        Assert.NotNull(issued);
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.Equal(
+            [ApiResource.OriginalString, OtherApiResource.OriginalString],
+            issued.Token.Payload.Json.GetArrayOfStringsOrNull(RefreshTokenResources.ClaimType));
+    }
+
+    /// <summary>
+    /// A refresh token of a grant naming no resource still states that it names none, so its reader tells it from a
+    /// token that carries its resources in the audience.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_ForAGrantNamingNoResource_StatesAnEmptyList()
+    {
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), null, GrantId);
+
+        Assert.NotNull(issued);
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.IsType<JsonArray>(issued.Token.Payload.Json[RefreshTokenResources.ClaimType]);
+        Assert.Empty(issued.Token.Payload.Json.GetArrayOfStringsOrNull(RefreshTokenResources.ClaimType)!);
+    }
+
+    /// <summary>
+    /// The grant's resources are read from the server's claim where the token carries it, an empty one naming no
+    /// resource, and from the audience where it does not, as a refresh token issued by 3.0 has them.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "https://api.example.com" }, null, new[] { "https://api.example.com" })]
+    [InlineData(new string[0], null, null)]
+    [InlineData(new string[0], new[] { "https://api.example.com" }, new[] { "https://api.example.com" })]
+    [InlineData(new string[0], new string[0], null)]
+    public async Task AuthorizeByRefreshToken_ReadsTheResourcesFromTheServersClaim_ElseFromTheAudience(
+        string[] audienceResources,
+        string[]? claimed,
+        string[]? expected)
+    {
+        var refreshToken = new JsonWebToken
+        {
+            Payload =
+            {
+                Subject = UserId,
+                SessionId = SessionId,
+                AuthenticationTime = _currentTime.AddMinutes(-30),
+                IdentityProvider = "local",
+                Issuer = Issuer,
+                Audiences = audienceResources is { Length: > 0 } ? audienceResources : [Issuer],
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+                GrantId = GrantId,
+            },
+        };
+        if (claimed is not null)
+        {
+            refreshToken.Payload.Json[RefreshTokenResources.ClaimType] =
+                new JsonArray([.. claimed.Select(value => (JsonNode?)JsonValue.Create(value))]);
+        }
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(expected?.Select(value => new Uri(value)).ToArray(), grant.Context.Resources);
+    }
+
+    /// <summary>
+    /// A refresh token issued for a resource grant is read back to the same resources, which the access tokens
+    /// renewed from it are issued for.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenOfAResourceGrant_IsReadBackToTheSameResources()
+    {
+        var authContext = CreateAuthorizationContext() with { Resources = [ApiResource, OtherApiResource] };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued!.Token, CreateClientInfo());
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal([ApiResource, OtherApiResource], grant.Context.Resources!);
+    }
+
+    private static readonly Uri ApiResource = new("https://api.example.com");
+    private static readonly Uri OtherApiResource = new("https://other.example.com/mcp");
+
     private static AuthSession CreateAuthSession() => new(
         Subject: UserId,
         SessionId: SessionId,
