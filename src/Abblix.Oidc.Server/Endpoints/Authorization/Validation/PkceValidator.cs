@@ -80,10 +80,11 @@ public class PkceValidator(
 		SecurityProfileRequirements profile,
 		string codeChallenge)
 	{
-		// RFC 7636 section 4.3: code_challenge_method "Defaults to "plain" if not present in the request". Written into
+		// RFC 7636 section 4.3: code_challenge_method "defaults to "plain" if not present in the request". Written into
 		// the request that goes on, so the plain rules below apply to it and the code it is issued is verified at the
-		// token endpoint by the method it was validated under
-		if (context.Request.CodeChallengeMethod is null)
+		// token endpoint by the method it was validated under. A request issuing no code has no code for the method to
+		// verify, so it is left without one
+		if (context.Request.CodeChallengeMethod is null && context.Request.ResponseType.HasFlag(ResponseTypes.Code))
 			context.Request = context.Request with { CodeChallengeMethod = CodeChallengeMethods.Plain };
 
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
