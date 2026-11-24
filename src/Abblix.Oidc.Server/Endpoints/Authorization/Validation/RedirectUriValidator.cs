@@ -92,6 +92,11 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
         return sole;
     }
 
+    /// <remarks>
+    /// The query is held to OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3 too: it "MUST NOT include any parameters
+    /// defined for use in the authorization response", which would reach the client beside the ones added here.
+    /// </remarks>
     private static bool IsAllowedFor(ClientInfo client, Uri uri)
-        => RedirectUriSchemes.IsAllowed(uri, native: client.ApplicationType == ApplicationTypes.Native);
+        => RedirectUriSchemes.IsAllowed(uri, native: client.ApplicationType == ApplicationTypes.Native) &&
+           RedirectUriQuery.ResponseParameterIn(uri) is null;
 }

@@ -858,6 +858,25 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3: "The query string component MUST NOT include any parameters
+    /// defined for use in the authorization response". A client the host's own store supplies never met the check of
+    /// the settings, so the endpoint refuses such a registered redirect URI too, and keeps one whose query names
+    /// another parameter.
+    /// </summary>
+    [Theory]
+    [InlineData("https://client.example.com/callback?code=1", false)]
+    [InlineData("https://client.example.com/callback?iss=x", false)]
+    [InlineData("https://client.example.com/callback?tenant=a", true)]
+    public async Task ValidateAsync_ARegisteredRedirectUriNamingAResponseParameter_IsRefused(string uri, bool accepted)
+    {
+        var context = CreateContextFor(ApplicationTypes.Web, new Uri(uri), new Uri(uri));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
     /// The URI a request naming none is served at answers to the schemes of its client like a named one: a web client
     /// is not served at an http URI it registered.
     /// </summary>

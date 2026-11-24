@@ -88,7 +88,22 @@ internal sealed class RedirectUrisCheck : ITenantsCheck
                 .Select(uri => (Member: nameof(ClientInfo.PostLogoutRedirectUris), Uri: uri)))
             .Where(redirect => Refuses(redirect.Uri))
             .Select(redirect => Failure(client, redirect.Member, redirect.Uri))
-            .Concat(WebClientFailures(client));
+            .Concat(WebClientFailures(client))
+            .Concat(ResponseParameterFailures(client));
+
+    /// <summary>
+    /// The redirect URIs whose query names a parameter of the authorization response, which OAuth 2.1
+    /// (draft-ietf-oauth-v2-1-17) section 2.3 forbids: "The query string component MUST NOT include any parameters
+    /// defined for use in the authorization response". A post-logout redirect carries no authorization response, so it
+    /// is not held to the rule.
+    /// </summary>
+    private static IEnumerable<string> ResponseParameterFailures(ClientInfo client)
+        => from uri in client.RedirectUris
+           where !Refuses(uri)
+           let parameter = RedirectUriQuery.ResponseParameterIn(uri)
+           where parameter != null
+           select $"The client '{client.ClientId}' has the {nameof(ClientInfo.RedirectUris)} '{Shown(uri)}', " +
+                  $"whose query names '{parameter}', a parameter of the authorization response (OAuth 2.1 section 2.3).";
 
     /// <summary>
     /// The redirect URIs of a web client that are not https, which RFC 9700 section 2.6 forbids ("MUST NOT allow
