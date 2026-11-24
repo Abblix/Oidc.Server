@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -114,7 +113,7 @@ public partial class PromptReturnTripTests
     }
 
     /// <summary>
-    /// The server over an end user the test signs in and a consent granted to everything, with the clients it
+    /// The server over an end user the test signs in, with the clients it
     /// registers trusted or left to the server's own policy.
     /// </summary>
     private (HttpClient Client, SignedInEndUser EndUser, IDisposable Host) StartErroneous(bool trustEveryClient)
@@ -123,7 +122,6 @@ public partial class PromptReturnTripTests
         var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
-            services.Replace(ServiceDescriptor.Singleton<IUserConsentsProvider, NullConsentService>());
             if (!trustEveryClient)
                 services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>());
         }));
