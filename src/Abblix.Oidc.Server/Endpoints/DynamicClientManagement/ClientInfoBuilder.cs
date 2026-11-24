@@ -25,6 +25,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 {
     private string? _sectorIdentifier;
     private ClientSecret[]? _clientSecrets;
+    private string? _softwareStatement;
     private string[]? _defaultScope;
     private Uri[]? _defaultAllowedResources;
     private string[]? _defaultTokenExchangeAudiences;
@@ -110,6 +111,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Sets the software statement the client is registered with: the one a registration presents, and for an
+    /// update the one the stored client was registered with, since an update body cannot replace it.
+    /// </summary>
+    public ClientInfoBuilder WithSoftwareStatement(string? softwareStatement)
+    {
+        _softwareStatement = softwareStatement;
+        return this;
+    }
+
+    /// <summary>
     /// Takes what the host set on <paramref name="stored"/> and no registration metadata can carry, its security
     /// profile among them: RFC 7592 section 2.2 replaces the client metadata, so an update keeps these as they were.
     /// A new registration takes the defaults of <see cref="ClientInfo"/>.
@@ -140,6 +151,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             ClientSecrets = _clientSecrets,
             SectorIdentifier = _sectorIdentifier,
             SectorIdentifierUri = model.SectorIdentifierUri,
+            SoftwareStatement = _softwareStatement,
         };
 
         ApplyHostSettings(clientInfo);

@@ -736,13 +736,12 @@ public record ClientRegistrationRequest
     /// through the family API rather than by registering the contract directly.
     /// </para>
     /// <para>
-    /// These are body members and nothing else. A claim carried in a trusted <c>software_statement</c>
-    /// never appears here, so a host reading one of these values is reading the client's own assertion
-    /// even when the software statement contradicts it - and RFC 7591 Section 2 gives the software
-    /// statement precedence: "If the same client metadata name is present in both locations and the
-    /// software statement is trusted by the authorization server, the value of a claim in the software
-    /// statement MUST take precedence". A host acting on a member that its software statements can also
-    /// carry has to resolve that itself.
+    /// A validation step running after the software statement check reads these with the members of a
+    /// trusted <c>software_statement</c> laid over the body's, as RFC 7591 Section 2 has it: "If the same
+    /// client metadata name is present in both locations and the software statement is trusted by the
+    /// authorization server, the value of a claim in the software statement MUST take precedence". The
+    /// claims a statement carries as a JWT (<c>iss</c>, <c>iat</c> and the like) are not client metadata
+    /// and never appear here.
     /// </para>
     /// <para>
     /// What arrives here is attacker-controlled, unlike the provider metadata a client keeps the same

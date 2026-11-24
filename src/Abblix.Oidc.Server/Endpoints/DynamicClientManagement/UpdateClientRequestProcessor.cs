@@ -59,6 +59,7 @@ public class UpdateClientRequestProcessor(
         // the host set on the client beyond its metadata, the security profile it is held to among them.
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithSoftwareStatement(existingClient.SoftwareStatement)
             .WithHostSettingsOf(existingClient)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)

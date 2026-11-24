@@ -32,11 +32,11 @@ public class RegisterClientResponseFormatter(
     public Task<IResult> FormatResponseAsync(
         ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, OidcError> response)
         => Task.FromResult(response.Match(
-            onSuccess: success => FormatSuccess(request, success),
+            onSuccess: FormatSuccess,
             onFailure: error => error.Format(
                 StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
 
-    private IResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
+    private IResult FormatSuccess(ClientRegistrationSuccessResponse success)
     {
         var modelResponse = new ClientRegistrationResponse(success.Metadata)
         {
@@ -51,9 +51,6 @@ public class RegisterClientResponseFormatter(
             RegistrationClientUri = success.RegistrationAccessToken.HasValue()
                 ? uriBuilder.Build(success.ClientId)
                 : null,
-
-            // RFC 7591 section 3.2.1: a software statement "MUST be returned unmodified", and the server keeps none
-            SoftwareStatement = request.SoftwareStatement,
         };
 
         return Results.Json(modelResponse, statusCode: StatusCodes.Status201Created);

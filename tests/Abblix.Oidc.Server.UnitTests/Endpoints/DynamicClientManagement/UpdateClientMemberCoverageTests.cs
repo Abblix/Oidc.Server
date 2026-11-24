@@ -48,14 +48,15 @@ public class UpdateClientMemberCoverageTests
 
     /// <summary>
     /// The members an update keeps from the stored client: what the host set and no registration metadata carries, the
-    /// credentials, and the identity and sector the client's end users are known under. Every other member is the
-    /// request's, so a member of the request copied from the stored client fails as surely as a host setting lost.
+    /// credentials, the identity and sector the client's end users are known under, and the software statement it was
+    /// registered with. Every other member is the request's, so a member of the request copied from the stored client fails as surely as a host setting lost.
     /// </summary>
     private static readonly string[] KeptFromHost =
     [
         nameof(ClientInfo.ClientId),
         nameof(ClientInfo.ClientSecrets),
         nameof(ClientInfo.SectorIdentifier),
+        nameof(ClientInfo.SoftwareStatement),
         nameof(ClientInfo.SecurityProfile),
         nameof(ClientInfo.Trust),
         nameof(ClientInfo.PlainPkceAllowed),

@@ -22,12 +22,13 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// <remarks>
 /// Section 4 of draft-ietf-oauth-client-id-metadata-document takes the document's values from "the OAuth Dynamic
 /// Client Registration Metadata OAuth Parameters registry ... as established by [RFC7591]", so they are judged as a
-/// registration's are, the host's limits on what a new client gets included. Two checks of the registration pipeline
-/// are left out because they judge the request rather than the metadata: the initial access token, which a fetched
-/// document cannot carry, and whether the requested client_id is taken, which asks the client store for the very
-/// identifier being resolved. The checks are built here rather than resolved, since a host need not open dynamic
-/// registration to accept clients by their documents, and they are the registration pipeline's own list, so a check
-/// added there judges a document too.
+/// registration's are, the host's limits on what a new client gets included. The checks of the registration pipeline
+/// that judge the request rather than the metadata are left out: the initial access token, which a fetched document
+/// cannot carry, whether the requested client_id is taken, which asks the client store for the very identifier being
+/// resolved, and the software statement, whose metadata would replace the rules the document's reader fixes. The
+/// checks are built here rather than resolved, since a host need not open dynamic registration to accept clients by
+/// their documents, and they are <see cref="ClientRegistrationMetadataChecks.MetadataDocument"/>, the list the
+/// registration pipeline runs too, so a check added there judges a document as well.
 /// </remarks>
 /// <param name="services">The container of the request the client is resolved for.</param>
 internal sealed class ClientIdMetadataDocumentValidator(IServiceProvider services)
@@ -43,7 +44,7 @@ internal sealed class ClientIdMetadataDocumentValidator(IServiceProvider service
         ClientRegistrationRequest metadata)
     {
         var context = new ClientRegistrationValidationContext(metadata);
-        foreach (var step in ClientRegistrationMetadataChecks.All)
+        foreach (var step in ClientRegistrationMetadataChecks.MetadataDocument)
         {
             var validator = (IClientRegistrationContextValidator)ActivatorUtilities.CreateInstance(
                 services, step.ImplementationType!);
