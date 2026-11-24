@@ -54,8 +54,9 @@ internal sealed class NativeClientsCheck : ITenantsCheck
         foreach (var responseType in client.EffectiveResponseTypes.Where(responseType => !responseType.ServesNativeApps()))
         {
             yield return $"The native client '{client.ClientId}' is allowed the response type " +
-                         $"'{string.Join(' ', responseType)}', which carries no code: PKCE cannot protect it, so a " +
-                         $"native app uses one carrying a code (RFC 8252 section 8.2, RFC 9700 section 2.1.2).";
+                         $"'{string.Join(' ', responseType)}': a native app uses a response type carrying a code, " +
+                         $"which PKCE protects, and gets its access token at the token endpoint, so not one carrying " +
+                         $"token (RFC 8252 section 8.2, RFC 9700 section 2.1.2).";
         }
 
         // RFC 8252 section 8.4 has native apps "classified as public clients" except "when using a mechanism like

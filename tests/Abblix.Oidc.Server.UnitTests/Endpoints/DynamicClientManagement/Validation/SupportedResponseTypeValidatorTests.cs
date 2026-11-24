@@ -221,13 +221,15 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
-    /// A native app registering a response type without a code is refused, since PKCE protects only the code (RFC 8252
+    /// A native app registering a response type without a code or with a token is refused, since PKCE protects only the code (RFC 8252
     /// section 8.2, RFC 9700 section 2.1.2); a hybrid one carries a code and registers, and a web client keeps the
     /// implicit flow the server enables.
     /// </summary>
     [Theory]
     [InlineData(ApplicationTypes.Native, ErrorCodes.InvalidClientMetadata, ResponseTypes.Token)]
     [InlineData(ApplicationTypes.Native, ErrorCodes.InvalidClientMetadata, ResponseTypes.IdToken)]
+    [InlineData(ApplicationTypes.Native, ErrorCodes.InvalidClientMetadata, ResponseTypes.Code, ResponseTypes.Token)]
+    [InlineData(ApplicationTypes.Native, ErrorCodes.InvalidClientMetadata, ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token)]
     [InlineData(ApplicationTypes.Native, null, ResponseTypes.Code, ResponseTypes.IdToken)]
     [InlineData(ApplicationTypes.Web, null, ResponseTypes.IdToken, ResponseTypes.Token)]
     public async Task ValidateAsync_ANativeApp_RegistersOnlyResponseTypesWithACode(

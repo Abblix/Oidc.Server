@@ -62,8 +62,8 @@ public class SupportedResponseTypeValidator(
             context.Request.ResponseTypes.FirstOrDefault(combination => !combination.ServesNativeApps()) is { } refused)
         {
             return ErrorFactory.InvalidClientMetadata(
-                $"A native app uses a response type carrying a code, which PKCE protects, not " +
-                $"'{string.Join(' ', refused)}' (RFC 8252 section 8.2)");
+                $"A native app uses a response type carrying a code, which PKCE protects, and gets its access token " +
+                $"at the token endpoint, not '{string.Join(' ', refused)}' (RFC 8252 section 8.2, RFC 9700 section 2.1.2)");
         }
 
         return WhyResponseModesRefused(context.Request.ResponseModes);
