@@ -157,6 +157,64 @@ public class AuthorizationHandlerTests
     }
 
     /// <summary>
+    /// The trust in the client's redirect URIs is decided once per request, so the login owed before an error and the
+    /// error kept at the server rest on one verdict: a policy whose answer changes while the request is answered, as a
+    /// registration removed meanwhile changes it, cannot have the error skip the login and still be redirected.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AVerdictChangingDuringTheRequest_RedirectsNothingWithoutALogin()
+    {
+        var request = CreateRequest();
+        SetUpValidationError(request, request.RedirectUri);
+        SignedIn();
+        _redirectUriTrust
+            .SetupSequence(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(false)
+            .ReturnsAsync(true);
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Null(error.RedirectUri);
+        _redirectUriTrust.Verify(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A trusted or untrusted client's error answered with a session asks the policy once.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HandleAsync_AnErrorWithASession_AsksThePolicyOnce(bool trusted)
+    {
+        var request = CreateRequest();
+        SetUpValidationError(request, request.RedirectUri);
+        _redirectUriTrust
+            .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(trusted);
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Equal(trusted ? request.RedirectUri : null, error.RedirectUri);
+        _redirectUriTrust.Verify(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()), Times.Once);
+    }
+
+    /// <summary>
+    /// An error naming no client is not going to be redirected, so it owes no login either, with nobody signed in.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnErrorNamingNoClientWithoutAUser_IsAnsweredAtOnce()
+    {
+        var request = CreateRequest() with { ClientId = null };
+        SetUpValidationError(request, request.RedirectUri);
+        SignedIn();
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Null(error.RedirectUri);
+        _sessions.Verify(s => s.GetAvailableAuthSessions(), Times.Never);
+    }
+
+    /// <summary>
     /// An error carrying a redirect URI but naming no client has no client whose redirect URIs could be trusted, so the
     /// server answers it.
     /// </summary>

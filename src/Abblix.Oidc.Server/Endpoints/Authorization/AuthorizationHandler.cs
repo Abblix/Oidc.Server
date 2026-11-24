@@ -78,11 +78,13 @@ public class AuthorizationHandler(
         // convergence point for success and every error variant, after session_state is finalised.
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
         var response = await ProduceResponseAsync(tenant, request, clients);
-        if (await AuthenticationOwedAsync(tenant, response, clients) is { } login)
+        Task<bool>? verdict = null;
+        Task<bool> Redirected(AuthorizationError error) => verdict ??= IsRedirectedAsync(tenant, error, clients);
+        if (await AuthenticationOwedAsync(tenant, response, Redirected) is { } login)
             return login;
 
         var encoded = await responseEncoder.EncodeAsync(tenant, response, clients);
-        return await KeptAtTheServerUnlessTrustedAsync(tenant, encoded, clients);
+        return await KeptAtTheServerUnlessTrustedAsync(encoded, Redirected);
     }
 
     /// <summary>
@@ -103,11 +105,11 @@ public class AuthorizationHandler(
     private async Task<LoginRequired?> AuthenticationOwedAsync(
         TenantDefinition tenant,
         AuthorizationResponse response,
-        IClientInfoProvider clients)
+        Func<AuthorizationError, Task<bool>> redirected)
     {
         if (response is not AuthorizationError { RedirectUri: not null, Model: var model } error ||
             PromptPages.Asks(model, Prompts.None) ||
-            !await IsRedirectedAsync(tenant, error, clients))
+            !await redirected(error))
         {
             return null;
         }
@@ -124,13 +126,12 @@ public class AuthorizationHandler(
     /// client: a refused request, a declined consent, a silent request. Decided after encoding, so an error the encoder
     /// itself makes of a response it could not pack is held to it too, and a packed one is answered without its JWT.
     /// </summary>
-    private async Task<AuthorizationResponse> KeptAtTheServerUnlessTrustedAsync(
-        TenantDefinition tenant,
+    private static async Task<AuthorizationResponse> KeptAtTheServerUnlessTrustedAsync(
         AuthorizationResponse response,
-        IClientInfoProvider clients)
+        Func<AuthorizationError, Task<bool>> redirected)
     {
         if (response is not AuthorizationError { RedirectUri: not null } error ||
-            await IsRedirectedAsync(tenant, error, clients))
+            await redirected(error))
         {
             return response;
         }
@@ -139,9 +140,10 @@ public class AuthorizationHandler(
     }
 
     /// <summary>
-    /// Whether <paramref name="error"/> may be redirected to its client: the one answer the login owed before an error
-    /// and the error kept at the server are both read from. An error naming no client has no client to trust, so it
-    /// stays at the server like an untrusted one.
+    /// Whether <paramref name="error"/> may be redirected to its client. <see cref="HandleAsync"/> asks it once per
+    /// request and hands the verdict to the login owed before an error and to the error kept at the server, so a policy
+    /// answering differently the second time cannot let an error skip the login and still be redirected. An error naming
+    /// no client has no client to trust, so it stays at the server like an untrusted one.
     /// </summary>
     private async Task<bool> IsRedirectedAsync(TenantDefinition tenant, AuthorizationError error, IClientInfoProvider clients)
         => error.Model.ClientId is { } clientId &&
