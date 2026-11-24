@@ -75,7 +75,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     }
 
     [Fact]
-    public async Task Userinfo_binds_access_token_from_query_and_from_bearer_header()
+    public async Task Userinfo_ignores_an_access_token_in_the_query_and_binds_the_bearer_header()
     {
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
@@ -84,17 +84,15 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var userInfoEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint);
 
-        // The query branch of the generated UserInfoRequest.BindAsync (SupportsGet -> RequestValues(query, form)) binds
-        // the token. The query alone is refused as a method the endpoint does not support (RFC 9700 section 4.3.2), so
-        // the token is sent beside the header: only a bound query token makes that two methods, an invalid_request
-        // (RFC 6750 section 3.1), where a token the binder missed would leave the header alone and be answered
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 5.1: "resource servers MUST ignore access tokens in a URI query
+        // parameter", so the generated UserInfoRequest.BindAsync reads none from there, and a token sent there twice
+        // beside the header neither counts as a second method (RFC 6750 section 3.1) nor as a repeated parameter
         using var viaQueryAndHeader = new HttpRequestMessage(
             HttpMethod.Get,
-            OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }));
+            new Uri($"{userInfoEndpoint}?{UserInfoRequest.Parameters.AccessToken}=a&{UserInfoRequest.Parameters.AccessToken}=b"));
         viaQueryAndHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
         var viaQuery = await client.SendAsync(viaQueryAndHeader, TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.BadRequest, viaQuery.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(viaQuery));
+        Assert.Equal(HttpStatusCode.OK, viaQuery.StatusCode);
 
         // OIDC Core 5.3.1 RECOMMENDED form: the access token in the Authorization: Bearer header.
         using var request = new HttpRequestMessage(HttpMethod.Get, userInfoEndpoint);

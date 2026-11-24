@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
 /// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
-/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form parameter, exactly one of them, never the
-/// query parameter),
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form parameter, exactly one of them; one in the
+/// query is ignored),
 /// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
@@ -191,8 +191,8 @@ public class UserInfoRequestValidator(
 
 	/// <summary>
 	/// Extracts the access token from exactly one source per RFC 6750 section 2: the <c>Authorization</c> header (Bearer or
-	/// DPoP scheme) or the <c>access_token</c> parameter in the body. Two sources, the query among them, are an
-	/// invalid request, and the query alone is answered as no token. Returns the typed
+	/// DPoP scheme) or the <c>access_token</c> parameter in the body; the two together are an invalid request, and a
+	/// token in the query is never read (OAuth 2.1 section 5.1). Returns the typed
 	/// <see cref="MissingAuthenticationError"/> when neither is present so the challenge builder omits error
 	/// attributes.
 	/// </summary>
@@ -206,36 +206,27 @@ public class UserInfoRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		// RFC 6750 section 3.1: the token in both the body and the query is "more than one method", an invalid_request
-		if (userInfoRequest is { AccessTokenInForm: not null, AccessTokenInQuery: not null })
-			return new OidcError(
-				ErrorCodes.InvalidRequest,
-				$"The '{Parameters.AccessToken}' parameter must be passed in the request body or the query, " +
-				"but not in both at the same time");
-
-		var parameter = userInfoRequest.AccessToken;
+		// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 5.1: "resource servers MUST ignore access tokens in a URI query
+		// parameter", so the query is not bound at all: a token there neither authenticates the request nor counts as a
+		// second method beside another. RFC 9700 section 4.3.2 forbids clients to send it there, and FAPI 2.0 Security
+		// Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 have a resource server "not accept access tokens in
+		// the query parameters"
+		var parameter = userInfoRequest.AccessTokenInForm;
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader == null)
 		{
-			if (userInfoRequest.AccessTokenInForm is { } inForm)
+			if (parameter is { } inForm)
 				return inForm;
 
 			// RFC 6750 section 3.1: a request with no authentication information at all gets a bare WWW-Authenticate
-			// challenge - the typed marker tells the challenge builder to omit the error attributes. A token in the
-			// query alone is answered so too. RFC 6750 section 2.3 lets a resource server take it from there, and this
-			// endpoint does not: a URL carrying it ends up in browser history and server logs (RFC 9700 section
-			// 4.3.2, which forbids clients to send it so), and FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0
-			// Part 1 section 6.2.1 have a resource server "not accept access tokens in the query parameters". That
-			// makes the query a method this endpoint does not support, whose response "SHOULD NOT include an error
-			// code or other error information" (RFC 6750 section 3.1). The token is never read, since validating it
-			// records what it finds
+			// challenge - the typed marker tells the challenge builder to omit the error attributes
 			return new MissingAuthenticationError(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter of the request body, but none of them specified");
 		}
 
-		// RFC 6750 section 3.1: the header and a parameter together, of the body or of the query, are "more than one
-		// method for including an access token", an invalid_request like the body and the query together above.
+		// RFC 6750 section 3.1: the header and the body parameter together are "more than one method for including an
+		// access token", an invalid_request.
 		// Decided before the scheme, since a request carrying a token does not lack authentication information
 		// whatever its header names
 		if (parameter != null)
