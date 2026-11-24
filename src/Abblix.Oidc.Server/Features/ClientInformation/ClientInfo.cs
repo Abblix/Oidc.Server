@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -32,10 +35,13 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Whether the client was resolved from the metadata document its identifier names, so the server's fetches of
-    /// its URIs are held to the special-purpose address registries as written. Set by the server, never by
-    /// configuration.
+    /// its URIs are held to the special-purpose address registries as written, and a host's
+    /// <see cref="IRedirectUriTrustPolicy"/> can tell such a client from one somebody registered. Set by the server,
+    /// never by configuration or a stored record: it is neither written to nor read from JSON.
     /// </summary>
-    internal bool ResolvedFromMetadataDocument { get; set; }
+    [JsonIgnore]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public bool ResolvedFromMetadataDocument { get; internal set; }
 
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from
