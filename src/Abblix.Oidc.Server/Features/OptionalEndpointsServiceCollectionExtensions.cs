@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Features.Consents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -61,7 +62,9 @@ public static class OptionalEndpointsServiceCollectionExtensions
     /// <see cref="OidcEndpoints.RegisterClient"/> flag, which is off in the default
     /// <see cref="OidcOptions.EnabledEndpoints"/>. Open registration widens the attack surface, so it is opt-in:
     /// a server that never calls this method exposes no registration endpoint and does not advertise it in
-    /// discovery. New-client defaults are taken from <see cref="OidcOptions.NewClientOptions"/>.
+    /// discovery. New-client defaults are taken from <see cref="OidcOptions.NewClientOptions"/>. A host granting every
+    /// client everything (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>) while
+    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> does not start.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
@@ -70,6 +73,7 @@ public static class OptionalEndpointsServiceCollectionExtensions
         services.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.RegisterClient);
         services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.RegisterClient);
+        services.AddConsentForUnreviewedClientsCheck();
         return services;
     }
 }

@@ -36,9 +36,9 @@ public sealed class RedirectUriTrustPolicy(IOptionsMonitor<OidcOptions> options,
         var settings = options.CurrentValue;
 
         if (client.ResolvedFromMetadataDocument)
-            return settings.ClientIdMetadataDocuments.AllowedClientIdPrefixes is { Length: > 0 };
+            return !OpenRegistration.AdmitsAnyDocument(settings);
 
-        if (settings.RequireInitialAccessToken)
+        if (!OpenRegistration.AdmitsAnyRegistrant(settings))
             return true;
 
         return await registrations.TryFindRegisteredClientAsync(tenant, client.ClientId) is null;
