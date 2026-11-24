@@ -56,10 +56,10 @@ public record NewClientOptions
     /// <summary>
     /// The resources a dynamically registered client may get an access token for: the list a client registering
     /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
-    /// client registering without the member may get a token for any registered resource while
-    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>true</c>, and for none while it is <c>false</c>; one
-    /// sending a resource is refused, since which resources a client reaches is the server's policy rather than the
-    /// client's choice.
+    /// client registering without the member may get a token for any registered resource, and for none while anybody
+    /// may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software
+    /// statement from a trusted issuer is required; one sending a resource is refused, since which resources a client
+    /// reaches is the server's policy rather than the client's choice.
     /// </summary>
     /// <remarks>
     /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client
@@ -81,8 +81,9 @@ public record NewClientOptions
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
     /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
-    /// server supports while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>true</c>, and only
-    /// <c>authorization_code</c> and <c>refresh_token</c> while it is <c>false</c>.
+    /// server supports, and only <c>authorization_code</c> and <c>refresh_token</c> while anybody may register, that is
+    /// while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software statement from a
+    /// trusted issuer is required.
     /// </summary>
     /// <remarks>
     /// A grant no end user takes part in, such as <c>client_credentials</c>, gets tokens with no user present, so a

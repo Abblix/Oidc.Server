@@ -12,7 +12,8 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
 /// Whether the settings let somebody nobody reviewed become a client: the one answer the trust set on a client when it
-/// is created and the startup refusal of consent granted to every client are both read from.
+/// is created, the startup refusal of consent granted to every client and the grant types and resources a client
+/// registering openly is given are all read from.
 /// </summary>
 internal static class OpenRegistration
 {

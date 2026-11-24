@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
@@ -19,13 +20,16 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// in, the authorization code and the refresh token, and no resource to get an access token for.
 /// </summary>
 /// <remarks>
-/// While <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> anybody may register, and a grant no end
-/// user approves, such as client credentials, would give whoever registered tokens of its own, as a client allowed
-/// every resource would get tokens for every API the tenant protects. A set the host names is held by
+/// Registration is open as <see cref="OpenRegistration.AdmitsAnyRegistrant"/> answers it, the answer the trust a
+/// registered client is created with is read from too: no initial access token is asked, and no software statement from
+/// an issuer the host trusts. A grant no end user approves, such as client credentials, would then give whoever
+/// registered tokens of its own, as a client allowed every resource would get tokens for every API the tenant
+/// protects. A required statement is still judged later in the pipeline, which refuses one missing or untrusted. A set
+/// the host names is held by
 /// <see cref="HostGrantedMetadataValidator"/> instead, so a request is judged by one set alone. A request check rather
 /// than a metadata one: a client resolved from its metadata document is held to
 /// <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>, which this would narrow. An update is judged as a
-/// registration is, since it replaces the metadata whole. Both settings are read at each request.
+/// registration is, since it replaces the metadata whole. The settings are read at each request.
 /// </remarks>
 /// <param name="options">The server options carrying the settings.</param>
 internal sealed class OpenRegistrationDefaultsValidator(IOptionsMonitor<OidcOptions> options)
@@ -35,7 +39,7 @@ internal sealed class OpenRegistrationDefaultsValidator(IOptionsMonitor<OidcOpti
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var settings = options.CurrentValue;
-        if (settings.RequireInitialAccessToken)
+        if (!OpenRegistration.AdmitsAnyRegistrant(settings))
             return null;
 
         var granted = settings.NewClientOptions;

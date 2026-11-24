@@ -21,9 +21,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <remarks>
 /// An unset set does not mean the same for each member: unset resources or audiences let a client name none, while
-/// unset grant types set no limit here, so a client may request every grant type the server supports while
-/// <see cref="OidcOptions.RequireInitialAccessToken"/> is true, and is held by
-/// <see cref="OpenRegistrationDefaultsValidator"/> while it is false.
+/// unset grant types set no limit here, so a client may request every grant type the server supports unless anybody
+/// may register, when <see cref="OpenRegistrationDefaultsValidator"/> holds it.
 /// Read the grant types as the resources are and every registration is refused, since a request always carries a
 /// grant type.
 /// </remarks>

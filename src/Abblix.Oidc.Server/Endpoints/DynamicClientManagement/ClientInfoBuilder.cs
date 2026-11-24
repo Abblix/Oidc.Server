@@ -133,16 +133,6 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
-    /// Sets the trust a new client is created with, which the registration metadata cannot carry. An update leaves it
-    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf(ClientInfo)"/>).
-    /// </summary>
-    public ClientInfoBuilder WithTrust(ClientTrust trust)
-    {
-        _trust = trust;
-        return this;
-    }
-
-    /// <summary>
     /// Takes what the host sets for a client it did not define, beyond the registration metadata: a new registration
     /// and a client resolved from its metadata document get these, while every other such member keeps the default of
     /// <see cref="ClientInfo"/>.
@@ -155,6 +145,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             SingleResourceAccessTokens = newClientOptions.SingleResourceAccessTokens,
             RefreshToken = newClientOptions.RefreshToken,
         };
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the trust a new client is created with, which the registration metadata cannot carry. An update leaves it
+    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf(ClientInfo)"/>).
+    /// </summary>
+    public ClientInfoBuilder WithTrust(ClientTrust trust)
+    {
+        _trust = trust;
         return this;
     }
 

@@ -29,12 +29,14 @@ public class OpenRegistrationDefaultsValidatorTests
         bool requireInitialAccessToken,
         string[]? allowedGrantTypes,
         string[] grantTypes,
-        DynamicClientOperation operation = DynamicClientOperation.Register)
+        DynamicClientOperation operation = DynamicClientOperation.Register,
+        SoftwareStatementOptions? softwareStatement = null)
     {
         var options = new Mock<IOptionsMonitor<OidcOptions>>();
         options.Setup(monitor => monitor.CurrentValue).Returns(new OidcOptions
         {
             RequireInitialAccessToken = requireInitialAccessToken,
+            SoftwareStatement = softwareStatement ?? new SoftwareStatementOptions(),
             NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
         });
         var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest { GrantTypes = grantTypes })
@@ -49,18 +51,53 @@ public class OpenRegistrationDefaultsValidatorTests
     private static readonly Uri Orders = new("https://orders.example.com");
 
     /// <summary>
+    /// A registration admitting only clients a software statement from a trusted issuer vouches for.
+    /// </summary>
+    private static SoftwareStatementOptions StatementRequired(bool withTrustedIssuer) => new()
+    {
+        RequireSoftwareStatement = true,
+        TrustedIssuers = withTrustedIssuer
+            ? [new TrustedIssuer { Issuer = "https://statements.example.com", JwksUri = new Uri("https://statements.example.com/jwks") }]
+            : [],
+    };
+
+    /// <summary>
+    /// A registration requiring a software statement from a trusted issuer is not open, whatever the initial access
+    /// token setting says, so the request keeps the grant types and resources it names.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationRequiringATrustedSoftwareStatement_IsNotHeldToTheOpenDefaults()
+    {
+        Assert.Null(await ValidateAsync(
+            false, null, [GrantTypes.ClientCredentials], softwareStatement: StatementRequired(withTrustedIssuer: true)));
+        Assert.Null(await ResourcesAfterAsync(false, null, softwareStatement: StatementRequired(withTrustedIssuer: true)));
+    }
+
+    /// <summary>
+    /// A statement required while no issuer is trusted vouches for nobody, so registration stays open.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationRequiringAStatementNoIssuerIsTrustedFor_IsHeldToTheOpenDefaults()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ValidateAsync(
+                false, null, [GrantTypes.ClientCredentials], softwareStatement: StatementRequired(withTrustedIssuer: false)));
+
+    /// <summary>
     /// The resources the request leaves the step with.
     /// </summary>
     private static async Task<Uri[]?> ResourcesAfterAsync(
         bool requireInitialAccessToken,
         Uri[]? hostResources,
         Uri[]? requested = null,
-        DynamicClientOperation operation = DynamicClientOperation.Register)
+        DynamicClientOperation operation = DynamicClientOperation.Register,
+        SoftwareStatementOptions? softwareStatement = null)
     {
         var options = new Mock<IOptionsMonitor<OidcOptions>>();
         options.Setup(monitor => monitor.CurrentValue).Returns(new OidcOptions
         {
             RequireInitialAccessToken = requireInitialAccessToken,
+            SoftwareStatement = softwareStatement ?? new SoftwareStatementOptions(),
             NewClientOptions = new NewClientOptions { AllowedResources = hostResources },
         });
         var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
