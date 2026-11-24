@@ -39,9 +39,17 @@ public static class TelemetryTags
 
     /// <summary>
     /// The error code a refused request is answered with, when it is one of the library's error codes, and
-    /// <see cref="Other"/> otherwise.
+    /// <see cref="Other"/> otherwise; <see cref="ClientMetadataUnavailable"/> for a refusal whose client metadata
+    /// document could not be had for now.
     /// </summary>
     public const string Error = "oauth.error";
+
+    /// <summary>
+    /// The <see cref="Error"/> of a request answered 503 because a client metadata document could not be had for now
+    /// (<see cref="Common.ClientTemporarilyUnavailableError"/>, experimental), told apart from a spent budget, which is
+    /// answered 429 and named temporarily_unavailable.
+    /// </summary>
+    public const string ClientMetadataUnavailable = "client_metadata_unavailable";
 
     /// <summary>
     /// The value of an attribute whose value is not one of its closed set, as a host's own handler or limiter may

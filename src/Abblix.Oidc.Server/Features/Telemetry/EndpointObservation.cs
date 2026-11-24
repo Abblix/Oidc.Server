@@ -111,7 +111,7 @@ internal static class EndpointObservation
             return (TelemetryOutcomes.Success, null);
         }
 
-        var errorCode = KnownErrors.Contains(error.Error) ? error.Error : TelemetryTags.Other;
+        var errorCode = ErrorCodeOf(error);
         span?.SetTag(TelemetryTags.Error, errorCode);
         span?.SetStatus(ActivityStatusCode.Error);
 
@@ -131,6 +131,17 @@ internal static class EndpointObservation
 
         span?.SetTag(TelemetryTags.ErrorType, exception.GetType().FullName);
         span?.SetStatus(ActivityStatusCode.Error);
+    }
+
+    /// <summary>
+    /// The error code a span and a measurement name a refusal by.
+    /// </summary>
+    private static string ErrorCodeOf(OidcError error)
+    {
+        if (error is ClientTemporarilyUnavailableError)
+            return TelemetryTags.ClientMetadataUnavailable;
+
+        return KnownErrors.Contains(error.Error) ? error.Error : TelemetryTags.Other;
     }
 
     /// <summary>

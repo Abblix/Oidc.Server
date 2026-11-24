@@ -253,7 +253,7 @@ public sealed class EndpointSpanTests : IDisposable
 
         var span = await SpanOf(() => observed.HandleAsync(SingleIssuer.Tenant, request, new ClientRequest()));
 
-        Assert.Equal(ErrorCodes.TemporarilyUnavailable, span.GetTagItem(TelemetryTags.Error));
+        Assert.Equal(TelemetryTags.ClientMetadataUnavailable, span.GetTagItem(TelemetryTags.Error));
     }
 
     [Theory]
