@@ -531,7 +531,7 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
     /// <summary>
     /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
     /// strings it generates do not start with https://", so a registrant cannot take a document's URL, in whatever
-    /// spelling of it.
+    /// spelling of it, where the host lets registrants propose their client_id.
     /// </summary>
     [Theory]
     [InlineData(ClientId)]
@@ -542,7 +542,7 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
     public async Task ARegistrationNamingAClientIdentifierUrl_IsRefused(string clientId)
     {
         Serve(PublicClientDocument());
-        await using var host = CreateHost();
+        await using var host = CreateHost(AcceptingProposedClientIds);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = PublicClientDocument();
@@ -562,6 +562,32 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
             client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
         Assert.NotEmpty(code);
     }
+
+    /// <summary>
+    /// A host that assigns every client_id ignores a proposed URL, so the registrant is given an identifier of the
+    /// server's and the URL still names the client its document describes.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationNamingAClientIdentifierUrl_IsGivenAnIdentifierOfTheServers()
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = PublicClientDocument();
+        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://other.example.com/cb");
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        Assert.NotEqual(ClientId, registered[RegistrationMembers.ClientId]!.GetValue<string>());
+        Assert.Equal(0, _origin.RequestsTo(ClientId));
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+        Assert.NotEmpty(code);
+    }
+
+    private static void AcceptingProposedClientIds(OidcOptions options)
+        => options.NewClientOptions = options.NewClientOptions with { AcceptProposedClientId = true };
 
     /// <summary>
     /// Section 3 compares Client Identifier URLs "using simple string comparison", so a registration held under

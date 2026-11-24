@@ -32,7 +32,7 @@ public class ClientCredentialFactory(
     /// SHA-512 provides cryptographic strength while remaining compatible with HMAC-based client_secret_jwt.
     /// </summary>
     /// <param name="tokenEndpointAuthMethod">Determines whether secret generation is required.</param>
-    /// <param name="clientId">Allows external client ID assignment for pre-registration scenarios.</param>
+    /// <param name="clientId">The identifier to register the client under, or null for one the server generates.</param>
     /// <returns>
     /// Credentials containing both plain-text (for transmission) and hashed (for storage) secret formats,
     /// along with calculated expiration timestamp.
