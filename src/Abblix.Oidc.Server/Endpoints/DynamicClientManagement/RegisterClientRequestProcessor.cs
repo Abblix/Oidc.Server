@@ -119,6 +119,7 @@ public partial class RegisterClientRequestProcessor(
         string? sectorIdentifier)
         => new ClientInfoBuilder(credentials.ClientId, model)
             .WithSectorIdentifier(sectorIdentifier)
+            .WithSoftwareStatement(model.SoftwareStatement)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)

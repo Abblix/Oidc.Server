@@ -872,6 +872,13 @@ public record ClientInfo(string ClientId)
     public string? SoftwareVersion { get; set; }
 
     /// <summary>
+    /// The software statement the client was registered with, as it was presented and validated (RFC 7591 section
+    /// 2.3), or <c>null</c> for a client registered without one. The metadata it carries stays the client's through
+    /// every RFC 7592 update, and it is returned unmodified wherever the registration is (RFC 7591 section 3.2.1).
+    /// </summary>
+    public string? SoftwareStatement { get; set; }
+
+    /// <summary>
     /// Expiration time for this dynamically registered client in distributed cache.
     /// If not set, the default expiration configured in the server settings is used.
     /// Implements pseudo-sliding expiration: TTL is reset on each access.

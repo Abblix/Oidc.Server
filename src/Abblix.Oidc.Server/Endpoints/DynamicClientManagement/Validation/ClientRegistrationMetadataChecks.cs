@@ -22,6 +22,9 @@ internal static class ClientRegistrationMetadataChecks
     /// </summary>
     public static readonly ServiceDescriptor[] All =
     [
+        // First: the metadata a trusted software statement carries replaces the request's (RFC 7591 section 3.1.1),
+        // so every check after it judges the values the client is registered with
+        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, PostLogoutRedirectUrisValidator>(),
         // Server-level support gates run before the consistency check so the rejection message
@@ -39,7 +42,6 @@ internal static class ClientRegistrationMetadataChecks
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ScopeValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, HostGrantedMetadataValidator>(),
-        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(),
