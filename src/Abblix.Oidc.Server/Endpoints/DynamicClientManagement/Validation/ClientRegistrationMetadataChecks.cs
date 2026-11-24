@@ -16,15 +16,24 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 internal static class ClientRegistrationMetadataChecks
 {
     /// <summary>
-    /// The checks of a registration that judge the client's metadata rather than the request carrying it, in the order
-    /// the pipeline runs them. A client resolved from its metadata document is judged by these alone
-    /// (<c>ClientIdMetadataDocumentValidator</c>), so a check added here judges both.
+    /// The metadata checks of a dynamic registration, in the order the pipeline runs them: the software statement
+    /// step first, since the metadata a trusted statement carries replaces the request's (RFC 7591 section 3.1.1) and
+    /// every check after it judges the values the client is registered with, then <see cref="MetadataDocument"/>.
     /// </summary>
-    public static readonly ServiceDescriptor[] All =
+    public static ServiceDescriptor[] Registration =>
     [
-        // First: the metadata a trusted software statement carries replaces the request's (RFC 7591 section 3.1.1),
-        // so every check after it judges the values the client is registered with
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
+        ..MetadataDocument,
+    ];
+
+    /// <summary>
+    /// The checks a client resolved from its metadata document is judged by (<c>ClientIdMetadataDocumentValidator</c>),
+    /// which every registration runs too, so a check added here judges both. A document is the client's own
+    /// assertion under rules its reader fixes, so a <c>software_statement</c> it carries is neither validated nor
+    /// applied.
+    /// </summary>
+    public static readonly ServiceDescriptor[] MetadataDocument =
+    [
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, PostLogoutRedirectUrisValidator>(),
         // Server-level support gates run before the consistency check so the rejection message

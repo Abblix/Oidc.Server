@@ -35,7 +35,7 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdentifierUrlRegistrationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, UpdateClientSecretValidator>(),
-            ..ClientRegistrationMetadataChecks.All,
+            ..ClientRegistrationMetadataChecks.Registration,
         ]);
         return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }

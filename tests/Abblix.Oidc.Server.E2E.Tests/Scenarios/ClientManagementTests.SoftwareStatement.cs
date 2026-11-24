@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using Xunit;
@@ -36,23 +37,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 // update, and is answered with the statement's values and the statement unmodified (RFC 7591 section 3.2.1)
 public partial class ClientManagementTests
 {
-    private const string StatementIssuer = "https://statements.example.org";
     private const string LegitRedirectUri = "https://legit.example.com/cb";
     private const string AttackerRedirectUri = "https://attacker.example.net/cb";
-
-    private static readonly JsonWebKey StatementKey =
-        JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-
-    private static readonly IServiceProvider StatementSigner = BuildStatementSigner();
-
-    private static ServiceProvider BuildStatementSigner()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton(TimeProvider.System);
-        services.AddLogging();
-        services.AddJsonWebTokens();
-        return services.BuildServiceProvider();
-    }
 
     /// <summary>
     /// The statement names one redirect URI and the body another: the stored client has the statement's alone, the
@@ -65,7 +51,7 @@ public partial class ClientManagementTests
         await using var host = CreateStatementHost();
         var client = CreateStatementClient(host);
         var discovery = await FetchDiscoveryAsync(client);
-        var statement = await IssueStatementAsync(new JsonObject
+        var statement = await TrustedStatementIssuer.IssueAsync(new JsonObject
         {
             [RequestMembers.RedirectUris] = new JsonArray(LegitRedirectUri),
             [RequestMembers.ClientUri] = "https://legit.example.com",
@@ -112,7 +98,7 @@ public partial class ClientManagementTests
         var client = CreateStatementClient(host);
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = StatementClientMetadata(LegitRedirectUri);
-        var statement = await IssueStatementAsync(new JsonObject
+        var statement = await TrustedStatementIssuer.IssueAsync(new JsonObject
         {
             [RequestMembers.RedirectUris] = new JsonArray(LegitRedirectUri),
         });
@@ -144,6 +130,41 @@ public partial class ClientManagementTests
 
         var refused = await AuthorizeAsync(client, discovery, clientId, AttackerRedirectUri);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
+    /// <summary>
+    /// RFC 7592 section 2.2 has an update carry back every field the read returned, the statement among them, so the
+    /// statement the client registered with, sent back as it was returned, is the stored one rather than a new one to
+    /// judge: the update is served once the statement's own validity has ended.
+    /// </summary>
+    [Fact]
+    public async Task An_update_sending_back_the_registered_statement_is_served_after_it_expires()
+    {
+        var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow());
+        await using var host = CreateStatementHost(configureServices: services =>
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock)));
+        var client = CreateStatementClient(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var statement = await TrustedStatementIssuer.IssueAsync(
+            new JsonObject { [RequestMembers.RedirectUris] = new JsonArray(LegitRedirectUri) },
+            expiresAt: clock.GetUtcNow().AddMinutes(10));
+        var metadata = StatementClientMetadata(LegitRedirectUri);
+        metadata[RequestMembers.SoftwareStatement] = statement;
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        clock.Advance(TimeSpan.FromDays(1));
+        var replacement = StatementClientMetadata(LegitRedirectUri);
+        replacement[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        replacement[RequestMembers.SoftwareStatement] = statement;
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>()),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(replacement);
+        var updateResponse = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        Assert.Equal(statement, (await ReadJsonAsync(updateResponse))[RequestMembers.SoftwareStatement]!.GetValue<string>());
     }
 
     /// <summary>
@@ -187,7 +208,7 @@ public partial class ClientManagementTests
         var client = CreateStatementClient(host);
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = StatementClientMetadata(LegitRedirectUri);
-        metadata[RequestMembers.SoftwareStatement] = await IssueStatementAsync(new JsonObject
+        metadata[RequestMembers.SoftwareStatement] = await TrustedStatementIssuer.IssueAsync(new JsonObject
         {
             [RequestMembers.RedirectUris] = new JsonArray("http://legit.example.com/cb"),
         });
@@ -214,7 +235,7 @@ public partial class ClientManagementTests
         var discovery = await FetchDiscoveryAsync(client);
         Assert.False(host.Services.GetRequiredService<IOptions<OidcOptions>>().Value.RequireInitialAccessToken);
         var metadata = StatementClientMetadata(AttackerRedirectUri);
-        metadata[RequestMembers.SoftwareStatement] = await IssueStatementAsync(new JsonObject
+        metadata[RequestMembers.SoftwareStatement] = await TrustedStatementIssuer.IssueAsync(new JsonObject
         {
             [RequestMembers.RedirectUris] = new JsonArray(LegitRedirectUri),
         });
@@ -253,18 +274,10 @@ public partial class ClientManagementTests
         Action<IServiceCollection>? configureServices = null)
         => Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
+            TrustedStatementIssuer.TrustIn(services);
             services.PostConfigure<OidcOptions>(options =>
-            {
-                options.SoftwareStatement.RequireSoftwareStatement = requireStatement;
-                options.SoftwareStatement.TrustedIssuers =
-                [
-                    new TrustedIssuer { Issuer = StatementIssuer, JwksUri = new Uri($"{StatementIssuer}/jwks") },
-                ];
-            });
+                options.SoftwareStatement.RequireSoftwareStatement = requireStatement);
             configureServices?.Invoke(services);
-            services.AddKeyedSingleton<ISecureHttpFetcher>(
-                KeySetOwners.SoftwareStatementIssuer,
-                new ServedKeySet(new JsonWebKeySet([StatementKey.Sanitize(includePrivateKeys: false)])));
         }));
 
     private static HttpClient CreateStatementClient(WebApplicationFactory<Program> host)
@@ -273,20 +286,6 @@ public partial class ClientManagementTests
             AllowAutoRedirect = false,
             BaseAddress = TestServerAddress.BaseAddress,
         });
-
-    private static Task<string> IssueStatementAsync(JsonObject metadata)
-    {
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = StatementKey.Algorithm },
-            Payload = new JsonWebTokenPayload(metadata)
-            {
-                Issuer = StatementIssuer,
-                IssuedAt = TimeProvider.System.GetUtcNow(),
-            },
-        };
-        return StatementSigner.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, StatementKey);
-    }
 
     /// <summary>
     /// A public client using the authorization code grant, registered at <paramref name="redirectUri"/>.
@@ -316,14 +315,5 @@ public partial class ClientManagementTests
         return client.GetAsync(
             QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters),
             TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>
-    /// The trusted issuer's key set, served where the server fetches it from.
-    /// </summary>
-    private sealed class ServedKeySet(JsonWebKeySet keys) : ISecureHttpFetcher
-    {
-        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
-            => Task.FromResult<Result<T, OidcError>>((T)(object)keys);
     }
 }

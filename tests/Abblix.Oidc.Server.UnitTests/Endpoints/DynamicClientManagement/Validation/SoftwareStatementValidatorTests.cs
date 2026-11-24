@@ -543,6 +543,26 @@ public class SoftwareStatementValidatorTests
     }
 
     /// <summary>
+    /// A member the statement names is the statement's whatever its value, so an explicit null clears what the body
+    /// gave for it.
+    /// </summary>
+    [Fact]
+    public async Task AnExplicitNullTheStatementCarries_ClearsTheBodysValue()
+    {
+        AcceptStatement(new JsonObject { [ClientRegistrationRequest.Parameters.LogoUri] = null });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            LogoUri = new Uri("https://body.example.com/logo.png"),
+            SoftwareStatement = "eyJ.valid.jwt",
+        });
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Null(context.Request.LogoUri);
+    }
+
+    /// <summary>
     /// A member only the statement carries becomes the client's metadata, a stated <c>offline_access</c> among them,
     /// whose absence the request tells apart from its default.
     /// </summary>

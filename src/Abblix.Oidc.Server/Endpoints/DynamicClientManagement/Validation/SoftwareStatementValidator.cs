@@ -86,6 +86,16 @@ public partial class SoftwareStatementValidator(
     }
 
     /// <summary>
+    /// Whether <paramref name="presented"/> is the statement the updated client was registered with. RFC 7592 section
+    /// 2.2 has an update carry back the fields the read returned, that statement among them: it is the stored one,
+    /// laid over the update after the presented one, not a new statement to judge, so its own validity ending does
+    /// not shut the client out of its registration.
+    /// </summary>
+    private static bool IsTheRegisteredStatement(ClientRegistrationValidationContext context, string? presented)
+        => context is { Operation: DynamicClientOperation.Update, StoredClient.SoftwareStatement: { } registered } &&
+           string.Equals(presented, registered, StringComparison.Ordinal);
+
+    /// <summary>
     /// Validates the statement the request presents and lays the metadata it carries over the request's.
     /// </summary>
     private async Task<OidcError?> ValidatePresentedAsync(
@@ -94,6 +104,9 @@ public partial class SoftwareStatementValidator(
     {
         var softwareStatementOptions = options.CurrentValue.SoftwareStatement;
         var softwareStatement = context.Request.SoftwareStatement;
+
+        if (IsTheRegisteredStatement(context, softwareStatement))
+            return null;
 
         // RFC 7591 section 3.2.2 keeps invalid_software_statement for "The software statement presented is invalid"
         // and unapproved_software_statement for one "not approved for use by this authorization server": a statement

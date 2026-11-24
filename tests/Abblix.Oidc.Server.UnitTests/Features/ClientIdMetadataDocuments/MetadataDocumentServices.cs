@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -15,7 +14,6 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
-using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Tests.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,11 +59,6 @@ internal sealed class MetadataDocumentServices : IDisposable
         var code = new Mock<IAuthorizationResponseBuilder>();
         code.Setup(b => b.ResponseType).Returns(ResponseTypes.Code);
         services.AddSingleton(code.Object);
-
-        // The software statement check opens the metadata checks, so it is built for every document judged
-        services.AddSingleton(new ProfiledJwtValidator(Mock.Of<IJsonWebTokenValidator>()));
-        services.AddKeyedSingleton(KeySetOwners.SoftwareStatementIssuer, Mock.Of<ISecureHttpFetcher>());
-        services.AddSingleton(SingleIssuer.LicensedCatalog);
 
         services.AddSingleton<ClientIdMetadataDocumentFetcher>();
         services.AddSingleton<HeldMetadataDocuments>();
