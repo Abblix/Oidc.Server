@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
 /// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
-/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form or query parameter, exactly one of them),
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form parameter, exactly one of them, never the
+/// query parameter),
 /// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
@@ -143,19 +144,6 @@ public class UserInfoRequestValidator(
 		if (mtlsError is not null)
 			return mtlsError;
 
-		// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1: a resource server "shall not accept
-		// access tokens in the query parameters". Which profile holds the client is known only from the validated token, so the refusal comes
-		// here, still before the token opens the user's session. Extraction admits exactly one source, so a token in
-		// the query is the token that was validated.
-		if (userInfoRequest.AccessTokenInQuery != null &&
-		    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequireAccessTokenOutsideQuery)
-		{
-			return new OidcError(
-				ErrorCodes.InvalidRequest,
-				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header or the request body, " +
-				$"the '{Parameters.AccessToken}' query parameter is not accepted under the client's security profile");
-		}
-
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
 		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenant, token, clientInfo))
@@ -193,8 +181,8 @@ public class UserInfoRequestValidator(
 
 	/// <summary>
 	/// Extracts the access token from exactly one source per RFC 6750 section 2: the <c>Authorization</c> header (Bearer or
-	/// DPoP scheme), the <c>access_token</c> parameter in the body, or the same parameter in the query, never two of
-	/// them. Returns the typed
+	/// DPoP scheme) or the <c>access_token</c> parameter in the body. Two sources, the query among them, are an
+	/// invalid request, and the query alone is answered as no token. Returns the typed
 	/// <see cref="MissingAuthenticationError"/> when neither is present so the challenge builder omits error
 	/// attributes.
 	/// </summary>
@@ -208,7 +196,7 @@ public class UserInfoRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		// The query and the body are told apart only so a profile can refuse one of them
+		// RFC 6750 section 3.1: the token in both the body and the query is "more than one method", an invalid_request
 		if (userInfoRequest is { AccessTokenInForm: not null, AccessTokenInQuery: not null })
 			return new OidcError(
 				ErrorCodes.InvalidRequest,
@@ -219,19 +207,27 @@ public class UserInfoRequestValidator(
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader == null)
 		{
-			if (parameter != null)
-				return parameter;
+			if (userInfoRequest.AccessTokenInForm is { } inForm)
+				return inForm;
 
 			// RFC 6750 section 3.1: a request with no authentication information at all gets a bare WWW-Authenticate
-			// challenge - the typed marker tells the challenge builder to omit the error attributes.
+			// challenge - the typed marker tells the challenge builder to omit the error attributes. A token in the
+			// query alone is answered so too. RFC 6750 section 2.3 lets a resource server take it from there, and this
+			// endpoint does not: a URL carrying it ends up in browser history and server logs (RFC 9700 section
+			// 4.3.2, which forbids clients to send it so), and FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0
+			// Part 1 section 6.2.1 have a resource server "not accept access tokens in the query parameters". That
+			// makes the query a method this endpoint does not support, whose response "SHOULD NOT include an error
+			// code or other error information" (RFC 6750 section 3.1). The token is never read, since validating it
+			// records what it finds
 			return new MissingAuthenticationError(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
-				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
+				$"or '{Parameters.AccessToken}' parameter of the request body, but none of them specified");
 		}
 
-		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access
-		// token", an invalid_request like the body and the query together above. Decided before the scheme, since a
-		// request carrying a token does not lack authentication information whatever its header names
+		// RFC 6750 section 3.1: the header and a parameter together, of the body or of the query, are "more than one
+		// method for including an access token", an invalid_request like the body and the query together above.
+		// Decided before the scheme, since a request carrying a token does not lack authentication information
+		// whatever its header names
 		if (parameter != null)
 			return new OidcError(
 				ErrorCodes.InvalidRequest,

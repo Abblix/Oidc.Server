@@ -36,8 +36,9 @@ public record UserInfoRequest
 
     /// <summary>
     /// The access token sent in the URI query (RFC 6750 section 2.3). Kept apart from
-    /// <see cref="AccessTokenInForm"/> because a security profile refuses this source alone: FAPI 2.0 Security
-    /// Profile section 5.3.4 forbids it and says nothing of the body.
+    /// <see cref="AccessTokenInForm"/> because the endpoint refuses this source and accepts the body (RFC 9700
+    /// section 4.3.2), and bound at all so that a token sent there is refused rather than read as no token beside
+    /// another source.
     /// </summary>
     [JsonIgnore]
     [QueryParameter(Parameters.AccessToken)]
