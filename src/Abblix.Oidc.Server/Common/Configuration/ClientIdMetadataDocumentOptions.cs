@@ -105,8 +105,9 @@ public record ClientIdMetadataDocumentOptions
     /// it tokens of its own. A document's grant types are narrowed to these, to those the server supports and to
     /// <see cref="NewClientOptions.AllowedGrantTypes"/>. Whatever this allows, a client authenticating with
     /// <c>none</c> is never given the client credentials, password or JWT bearer grant: RFC 6749 section 4.4 says
-    /// "The client credentials grant type MUST only be used by confidential clients". An empty list and a blank entry
-    /// are refused at startup.
+    /// "The client credentials grant type MUST only be used by confidential clients". A document's client given that
+    /// grant gets tokens whose <c>idp</c> is <c>client_credentials</c>, which marks them as the client's own (RFC 9700
+    /// section 4.15.1). An empty list and a blank entry are refused at startup.
     /// </remarks>
     public string[]? AllowedGrantTypes { get; set; }
 

@@ -128,8 +128,10 @@ public record ClientRegistrationRequest
     public string[]? Contacts { get; init; }
 
     /// <summary>
-    /// A client-proposed <c>client_id</c>. Servers MAY ignore this and assign their own identifier;
-    /// when accepted, the value is echoed back in the registration response.
+    /// The <c>client_id</c> an RFC 7592 section 2.2 update carries, which must be the client's own. On a registration
+    /// it is a proposal, ignored unless the host accepts proposals
+    /// (<see cref="Common.Configuration.NewClientOptions.AcceptProposedClientId"/>), and the response names the
+    /// identifier the client was registered under.
     /// </summary>
     [JsonPropertyName(Parameters.ClientId)]
     public string? ClientId { get; init; }
@@ -785,8 +787,8 @@ public record ClientRegistrationRequest
         /// responsible for the client.</summary>
         public const string Contacts = "contacts";
 
-        /// <summary>The <c>client_id</c> registration parameter; a client-proposed identifier that the OP
-        /// may accept or ignore.</summary>
+        /// <summary>The <c>client_id</c> parameter an RFC 7592 update carries; on a registration, a proposal the
+        /// server ignores unless the host accepts proposals.</summary>
         public const string ClientId = "client_id";
 
         /// <summary>The <c>client_secret</c> a client update request carries when the server issued one

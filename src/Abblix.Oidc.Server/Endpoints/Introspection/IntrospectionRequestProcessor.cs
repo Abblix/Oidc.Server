@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -74,6 +75,13 @@ public class IntrospectionRequestProcessor(
 		if (request.Token.Payload.ClientId != request.ClientInfo.ClientId)
 		{
 			payload = WithoutPrivateClaims(payload, request.ClientInfo);
+
+			// RFC 9700 section 4.15.1: a resource server tells a token issued to the client itself from one issued
+			// for an end user. An end user's identity provider stays private, so idp is shown for the former alone.
+			if (ClientCredentialsSession.IsClientItself(request.Token.Payload.IdentityProvider))
+			{
+				payload[OidcClaimTypes.IdentityProvider] = ClientCredentialsSession.IdentityProvider;
+			}
 
 			var forCaller = await SubjectsForCallerAsync(tenant, request);
 			if (forCaller != null)
