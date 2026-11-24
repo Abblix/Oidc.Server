@@ -41,12 +41,11 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
         // FAPI 1.0 Part 1 section 5.2.2: "shall require the value of redirect_uri to exactly match one of the
         // pre-registered redirect URIs" and "shall require redirect URIs to use the https scheme". Refusing http is
         // what leaves no room for the loopback port allowance of RFC 8252 section 7.3, which applies to http alone
-        var exactHttps = SecurityProfileRequirements
-            .For(context.ClientInfo, tenant.DefaultSecurityProfile)
-            .RequireExactHttpsRedirectUris;
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+        var exactHttps = profile.RequireExactHttpsRedirectUris;
         var uriValidator = UriValidatorFactory.CreateForRedirectUris(context.ClientInfo.RedirectUris);
 
-        var redirectUri = context.Request.RedirectUri;
+        var redirectUri = context.Request.RedirectUri ?? SoleRegisteredUri(context, profile);
 
         // A client the host's own store supplies never met the check of the settings, so its redirect URI is held to
         // the schemes its kind of client may use here, once it matched a registered one and is known to be absolute
@@ -57,12 +56,40 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
             return context.InvalidRequest("The redirect URI is not valid for specified client");
         }
 
-        context.ValidRedirectUri = redirectUri;
+        // The request goes on carrying the URI it is served at, so what follows answers there, and the code it is
+        // issued remembers whether the client named it
+        if (context.Request.RedirectUri is null)
+            context.Request = context.Request with { RedirectUri = uri, ClientNamedNoRedirectUri = true };
+
+        context.ValidRedirectUri = uri;
 
         return null;
 
         bool Matches(Uri uri)
             => !(exactHttps && uri is not { IsAbsoluteUri: true, Scheme: "https" }) && uriValidator.IsValid(uri);
+    }
+
+    /// <summary>
+    /// The redirect URI a request naming none is served at, or null where it has to name one.
+    /// </summary>
+    /// <remarks>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.1: redirect_uri is "OPTIONAL if only one redirect URI is
+    /// registered for this client. REQUIRED if multiple redirect URIs are registered for this client", and section
+    /// 2.3.2 repeats it. OpenID Connect Core 1.0 section 3.1.2.1 has it "REQUIRED" in an Authentication Request, so a
+    /// request served the openid scope, named or as the client's default, names it; and so does a client held to a
+    /// profile requiring it (<see cref="SecurityProfileRequirements.RequireRedirectUriParameter"/>).
+    /// </remarks>
+    private static Uri? SoleRegisteredUri(AuthorizationValidationContext context, SecurityProfileRequirements profile)
+    {
+        if (profile.RequireRedirectUriParameter ||
+            context.ClientInfo.RedirectUris is not [var sole] ||
+            context.ServedScope() is not { } served ||
+            served.Contains(Scopes.OpenId, StringComparer.Ordinal))
+        {
+            return null;
+        }
+
+        return sole;
     }
 
     private static bool IsAllowedFor(ClientInfo client, Uri uri)

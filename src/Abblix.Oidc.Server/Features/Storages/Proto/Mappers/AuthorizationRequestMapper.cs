@@ -78,6 +78,7 @@ internal static class AuthorizationRequestMapper
             source.OriginRequestUri?.OriginalString,
             static (message, value) => message.OriginRequestUri = value);
         proto.ClientNamedNoScope = source.ClientNamedNoScope;
+        proto.ClientNamedNoRedirectUri = source.ClientNamedNoRedirectUri;
     }
 
     /// <summary>
@@ -134,6 +135,7 @@ internal static class AuthorizationRequestMapper
                 : null,
             OriginRequestUri = ProtoMapper.GetUri(source.OriginRequestUri, source.HasOriginRequestUri),
             ClientNamedNoScope = source.ClientNamedNoScope,
+            ClientNamedNoRedirectUri = source.ClientNamedNoRedirectUri,
         };
     }
 }

@@ -61,6 +61,7 @@ internal static class AuthorizationContextMapper
             proto.ActorJson = source.Actor.ToJsonString();
 
         proto.ClientNamedNoScope = source.ClientNamedNoScope;
+        proto.ClientNamedNoRedirectUri = source.ClientNamedNoRedirectUri;
         return proto;
     }
 
@@ -88,6 +89,7 @@ internal static class AuthorizationContextMapper
                 ? JsonNode.Parse(source.ActorJson) as JsonObject
                 : null,
             ClientNamedNoScope = source.ClientNamedNoScope,
+            ClientNamedNoRedirectUri = source.ClientNamedNoRedirectUri,
         };
     }
 }

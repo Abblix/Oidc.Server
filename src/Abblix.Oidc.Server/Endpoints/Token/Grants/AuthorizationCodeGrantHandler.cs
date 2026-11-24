@@ -85,16 +85,9 @@ public class AuthorizationCodeGrantHandler(
                 "Code was issued for another client");
         }
 
-        // RFC 6749 section 4.1.3: the server must "ensure that the "redirect_uri" parameter is present if the
-        // "redirect_uri" parameter was included in the initial authorization request ... and if included ensure
-        // that their values are identical". Only this grant has an authorization request to compare with; every
-        // other grant ignores the parameter, as section 3.2 has the server ignore unrecognized request parameters.
-        // Identical as written, as RFC 9700 section 4.1.3 has redirect URIs compared, not as URIs equal once normalized
-        if (!RedirectUriComparison.AreIdentical(grant.Context.RedirectUri, request.RedirectUri))
+        if (RedirectUriRefusal(grant.Context, request) is { } redirectUriRefusal)
         {
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "The redirect Uri value does not match to the value used before");
+            return redirectUriRefusal;
         }
 
         if (grant.Context.CodeChallenge != null)
@@ -133,5 +126,42 @@ public class AuthorizationCodeGrantHandler(
         }
 
         return grant;
+    }
+
+    /// <summary>
+    /// The refusal the redirect URI of <paramref name="request"/> earns for a code issued under
+    /// <paramref name="context"/>, or null where it redeems the code.
+    /// </summary>
+    private static OidcError? RedirectUriRefusal(AuthorizationContext context, TokenRequest request)
+    {
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 10.2: a server serving OAuth 2.0 clients too "MUST allow clients
+        // to send the redirect_uri parameter in the token request (Section 4.1.3), and MUST enforce the parameter as
+        // described in [RFC6749]", whose section 4.1.3 has the server "ensure that the "redirect_uri" parameter is
+        // present if the "redirect_uri" parameter was included in the initial authorization request ... and if
+        // included ensure that their values are identical". One sent is compared with the URI the code was issued at,
+        // the single registered one where the authorization request named none. Only this grant has an authorization
+        // request to compare with; every other grant ignores the parameter, as section 3.2 has the server ignore
+        // unrecognized request parameters. Identical as written, as RFC 9700 section 4.1.3 has redirect URIs compared,
+        // not as URIs equal once normalized
+        if (request.RedirectUri is not null &&
+            !RedirectUriComparison.AreIdentical(context.RedirectUri, request.RedirectUri))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidGrant,
+                "The redirect Uri value does not match to the value used before");
+        }
+
+        // OAuth 2.1 section 4.1.3 asks the token request for no redirect_uri, section 10.2 explaining that
+        // "authorization code injection is prevented by the code_challenge and code_verifier parameters, so including
+        // the redirect_uri parameter in the token request serves no purpose". A code issued without PKCE keeps the RFC
+        // 6749 rule: required where the authorization request included it, and section 3.2.4 names a request
+        // "missing a required parameter" invalid_request
+        if (request.RedirectUri is null &&
+            context is { CodeChallenge: null, ClientNamedNoRedirectUri: false, RedirectUri: not null })
+        {
+            return ErrorFactory.MissingParameter(TokenRequest.Parameters.RedirectUri);
+        }
+
+        return null;
     }
 }

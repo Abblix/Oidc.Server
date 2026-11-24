@@ -195,6 +195,13 @@ public record AuthorizationContext
     public bool ClientNamedNoScope { get; init; }
 
     /// <summary>
+    /// Whether the authorization request this grant comes from named no redirect URI, so <see cref="RedirectUri"/> is
+    /// the single one its client registered (OAuth 2.1 section 4.1.1). RFC 6749 section 4.1.3 then asks for none at
+    /// the token endpoint. A grant stored before this member existed reads false, as a redirect URI the client named.
+    /// </summary>
+    public bool ClientNamedNoRedirectUri { get; init; }
+
+    /// <summary>
     /// RFC 8693 section 2.1 <c>audience</c> request parameter passed through to the issued token. Logical
     /// names of the relying party for which the requested token is intended. Distinct from
     /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT

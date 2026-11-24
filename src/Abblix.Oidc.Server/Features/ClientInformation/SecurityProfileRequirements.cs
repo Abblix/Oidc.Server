@@ -176,6 +176,16 @@ public sealed record SecurityProfileRequirements
     public bool RequireExactHttpsRedirectUris { get; init; }
 
     /// <summary>
+    /// The profile requires the redirect_uri parameter in every authorization request, the one OAuth 2.1 section 4.1.1
+    /// makes optional for a client with a single registered redirect URI. FAPI 1.0 Part 1 section 5.2.2 clause 9, which
+    /// Part 2 section 5.2.2 takes in: the server "shall require the redirect_uri in the authorization request"; FAPI 2.0
+    /// Security Profile section 5.3.2.2 clause 6: it "shall require the redirect_uri parameter in pushed authorization
+    /// requests", the only ones that profile admits. Enforced by
+    /// <c>Endpoints.Authorization.Validation.RedirectUriValidator</c>.
+    /// </summary>
+    public bool RequireRedirectUriParameter { get; init; }
+
+    /// <summary>
     /// The profile requires a client publishing its keys at a jwks_uri to serve it over TLS. FAPI 1.0 Part 2 section
     /// 8.9: "this profile ... requires that jwks_uri endpoints shall be served over TLS". Held by
     /// <see cref="SecurityProfileConsistency"/> at registration, at startup and where the client authenticates, whatever
@@ -465,6 +475,7 @@ public sealed record SecurityProfileRequirements
 
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        RequireRedirectUriParameter = true,
 
         // The audience and lifetime of a request object are FAPI 2.0 Message Signing section 5.3.1, a profile of its
         // own (Fapi2SignedAuthorizationRequestsRequirements below), and not the Security Profile's
@@ -514,6 +525,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireRedirectUriParameter = true,
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
@@ -721,6 +733,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireRedirectUriParameter = true,
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
@@ -836,6 +849,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
         RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
         RequireExactHttpsRedirectUris = RequireExactHttpsRedirectUris || other.RequireExactHttpsRedirectUris,
+        RequireRedirectUriParameter = RequireRedirectUriParameter || other.RequireRedirectUriParameter,
     };
 
     /// <summary>

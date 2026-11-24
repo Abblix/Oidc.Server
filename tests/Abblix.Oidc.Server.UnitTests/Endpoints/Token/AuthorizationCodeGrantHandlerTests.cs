@@ -175,42 +175,95 @@ public class AuthorizationCodeGrantHandlerTests
 	[InlineData("https://client.example.com/callback", "https://CLIENT.example.com/callback")]
 	[InlineData("https://client.example.com/callback", "https://client.example.com:443/callback")]
 	[InlineData("https://client.example.com/~user", "https://client.example.com/%7Euser")]
-	[InlineData("https://client.example.com/callback", null)]
 	[InlineData(null, "https://client.example.com/callback")]
 	public async Task ARedirectUriOtherThanTheAuthorizationRequests_ReturnsInvalidGrant(
 		string? authorizedRedirectUri,
 		string? requestedRedirectUri)
 	{
-		var result = await RedeemWithRedirectUri(authorizedRedirectUri, requestedRedirectUri);
+		foreach (var (pkce, namedNone) in new[] { (false, false), (true, false), (false, true), (true, true) })
+		{
+			var result = await RedeemWithRedirectUri(authorizedRedirectUri, requestedRedirectUri, pkce, namedNone);
 
-		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+			Assert.True(result.TryGetFailure(out var error));
+			Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+		}
 	}
 
 	/// <summary>
-	/// The redirect URI of the authorization request, sent again, or none on either side, redeems the code.
+	/// RFC 6749 section 4.1.3, which OAuth 2.1 section 10.2 keeps for a code issued without PKCE: the redirect URI is
+	/// "REQUIRED, if the "redirect_uri" parameter was included in the authorization request". A missing required
+	/// parameter is invalid_request (OAuth 2.1 section 3.2.4).
+	/// </summary>
+	[Fact]
+	public async Task ACodeWithoutPkce_ItsAuthorizationRequestNamingTheRedirectUri_RequiresIt()
+	{
+		var result = await RedeemWithRedirectUri("https://client.example.com/callback", null);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+	}
+
+	/// <summary>
+	/// OAuth 2.1 section 4.1.3 has the token request carry no redirect_uri, section 10.2 explaining that "authorization
+	/// code injection is prevented by the code_challenge and code_verifier parameters, so including the redirect_uri
+	/// parameter in the token request serves no purpose", so a code issued with PKCE is redeemed without it, whether or
+	/// not its authorization request named one. RFC 6749 section 4.1.3 asks for none where the authorization request
+	/// named none either.
 	/// </summary>
 	[Theory]
-	[InlineData("https://client.example.com/callback", "https://client.example.com/callback")]
-	[InlineData(null, null)]
-	public async Task TheAuthorizationRequestsRedirectUri_RedeemsTheCode(
-		string? authorizedRedirectUri,
-		string? requestedRedirectUri)
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	[InlineData(false, true)]
+	public async Task ACodeWithPkceOrIssuedToARequestNamingNoRedirectUri_IsRedeemedWithoutIt(bool pkce, bool namedNone)
 	{
-		var result = await RedeemWithRedirectUri(authorizedRedirectUri, requestedRedirectUri);
+		var result = await RedeemWithRedirectUri("https://client.example.com/callback", null, pkce, namedNone);
+
+		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	/// <summary>
+	/// OAuth 2.1 section 10.2: a server serving OAuth 2.0 clients too "MUST allow clients to send the redirect_uri
+	/// parameter in the token request", so one sent for a code of any kind is accepted when it is the URI the code was
+	/// issued at, the single registered one where the authorization request named none.
+	/// </summary>
+	[Theory]
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	[InlineData(true, true)]
+	public async Task TheRedirectUriTheCodeWasIssuedAt_RedeemsAnyCode(bool pkce, bool namedNone)
+	{
+		const string uri = "https://client.example.com/callback";
+
+		var result = await RedeemWithRedirectUri(uri, uri, pkce, namedNone);
+
+		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	/// <summary>
+	/// A code stored without a redirect URI, as none of the authorization requests this server serves leaves, is
+	/// redeemed without one.
+	/// </summary>
+	[Fact]
+	public async Task ACodeWithoutARedirectUri_IsRedeemedWithoutOne()
+	{
+		var result = await RedeemWithRedirectUri(null, null);
 
 		Assert.True(result.TryGetSuccess(out _));
 	}
 
 	private async Task<Result<AuthorizedGrant, OidcError>> RedeemWithRedirectUri(
 		string? authorizedRedirectUri,
-		string? requestedRedirectUri)
+		string? requestedRedirectUri,
+		bool pkce = false,
+		bool namedNone = false)
 	{
 		var clientInfo = new ClientInfo("client1");
 		var tokenRequest = new TokenRequest
 		{
 			Code = "abc",
 			RedirectUri = requestedRedirectUri is null ? null : new Uri(requestedRedirectUri),
+			CodeVerifier = pkce ? "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk" : null,
 		};
 
 		_authCodeService
@@ -221,6 +274,9 @@ public class AuthorizationCodeGrantHandlerTests
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)
 					{
 						RedirectUri = authorizedRedirectUri is null ? null : new Uri(authorizedRedirectUri),
+						ClientNamedNoRedirectUri = namedNone,
+						CodeChallenge = pkce ? "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" : null,
+						CodeChallengeMethod = pkce ? CodeChallengeMethods.S256 : null,
 					}));
 
 		return await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);

@@ -274,6 +274,16 @@ public record AuthorizationRequest
 	public bool ClientNamedNoScope { get; init; }
 
 	/// <summary>
+	/// Whether the client named no redirect URI, so the one <see cref="RedirectUri"/> carries is the single URI the
+	/// client registered (OAuth 2.1 section 4.1.1), set by the server and kept with the request it stores for each page.
+	/// The authorization code it is issued remembers it, so the token endpoint does not ask for a redirect URI the
+	/// authorization request did not include. Kept off the wire, so no client can claim it. A request stored before
+	/// this member existed reads false, as a redirect URI the client named.
+	/// </summary>
+	[JsonIgnore]
+	public bool ClientNamedNoRedirectUri { get; init; }
+
+	/// <summary>
 	/// Specifies the resource for which the access token is requested.
 	/// As defined in RFC 8707, this parameter is used to request access tokens with a specific scope for a particular
 	/// resource.
