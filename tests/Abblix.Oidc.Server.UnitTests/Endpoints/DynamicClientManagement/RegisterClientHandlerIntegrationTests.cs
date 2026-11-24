@@ -8,10 +8,12 @@
 
 using System;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -19,6 +21,8 @@ using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -46,7 +50,8 @@ public class RegisterClientHandlerIntegrationTests
 {
     private static IServiceProvider BuildProvider(
         Action<IServiceCollection>? configure = null,
-        Action<OidcOptions>? configureOptions = null)
+        Action<OidcOptions>? configureOptions = null,
+        Action<IServiceCollection>? afterServer = null)
     {
         var services = new ServiceCollection();
 
@@ -85,6 +90,12 @@ public class RegisterClientHandlerIntegrationTests
                     Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 },
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
+
+                // Pairwise subjects, whose sector identifier document a registration may name for the server to fetch
+                PairwiseSubject = new PairwiseSubjectSettings
+                {
+                    Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
             });
 
             // Anonymous registration: opt out of RFC 7591 section 3 initial access token gating so
@@ -97,6 +108,9 @@ public class RegisterClientHandlerIntegrationTests
             // A test that exercises the initial access token gate re-enables it here.
             configureOptions?.Invoke(opts);
         });
+
+        // Registrations that have to win over the server's own, which a typed HTTP client adds unconditionally
+        afterServer?.Invoke(services);
 
         return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
@@ -469,6 +483,69 @@ public class RegisterClientHandlerIntegrationTests
     private static ClientRegistrationRequest MachineClientRequest() => CreateRequest(
         responseTypes: [],
         grantTypes: [GrantTypes.ClientCredentials]);
+
+    /// <summary>
+    /// A registration the defaults of open registration refuse costs the server no fetch of what it names: the
+    /// sector identifier document a pairwise client points at is not requested.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationTheOpenDefaultsRefuse_MakesNoOutboundRequest()
+    {
+        var fetches = new CountingFetcher();
+        var provider = BuildProvider(afterServer: services => services.AddSingleton<ISecureHttpFetcher>(fetches));
+        var request = MachineClientRequest() with
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifierUri = new Uri("https://sector.example.com/redirect_uris.json"),
+        };
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+        Assert.Equal(0, fetches.Count);
+    }
+
+    /// <summary>
+    /// The same registration within the host's grant types reaches the sector identifier fetch, so the test above
+    /// counts the fetch a refusal saves.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationWithinTheHostsGrantTypes_FetchesItsSectorIdentifier()
+    {
+        var fetches = new CountingFetcher();
+        var provider = BuildProvider(
+            configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials),
+            afterServer: services => services.AddSingleton<ISecureHttpFetcher>(fetches));
+        var request = MachineClientRequest() with
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifierUri = new Uri("https://sector.example.com/redirect_uris.json"),
+        };
+
+        await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.Equal(1, fetches.Count);
+    }
+
+    /// <summary>
+    /// Counts the fetches asked of it and answers each with a refusal.
+    /// </summary>
+    private sealed class CountingFetcher : ISecureHttpFetcher
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
+        {
+            Interlocked.Increment(ref _count);
+            return Task.FromResult<Result<T, OidcError>>(
+                new OidcError(ErrorCodes.InvalidClientMetadata, "The document is not served"));
+        }
+    }
 
     /// <summary>
     /// While anybody may register and the host names no grant types, a client asking for a grant no end user takes

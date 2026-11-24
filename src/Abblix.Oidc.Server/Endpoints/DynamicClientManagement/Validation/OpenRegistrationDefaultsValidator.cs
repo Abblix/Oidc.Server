@@ -24,12 +24,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// registered client is created with is read from too: no initial access token is asked, and no software statement from
 /// an issuer the host trusts. A grant no end user approves, such as client credentials, would then give whoever
 /// registered tokens of its own, as a client allowed every resource would get tokens for every API the tenant
-/// protects. A required statement is still judged later in the pipeline, which refuses one missing or untrusted. A set
-/// the host names is held by
-/// <see cref="HostGrantedMetadataValidator"/> instead, so a request is judged by one set alone. A request check rather
-/// than a metadata one: a client resolved from its metadata document is held to
-/// <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>, which this would narrow. An update is judged as a
-/// registration is, since it replaces the metadata whole. The settings are read at each request.
+/// protects. It judges the request after a trusted software statement has replaced the metadata it carries, so a
+/// statement adds no grant or resource the defaults hold back. A set the host names is held by
+/// <see cref="HostGrantedMetadataValidator"/> instead, so a request is judged by one set alone. It is in
+/// <see cref="ClientRegistrationMetadataChecks.Registration"/> alone: a client resolved from its metadata document is
+/// held to <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>, which this would narrow. An update is
+/// judged as a registration is, since it replaces the metadata whole. The settings are read at each request.
 /// </remarks>
 /// <param name="options">The server options carrying the settings.</param>
 internal sealed class OpenRegistrationDefaultsValidator(IOptionsMonitor<OidcOptions> options)

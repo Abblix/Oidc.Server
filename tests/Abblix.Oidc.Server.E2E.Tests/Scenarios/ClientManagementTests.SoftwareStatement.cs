@@ -256,6 +256,71 @@ public partial class ClientManagementTests
     }
 
     /// <summary>
+    /// Registration open to anybody holds a client to its defaults on the values it is registered with, a trusted
+    /// statement's included: a statement adding a grant no end user takes part in is refused as the body would be.
+    /// </summary>
+    [Fact]
+    public async Task Under_open_registration_a_statement_adding_client_credentials_is_refused()
+    {
+        await using var host = CreateStatementHost(configureServices: WithoutHostSets);
+        var client = CreateStatementClient(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = ConfidentialStatementClientMetadata();
+        metadata[RequestMembers.SoftwareStatement] = await TrustedStatementIssuer.IssueAsync(new JsonObject
+        {
+            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials),
+        });
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A statement stating no resources leaves a client registered openly with none, though it sets the member: the
+    /// stored client has the sign-in grant it registered with and may get an access token for no resource.
+    /// </summary>
+    [Fact]
+    public async Task Under_open_registration_a_statement_naming_no_resource_leaves_the_client_with_none()
+    {
+        await using var host = CreateStatementHost(configureServices: WithoutHostSets);
+        var client = CreateStatementClient(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = ConfidentialStatementClientMetadata();
+        metadata[RequestMembers.SoftwareStatement] = await TrustedStatementIssuer.IssueAsync(new JsonObject
+        {
+            [RequestMembers.AllowedResources] = null,
+        });
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        var stored = await FindStoredClientAsync(host, registered[ResponseMembers.ClientId]!.GetValue<string>());
+        Assert.Equal([GrantTypes.AuthorizationCode], stored.EffectiveGrantTypes);
+        Assert.Equal([], stored.AllowedResources!);
+        Assert.Equal(ClientTrust.Unreviewed, stored.Trust);
+    }
+
+    /// <summary>
+    /// The server's defaults for new clients in place of the grant types this suite's host names for them.
+    /// </summary>
+    private static void WithoutHostSets(IServiceCollection services)
+        => services.PostConfigure<OidcOptions>(options => options.NewClientOptions =
+            options.NewClientOptions with { AllowedGrantTypes = null, AllowedResources = null });
+
+    /// <summary>
+    /// A client authenticating with a secret, which may hold the client credentials grant, using the authorization
+    /// code grant.
+    /// </summary>
+    private static JsonObject ConfidentialStatementClientMetadata()
+    {
+        var metadata = StatementClientMetadata(LegitRedirectUri);
+        metadata[RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic;
+        return metadata;
+    }
+
+    /// <summary>
     /// A code challenge method this server does not support, which RFC 7636 section 4.4.1 has answered with an
     /// authorization error at the client's redirect URI where the server may send it there.
     /// </summary>

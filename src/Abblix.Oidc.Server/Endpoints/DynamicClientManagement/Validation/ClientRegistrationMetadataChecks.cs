@@ -18,11 +18,15 @@ internal static class ClientRegistrationMetadataChecks
     /// <summary>
     /// The metadata checks of a dynamic registration, in the order the pipeline runs them: the software statement
     /// step first, since the metadata a trusted statement carries replaces the request's (RFC 7591 section 3.1.1) and
-    /// every check after it judges the values the client is registered with, then <see cref="MetadataDocument"/>.
+    /// every check after it judges the values the client is registered with, then the defaults of open registration,
+    /// then <see cref="MetadataDocument"/>.
     /// </summary>
     public static ServiceDescriptor[] Registration =>
     [
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
+        // On the values the client is registered with, the statement's included, and before every check that fetches
+        // what the request names, so a client nobody vetted asking for a grant it is not given costs no fetch
+        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OpenRegistrationDefaultsValidator>(),
         ..MetadataDocument,
     ];
 
