@@ -204,20 +204,26 @@ public class DPoPTokenEndpointValidatorTests
 
     /// <summary>
     /// A registration for certificate-bound tokens binds a token only to a certificate this request presents,
-    /// so without one the token would go out as Bearer and the profile is not met.
+    /// so without one the token would go out as Bearer and the profile is not met. What the request lacks is the
+    /// certificate, as when such a client calls the token endpoint outside mtls_endpoint_aliases (RFC 8705 section 5),
+    /// so it is refused with invalid_client, the code FAPI 1.0 Advanced gives the same request.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_MissingHeaderFapi2ClientRegisteredForBindingWithoutCertificate_Refuses()
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task ValidateAsync_MissingHeaderClientRegisteredForBindingWithoutCertificate_IsInvalidClient(
+        ClientSecurityProfile profile)
     {
         var context = CreateContext(
             proofJwt: null,
             clientRequiresDPoP: false,
             tlsClientCertificateBoundAccessTokens: true,
-            securityProfile: ClientSecurityProfile.Fapi2);
+            securityProfile: profile);
 
         var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
-        AssertProofRejected(error, context);
+        Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        Assert.Null(context.ProofKeyThumbprint);
     }
 
     /// <summary>
