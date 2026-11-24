@@ -10,9 +10,8 @@ namespace Abblix.Oidc.Server.Features.Consents;
 
 /// <summary>
 /// Whether every client is granted everything it asks for while somebody nobody reviewed may become a client, by
-/// either way the server lets one in. The consent screen is then the end user's only protection, and RFC 9700 section
-/// 4.11.2 names the attack it stops: a client "controlled by the attacker" sending a silent request is redirected to at
-/// once, with what it asked for.
+/// either way the server lets one in, which the server refuses at startup: the consent screen is the end user's only
+/// check on such a client (RFC 9700 section 4.11.2).
 /// </summary>
 internal sealed class ConsentForUnreviewedClients
 {
