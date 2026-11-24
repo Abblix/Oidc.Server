@@ -44,21 +44,18 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// A token of a client whose document cannot be had for now, read for another client, is not judged on a client the
-    /// server could not find: introspected by a client authorized to introspect any token, or presented at the token
-    /// endpoint, where draft-ietf-oauth-client-id-metadata-document-03 section 6.1 has a transient failure answered
-    /// 503, the request is answered 503, as a failed authentication of such a client is.
+    /// A token of a client whose document cannot be had for now, introspected by a client authorized to introspect any
+    /// token, is not judged on a client the server could not find: the request is answered 503, as a failed
+    /// authentication of such a client is, rather than reporting the token inactive.
     /// </summary>
-    [Theory]
-    [InlineData(TokenReader.Refresh, Caller.Introspector)]
-    [InlineData(TokenReader.Introspection, Caller.Introspector)]
-    public async Task ATokenOfAClientWhoseDocumentCannotBeHadForNow_IsAnswered503(TokenReader reader, Caller caller)
+    [Fact]
+    public async Task ATokenOfAClientWhoseDocumentCannotBeHadForNow_IsAnswered503()
     {
         var (host, client, discovery, tokens) = await IssueOfflineTokensAsync();
         await using var _ = host;
         _origin.Answer(ClientId, () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
 
-        using var response = await ReadAsync(client, discovery, tokens, reader, caller);
+        using var response = await ReadAsync(client, discovery, tokens, TokenReader.Introspection, Caller.Introspector);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
@@ -66,11 +63,12 @@ public partial class ClientIdMetadataDocumentTests
 
     /// <summary>
     /// A token that is not the caller's is answered as it is without the outage, since nothing its client's document
-    /// would say changes the answer: revocation revokes nothing with 200 (RFC 7009 section 2.1), and introspection by a
-    /// client not authorized to introspect another's token reports it inactive. Either tells the caller nothing about
-    /// a token that is not its own, its client's outage included.
+    /// would say changes the answer: a refresh is invalid_grant (RFC 6749 section 6), revocation revokes nothing with
+    /// 200 (RFC 7009 section 2.1), and introspection by a client not authorized to introspect another's token reports it
+    /// inactive. None tells the caller anything about a token that is not its own, its client's outage included.
     /// </summary>
     [Theory]
+    [InlineData(TokenReader.Refresh, Caller.Introspector)]
     [InlineData(TokenReader.Revocation, Caller.Introspector)]
     [InlineData(TokenReader.Introspection, Caller.Stranger)]
     public async Task ATokenNotTheCallers_IsAnsweredAsWithoutTheOutageOfItsClientsDocument(TokenReader reader, Caller caller)
@@ -81,11 +79,25 @@ public partial class ClientIdMetadataDocumentTests
 
         using var response = await ReadAsync(client, discovery, tokens, reader, caller);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        if (reader == TokenReader.Introspection)
+        switch (reader)
         {
-            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-            Assert.False(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+            case TokenReader.Refresh:
+                Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+                Assert.Equal(ErrorCodes.InvalidGrant, await ErrorResponseReader.ErrorCodeOf(response));
+                break;
+
+            case TokenReader.Revocation:
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                break;
+
+            case TokenReader.Introspection:
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+                Assert.False(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(reader), reader, null);
         }
     }
 

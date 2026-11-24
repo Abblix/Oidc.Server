@@ -21,12 +21,16 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
 {
     private ClientInfo? _clientInfo;
     private AuthorizedGrant? _authorizedGrant;
+    private IClientInfoProvider? _clients;
 
     /// <summary>
-    /// The clients the request names, each found once for every step asking for it: client authentication and the
-    /// reading of a token the request presents.
+    /// The clients the request names, each found once for every step asking for it: client authentication, which sets
+    /// it, and the reading of a token the request presents.
     /// </summary>
-    public required IClientInfoProvider Clients { get; init; }
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when trying to access this property before it is set.
+    /// </exception>
+    public IClientInfoProvider Clients { get => _clients.NotNull(nameof(Clients)); set => _clients = value; }
 
     /// <summary>
     /// Information about the client making the request, derived from the client authentication process.

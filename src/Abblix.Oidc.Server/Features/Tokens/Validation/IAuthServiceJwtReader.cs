@@ -20,10 +20,10 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <remarks>
 /// Reading what is recorded about a token is not free of effect: a refresh token found superseded there revokes the
 /// grant it belongs to, since a replay cannot be told from a theft. What acts on a token only for the client it
-/// belongs to - the revocation and introspection endpoints and refresh token exchange - decides that between the
-/// halves, so a client holding another client's token cannot end that client's grant by presenting it.
+/// belongs to - the refresh token grant, the revocation and introspection endpoints and refresh token exchange - decides
+/// that between the halves, so a client holding another client's token cannot end that client's grant by presenting it.
 /// <para>
-/// Those three read tokens through this interface alone, so a host replacing or decorating
+/// Those read tokens through this interface alone, so a host replacing or decorating
 /// <see cref="IAuthServiceJwtValidator"/> replaces or decorates this one as well, or they read tokens without it.
 /// </para>
 /// </remarks>

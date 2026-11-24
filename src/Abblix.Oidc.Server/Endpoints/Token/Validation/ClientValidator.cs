@@ -24,7 +24,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// to the validation context. If the authentication fails, it returns an error indicating that the client is not authorized.
 /// </remarks>
 /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator) : ITokenContextValidator
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientInfoProvider clientInfoProvider)
+    : ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client in the token request context. This method checks if the client
@@ -48,15 +50,20 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : ITokenC
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, context.Clients);
+        // One lookup of the clients for the whole request, handed on to the steps that read a token it presents
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        context.Clients = clients;
+
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
-            // client" an invalid_request, not a failed authentication
-            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
-                return moreThanOneMethod;
-
-            return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+            // client" an invalid_request, not a failed authentication. draft-ietf-oauth-client-id-metadata-document-03
+            // section 6.1: "for a transient failure, an HTTP 503". A later step reading a token of another client may
+            // meet that client's outage too, but the answer to such a token does not depend on it, so only a failed
+            // authentication is answered as one
+            return clients.RefusalOf(authenticated.GetFailure() as MoreThanOneClientAuthenticationMethodError
+                                     ?? new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"));
         }
 
         context.ClientInfo = clientInfo;

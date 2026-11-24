@@ -9,7 +9,6 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -23,9 +22,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// and authenticity of token requests, according to the framework defined in RFC 6749.
 /// </summary>
 /// <param name="validator">The token context validator used to validate token requests.</param>
-/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
-public class TokenRequestValidator(ITokenContextValidator validator, IClientInfoProvider clientInfoProvider)
-	: ITokenRequestValidator
+public class TokenRequestValidator(ITokenContextValidator validator) : ITokenRequestValidator
 {
 	/// <summary>
 	/// Asynchronously validates a token request against the OAuth 2.0 specifications. It checks for proper authorization
@@ -44,19 +41,12 @@ public class TokenRequestValidator(ITokenContextValidator validator, IClientInfo
 		TenantDefinition tenant,
 		TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
 	{
-		// One lookup of the clients for the whole request: the client authentication and the reading of a token the
-		// request presents find each client once
-		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
-		var context = new TokenValidationContext(tokenRequest, clientRequest) { Clients = clients };
+		var context = new TokenValidationContext(tokenRequest, clientRequest);
 
 		var error = await validator.ValidateAsync(tenant, context, cancellationToken);
-		if (error == null)
-			return new ValidTokenRequest(context);
+		if (error != null)
+			return error;
 
-		// draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "At the token endpoint ... for a transient
-		// failure, an HTTP 503 status code", whichever step of the request met the client that could not be had: its
-		// authentication, or the reading of a token issued to it. A refusal alone: a request that passed validation may
-		// already have spent its grant, a device code or a backchannel authentication request taken from storage
-		return clients.RefusalOf(error);
+		return new ValidTokenRequest(context);
 	}
 }
