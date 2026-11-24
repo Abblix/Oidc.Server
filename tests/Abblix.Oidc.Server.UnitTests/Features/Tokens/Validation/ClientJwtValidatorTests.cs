@@ -69,7 +69,7 @@ public class ClientJwtValidatorTests
             new ProfiledJwtValidator(_tokenValidator.Object),
             _clientKeysProvider.Object,
             _serviceKeysProvider.Object,
-            TimeProvider.System);
+            TimeProvider.System, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
     }
 
     /// <summary>

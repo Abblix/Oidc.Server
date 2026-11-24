@@ -23,6 +23,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -129,10 +130,10 @@ public class ClientSecretJwtThroughTheValidatorTests
 
         return new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()),
             TimeProvider.System,
             replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()), TimeProvider.System),
+            DefaultOidcOptions.Monitor());
     }
 
     private static Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)

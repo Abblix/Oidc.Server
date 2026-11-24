@@ -12,10 +12,11 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// Encrypts the client secret a tenant issues on dynamic registration and decrypts it again, so the client
-/// configuration endpoint can return it when the client reads its registration (RFC 7592 section 3: the server "MUST
+/// Encrypts the client secret a tenant issues on dynamic registration and decrypts it again: for the client
+/// configuration endpoint to return it when the client reads its registration (RFC 7592 section 3: the server "MUST
 /// return all registered metadata about this client", and Appendix A.1: "The client's current registration access
-/// token and client credentials (if applicable) MUST be included in the client information response").
+/// token and client credentials (if applicable) MUST be included in the client information response"), and for the
+/// keys read from the secret of a client_secret_jwt client (<see cref="ClientSecretValues"/>).
 /// </summary>
 /// <remarks>
 /// Each tenant encrypts with the key of its own <see cref="TenantDefinition.ClientSecretEncryption"/>, and the value is
@@ -38,7 +39,7 @@ public interface IClientSecretEncryptor
     /// <summary>
     /// The secret <paramref name="encryptedSecret"/> holds for the client <paramref name="clientId"/> of
     /// <paramref name="tenant"/>, or null when it does not decrypt there: the tenant has no key, has replaced the one it
-    /// was encrypted with, or the value was encrypted for another client.
+    /// was encrypted with or its hash algorithm, or the value was encrypted for another client.
     /// </summary>
     /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="clientId">The client the secret was issued to.</param>

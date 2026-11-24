@@ -43,6 +43,15 @@ public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthent
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }
 
+        if (request.TokenEndpointAuthMethod.HasValue() &&
+            !TlsClientAuthCertificateAuthorities.Serve(tenant, request.TokenEndpointAuthMethod))
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not " +
+                "supported: the server trusts no certificate authority to issue the client's certificate, which it lists " +
+                $"in {nameof(TenantDefinition.TlsClientAuthCertificateAuthorities)} as base64-encoded DER certificates");
+        }
+
         return null;
     }
 }

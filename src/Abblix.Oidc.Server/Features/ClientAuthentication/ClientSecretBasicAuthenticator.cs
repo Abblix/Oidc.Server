@@ -76,19 +76,31 @@ public class ClientSecretBasicAuthenticator(
 
 		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
-		// According to RFC 7617: https://datatracker.ietf.org/doc/html/rfc7617#section-2.1
-		// the first colon in a user-pass string separates user-id and password from one another,
-		// text after the first colon is part of the password.
-		// User-ids containing colons cannot be encoded in user-pass strings.
+		// RFC 7617 section 2: the first colon in the user-pass string separates the user-id from the password
 		var colonIndex = value.IndexOf(':');
 		if (colonIndex < 0)
 			return ClientAuthenticationFailures.InvalidCredential;
 
+		// RFC 6749 section 2.3.1: the client identifier and the password are each form-urlencoded (Appendix B) before
+		// they are written into the user-pass string, so each is decoded after the split, which an encoded colon in the
+		// client identifier cannot move
+		if (!FormUrlEncoding.TryDecode(value[..colonIndex], out var clientId) ||
+		    !FormUrlEncoding.TryDecode(value[(colonIndex + 1)..], out var secret))
+		{
+			return ClientAuthenticationFailures.InvalidCredential;
+		}
+
+		if (request.NamesAnotherClientThan(clientId))
+		{
+			LogClientIdentifiersMismatch(clientId, Sanitized.Value(request.ClientId));
+			return ClientAuthenticationFailures.InvalidCredential;
+		}
+
 		return await TryAuthenticateAsync(
 			tenant,
 			clients,
-			clientId: value[..colonIndex],
-			secret: value[(colonIndex + 1)..],
+			clientId,
+			secret,
 			ClientAuthenticationMethods.ClientSecretBasic);
 	}
 

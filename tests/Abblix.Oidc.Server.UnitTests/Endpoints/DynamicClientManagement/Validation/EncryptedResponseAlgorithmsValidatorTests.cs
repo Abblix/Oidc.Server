@@ -61,7 +61,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             _jwtAlgorithms.Object,
             _serviceKeys.Object,
             _clientInfoProvider.Object,
-            TimeProvider.System, TestEncryptionAlgorithms.Every);
+            TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
     }
 
     private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)

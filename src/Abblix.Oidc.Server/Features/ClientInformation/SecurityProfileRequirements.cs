@@ -444,15 +444,6 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile refuses a request naming a client_id other than the client its credential proves. FAPI 1.0 Part 1
-    /// section 5.2.2, which Part 2 section 5.2.2 takes in: the server "shall return an invalid_client error as defined
-    /// in 5.2 of RFC6749 when mis-matched client identifiers were provided through the client authentication methods
-    /// that permits sending the client identifier in more than one way". Enforced by
-    /// <c>Features.ClientAuthentication.SecurityProfileClientAuthenticator</c>.
-    /// </summary>
-    public bool RequireMatchingClientIdentifiers { get; init; }
-
-    /// <summary>
     /// The profile accepts in the audience of a client authentication assertion only the issuer identifier, as a
     /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: no endpoint URL
     /// and no array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>, and refused in
@@ -536,7 +527,6 @@ public sealed record SecurityProfileRequirements
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireAccessTokenOutsideQuery = true,
         RequireFapiInteractionId = true,
@@ -746,7 +736,6 @@ public sealed record SecurityProfileRequirements
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireStringAudienceInClientAssertion = true,
         RequireFapiInteractionId = true,
@@ -888,8 +877,6 @@ public sealed record SecurityProfileRequirements
                 RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
             RequireStringAudienceInClientAssertion =
                 RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
-            RequireMatchingClientIdentifiers =
-                RequireMatchingClientIdentifiers || other.RequireMatchingClientIdentifiers,
             RequireHttpsJwksUri = RequireHttpsJwksUri || other.RequireHttpsJwksUri,
         };
 

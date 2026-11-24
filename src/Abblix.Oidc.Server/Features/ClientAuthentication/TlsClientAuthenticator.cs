@@ -27,7 +27,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsClientAuthenticator(
     ILogger<TlsClientAuthenticator> logger,
-    IClientKeysProvider clientKeysProvider) : IClientAuthenticator
+    IClientKeysProvider clientKeysProvider,
+    TimeProvider clock) : IClientAuthenticator
 {
     // Only the self-signed variant is served here; tls_client_auth has its own authenticator
     private readonly MutualTlsCredential _credential =
@@ -77,8 +78,29 @@ public partial class TlsClientAuthenticator(
         if (await _credential.FindAsync(tenant, request, clients, LogNotFound) is not (var client, var certificate))
             return ClientAuthenticationFailures.NoCredential;
 
-        // Compute certificate public key and compare against client's JWKS signing keys
-        var certJwk = certificate.ToJsonWebKey();
+        // RFC 8705 section 2.2 has the server not validate the chain of a self-signed certificate, which leaves the
+        // certificate's own validity period (RFC 5280 section 4.1.2.5) to be checked here
+        var notBefore = new DateTimeOffset(certificate.NotBefore);
+        var notAfter = new DateTimeOffset(certificate.NotAfter);
+        var now = clock.GetUtcNow();
+        if (now < notBefore || notAfter < now)
+        {
+            LogOutsideValidityPeriod(client.ClientId, notBefore, notAfter);
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
+
+        // Compute certificate public key and compare against client's JWKS signing keys. A key of a type the
+        // conversion does not read is the client's certificate, not a fault of the server, so it is a refusal
+        JsonWebKey certJwk;
+        try
+        {
+            certJwk = certificate.ToJsonWebKey();
+        }
+        catch (InvalidOperationException)
+        {
+            LogUnsupportedKeyType(client.ClientId);
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
             LogNoMatchingPublicKey(client.ClientId);

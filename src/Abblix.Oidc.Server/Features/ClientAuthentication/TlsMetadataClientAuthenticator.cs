@@ -24,11 +24,15 @@ using Abblix.Oidc.Server.Common;
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 /// <summary>
-/// RFC 8705 tls_client_auth authenticator. Matches presented client certificate against
-/// client metadata: subject DN and/or Subject Alternative Name entries.
+/// RFC 8705 tls_client_auth authenticator. Validates the presented client certificate's chain against the certificate
+/// authorities the tenant lists, then matches it against client metadata: subject DN and/or Subject Alternative Name
+/// entries.
 /// </summary>
+/// <param name="logger">Records why a certificate authenticates no client.</param>
+/// <param name="clock">The time the certificate chain's validity periods are judged at.</param>
 public partial class TlsMetadataClientAuthenticator(
-    ILogger<TlsMetadataClientAuthenticator> logger) : IClientAuthenticator
+    ILogger<TlsMetadataClientAuthenticator> logger,
+    TimeProvider clock) : IClientAuthenticator
 {
     private readonly MutualTlsCredential _credential = new(ClientAuthenticationMethods.TlsClientAuth);
 
@@ -65,8 +69,9 @@ public partial class TlsMetadataClientAuthenticator(
     /// 1. Verifying a client certificate is present
     /// 2. Looking up client configuration by client_id
     /// 3. Checking the client uses tls_client_auth method
-    /// 4. Validating certificate Subject DN (if configured)
-    /// 5. Validating certificate SAN entries (if configured)
+    /// 4. Validating the certificate chain against the tenant's certificate authorities
+    /// 5. Validating certificate Subject DN (if configured)
+    /// 6. Validating certificate SAN entries (if configured)
     /// </remarks>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
         TenantDefinition tenant,
@@ -80,6 +85,13 @@ public partial class TlsMetadataClientAuthenticator(
         if (options == null)
         {
             LogNoTlsMetadataConfigured(client.ClientId);
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
+
+        // A tenant listing no certificate authority has no anchor for the chain to end at, so it is refused here too
+        if (TlsClientAuthCertificateAuthorities.WhyNotChained(tenant, certificate, clock.GetUtcNow()) is { } whyNot)
+        {
+            LogChainNotValidated(client.ClientId, whyNot);
             return ClientAuthenticationFailures.InvalidCredential;
         }
 
@@ -101,24 +113,20 @@ public partial class TlsMetadataClientAuthenticator(
         => _credential.FindPresentedAsync(tenant, request, clients);
 
     /// <summary>
-    /// Validates the certificate's Subject Distinguished Name against the required DN.
-    /// Uses X500DistinguishedName for proper RFC 4514 parsing and binary comparison.
+    /// Validates the certificate's Subject Distinguished Name against the required DN, parsed from its RFC 4514
+    /// string and compared by the distinguishedNameMatch rule (<see cref="DistinguishedNameMatch"/>).
     /// </summary>
     /// <param name="requiredDn">The required Subject DN in RFC 4514 format, or null if not required.</param>
     /// <param name="cert">The client certificate to validate.</param>
     /// <returns>
-    /// True if the DN matches or no DN is required; false if validation fails.
-    /// Falls back to case-insensitive string comparison if DN parsing fails.
+    /// True if the DN matches or no DN is required; false if it does not match or does not parse.
     /// </returns>
     private static bool MatchSubjectDn(string? requiredDn, X509Certificate2 cert)
     {
         if (string.IsNullOrWhiteSpace(requiredDn))
             return true; // no requirement
 
-        // A case-insensitive string compare is deliberately NOT used as a fallback: DN string
-        // equality is sensitive to attribute ordering, RDN spacing and encoding, so it both
-        // false-negatives and (on case) matches too loosely - a security-weakening path. The
-        // required DN is validated at registration time (TlsClientAuthValidator), so a parse
+        // The required DN is validated at registration time (TlsClientAuthValidator), so a parse
         // failure here can only mean a misconfigured client; authentication fails closed.
         X500DistinguishedName requiredX500Dn;
         try
@@ -130,8 +138,7 @@ public partial class TlsMetadataClientAuthenticator(
             return false;
         }
 
-        // Compare the binary RFC 4514 representation for an exact match.
-        return cert.SubjectName.RawData.AsSpan().SequenceEqual(requiredX500Dn.RawData);
+        return DistinguishedNameMatch.Matches(cert.SubjectName, requiredX500Dn);
     }
 
     /// <summary>
@@ -172,11 +179,14 @@ public partial class TlsMetadataClientAuthenticator(
         if (options.SanDns is { Length: > 0 } dnsNames)
             yield return san => dnsNames.All(d => san.DnsNames.Contains(d));
 
+        // Compared as written, the simple string comparison of RFC 3986 section 6.2.1
         if (options.SanUris is { Length: > 0 } uris)
-            yield return san => uris.All(u => san.Uris.Contains(u));
+            yield return san => uris.All(u => san.Uris.Contains(u.OriginalString));
 
+        // RFC 8705 section 2.1.2: "the IP address comparison of the value in this parameter and the SAN entry in the
+        // certificate is to be done in binary format", so each spelling of one address matches it
         if (options.SanIps is { Length: > 0 } ips)
-            yield return san => ips.All(ip => san.Ips.Contains(ip));
+            yield return san => ips.All(ip => IPAddress.TryParse(ip, out var address) && san.Ips.Contains(address));
 
         if (options.SanEmails is { Length: > 0 } emails)
             yield return san => emails.All(e => san.Emails.Contains(e));
@@ -195,14 +205,14 @@ public partial class TlsMetadataClientAuthenticator(
         public HashSet<string> DnsNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Gets the collection of URIs from the SAN extension.
+        /// Gets the collection of URIs from the SAN extension, as the certificate writes them.
         /// </summary>
-        public HashSet<Uri> Uris { get; } = new();
+        public HashSet<string> Uris { get; } = new(StringComparer.Ordinal);
 
         /// <summary>
-        /// Gets the collection of IP addresses (as strings) from the SAN extension.
+        /// Gets the collection of IP addresses from the SAN extension.
         /// </summary>
-        public HashSet<string> Ips { get; } = new();
+        public HashSet<IPAddress> Ips { get; } = new();
 
         /// <summary>
         /// Gets the collection of email addresses from the SAN extension.
@@ -245,7 +255,6 @@ public partial class TlsMetadataClientAuthenticator(
     /// <param name="extension">The X.509 extension containing the SAN data.</param>
     /// <returns>
     /// A <see cref="SanEntries"/> object containing all parsed entries.
-    /// Invalid URIs are silently skipped; all other entry types are included as-is.
     /// </returns>
     /// <remarks>
     /// Uses <see cref="AsnReader"/> for proper ASN.1 DER decoding, avoiding locale-dependent parsing.
@@ -289,13 +298,11 @@ public partial class TlsMetadataClientAuthenticator(
                     break;
 
                 case GeneralNameTag.UniformResourceIdentifier:
-                    AddUri(Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag)), entries);
+                    entries.Uris.Add(Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag)));
                     break;
 
                 case GeneralNameTag.IpAddress:
-                    var ipBytes = sequenceReader.ReadOctetString(tag);
-                    var ip = new IPAddress(ipBytes).ToString();
-                    entries.Ips.Add(ip);
+                    entries.Ips.Add(new IPAddress(sequenceReader.ReadOctetString(tag)));
                     break;
 
                 // The name forms client authentication does not match on are read past.
@@ -310,12 +317,5 @@ public partial class TlsMetadataClientAuthenticator(
                 default:
                     throw new ArgumentOutOfRangeException(nameof(name), name, "A general name form without a reading rule.");
             }
-    }
-
-    // An entry that is not an absolute URI is skipped, as the summary of the parse promises.
-    private static void AddUri(string value, SanEntries entries)
-    {
-        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
-            entries.Uris.Add(uri);
     }
 }

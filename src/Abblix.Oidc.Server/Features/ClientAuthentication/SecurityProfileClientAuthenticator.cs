@@ -87,16 +87,6 @@ internal partial class SecurityProfileClientAuthenticator(
 
         var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
 
-        // FAPI 1.0 Part 1 section 5.2.2: invalid_client "when mis-matched client identifiers were provided through the
-        // client authentication methods that permits sending the client identifier in more than one way". The
-        // credential decided which client this is, so a client_id naming another one is refused rather than ignored
-        if (requirements.RequireMatchingClientIdentifiers &&
-            request.ClientId is { Length: > 0 } namedClientId &&
-            !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
-        {
-            LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
-            return Refused(clientInfo);
-        }
         IReadOnlyList<string> violations =
         [
             ..SecurityProfileConsistency.FindViolations(
@@ -119,7 +109,7 @@ internal partial class SecurityProfileClientAuthenticator(
             ..SecurityProfileConsistency.FindServiceTokenViolations(
                 SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
             ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
-                encryptionKeyResolver, clientInfo, requirements),
+                encryptionKeyResolver, tenant, clientInfo, requirements),
         ];
 
         if (violations.Count == 0)

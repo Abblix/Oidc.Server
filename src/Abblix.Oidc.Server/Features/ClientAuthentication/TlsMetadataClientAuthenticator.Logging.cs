@@ -23,4 +23,10 @@ partial class TlsMetadataClientAuthenticator
         Level = LogLevel.Information,
         Message = "tls_client_auth: client authenticated: {ClientId}")]
     private partial void LogAuthenticated(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.TlsMetadataClientAuthenticator.ChainNotValidated,
+        Level = LogLevel.Warning,
+        Message = "tls_client_auth: the certificate presented for client {ClientId} does not chain to the certificate authorities the tenant lists in TlsClientAuthCertificateAuthorities (base64-encoded DER, self-signed anchors and the intermediates under them): {ChainStatus}")]
+    private partial void LogChainNotValidated(string ClientId, string ChainStatus);
 }

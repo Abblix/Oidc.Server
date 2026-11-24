@@ -144,6 +144,33 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
+    /// A client_secret_jwt client's secret is kept as its hash and encrypted, never as itself: its assertion is
+    /// verified with the secret decrypted.
+    /// </summary>
+    [Fact]
+    public async Task AClientSecretJwtClient_IsStoredWithoutItsSecretInTheClear()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var request = new ValidClientRegistrationRequest(
+            new ClientRegistrationRequest
+            {
+                ClientId = "client-1",
+                RedirectUris = [new Uri("https://client.example.com/cb")],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            },
+            SectorIdentifier: null);
+
+        Assert.True((await Processor().ProcessAsync(SingleIssuer.Tenant, request)).TryGetSuccess(out _));
+
+        var secret = Assert.Single(stored!.ClientInfo.ClientSecrets!);
+        Assert.Null(secret.Value);
+    }
+
+    /// <summary>
     /// A registered client takes the host's grant of offline access beside an access token carried through the user
     /// agent, which registration metadata has no member for.
     /// </summary>

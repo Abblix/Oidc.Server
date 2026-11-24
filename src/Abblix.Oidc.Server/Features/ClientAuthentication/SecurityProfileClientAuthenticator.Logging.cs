@@ -15,12 +15,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 partial class SecurityProfileClientAuthenticator
 {
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.ClientIdentifiersMismatch,
-        Level = LogLevel.Warning,
-        Message = "The credential proves the client {ClientId}, but the request names the client {Named}")]
-    private partial void LogClientIdentifiersMismatch(string ClientId, Sanitized Named);
-
-    [LoggerMessage(
         EventId = LogEvents.ClientAuth.SecurityProfileClientAuthenticator.RegistrationCannotSatisfyProfile,
         Level = LogLevel.Warning,
         Message = "The client {ClientId} authenticated, but its registration cannot satisfy the "

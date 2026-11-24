@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -29,11 +30,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="clientKeysProvider">Supplies the encryption keys the client publishes.</param>
 /// <param name="timeProvider">Supplies the time a client secret's expiry is judged against.</param>
 /// <param name="encryptionAlgorithms">Tells which key types a key management algorithm is carried out with.</param>
+/// <param name="secretEncryptor">Decrypts a client secret kept encrypted, for the key derived from it.</param>
 public sealed class ClientEncryptionKeyResolver(
     ProfiledJwtIssuer issuer,
     IClientKeysProvider clientKeysProvider,
     TimeProvider timeProvider,
-    EncryptionAlgorithmsProvider encryptionAlgorithms)
+    EncryptionAlgorithmsProvider encryptionAlgorithms,
+    IClientSecretEncryptor secretEncryptor)
 {
     /// <summary>
     /// The key a JWT for <paramref name="client"/> is encrypted to under <paramref name="keyManagementAlgorithm"/>, or
@@ -41,12 +44,14 @@ public sealed class ClientEncryptionKeyResolver(
     /// out, the host performs it with and <paramref name="profile"/> admits; for a symmetric algorithm, the key derived
     /// from the client secret, under the same conditions.
     /// </summary>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="profile">The controls the client is held to.</param>
     /// <param name="client">The client the JWT is addressed to.</param>
     /// <param name="keyManagementAlgorithm">The key management algorithm the client registered.</param>
     /// <param name="contentEncryptionAlgorithm">The content encryption algorithm the JWT is encrypted with, which fixes
     /// the length of a key used directly as the content encryption key.</param>
     public async Task<JsonWebKey?> ResolveAsync(
+        TenantDefinition tenant,
         SecurityProfileRequirements profile,
         ClientInfo client,
         string keyManagementAlgorithm,
@@ -60,7 +65,7 @@ public sealed class ClientEncryptionKeyResolver(
         }
 
         if (ClientSecretEncryptionKey.SizeInBytes(keyManagementAlgorithm, contentEncryptionAlgorithm) is not { } size ||
-            ClientSecretEncryptionKey.SecretOf(client, timeProvider.GetUtcNow()) is not { } secret)
+            ClientSecretEncryptionKey.SecretOf(tenant, client, timeProvider.GetUtcNow(), secretEncryptor) is not { } secret)
         {
             return null;
         }

@@ -48,4 +48,10 @@ partial class ClientSecretAuthenticator
 		Level = LogLevel.Information,
 		Message = "Client authenticated successfully with client ID {ClientId}")]
 	private partial void LogAuthenticated(string ClientId);
+
+	[LoggerMessage(
+		EventId = LogEvents.ClientAuth.ClientSecretAuthenticator.ClientIdentifiersMismatch,
+		Level = LogLevel.Warning,
+		Message = "The Basic credentials identify the client {ClientId}, but the request names the client {Named}")]
+	protected partial void LogClientIdentifiersMismatch(string ClientId, Sanitized Named);
 }

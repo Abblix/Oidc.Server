@@ -38,12 +38,11 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// deployment's. A client asking to be held to a tighter profile could not be heard on this path.
 /// </summary>
 /// <remarks>
-/// The subject is <see cref="ClientSecretJwtAuthenticator"/> rather than its sibling, because this is
-/// where the base class's second pass is the ONLY one: it validates through
-/// <see cref="IJsonWebTokenValidator"/> directly, while <see cref="PrivateKeyJwtAuthenticator"/> goes
-/// through the client JWT validator, which now performs the same check itself. Under a tenant naming a
-/// FAPI profile the subject is <see cref="PrivateKeyJwtAuthenticator"/> with that validator a stub, since
-/// such a profile admits no algorithm a client secret signs with.
+/// The subject is <see cref="ClientSecretJwtAuthenticator"/> over a stub of <see cref="IJsonWebTokenValidator"/>
+/// that verifies no signature, so the windows alone decide. The client JWT validator it goes through also holds the
+/// client to its own profile's algorithms, and no FAPI profile admits one a client secret signs with, so the
+/// assertion of a client naming such a profile is written PS256 here. Under a tenant naming a FAPI profile the subject
+/// is <see cref="PrivateKeyJwtAuthenticator"/> with that validator a stub.
 ///
 /// Every assertion here carries the identifier and the expiry the specification demands and names the
 /// issuer as its audience, so the only thing separating acceptance from refusal is which profile the
@@ -77,7 +76,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            issuedAt: Now + BeyondEveryProfileButNone);
+            issuedAt: Now + BeyondEveryProfileButNone,
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
 
@@ -143,7 +143,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            expiresAt: Now.AddSeconds(-1));
+            expiresAt: Now.AddSeconds(-1),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
     }
@@ -172,7 +173,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            notBefore: Now + BeyondEveryProfileButNone);
+            notBefore: Now + BeyondEveryProfileButNone,
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
     }
@@ -216,7 +218,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            issuedAt: Now.AddSeconds(5));
+            issuedAt: Now.AddSeconds(5),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.True((result).TryGetSuccess(out _));
     }
@@ -231,7 +234,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            notBefore: Now.AddSeconds(5));
+            notBefore: Now.AddSeconds(5),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.True((result).TryGetSuccess(out _));
     }
@@ -240,7 +244,8 @@ public class ClientAssertionMayTightenItselfTests
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? notBefore = null)
+        DateTimeOffset? notBefore = null,
+        string algorithm = SigningAlgorithms.HS256)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -252,7 +257,11 @@ public class ClientAssertionMayTightenItselfTests
             .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
-        var token = CreateAssertion(issuedAt, expiresAt, notBefore);
+        var token = CreateAssertion(
+            issuedAt,
+            expiresAt,
+            notBefore,
+            algorithm);
 
         // The real validator drives these callbacks, signing keys first and the issuer after, and the
         // assertion path depends on what they leave behind: resolving the keys is what finds the client
@@ -277,10 +286,10 @@ public class ClientAssertionMayTightenItselfTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            new ProfiledJwtValidator(tokenValidator.Object),
             new FakeTimeProvider(Now),
             replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(tokenValidator.Object), new FakeTimeProvider(Now)),
+            DefaultOidcOptions.Monitor());
 
         var tenant = new TestIssuer { Issuer = new Uri(Issuer) }.ToTenant();
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
@@ -327,7 +336,8 @@ public class ClientAssertionMayTightenItselfTests
             Mock.Of<ILogger<PrivateKeyJwtAuthenticator>>(),
             replayCache.Object,
             services,
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now),
+            DefaultOidcOptions.Monitor());
 
         var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest

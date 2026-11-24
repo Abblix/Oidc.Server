@@ -80,7 +80,7 @@ public class SecurityProfileClientAuthenticatorTests
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
             logger,
-            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()),
             Options.Create(options));
 
         return (authenticator, inner);
@@ -723,36 +723,6 @@ public class SecurityProfileClientAuthenticatorTests
 
         var result = await authenticator.TryAuthenticateClientAsync(
             TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest(), Clients);
-
-        Assert.Equal(accepted, result.TryGetSuccess(out _));
-    }
-
-    /// <summary>
-    /// FAPI 1.0 Part 1 section 5.2.2: "shall return an invalid_client error as defined in 5.2 of RFC6749 when
-    /// mis-matched client identifiers were provided through the client authentication methods that permits sending the
-    /// client identifier in more than one way". A client held to FAPI 1.0 Advanced whose request names another
-    /// client_id than the one its credential proves is refused; naming its own, or none, passes, and a client held to
-    /// no profile is left to what the credential proves.
-    /// </summary>
-    [Theory]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, "someone-else", false)]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientId, true)]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, true)]
-    [InlineData(null, "someone-else", true)]
-    public async Task AMismatchedClientId_IsRefused(ClientSecurityProfile? profile, string? named, bool accepted)
-    {
-        var (authenticator, inner) = CreateAuthenticator();
-        Authenticates(inner, new ClientInfo(ClientId)
-        {
-            SecurityProfile = profile,
-            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            TlsClientCertificateBoundAccessTokens = true,
-        });
-
-        var result = await authenticator.TryAuthenticateClientAsync(
-            TenantAt(ClientSecurityProfile.None), new ClientRequest { ClientId = named }, Clients);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }

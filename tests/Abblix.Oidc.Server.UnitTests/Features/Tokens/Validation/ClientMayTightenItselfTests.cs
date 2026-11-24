@@ -107,7 +107,7 @@ public class ClientMayTightenItselfTests
             new ProfiledJwtValidator(tokenValidator.Object),
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now), Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
 
         return await validator.ValidateAsync(
             new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = deploymentProfile }.ToTenant(),

@@ -48,7 +48,8 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
     protected override ClientRequest PrepareValidRequest(string clientId, string clientSecret)
     {
-        var credentials = $"{clientId}:{clientSecret}";
+        // RFC 6749 section 2.3.1: each half is form-urlencoded before the two are joined
+        var credentials = $"{Uri.EscapeDataString(clientId)}:{Uri.EscapeDataString(clientSecret)}";
         var base64Credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(credentials));
 
         return new ClientRequest

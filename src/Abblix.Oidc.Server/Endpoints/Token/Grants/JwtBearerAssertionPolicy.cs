@@ -272,7 +272,7 @@ public sealed partial class JwtBearerAssertionPolicy(
 		// the read-then-write race. An assertion carrying no expiry names no window to remember it for, so the
 		// identifier is held for the fallback the cache publishes.
 		var expiresAt = ctx.ExpiresAt ?? timeProvider.GetUtcNow() + ConfiguredReplayCache.DefaultExpiration;
-		if (!await replayCache.TryReserveAsync(jti, expiresAt))
+		if (!await replayCache.TryReserveAsync(SingleUseTokenKey.JwtBearerGrant(ctx.Issuer, jti), expiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");

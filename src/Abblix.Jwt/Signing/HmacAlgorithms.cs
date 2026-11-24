@@ -18,6 +18,16 @@ internal static class HmacAlgorithms
 		StringComparer.Ordinal);
 
 	/// <summary>
+	/// The HS algorithms a key of <paramref name="keyLength"/> octets keys: RFC 7518 section 3.2, "A key of the same size
+	/// as the hash output (for instance, 256 bits for "HS256") or larger MUST be used with this algorithm".
+	/// </summary>
+	/// <param name="keyLength">The length of the key, in octets.</param>
+	public static IEnumerable<string> KeyedBy(int keyLength)
+		=> All.Where(algorithm => KeySizeFloors.MinimumHmacKeyBits(algorithm) <= keyLength * BitsPerByte);
+
+	private const int BitsPerByte = 8;
+
+	/// <summary>
 	/// Computes the HMAC of <paramref name="data"/> under <paramref name="keyValue"/> with the hash
 	/// <paramref name="algorithm"/> names.
 	/// </summary>

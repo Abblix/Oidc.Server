@@ -26,11 +26,15 @@ public class CredentialsValidatorTests
     /// <summary>What a client_secret_jwt registration stores: the value, and the hash beside it.</summary>
     private static readonly ClientSecret ValueAndHash = new() { Value = "secret", Sha512Hash = new byte[64] };
 
+    /// <summary>What a registration stores: the hash, and the secret encrypted beside it.</summary>
+    private static readonly ClientSecret EncryptedAndHash = new() { EncryptedValue = [1, 2, 3], Sha512Hash = new byte[64] };
+
     public enum StoredSecret
     {
         None,
         HashOnly,
         ValueAndHash,
+        EncryptedAndHash,
     }
 
     private static ClientRegistrationValidationContext UpdateTo(string method, StoredSecret stored)
@@ -48,6 +52,7 @@ public class CredentialsValidatorTests
                     StoredSecret.None => null,
                     StoredSecret.HashOnly => [HashOnly],
                     StoredSecret.ValueAndHash => [ValueAndHash],
+                    StoredSecret.EncryptedAndHash => [EncryptedAndHash],
                     _ => throw new System.ArgumentOutOfRangeException(nameof(stored), stored, null),
                 },
             },
@@ -85,6 +90,8 @@ public class CredentialsValidatorTests
     [InlineData(ClientAuthenticationMethods.ClientSecretBasic, StoredSecret.ValueAndHash)]
     [InlineData(ClientAuthenticationMethods.ClientSecretPost, StoredSecret.ValueAndHash)]
     [InlineData(ClientAuthenticationMethods.ClientSecretJwt, StoredSecret.ValueAndHash)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, StoredSecret.EncryptedAndHash)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, StoredSecret.EncryptedAndHash)]
     [InlineData(ClientAuthenticationMethods.ClientSecretBasic, StoredSecret.HashOnly)]
     [InlineData(ClientAuthenticationMethods.ClientSecretPost, StoredSecret.HashOnly)]
     [InlineData(ClientAuthenticationMethods.None, StoredSecret.HashOnly)]

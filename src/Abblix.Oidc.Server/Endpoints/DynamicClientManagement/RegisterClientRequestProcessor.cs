@@ -122,24 +122,17 @@ public partial class RegisterClientRequestProcessor(
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithClientSecrets(ToClientSecrets(tenant, model.TokenEndpointAuthMethod, credentials))
+            .WithClientSecrets(ToClientSecrets(tenant, credentials))
             .Build();
-
-    /// <summary>
-    /// Whether a client registered with <paramref name="tokenEndpointAuthMethod"/> has its secret kept itself rather
-    /// than only its hash: client_secret_jwt alone, since verifying the client's HMAC-signed assertion needs it; every
-    /// other method is verified against the hash.
-    /// </summary>
-    internal static bool KeepsSecretValue(string tokenEndpointAuthMethod)
-        => tokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
 
     /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    private ClientSecret[]? ToClientSecrets(
-        TenantDefinition tenant,
-        string tokenEndpointAuthMethod,
-        ClientCredentials credentials)
+    /// <remarks>
+    /// The secret is kept as its hash and encrypted, never as itself: the server reads it back by decrypting it where
+    /// <see cref="ClientSecretValues"/> says it does.
+    /// </remarks>
+    private ClientSecret[]? ToClientSecrets(TenantDefinition tenant, ClientCredentials credentials)
     {
         if (credentials.ClientSecret is not { Length: > 0 } secret)
             return null;
@@ -148,7 +141,6 @@ public partial class RegisterClientRequestProcessor(
         [
             new ClientSecret
             {
-                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? secret : null,
                 Sha512Hash = credentials.Sha512Hash,
                 EncryptedValue = clientSecretEncryptor.Encrypt(tenant, credentials.ClientId, secret),
                 ExpiresAt = credentials.ExpiresAt,

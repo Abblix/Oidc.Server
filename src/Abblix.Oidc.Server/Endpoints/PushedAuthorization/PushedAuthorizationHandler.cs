@@ -87,7 +87,8 @@ public class PushedAuthorizationHandler(
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
         }
 
-        // The object is read for the client the request names, which has to be the one that authenticated
+        // The object is read for the client the request names, which has to be the one that authenticated. The library's
+        // authenticators already refuse a client_id naming another client; this holds it for one a host registers
         if (authorizationRequest.ClientId is { } named && named != clientInfo.ClientId)
         {
             return new AuthorizationError(

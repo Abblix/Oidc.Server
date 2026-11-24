@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -68,7 +69,9 @@ public sealed class ConfigurationHandler(
 		// enabled accepts no caller at all, so nothing is said about it.
 		var authenticationMethods = AdmittedAuthenticationMethods(
 			tenant, clientAuthenticator.ClientAuthenticationMethodsSupported);
-		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported).ToArray();
+		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported)
+			.Where(options.Value.NewClientOptions.ClientSecret.Keys)
+			.ToArray();
 		var revocationMethods = WhereEnabled(OidcEndpoints.Revocation, authenticationMethods);
 		var introspectionMethods = WhereEnabled(
 			OidcEndpoints.Introspection,
@@ -196,13 +199,14 @@ public sealed class ConfigurationHandler(
 	/// TLS and the private key JWT alone, and refuse a public client. The tenant's profile binds every client it
 	/// serves, which is refused where it authenticates by the same rule, so a method it refuses is one no endpoint of
 	/// the tenant authenticates a client with, and RFC 8414 section 2 lists the methods "supported by this token
-	/// endpoint".
+	/// endpoint". A tenant listing no certificate authority for tls_client_auth serves no client with it either.
 	/// </summary>
 	private static string[] AdmittedAuthenticationMethods(TenantDefinition tenant, IEnumerable<string> methods)
 	{
 		var profile = SecurityProfileRequirements.For(tenant, client: null);
 		return methods
 			.Where(method => SecurityProfileConsistency.FindAuthenticationMethodViolations(method, profile).Count == 0)
+			.Where(method => TlsClientAuthCertificateAuthorities.Serve(tenant, method))
 			.ToArray();
 	}
 

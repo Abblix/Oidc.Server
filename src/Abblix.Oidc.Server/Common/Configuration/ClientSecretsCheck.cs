@@ -101,7 +101,7 @@ public sealed class ClientSecretsCheck : ITenantsCheck
 
     /// <summary>
     /// Whether <paramref name="secrets"/> hold a secret in the form <paramref name="tokenEndpointAuthMethod"/> reads:
-    /// client_secret_jwt the value, the HMAC key; client_secret_basic and client_secret_post a hash, which the presented
+    /// client_secret_jwt the value, the HMAC key, kept itself or encrypted; client_secret_basic and client_secret_post a hash, which the presented
     /// secret is compared against. A method reading no secret is served by any, none included. Startup asks it of a
     /// configured client, and an RFC 7592 update of the secrets the stored client keeps under the method it moves to.
     /// </summary>
@@ -111,7 +111,7 @@ public sealed class ClientSecretsCheck : ITenantsCheck
         => tokenEndpointAuthMethod switch
         {
             ClientAuthenticationMethods.ClientSecretJwt
-                => Array.Exists(secrets ?? [], secret => !string.IsNullOrEmpty(secret.Value)),
+                => Array.Exists(secrets ?? [], secret => ClientSecretValues.AreKeptIn(tokenEndpointAuthMethod, secret)),
 
             ClientAuthenticationMethods.ClientSecretBasic or ClientAuthenticationMethods.ClientSecretPost
                 => Array.Exists(secrets ?? [], secret => secret.Sha256Hash != null || secret.Sha512Hash != null),

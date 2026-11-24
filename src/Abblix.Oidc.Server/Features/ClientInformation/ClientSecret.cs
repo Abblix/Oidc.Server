@@ -103,8 +103,9 @@ public record ClientSecret
 	}
 
 	/// <summary>
-	/// The plain-text value of the client secret. This property is required for authentication methods
-	/// that need the raw secret value, such as client_secret_jwt (which uses HMAC signatures).
+	/// The plain-text value of a client secret the host declares, for the uses that need the value itself rather than
+	/// its hash: the HMAC key of a client_secret_jwt assertion and the key a JWT is encrypted to the client with. A
+	/// client registered dynamically keeps its secret in <see cref="EncryptedValue"/> instead.
 	/// </summary>
 	/// <remarks>
 	/// While storing plain-text secrets poses security risks, some authentication methods like
@@ -120,8 +121,10 @@ public record ClientSecret
 	/// had such a key, and for one the host declares; a read then answers without the secret.
 	/// </summary>
 	/// <remarks>
-	/// Never used to authenticate the client, which is verified against the hashes alone. Without the key it was
-	/// encrypted with it opens to nothing.
+	/// A client_secret_jwt client's assertion is verified with the secret decrypted from here, and a JWT encrypted to it
+	/// with a key derived from it; every other method is verified against the hashes. Without the key it was encrypted
+	/// with it opens to nothing, so replacing the tenant's key ends the client_secret_jwt authentication of a client
+	/// that keeps its secret only here.
 	/// </remarks>
 	public byte[]? EncryptedValue { get; init; }
 

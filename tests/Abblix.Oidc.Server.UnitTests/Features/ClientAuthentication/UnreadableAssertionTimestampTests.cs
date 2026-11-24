@@ -144,10 +144,10 @@ public class UnreadableAssertionTimestampTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            new ProfiledJwtValidator(tokenValidator.Object),
             new FakeTimeProvider(Now),
             replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(tokenValidator.Object), new FakeTimeProvider(Now)),
+            DefaultOidcOptions.Monitor());
 
         return (authenticator, replayCache, clientInfoProvider.Object);
     }

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common.Configuration;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -30,7 +32,33 @@ public class SigningAlgorithmsValidatorTests
     public SigningAlgorithmsValidatorTests()
     {
         _jwtAlgorithms = new Mock<IJwtAlgorithmsProvider>(MockBehavior.Strict);
-        _validator = new SigningAlgorithmsValidator(_jwtAlgorithms.Object);
+        _validator = new SigningAlgorithmsValidator(_jwtAlgorithms.Object, DefaultOidcOptions.Monitor());
+    }
+
+    /// <summary>
+    /// A client_secret_jwt client signs with the secret it is issued, so registration accepts an HS algorithm only
+    /// where a secret of the length the server issues keys it (RFC 7518 section 3.2), as discovery publishes them.
+    /// </summary>
+    [Theory]
+    [InlineData(32, SigningAlgorithms.HS256, true)]
+    [InlineData(32, SigningAlgorithms.HS512, false)]
+    [InlineData(64, SigningAlgorithms.HS512, true)]
+    [InlineData(32, SigningAlgorithms.RS256, true)]
+    public async Task AnHsAlgorithm_IsAcceptedOnlyWhereTheIssuedSecretKeysIt(int length, string algorithm, bool accepted)
+    {
+        _jwtAlgorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns(
+            [SigningAlgorithms.RS256, SigningAlgorithms.HS256, SigningAlgorithms.HS384, SigningAlgorithms.HS512]);
+        var validator = new SigningAlgorithmsValidator(
+            _jwtAlgorithms.Object,
+            Mock.Of<IOptionsMonitor<OidcOptions>>(m => m.CurrentValue == new OidcOptions
+            {
+                NewClientOptions = new NewClientOptions { ClientSecret = new ClientSecretOptions { Length = length } },
+            }));
+
+        var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateContext(tokenEndpointAuthSigningAlg: algorithm));
+
+        Assert.Equal(accepted, result is null);
     }
 
     private ClientRegistrationValidationContext CreateContext(

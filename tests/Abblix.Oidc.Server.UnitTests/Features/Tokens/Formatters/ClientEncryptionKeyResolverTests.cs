@@ -53,12 +53,14 @@ public class ClientEncryptionKeyResolverTests
             (serviceProvider, _) => serviceProvider.GetRequiredKeyedService<IKeyManagementAlgorithm<RsaJsonWebKey>>(
                 KeyManagement.RsaOaep256)));
 
-    private ClientEncryptionKeyResolver Resolver(IJsonWebTokenCreator? creator = null)
+    private ClientEncryptionKeyResolver Resolver(
+        IJsonWebTokenCreator? creator = null, IClientSecretEncryptor? encryptor = null)
         => new(
             new ProfiledJwtIssuer(creator ?? EveryAlgorithm(), Algorithms),
             _clientKeys.Object,
             new FakeTimeProvider(Now),
-            Algorithms);
+            Algorithms,
+            encryptor ?? Mock.Of<IClientSecretEncryptor>());
 
     private static IJsonWebTokenCreator EveryAlgorithm()
     {
@@ -98,12 +100,37 @@ public class ClientEncryptionKeyResolverTests
     public async Task ASymmetricAlgorithm_EncryptsToTheKeyDerivedFromTheSecret(
         string algorithm, string contentEncryption, string expectedKeyHex)
     {
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, ClientHolding(new ClientSecret { Value = ClientSecret }), algorithm, contentEncryption);
 
         var derived = Assert.IsType<OctetJsonWebKey>(key);
         Assert.Equal(Convert.FromHexString(expectedKeyHex), derived.KeyValue);
         Assert.Equal(algorithm, derived.Algorithm);
+    }
+
+    /// <summary>
+    /// A client_secret_jwt client registered dynamically keeps its secret encrypted alone, and the key is derived from
+    /// the secret decrypted, as from one the host declares.
+    /// </summary>
+    [Fact]
+    public async Task ARegisteredClientsKeyIsDerivedFromItsDecryptedSecret()
+    {
+        byte[] encrypted = [1, 2, 3];
+        var encryptor = new Mock<IClientSecretEncryptor>();
+        encryptor
+            .Setup(e => e.Decrypt(TestTenant.Matched, TestConstants.DefaultClientId, encrypted))
+            .Returns(ClientSecret);
+
+        var registered = await Resolver(encryptor: encryptor.Object).ResolveAsync(
+            SingleIssuer.Tenant, NoProfile, ClientHolding(new ClientSecret { EncryptedValue = encrypted }),
+            KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
+        var declared = await Resolver().ResolveAsync(
+            SingleIssuer.Tenant, NoProfile, ClientHolding(new ClientSecret { Value = ClientSecret }),
+            KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
+
+        Assert.Equal(
+            Assert.IsType<OctetJsonWebKey>(declared).KeyValue,
+            Assert.IsType<OctetJsonWebKey>(registered).KeyValue);
     }
 
     /// <summary>
@@ -124,7 +151,7 @@ public class ClientEncryptionKeyResolverTests
         await using var provider = services.BuildServiceProvider();
         var creator = provider.GetRequiredService<IJsonWebTokenCreator>();
 
-        var key = await Resolver(creator).ResolveAsync(
+        var key = await Resolver(creator).ResolveAsync(SingleIssuer.Tenant,
             NoProfile, ClientHolding(new ClientSecret { Value = ClientSecret }), algorithm, contentEncryption);
 
         var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
@@ -173,7 +200,7 @@ public class ClientEncryptionKeyResolverTests
             _ => throw new ArgumentOutOfRangeException(nameof(client), client, null),
         };
 
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Null(key);
@@ -190,7 +217,7 @@ public class ClientEncryptionKeyResolverTests
             new ClientSecret { Value = "an-expired-secret", ExpiresAt = Now.AddMinutes(-1) },
             new ClientSecret { Value = ClientSecret });
 
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Equal(
@@ -210,7 +237,7 @@ public class ClientEncryptionKeyResolverTests
             new ClientSecret { Value = "the-older-secret", ExpiresAt = Now.AddDays(1) },
             new ClientSecret { Value = ClientSecret, ExpiresAt = newerNeverExpires ? null : Now.AddDays(30) });
 
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Equal(
@@ -226,7 +253,7 @@ public class ClientEncryptionKeyResolverTests
     [InlineData(KeyManagement.Dir, "A512-HOST")]
     public async Task ASymmetricAlgorithmSection10_2DerivesNoKeyFor_HasNone(string algorithm, string contentEncryption)
     {
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, ClientHolding(new ClientSecret { Value = ClientSecret }), algorithm, contentEncryption);
 
         Assert.Null(key);
@@ -245,7 +272,7 @@ public class ClientEncryptionKeyResolverTests
             .Setup(k => k.GetEncryptionKeys(clientInfo))
             .Returns(new JsonWebKey[] { new OctetJsonWebKey { KeyValue = new byte[32] }, published }.ToAsyncEnumerable());
 
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, KeyManagement.RsaOaep256, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Same(published, key);
@@ -269,7 +296,7 @@ public class ClientEncryptionKeyResolverTests
         var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         creator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns([HostRsaAlgorithm]);
 
-        var key = await Resolver(creator.Object).ResolveAsync(
+        var key = await Resolver(creator.Object).ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, HostRsaAlgorithm, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Same(published, key);
@@ -289,7 +316,7 @@ public class ClientEncryptionKeyResolverTests
                 new OctetJsonWebKey { Algorithm = KeyManagement.Aes128KW, KeyValue = new byte[16] },
             }.ToAsyncEnumerable());
 
-        var key = await Resolver().ResolveAsync(
+        var key = await Resolver().ResolveAsync(SingleIssuer.Tenant,
             NoProfile, clientInfo, KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Null(key);
@@ -305,7 +332,7 @@ public class ClientEncryptionKeyResolverTests
         var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         creator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns([KeyManagement.RsaOaep256]);
 
-        var key = await Resolver(creator.Object).ResolveAsync(
+        var key = await Resolver(creator.Object).ResolveAsync(SingleIssuer.Tenant,
             NoProfile,
             ClientHolding(new ClientSecret { Value = ClientSecret }),
             KeyManagement.Aes128KW,

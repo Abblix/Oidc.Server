@@ -46,8 +46,9 @@ public partial class JarRichAuthorizationRequestsTests
     [InlineData(false, Named.Nobody, false, Named.Nobody, Named.Nobody, HttpStatusCode.BadRequest, ErrorCodes.UnauthorizedClient)]
     // Section 2.1: the authenticated client naming itself
     [InlineData(false, Named.Poster, false, Named.Nobody, Named.Nobody, HttpStatusCode.Created, null)]
-    // Section 2.1: a client_id of another client than the one that authenticated
-    [InlineData(false, Named.Other, false, Named.Nobody, Named.Nobody, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    // Section 2.1 step 1 authenticates the client "in the same way as at the token endpoint", which refuses a
+    // client_id naming another client than the Basic credentials identify
+    [InlineData(false, Named.Other, false, Named.Nobody, Named.Nobody, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
     // Section 3: the object alone, naming the authenticated client
     [InlineData(false, Named.Nobody, true, Named.Poster, Named.Poster, HttpStatusCode.Created, null)]
     // Section 3 step 3: the object alone, signed with the authenticated client's key, naming another client
@@ -58,8 +59,9 @@ public partial class JarRichAuthorizationRequestsTests
     [InlineData(false, Named.Nobody, true, Named.Nobody, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
     // Section 3 step 3: the object alone naming no client, processed strictly
     [InlineData(true, Named.Nobody, true, Named.Nobody, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    // Section 3: the object beside a client_id of another client than the one that authenticated
-    [InlineData(false, Named.Other, true, Named.Poster, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    // Section 3: the object beside a client_id of another client than the one that authenticated, refused as the
+    // client is authenticated
+    [InlineData(false, Named.Other, true, Named.Poster, Named.Poster, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
     // Section 2.1 step 3, validated as at the authorization endpoint, where RFC 9101 section 6.3 has "The client ID
     // values in the "client_id" request parameter and in the Request Object "client_id" claim MUST be identical":
     // the object naming no client beside the client_id of the one that authenticated, merged over the outer parameters
