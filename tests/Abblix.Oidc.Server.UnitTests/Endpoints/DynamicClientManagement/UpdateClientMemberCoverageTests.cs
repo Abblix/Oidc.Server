@@ -69,7 +69,7 @@ public class UpdateClientMemberCoverageTests
         nameof(ClientInfo.ForceUserClaimsInIdentityToken),
         nameof(ClientInfo.ForceAuthorizationDetailsInIdentityToken),
         nameof(ClientInfo.ResourceLocations),
-        nameof(ClientInfo.AllowCrossClientSubjectTokenExchange),
+        nameof(ClientInfo.CrossClientSubjectTokenExchange),
         nameof(ClientInfo.AllowCrossClientIntrospection),
         nameof(ClientInfo.ParseLoginHintTokenAsJwt),
         nameof(ClientInfo.DefaultScope),

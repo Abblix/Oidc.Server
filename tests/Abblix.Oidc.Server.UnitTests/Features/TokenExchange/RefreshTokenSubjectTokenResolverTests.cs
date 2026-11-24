@@ -38,7 +38,7 @@ public class RefreshTokenSubjectTokenResolverTests
     /// The client requesting the exchange: a client trusted to present tokens issued to others, as a broker exchanging them is, so the cases below reach
     /// what follows the token's ownership.
     /// </summary>
-    private static readonly ClientInfo Requester = new("requester") { AllowCrossClientSubjectTokenExchange = true };
+    private static readonly ClientInfo Requester = new("requester") { CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any };
 
     private const string TokenWire = "refresh.jwt.signature";
     private const string OriginalClientId = "client-1";
@@ -79,6 +79,36 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var presenter = new ClientInfo("requester");
         var jwt = NewRefreshJwt();
+        _jwtValidator
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(
+            SingleIssuer.Tenant, presenter, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _jwtValidator.Verify(
+            v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A resource server exchanging tokens addressed to it is refused another client's refresh token, even one whose
+    /// audience names the resource server's own location, as one issued by 3.0 holds its grant's resources there: a
+    /// refresh token is addressed to this server alone.
+    /// </summary>
+    [Fact]
+    public async Task AnotherClientsRefreshToken_NamingTheResourceServer_IsRefusedUnderAddressedToClient()
+    {
+        const string location = "https://mcp.example.com/";
+        var presenter = new ClientInfo("requester")
+        {
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.AddressedToClient,
+            ResourceLocations = [new Uri(location)],
+        };
+        var jwt = NewRefreshJwt();
+        jwt.Payload.Audiences = [location];
         _jwtValidator
             .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);

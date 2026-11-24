@@ -109,27 +109,22 @@ public class RefreshTokenService(
 
 		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 
-		// The same four claims as on an access token, answering the same four questions - except that one of
-		// them answers a different question here than its name suggests:
+		// The same four claims as on an access token, answering the same four questions:
 		//
 		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
-		//   aud       - not who reads it     (RFC 7519 Section 4.1.3). Set by ApplyTo below, from the same
-		//                                     authorization context the access token uses, so it holds the
-		//                                     resources the grant was issued for - or the issuer where it
-		//                                     named none. AuthorizeByRefreshTokenAsync reads them straight
-		//                                     back out of it to rebuild the grant, which makes the claim a
-		//                                     store of grant state rather than a statement about the reader,
-		//                                     and gives a refresh token the same audience as every access
-		//                                     token of the same grant.
-		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set by ApplyTo below.
+		//   aud       - who reads it         (RFC 7519 Section 4.1.3): this server, the only party a refresh token
+		//                                     is ever presented to. The resources of the grant it continues are kept
+		//                                     in a claim of the server's own (RefreshTokenResources) rather than
+		//                                     here, so a resource server checking the audience of a token presented
+		//                                     to it refuses this one without having to check its type.
+		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set with the grant's context below.
 		//   sub       - who it is about      (RFC 9068 Section 2.2), sealed per sector for a pairwise client
 		//                                     further down.
 		//
-		// The type below therefore carries a protection rather than a label. With the audiences identical, it
-		// is the only thing separating a refresh token from an access token, and a resource server presented
-		// with one has nothing else to reject it by - the mutually exclusive validation rules RFC 8725
-		// Section 3.12 asks for. Encryption does not stand in for it: it applies only where the host
-		// configured a server encryption key, and without one every service token ships as a readable JWS.
+		// The type below is the second protection, the mutually exclusive validation rules RFC 8725 Section 3.12 asks
+		// for: a resource server that does check it refuses a refresh token whatever its audience. Encryption does not
+		// stand in for either: it applies only where the host configured a server encryption key, and without one every
+		// service token ships as a readable JWS.
 		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
 
 		var newToken = new JsonWebToken
@@ -156,9 +151,7 @@ public class RefreshTokenService(
 		};
 		authSession.ApplyTo(newToken.Payload);
 
-		// This is what sets the audience described above, so setting it in the initializer would only be
-		// overwritten here.
-		authContext.ApplyTo(newToken.Payload);
+		RefreshTokenResources.ApplyTo(authContext, newToken.Payload);
 
 		// For a pairwise client, replace the real subject in 'sub' and every actor in 'act' with the client's
 		// reversible per-sector pseudonyms; a public client is untouched. A pseudonym carries the real identifier that
@@ -233,7 +226,7 @@ public class RefreshTokenService(
 		}
 
 		var authSession = refreshToken.Payload.ToAuthSession();
-		var authContext = refreshToken.Payload.ToAuthorizationContext();
+		var authContext = RefreshTokenResources.ToAuthorizationContext(refreshToken.Payload);
 
 		// Open the real parties from the per-sector pseudonyms (their sector comes from clientInfo) before building
 		// the grant, so the grant carries the real subject and actors the server refreshes and exchanges against - the

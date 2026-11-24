@@ -57,8 +57,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
         Uri tokenType,
         CancellationToken cancellationToken)
     {
-        // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
-        // need not name this server
+        // A refresh token issued by 3.0 holds the resources of the grant it continues in its audience
+        // (RefreshTokenResources), so the audience need not name this server
         var validation = await ReadAsync(tenant, client, subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
             return validation.GetFailure();
@@ -169,7 +169,9 @@ public sealed class RefreshTokenSubjectTokenResolver(
         // The handler's cross-client guard, decided here before the token's records are read, because reading them
         // revokes the grant of a superseded refresh token, which a client holding another client's token would
         // otherwise do to it from here
-        if (TokenOrigin.Check(token.OwnerOf(), client) is { } refusal)
+        // A refresh token is addressed to this server alone, so it names no location of the presenting client,
+        // whatever one issued by 3.0 holds in its audience
+        if (TokenOrigin.CheckSubject(tenant, token.OwnerOf(), null, client) is { } refusal)
             return refusal;
 
         var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);

@@ -74,7 +74,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
             .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
-            .Bind(ValidateSubjectTokenOrigin)
+            .Bind(ctx => ValidateSubjectTokenOrigin(tenant, ctx))
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateActorTokenOrigin)
@@ -232,13 +232,16 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     /// <summary>
     /// The subject_token must have been issued to the requesting client
-    /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
-    /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
+    /// (confused-deputy guard; <see cref="ClientInfo.CrossClientSubjectTokenExchange"/> admits one addressed to
+    /// the client as a resource server, or any for broker scenarios). The typ header is matched against the presented URI earlier, by the
     /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(
+        TenantDefinition tenant,
+        ValidationContext ctx)
     {
-        if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
+        var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
+        if (TokenOrigin.CheckSubject(tenant, subject.OriginalClientId, subject.Audiences, ctx.ClientInfo) is { } error)
         {
             return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }
@@ -309,16 +312,15 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     }
 
     /// <summary>
-    /// Applies the same origin guard to the actor_token (when present) that
-    /// <see cref="ValidateSubjectTokenOrigin"/> applies to the subject_token. No-op when
-    /// the request had no actor.
+    /// Holds the actor_token (when present) to the client it was issued to, as
+    /// <see cref="TokenOrigin.CheckActor"/> decides. No-op when the request had no actor.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateActorTokenOrigin(ValidationContext ctx)
     {
         if (ctx.Actor is not { } actor)
             return ctx;
 
-        return CheckTokenOrigin(actor, ctx.ClientInfo) is { } error
+        return TokenOrigin.CheckActor(actor.OriginalClientId, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
     }
@@ -373,17 +375,6 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         }
 
         return ctx;
-    }
-
-    /// <summary>
-    /// The origin guard applied identically to subject and actor tokens; the token's type is judged where it is
-    /// validated, against the type it was presented under.
-    /// </summary>
-    private static OidcError? CheckTokenOrigin(
-        SubjectTokenContext token,
-        ClientInfo clientInfo)
-    {
-        return TokenOrigin.Check(token.OriginalClientId, clientInfo);
     }
 
     /// <summary>
