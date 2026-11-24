@@ -95,7 +95,9 @@ public class AuthorizationHandler(
     /// as it was fetched. The page sends it back by its request_uri, the request fails the same check again, and the
     /// error then goes on as one with a session: redirected to a trusted client, answered at the server for another. A
     /// silent request (<c>prompt=none</c>) cannot show a login page, so its error is answered at once, and an error
-    /// without a redirect URI is answered by the server anyway.
+    /// without a redirect URI is answered by the server anyway. The login page signs the end user in before it sends the
+    /// request back, as it does for a request whose session max_age or acr_values leave out, or the request comes back
+    /// to it.
     /// </remarks>
     private async Task<LoginRequired?> AuthenticationOwedAsync(TenantDefinition tenant, AuthorizationResponse response)
     {

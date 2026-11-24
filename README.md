@@ -184,7 +184,7 @@ What stops the host at startup or leaves a stored tenant unserved:
 - A client authenticating with `none` gives up the `client_credentials`, `password`, JWT bearer and CIBA grants, or moves to a method that authenticates it.
 - A tenant definition holding a null where its types declare a value is refused, a stored client's `TokenEndpointAuthMethod` included.
 - An invalid `OutboundProxy` or `SecureHttpFetchOptions.AllowedDestinations` value stops the host.
-- A host granting every client everything with `AddConsentGrantedForEveryClient()` and serving dynamic registration with `RequireInitialAccessToken` set to false does not start: keep the initial access token, or register an `IUserConsentsProvider` that asks the end user.
+- A host granting every client everything with `AddConsentGrantedForEveryClient()`, undecorated, and serving dynamic registration with `RequireInitialAccessToken` set to false does not start: keep the initial access token, or register an `IUserConsentsProvider` that asks the end user.
 
 What behaves differently at runtime, with no error:
 
@@ -193,7 +193,7 @@ What behaves differently at runtime, with no error:
 - A host that replaced or decorated `IAuthServiceJwtValidator` registers the same for `IAuthServiceJwtReader`, which revocation, introspection and the token exchange of a refresh token read tokens through.
 - Discovery and `registration_client_uri` name the tenant's `Issuer` host, not the host the request came by.
 - A request object or CIBA `login_hint_token` carrying an `aud` names the issuer identifier exactly.
-- Native and public clients always use PKCE. A `code_challenge` without `code_challenge_method` is `plain`, refused unless the client allows plain.
+- Native and public clients always use PKCE. A `code_challenge` without `code_challenge_method` in a request issuing a code is `plain`, refused unless the client allows plain.
 - An authorization error for a client from a metadata document while `AllowedClientIdPrefixes` is unset, or for a client registered dynamically while `RequireInitialAccessToken` is false, is answered by the server with status 400 instead of at the client's redirect URI. A host that trusts such clients registers its own `IRedirectUriTrustPolicy`.
 - An authorization error bound for the client's redirect URI while nobody is signed in, other than for `prompt=none`, first sends the end user to the login page, which receives the request as it does a valid one; the error follows when the page sends the request back after the login. A login page reading the pending request meets requests the server is going to refuse.
 - A redirect URI matches a registered one only as written: another host case, a default port written out, a trailing slash on an empty path (`https://client.example.com` against `https://client.example.com/`) or an encoded unreserved character no longer matches, at the authorization and token endpoints. A loopback IP redirect URI (`http://127.0.0.1` or `http://[::1]`) still takes any port; one on `localhost` needs its exact port. The schemes of the startup rule above also apply at the authorization endpoint to clients from a host's own store.

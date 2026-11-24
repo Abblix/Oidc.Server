@@ -63,7 +63,8 @@ public static class OptionalEndpointsServiceCollectionExtensions
     /// <see cref="OidcOptions.EnabledEndpoints"/>. Open registration widens the attack surface, so it is opt-in:
     /// a server that never calls this method exposes no registration endpoint and does not advertise it in
     /// discovery. New-client defaults are taken from <see cref="OidcOptions.NewClientOptions"/>. A host granting every
-    /// client everything (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>) while
+    /// client everything with the provider <see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>
+    /// registers, undecorated, while
     /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> does not start.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>

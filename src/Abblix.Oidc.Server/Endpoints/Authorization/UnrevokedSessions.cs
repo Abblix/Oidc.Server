@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// the next request - two store reads per candidate, since a cutoff can be recorded against either the
 /// subject or the session and the common answer is that neither exists.
 ///
-/// What that leaves behind is a browser-state cookie the provider no longer honours, so a relying party
+/// What that leaves behind is a browser-state cookie the provider no longer honors, so a relying party
 /// polling check_session sees no change and does not learn the session ended. It corrects itself on the
 /// next successful sign-in, which rewrites the cookie; until then the two views disagree.
 /// </remarks>

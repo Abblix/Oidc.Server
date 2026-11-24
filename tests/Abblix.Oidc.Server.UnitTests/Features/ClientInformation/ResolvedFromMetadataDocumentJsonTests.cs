@@ -29,6 +29,9 @@ public class ResolvedFromMetadataDocumentJsonTests
         Assert.False(json.ContainsKey(nameof(ClientInfo.ResolvedFromMetadataDocument)));
     }
 
+    /// <summary>
+    /// The setter is the server's alone, so a stored record naming the member true reads back as not resolved.
+    /// </summary>
     [Fact]
     public void Deserialize_IgnoresIt()
     {
