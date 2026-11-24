@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -219,6 +220,7 @@ public sealed class SingleTenantWithoutTheCallTests
             {
                 services.AddDynamicClientRegistration();
                 services.Configure<OidcOptions>(options => options.RequireInitialAccessToken = false);
+                EveryConsentGiven.Register(services);
             });
         using var http = app.GetTestClient();
         http.BaseAddress = new Uri(reachedBy);

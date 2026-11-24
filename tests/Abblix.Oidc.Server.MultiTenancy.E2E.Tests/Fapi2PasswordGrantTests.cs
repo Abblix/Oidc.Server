@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Cryptography;
@@ -99,7 +100,7 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddConsentGrantedForEveryClient();
+        EveryConsentGiven.Register(builder.Services);
         builder.Services.AddDynamicClientRegistration();
         builder.Services.AddSingleton<IUserCredentialsAuthenticator, EveryUserAuthenticates>();
         builder.Services.EnablePasswordGrant();
