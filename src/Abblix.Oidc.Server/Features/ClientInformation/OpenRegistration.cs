@@ -11,8 +11,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// Whether the settings let somebody nobody reviewed become a client: the one answer the trust in a client's redirect
-/// URIs and the startup refusal of consent granted to every client are both read from.
+/// Whether the settings let somebody nobody reviewed become a client: the one answer the trust set on a client when it
+/// is created and the startup refusal of consent granted to every client are both read from.
 /// </summary>
 internal static class OpenRegistration
 {
@@ -25,7 +25,11 @@ internal static class OpenRegistration
         => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes is not { Length: > 0 };
 
     /// <summary>
-    /// Whether anybody may register a client dynamically: registration asks no initial access token.
+    /// Whether anybody may register a client dynamically: registration asks no initial access token, and no software
+    /// statement from an issuer the host trusts. A registration made while it is open is
+    /// <see cref="ClientTrust.Unreviewed"/>.
     /// </summary>
-    public static bool AdmitsAnyRegistrant(OidcOptions options) => !options.RequireInitialAccessToken;
+    public static bool AdmitsAnyRegistrant(OidcOptions options)
+        => !options.RequireInitialAccessToken &&
+           options.SoftwareStatement is not { RequireSoftwareStatement: true, TrustedIssuers.Length: > 0 };
 }

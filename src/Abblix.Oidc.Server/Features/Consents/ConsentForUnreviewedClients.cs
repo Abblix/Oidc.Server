@@ -31,10 +31,12 @@ internal sealed class ConsentForUnreviewedClients
     /// What a host is told when it grants every client everything and lets anybody register one.
     /// </summary>
     internal const string AnyRegistrantMessage =
-        "AddDynamicClientRegistration() was called with RequireInitialAccessToken set to false, and the consent " +
+        "AddDynamicClientRegistration() was called with RequireInitialAccessToken set to false and no software " +
+        "statement required from a trusted issuer (SoftwareStatement), and the consent " +
         "provider is the one AddConsentGrantedForEveryClient() registers (NullConsentService), so anybody could " +
         "register a client and obtain an end user's tokens without the end user being asked. Keep " +
-        "RequireInitialAccessToken on, or register an IUserConsentsProvider that asks the end user for consent.";
+        "RequireInitialAccessToken on, require a software statement from a trusted issuer, or register an " +
+        "IUserConsentsProvider that asks the end user for consent.";
 
     /// <summary>
     /// Whether every client is granted everything while a metadata document is accepted from any URL.

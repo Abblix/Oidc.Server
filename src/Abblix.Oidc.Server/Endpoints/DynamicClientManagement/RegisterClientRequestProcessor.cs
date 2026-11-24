@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -33,6 +34,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
 /// <param name="clientSecretEncryptor">Encrypts the secret issued with the key of the tenant, so a client reading its
 /// registration is given its secret back (RFC 7592 section 3).</param>
+/// <param name="options">The server's settings, which decide whether registration is open when a client registers:
+/// the trust it is created with (<see cref="ClientInfo.Trust"/>) is decided then and kept.</param>
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
@@ -41,7 +44,8 @@ public partial class RegisterClientRequestProcessor(
     ITokenIdGenerator tokenIdGenerator,
     IRegistrationAccessTokenService registrationAccessTokenService,
     NewClientOptions newClientOptions,
-    IClientSecretEncryptor clientSecretEncryptor) : IRegisterClientRequestProcessor
+    IClientSecretEncryptor clientSecretEncryptor,
+    IOptionsMonitor<OidcOptions> options) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -123,6 +127,7 @@ public partial class RegisterClientRequestProcessor(
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(ToClientSecrets(tenant, credentials))
+            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(options.CurrentValue) ? ClientTrust.Unreviewed : ClientTrust.Reviewed)
             .Build();
 
     /// <summary>

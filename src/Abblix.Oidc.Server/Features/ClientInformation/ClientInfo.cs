@@ -44,6 +44,20 @@ public record ClientInfo(string ClientId)
     public bool ResolvedFromMetadataDocument { get; internal set; }
 
     /// <summary>
+    /// Whether somebody answering for the deployment let the client in, decided when the client was created and kept
+    /// with it: <see cref="ClientTrust.Reviewed"/>, the default, for a client the host declares, and the value the
+    /// server set for one it registered or resolved. A record naming none is reviewed.
+    /// </summary>
+    /// <remarks>
+    /// A host changing it writes the client's record, and every replica answers from that record once it reads it
+    /// again: a registration in the host's <see cref="MultiTenancy.ITenantClientRegistrationStore"/> on its next lookup,
+    /// a client declared in a tenant read from a tenant store at the next reading of the store
+    /// (<see cref="OidcOptions.RefreshTenantsEvery"/>). A client resolved from its metadata document has it decided
+    /// again as the document is fetched again, within <see cref="ClientIdMetadataDocumentOptions.MaximumCacheDuration"/>.
+    /// </remarks>
+    public ClientTrust Trust { get; set; }
+
+    /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from
     /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
     /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.

@@ -33,6 +33,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private OfflineAccess _defaultOfflineAccess = OfflineAccess.ConsentRequired;
     private ClientInfo _hostSettings = new(clientId);
 
+    private ClientTrust? _trust;
+
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
     /// </summary>
@@ -119,6 +121,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Sets the trust a new client is created with, which the registration metadata cannot carry. An update leaves it
+    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf"/>).
+    /// </summary>
+    public ClientInfoBuilder WithTrust(ClientTrust trust)
+    {
+        _trust = trust;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the client from the registration metadata and whatever was set on this builder.
     /// </summary>
     public ClientInfo Build()
@@ -152,6 +164,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private void ApplyHostSettings(ClientInfo clientInfo)
     {
         clientInfo.SecurityProfile = _hostSettings.SecurityProfile;
+        clientInfo.Trust = _trust ?? _hostSettings.Trust;
         clientInfo.PlainPkceAllowed = _hostSettings.PlainPkceAllowed;
         clientInfo.AuthorizationCodeExpiresIn = _hostSettings.AuthorizationCodeExpiresIn;
         clientInfo.AccessTokenExpiresIn = _hostSettings.AccessTokenExpiresIn;

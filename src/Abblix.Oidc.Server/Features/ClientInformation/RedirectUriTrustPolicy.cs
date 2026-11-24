@@ -6,53 +6,28 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Utils;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// Trusts the redirect URIs of every client somebody answering for the deployment let in, and of no other: RFC 9700
-/// section 4.11.2 names "the source of the redirection URI and other client data" among what the decision takes into
-/// account.
+/// Trusts the redirect URIs of a client somebody answering for the deployment let in, and of no other, as the
+/// client's record says: <see cref="ClientInfo.Trust"/>, decided when the client was created. RFC 9700 section 4.11.2
+/// names "the source of the redirection URI and other client data" among what the decision takes into account.
 /// </summary>
 /// <remarks>
-/// Two kinds of client are untrusted. One resolved from its client ID metadata document while
-/// <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/> names no prefix, since any URL may then name
-/// itself a client; a list of prefixes is the host's own assessment of the URLs it serves. And, while
-/// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and anybody may register a client, every client
-/// but one the tenant settings declare or the host's own store still supplies: a registered one, whenever it
-/// registered, and one whose registration is gone, which nobody answers for any more. The store is asked again rather
-/// than taken from the lookup the request made, so a registration removed meanwhile is not trusted for being absent.
+/// It reads the record alone, never the settings the server runs with now, so every replica serving a client from a
+/// shared store gives the same answer, and a later change of the settings leaves the clients created before it as
+/// they were. A host deciding otherwise writes the client's <see cref="ClientInfo.Trust"/> to its store, or registers
+/// its own <see cref="IRedirectUriTrustPolicy"/>.
 /// </remarks>
-/// <param name="options">The server's options, read at each decision.</param>
-/// <param name="registrations">The store of dynamically registered clients.</param>
-/// <param name="clients">The client store the server resolves clients by, the host's own where it registers one.</param>
-public sealed class RedirectUriTrustPolicy(
-    IOptionsMonitor<OidcOptions> options,
-    IClientInfoManager registrations,
-    IClientInfoProvider clients)
-    : IRedirectUriTrustPolicy
+public sealed class RedirectUriTrustPolicy : IRedirectUriTrustPolicy
 {
     /// <inheritdoc />
-    public async Task<bool> IsTrustedAsync(TenantDefinition tenant, ClientInfo client)
+    public Task<bool> IsTrustedAsync(TenantDefinition tenant, ClientInfo client) => Task.FromResult(client.Trust switch
     {
-        var settings = options.CurrentValue;
-
-        if (client.ResolvedFromMetadataDocument)
-            return !OpenRegistration.AdmitsAnyDocument(settings);
-
-        if (!OpenRegistration.AdmitsAnyRegistrant(settings) ||
-            tenant.Clients.Any(declared => declared.IsNamedBy(client.ClientId)))
-        {
-            return true;
-        }
-
-        if (await registrations.TryFindRegisteredClientAsync(tenant, client.ClientId) is not null)
-            return false;
-
-        return (await clients.FindClientAsync(tenant, client.ClientId)).TryGetSuccess(out _);
-    }
+        ClientTrust.Reviewed => true,
+        ClientTrust.Unreviewed => false,
+        _ => throw new ArgumentOutOfRangeException(nameof(client), client.Trust, "The client's trust is not one known"),
+    });
 }

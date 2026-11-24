@@ -149,6 +149,38 @@ public class ConsentForUnreviewedClientsTests
         }
     }
 
+    /// <summary>
+    /// Registration requiring a software statement from an issuer the host trusts is closed, though it asks no initial
+    /// access token, so a host granting every client everything starts with it.
+    /// </summary>
+    [Fact]
+    public async Task RegistrationRequiringATrustedSoftwareStatement_IsNoOpenRegistration()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions();
+        services.AddSecureHttpFetch();
+        services.AddSingleton(Mock.Of<IClientInfoProvider>());
+        services.Configure<OidcOptions>(options =>
+        {
+            options.RequireInitialAccessToken = false;
+            options.SoftwareStatement.RequireSoftwareStatement = true;
+            options.SoftwareStatement.TrustedIssuers =
+            [
+                new TrustedIssuer
+                {
+                    Issuer = "https://statements.example.com",
+                    JwksUri = new Uri("https://statements.example.com/jwks"),
+                },
+            ];
+        });
+        services.AddConsentGrantedForEveryClient();
+        Register(services, Way.DynamicRegistration);
+
+        await using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+    }
+
     private static string MessageOf(Way way) => way switch
     {
         Way.MetadataDocument => ConsentForUnreviewedClients.AnyUrlMessage,

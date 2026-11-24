@@ -58,6 +58,26 @@ public class UpdateClientRequestProcessorTests
         return (processor, clientInfoManager, tokenService, idGenerator);
     }
 
+    /// <summary>
+    /// The trust a client was registered with is no registration metadata, so an update keeps it, whichever it is.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientTrust.Reviewed)]
+    [InlineData(ClientTrust.Unreviewed)]
+    public async Task AnUpdate_KeepsTheTrustTheClientWasRegisteredWith(ClientTrust trust)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var existing = new RegisteredClient(new ClientInfo("client-1") { Trust = trust }, "jti-current");
+        var request = new ValidUpdateClientRequest(new UpdateClientRequest(new ClientRequest(), model), existing, model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal(trust, saved!.Trust);
+    }
+
     [Fact]
     public async Task Update_PreservesAllowedScopes()
     {
