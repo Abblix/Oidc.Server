@@ -72,6 +72,26 @@ public sealed class RedirectUriTrustPolicyTests
     }
 
     /// <summary>
+    /// A store that cannot answer whether it still supplies the client, unavailable or refusing, supplies nothing to
+    /// trust: the client is untrusted while registration is open.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAbsenceReason.TemporarilyUnavailable)]
+    [InlineData(ClientAbsenceReason.Refused)]
+    public async Task AClientTheStoreCannotAnswerFor_IsUntrustedWhileRegistrationIsOpen(ClientAbsenceReason reason)
+    {
+        var client = new ClientInfo(ClientId);
+        _registrations
+            .Setup(store => store.TryFindRegisteredClientAsync(Tenant, ClientId))
+            .ReturnsAsync((RegisteredClient?)null);
+        _clients
+            .Setup(store => store.FindClientAsync(Tenant, ClientId))
+            .ReturnsAsync(new ClientAbsence(reason));
+
+        Assert.False(await Policy(new OidcOptions { RequireInitialAccessToken = false }).IsTrustedAsync(Tenant, client));
+    }
+
+    /// <summary>
     /// A client the tenant settings declare is trusted with registration open, and no store is asked about it.
     /// </summary>
     [Fact]
