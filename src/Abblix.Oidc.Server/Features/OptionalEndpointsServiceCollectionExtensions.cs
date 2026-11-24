@@ -64,8 +64,9 @@ public static class OptionalEndpointsServiceCollectionExtensions
     /// a server that never calls this method exposes no registration endpoint and does not advertise it in
     /// discovery. New-client defaults are taken from <see cref="OidcOptions.NewClientOptions"/>. A host granting every
     /// client everything with the provider <see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>
-    /// registers, undecorated, while
-    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> does not start.
+    /// registers, undecorated, while anybody may register a client does not start: while
+    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software statement from a trusted
+    /// issuer is required (<see cref="OidcOptions.SoftwareStatement"/>).
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
