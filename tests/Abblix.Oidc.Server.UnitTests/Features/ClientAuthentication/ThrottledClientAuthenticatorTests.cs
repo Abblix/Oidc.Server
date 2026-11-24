@@ -105,6 +105,34 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
+    /// A caller asks which credentials a request presents before reading anything it presents, as the token endpoint
+    /// reads the client a refresh token names, a signature check: a source past its budget is refused at that question
+    /// already, so nothing it presents is read.
+    /// </summary>
+    [Fact]
+    public async Task ASourcePastItsBudget_IsRefusedBeforeItsPresentedCredentialsAreSought()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
+        _inner
+            .Setup(a => a.FindPresentedCredentialsAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync([]);
+
+        // Act
+        Assert.Empty(await authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, CreateRequest(), Clients));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest(), Clients)).TryGetSuccess(out _));
+        var refusal = await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, CreateRequest(), Clients));
+
+        // Assert
+        Assert.Equal(CallerRateLimiters.AuthenticationFailures, refusal.Refusal.Budget);
+        _inner.Verify(a => a.FindPresentedCredentialsAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
+    }
+
+    /// <summary>
     /// A request using more than one client authentication method is refused before any credential is looked at, as a
     /// repeated Authorization header is, so it spends nothing the budget prices and is not charged to it: a sender
     /// repeating it past the budget is still answered each time, and the budget is still whole for a credential that

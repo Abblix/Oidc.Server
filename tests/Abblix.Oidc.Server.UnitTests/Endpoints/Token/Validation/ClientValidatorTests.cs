@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -20,6 +21,7 @@ using Moq;
 using Xunit;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.RateLimiting;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
@@ -188,6 +190,26 @@ public class ClientValidatorTests
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        _jwtReader.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// The credentials a request presents are sought before its refresh token is read, so a source the authenticator
+    /// refuses as past its failure budget is refused before that read, a signature check, is spent on it.
+    /// </summary>
+    [Fact]
+    public async Task ASourceRefusedWhenItsCredentialsAreSought_HasNoRefreshTokenRead()
+    {
+        var context = RefreshContext();
+        _clientAuthenticator
+            .Setup(a => a.FindPresentedCredentialsAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ThrowsAsync(new TooManyAuthenticationFailuresException(
+                new TooManyRequestsError("Too many failed authentications", TimeSpan.FromMinutes(1), CallerRateLimiters.AuthenticationFailures)));
+
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken));
+
         _jwtReader.VerifyNoOtherCalls();
     }
 

@@ -63,7 +63,8 @@ public class ClientValidator(
         context.Clients = clients;
 
         // The client a refresh token presented without any credential names is the one authenticated, once: a first
-        // attempt without it would be charged to the source as a failed one, which a working client must never be
+        // attempt without it would be charged to the source as a failed one, which a working client must never be.
+        // Asking what is presented first refuses a source past its failure budget before the token's signature is checked
         if (!(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, clientRequest, clients)).Any() &&
             await NamedByTheRefreshTokenAsync(tenant, context.Request, clientRequest) is { } named)
         {
