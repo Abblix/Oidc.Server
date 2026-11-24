@@ -133,8 +133,19 @@ internal sealed partial class HeldMetadataDocuments(
         HeldMetadataDocument document)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var admitted = TenantClientAuthenticationMethods.Admitted(tenant, Offered(scope.ServiceProvider));
-        return ReaderIn(scope.ServiceProvider).Read(clientId, JsonNode.Parse(document.Content)!.AsObject(), admitted);
+        var offered = Offered(scope.ServiceProvider);
+        var admitted = TenantClientAuthenticationMethods.Admitted(tenant, offered);
+        var read = ReaderIn(scope.ServiceProvider)
+            .Read(clientId, JsonNode.Parse(document.Content)!.AsObject(), admitted);
+
+        // The reader speaks of the methods it was handed as the server's, so a refusal names the ones this tenant
+        // refuses of those the server offers, and why
+        var refusedHere = offered.Except(admitted, StringComparer.Ordinal).ToArray();
+        if (refusedHere.Length == 0 || !read.TryGetFailure(out var failure))
+            return read;
+
+        var why = refusedHere.Select(method => $"{method}: {TenantClientAuthenticationMethods.WhyRefused(tenant, method)}");
+        return failure with { Reason = $"{failure.Reason}; this tenant refuses {string.Join("; ", why)}" };
     }
 
     private async Task<Result<Model.ClientRegistrationRequest, MetadataDocumentFailure>> ReadAsync(
