@@ -136,6 +136,21 @@ public class AuthorizationHandlerTests
         Assert.Equal(hasRedirectUri ? request.RedirectUri : null, error.RedirectUri);
     }
 
+    /// <summary>
+    /// An error carrying a redirect URI but naming no client has no client whose redirect URIs could be trusted, so the
+    /// server answers it.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnErrorNamingNoClient_StaysAtTheServer()
+    {
+        var request = CreateRequest() with { ClientId = null };
+        SetUpValidationError(request, request.RedirectUri);
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Null(error.RedirectUri);
+    }
+
     private void SetUpValidationError(AuthorizationRequest request, Uri? redirectUri)
     {
         _fetcher

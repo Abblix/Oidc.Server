@@ -122,12 +122,16 @@ public class AuthorizationHandler(
         AuthorizationResponse response,
         IClientInfoProvider clients)
     {
-        if (response is not AuthorizationError { RedirectUri: not null, Model.ClientId: { } clientId } error)
+        if (response is not AuthorizationError { RedirectUri: not null } error)
             return response;
 
-        var found = await clients.FindClientAsync(tenant, clientId);
-        if (found.TryGetSuccess(out var client) && await redirectUriTrust.IsTrustedAsync(tenant, client))
+        // An error naming no client has no client to trust, so it stays at the server like an untrusted one
+        if (error.Model.ClientId is { } clientId &&
+            (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) &&
+            await redirectUriTrust.IsTrustedAsync(tenant, client))
+        {
             return error;
+        }
 
         return error with { RedirectUri = null, ResponseJwt = null };
     }
