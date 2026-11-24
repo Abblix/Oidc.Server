@@ -32,12 +32,12 @@ Add an OpenID Connect provider to your own ASP.NET Core app. It runs inside your
 ## Table of Contents
 - [About](#-about)
 - [Quickstart](#-quickstart)
+- [Packages](#-packages)
 - [Certification](#-certification)
-- [How to Install](#-how-to-install)
 - [Upgrading](#%EF%B8%8F-upgrading)
 - [Documentation](#-documentation)
 - [Abblix Account](#-abblix-account)
-- [Feedback and Contributions](#-feedback-and-contributions)
+- [Feedback](#-feedback)
 - [License](#-license)
 - [Contacts](#%EF%B8%8F-contacts)
 
@@ -45,7 +45,6 @@ Add an OpenID Connect provider to your own ASP.NET Core app. It runs inside your
 
 Abblix OIDC Server turns your ASP.NET Core application into an OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- Certified by the OpenID Foundation in versions 1.x and 2.x, with 3.x being prepared for certification: see [Certification](#-certification).
 - A library inside your app, not a server you run: the OpenID Connect endpoints run in your process, so users, data, and UI never leave it.
 - Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses, alongside the OAuth 2.0 and OpenID Connect core.
 - Security profiles the server enforces per client or per tenant, not certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced, which also holds CIBA clients to FAPI-CIBA. Every 3.x release runs their OpenID Foundation conformance plans.
@@ -99,57 +98,11 @@ The issuer comes from configuration, so add it to `appsettings.json` first, for 
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. Some hosts also call `app.UseMultiTenancy()`; [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) says which.
 
-This is the outline, not a complete application: it serves discovery and the signing keys, and it issues a token once it has a client, a login page and your user store. The server keeps authorization codes, pushed requests and other short-lived state in your `IDistributedCache`, and documents it fetches in your `IMemoryCache`; for whichever of them is not registered, it uses an in-process cache of its own, which is enough for one instance. Several instances need a shared distributed cache, such as Redis. The server finds a cache registered without a key, so a cache registered only as a keyed service has to be registered without one too. The key in the outline is generated anew at every start, so production keys come from configuration or a secret store as JSON Web Keys, or from HashiCorp Vault, OpenBao or Azure Key Vault through the packages described in [External key custodians](EXTERNAL_KEYS.md), and every replica uses the same keys. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) uses the MVC adapter and builds a complete, runnable solution step by step.
+This is the outline, not a complete application: it serves discovery and the signing keys, and it issues a token once it has a client, a login page and your user store. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) builds a complete, runnable solution, with caches and keys for several instances.
 
-## 🎓 Certification
+## 📦 Packages
 
-[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
-
-Versions 1.x and 2.x are certified in every OpenID Connect provider profile and every logout profile listed below. In the 2.x certification we skipped no tests and received no warnings: every test ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
-
-Version 3.x is being prepared for certification. Until then, every 3.x release is held to the same suite: the release workflow runs the OpenID Foundation conformance plans for the certified OpenID Connect profiles and for FAPI 2.0, FAPI 2.0 Message Signing, FAPI 1.0 Advanced and FAPI-CIBA, and a release is not published unless they pass, apart from the few checks the suite cannot complete unattended, which the repository lists. The FAPI plans are run, not certified.
-
-The tables below are the results of the 2.x certification:
-
-### Regular Profiles
-|OIDC Profile|Response Types (links to official OpenID Foundation test results)|Tests|
-|:-|:-|:-|
-|Basic OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=vaSiS5JvFcWr2)|36|
-|Implicit OP|[id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=PHYWpi4iBLDmq)|58|
-|Hybrid OP|[code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=HPb7q9DYsfgcf)|102|
-|Config OP|[config](https://www.certification.openid.net/plan-detail.html?public=true&plan=kcQTPdtyz1bt5)|1|
-|Dynamic OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=Ie4igUuhKheHC) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=wz8WwocsxeXLG) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=Vz0xyMMiabOuT) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=di3sWIakE1NfO) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=siWnWnxc0F25Q) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=sErNAjGZuRNMX)|127|
-|Form Post OP|[basic](https://www.certification.openid.net/plan-detail.html?public=true&plan=2hkxl3otFUbdm) \| [implicit](https://www.certification.openid.net/plan-detail.html?public=true&plan=81Tzj22qYpFCy) \| [hybrid](https://www.certification.openid.net/plan-detail.html?public=true&plan=ywUWjGPWsyFuS)|196|
-|3rd Party-Init OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=GB6nP470pDdVe) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=M89emXc0N5GMF) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=pe5s8Gus3Uz3y) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=JNX5OGMAKr2kr) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=gfI5xgx8UGzOL) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=k4e0SJnvHGuu9)|12|
-|Total||532|
-
-### Logout Profiles
-
-|OIDC Profile|Response Types (links to official OpenID Foundation test results)|Tests|
-|:-|:-|:-|
-|RP-Initiated OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=VPaBRT8VQQXhH) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=WY5LQ9JYgTUdJ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=nt4LY7vwN3ACO) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=jLhRFKJXYJuEK) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=hwROnePvJvrXe) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=3CVp7fx4TQX1H)|66|
-|Session OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=N3Tsp7nigWMiS) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=KqBqsHxH4vN03) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=KCwP7JqmXbcPf) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=MJxcSnziJTOaa) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=9sZ9qkcq8VY1O) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=OrRc3cBBm53OK)|12|
-|Front-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=FCIMtfChd8JUR) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=UPqVQppkBai8Q) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=TK2z4lTRgeU0O) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=ntjIMSdbzeBJN) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=0SfPTdERrzANP) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RLQm9h40E4j1k)|12|
-|Back-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=5kbQfVOWmJV76) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=VWmk225h0coIZ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=YzDOT2LFWi4X7) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RxPPCdLI7LlcR) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=x73qpcrHcFWv0) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=uYoYs5BFAZkgr)|12|
-|Total||102|
-
-## 📦 How to Install
-
-Add the adapter that matches your ASP.NET Core hosting model from NuGet.
-
-For MVC controllers and routing:
-
-```shell
-dotnet add package Abblix.OIDC.Server.MVC
-```
-
-For Minimal API endpoint routing:
-
-```shell
-dotnet add package Abblix.OIDC.Server.MinimalAPI
-```
-
-Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+The quickstart uses the Minimal API adapter; an MVC application installs `Abblix.OIDC.Server.MVC`. Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
 [Abblix.OIDC](src/Abblix.Oidc/README.md) (the OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients), [Abblix.JWT](src/Abblix.Jwt/README.md) (JWT signing, encryption and validation on the platform's own cryptography), [Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md) (Security Event Tokens) and [Abblix.DependencyInjection](src/Abblix.DependencyInjection/README.md) (the registration patterns the server is built on) come with the server. The rest are optional: add each one only if you actually need its feature.
 
@@ -159,6 +112,12 @@ Both adapters expose the same OpenID Connect endpoints and pull in the core `Abb
 |[Abblix.OIDC.Server.SharedSignals](src/Abblix.Oidc.Server.SharedSignals/README.md)|A Shared Signals transmitter for each tenant of the server|
 |[Abblix.SharedSignals](src/Abblix.SharedSignals/README.md), [.MinimalAPI](src/Abblix.SharedSignals.MinimalApi/README.md), [.Redis](src/Abblix.SharedSignals.Redis/README.md)|OpenID Shared Signals Framework 1.0 transmitter and receiver, its endpoints, and a Redis event outbox for several replicas|
 |[Abblix.SecurityEvents.CAEP](src/Abblix.SecurityEvents.CAEP/README.md), [.RISC](src/Abblix.SecurityEvents.RISC/README.md), [.MinimalAPI](src/Abblix.SecurityEvents.MinimalApi/README.md)|The CAEP and RISC security event types, and endpoints receiving security events|
+
+## 🎓 Certification
+
+[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
+
+Versions 1.x and 2.x are certified by the OpenID Foundation in every OpenID Connect provider profile and every logout profile, and 3.x is being prepared for certification; every 3.x release runs the same conformance plans. The [certified profiles](https://oidc.abblix.com/certified-profiles) page links each official test result.
 
 ## ⬆️ Upgrading
 
@@ -182,29 +141,22 @@ The [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-s
 
 ## 💎 Abblix Account
 
-Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications: everything your users need, connected to your website as an OpenID Connect provider.
+Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use cloud service built on this library, with passkeys, MFA and social login; [Quorvel Coffee](https://quorvel.abblix.com) shows it at work.
 
-👉 See it live: [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service, all delivered by Abblix Account, fit into a client website.
+## 🤝 Feedback
 
-## 🤝 Feedback and Contributions
-
-The library passes the OpenID Foundation conformance plans it is run against, but it is not finished. What you run into in your own application is what we cannot see from here.
-
-> [!IMPORTANT]
-> Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. A report that names the flow and the client you were using is what turns a guess into a fix.
-
-Please feel free to contribute by [submitting an issue](https://github.com/Abblix/Oidc.Server/issues) or [joining the discussions](https://github.com/Abblix/Oidc.Server/discussions).
-
-For how we handle contributions, and why the library is developed in-house, see our [Contributing Guidelines](CONTRIBUTING.md).
+Report what you run into, with the flow and the client you used, in [issues](https://github.com/Abblix/Oidc.Server/issues) or the [discussions](https://github.com/Abblix/Oidc.Server/discussions).
 
 ## 📃 License
 
-This product is distributed under a source-available proprietary license. See 📋[License Agreement](LICENSE.md) for details.
+This product is distributed under a source-available proprietary license.
 
 It is free of charge for companies under $1M in annual revenue and under $1M raised in outside funding, for
 non-profits, educational institutions, personal projects and non-commercial open source. Free use allows one
 production issuer, with every protocol included and no limit on client applications or users. It comes "as is",
 with no guaranteed response time and no commitment to updates or maintenance.
+
+See 📋[License Agreement](LICENSE.md) for details.
 
 Redistributing the library to third parties inside a product you sell or deploy at customer sites needs a separate
 redistribution license. License types and prices are on the [pricing page](https://www.abblix.com/en/oidc-server/pricing).
