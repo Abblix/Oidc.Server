@@ -82,7 +82,7 @@ public class AuthorizationCodeGrantHandlerTests
 	/// </summary>
 	[Theory]
 	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")]
-	[InlineData(CodeChallengeMethods.Plain, "qwerty", "qwerty")]
+	[InlineData(CodeChallengeMethods.Plain, PlainVerifier, PlainVerifier)]
 	public async Task PkceSuccessfulChallengeTest(string codeChallengeMethod, string codeChallenge, string codeVerifier)
 	{
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
@@ -98,13 +98,13 @@ public class AuthorizationCodeGrantHandlerTests
 	/// This prevents authorization code interception attacks per RFC 7636.
 	/// </summary>
 	[Theory]
-	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "abc")]
-	[InlineData(CodeChallengeMethods.S256, "qwerty", null)]
-	[InlineData(CodeChallengeMethods.Plain, "qwerty", "asdfgh")]
-	[InlineData(CodeChallengeMethods.Plain, "qwerty", null)]
+	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", PlainVerifier)]
+	[InlineData(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", null)]
+	[InlineData(CodeChallengeMethods.Plain, PlainVerifier, "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")]
+	[InlineData(CodeChallengeMethods.Plain, PlainVerifier, null)]
 	// RFC 7636 section 4.6: the plain verifier is compared byte-for-byte, so a case flip must fail. This case
 	// would have passed under the previous case-insensitive comparison - it locks the ordinal comparison in.
-	[InlineData(CodeChallengeMethods.Plain, "qwerty", "QWERTY")]
+	[InlineData(CodeChallengeMethods.Plain, PlainVerifier, "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghj")]
 	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{
 		var result = await PkceTest(codeChallengeMethod, codeChallenge, codeVerifier);
@@ -115,15 +115,16 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 9700 (OAuth 2.0 Security BCP) section 2.1.1: presenting a code_verifier for an authorization code that
-	/// was issued without a code_challenge signals a PKCE downgrade / code-injection attempt. The verifier
-	/// must be rejected (invalid_grant) rather than silently ignored while tokens are issued.
+	/// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.3: the code_verifier "MUST NOT be used" where no
+	/// code_challenge was sent, and section 3.2.4 names a request that "contains a code_verifier although no
+	/// code_challenge was sent in the authorization request" invalid_request. RFC 9700 section 2.1.1 reads it as a PKCE
+	/// downgrade, so it is refused rather than ignored while tokens are issued.
 	/// </summary>
 	[Fact]
-	public async Task AuthorizeAsync_CodeVerifierWithoutCodeChallenge_ReturnsInvalidGrant()
+	public async Task AuthorizeAsync_CodeVerifierWithoutCodeChallenge_ReturnsInvalidRequest()
 	{
 		var clientInfo = new ClientInfo("client1");
-		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = "unexpected-verifier" };
+		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk" };
 
 		_authCodeService
 			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
@@ -135,7 +136,25 @@ public class AuthorizationCodeGrantHandlerTests
 		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+	}
+
+	/// <summary>
+	/// OAuth 2.1 section 4.1.1: "code-verifier = 43*128unreserved". A verifier outside that syntax is a malformed
+	/// request, invalid_request under section 3.2.4, rather than a grant the verifier fails to match; RFC 7636 section
+	/// 4.6 keeps invalid_grant for a well-formed verifier that does not match, and for a missing one.
+	/// </summary>
+	[Theory]
+	[InlineData("abc")]
+	[InlineData("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjX")]
+	[InlineData("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk=")]
+	[InlineData("dBjftJeZ4CVP+mB92K27uhbUJU1p1r/wW1gFWFOEjXk")]
+	public async Task AMalformedCodeVerifier_ReturnsInvalidRequest(string codeVerifier)
+	{
+		var result = await PkceTest(CodeChallengeMethods.S256, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", codeVerifier);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
 	}
 
 	/// <summary>
@@ -281,6 +300,11 @@ public class AuthorizationCodeGrantHandlerTests
 
 		return await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 	}
+
+	/// <summary>
+	/// A plain verifier, and so a plain challenge, of the syntax OAuth 2.1 section 4.1.1 gives both.
+	/// </summary>
+	private const string PlainVerifier = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJ";
 
 	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
 	{

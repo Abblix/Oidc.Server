@@ -69,7 +69,7 @@ public sealed class EndpointLogCorrelationTests(TestFactory factory) : TestBase(
             record => record.Attributes.Contains(new KeyValuePair<string, object?>("Endpoint", TelemetryEndpoints.Token)));
 
         Assert.Equal(span.SpanId, logged.SpanId);
-        Assert.Equal(ErrorCodes.UnauthorizedClient, span.GetTagItem(TelemetryTags.Error));
+        Assert.Equal(ErrorCodes.UnsupportedGrantType, span.GetTagItem(TelemetryTags.Error));
         Assert.Equal(span.GetTagItem(TelemetryTags.Error), Assert.Single(logged.Attributes, a => a.Key == "Error").Value);
     }
 }

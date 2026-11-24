@@ -79,7 +79,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         Assert.Empty(stageSpans.Where(span => span.Parent?.Source.Name != OidcTelemetry.SourceName).Select(span => span.DisplayName));
         AssertOnlyAdmittedAttributes(spans);
 
-        var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnauthorizedClient));
+        var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnsupportedGrantType));
         Assert.Equal(ActivityStatusCode.Error, refused.Status);
         Assert.Null(refused.GetTagItem(TelemetryTags.GrantType));
         var token = Assert.Single(spans, span => span.Status == ActivityStatusCode.Ok &&

@@ -31,7 +31,7 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
         from handler in grantHandlers
         from grantType in handler.GrantTypesSupported
         select new KeyValuePair<string, IAuthorizationGrantHandler>(grantType, handler),
-        StringComparer.OrdinalIgnoreCase);
+        StringComparer.Ordinal);
 
     /// <summary>
     /// Provides a list of all the supported grant types across the registered grant handlers.

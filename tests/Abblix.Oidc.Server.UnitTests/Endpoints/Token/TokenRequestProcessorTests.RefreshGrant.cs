@@ -148,6 +148,7 @@ public partial class TokenRequestProcessorTests
     private static async Task<bool> GrantAccepts(ClientInfo clientInfo, string grantType)
     {
         var grantHandler = new Mock<IAuthorizationGrantHandler>(MockBehavior.Strict);
+        grantHandler.Setup(h => h.GrantTypesSupported).Returns([grantType]);
         grantHandler
             .Setup(h => h.AuthorizeAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<TokenRequest>(), clientInfo, It.IsAny<IClientInfoProvider>(), It.IsAny<CancellationToken>()))

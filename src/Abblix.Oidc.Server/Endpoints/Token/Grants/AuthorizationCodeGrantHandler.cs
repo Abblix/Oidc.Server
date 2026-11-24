@@ -90,42 +90,69 @@ public class AuthorizationCodeGrantHandler(
             return redirectUriRefusal;
         }
 
-        if (grant.Context.CodeChallenge != null)
+        if (PkceRefusal(grant.Context, request) is { } pkceRefusal)
         {
-            // Checks if PKCE is required but the code challenge method is missing from the request.
-            if (string.IsNullOrEmpty(grant.Context.CodeChallengeMethod))
-            {
-                return new OidcError(ErrorCodes.InvalidGrant, "Code challenge method is required");
-            }
-
-            // Checks if PKCE is required but the code verifier is missing from the request.
-            if (string.IsNullOrEmpty(request.CodeVerifier))
-            {
-                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is required");
-            }
-
-            // Validates the code verifier against the stored code challenge using the appropriate method.
-            // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 section 4.6,
-            // so the comparison is ordinal - case folding would widen the accepted set and weaken the plain method.
-            if (!string.Equals(
-                    grant.Context.CodeChallenge,
-                    CodeChallenge.Calculate(grant.Context.CodeChallengeMethod, request.CodeVerifier),
-                    StringComparison.Ordinal))
-            {
-                return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
-            }
-        }
-        else if (!string.IsNullOrEmpty(request.CodeVerifier))
-        {
-            // RFC 9700 (OAuth 2.0 Security BCP) section 2.1.1: a code_verifier presented for an authorization code that was
-            // issued without a code_challenge signals a PKCE downgrade / code-injection attempt. Reject it rather
-            // than silently ignore the verifier and issue tokens.
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "Code verifier was not expected for this authorization code");
+            return pkceRefusal;
         }
 
         return grant;
+    }
+
+    /// <summary>
+    /// The refusal the code_verifier of <paramref name="request"/> earns for a code issued under
+    /// <paramref name="context"/>, or null where it redeems the code.
+    /// </summary>
+    private static OidcError? PkceRefusal(AuthorizationContext context, TokenRequest request)
+    {
+        if (context.CodeChallenge == null && string.IsNullOrEmpty(request.CodeVerifier))
+        {
+            return null;
+        }
+
+        if (context.CodeChallenge == null)
+        {
+            // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.3: the code_verifier "MUST NOT be used" where no
+            // code_challenge was sent, and section 3.2.4 names a request that "contains a code_verifier although no
+            // code_challenge was sent in the authorization request" invalid_request. RFC 9700 section 2.1.1 reads it as
+            // a PKCE downgrade or code injection attempt, so it is refused rather than ignored while tokens are issued
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "Code verifier was not expected for this authorization code");
+        }
+
+        // Checks if PKCE is required but the code challenge method is missing from the request.
+        if (string.IsNullOrEmpty(context.CodeChallengeMethod))
+        {
+            return new OidcError(ErrorCodes.InvalidGrant, "Code challenge method is required");
+        }
+
+        // A missing verifier is answered as RFC 7636 section 4.6 answers one that does not match, invalid_grant, which
+        // the FAPI 2.0 certification tests require; OAuth 2.1 section 3.2.4 would name the missing parameter
+        // invalid_request
+        if (string.IsNullOrEmpty(request.CodeVerifier))
+        {
+            return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is required");
+        }
+
+        // OAuth 2.1 section 4.1.1: "code-verifier = 43*128unreserved". One of another syntax is a request that "is
+        // otherwise malformed", which section 3.2.4 names invalid_request, rather than a verifier found not to match
+        if (!CodeChallenge.IsWellFormed(request.CodeVerifier))
+        {
+            return new OidcError(ErrorCodes.InvalidRequest, "Code verifier is malformed");
+        }
+
+        // Validates the code verifier against the stored code challenge using the appropriate method.
+        // base64url challenges (S256/S512) and the plain verifier are case-sensitive per RFC 7636 section 4.6,
+        // so the comparison is ordinal - case folding would widen the accepted set and weaken the plain method.
+        if (!string.Equals(
+                context.CodeChallenge,
+                CodeChallenge.Calculate(context.CodeChallengeMethod, request.CodeVerifier),
+                StringComparison.Ordinal))
+        {
+            return new OidcError(ErrorCodes.InvalidGrant, "Code verifier is not valid");
+        }
+
+        return null;
     }
 
     /// <summary>
