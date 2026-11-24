@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Collections.Concurrent;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
@@ -41,4 +42,33 @@ internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner)
     {
         return _answers.GetOrAdd((tenant.Id, clientId), _ => inner.FindClientAsync(tenant, clientId));
     }
+
+    /// <summary>
+    /// The refusal of a request whose client authentication failed, where a client the request named could not be had
+    /// for now (<see cref="ClientAbsenceReason.TemporarilyUnavailable"/>): the client the credential would have been
+    /// checked against is unknown for a reason that may pass, so the failure says nothing about the credential. Null
+    /// where every client the request named was found or refused.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the answers the authentication already received, so it fetches nothing. Experimental, as the reason it
+    /// reads is: draft-ietf-oauth-client-id-metadata-document-03 section 6.1 answers such a request at the token and
+    /// pushed authorization request endpoints "for a transient failure, an HTTP 503 status code".
+    /// </remarks>
+    public ClientTemporarilyUnavailableError? UnavailableClientRefusal()
+    {
+        foreach (var answer in _answers.Values)
+        {
+            if (answer.IsCompletedSuccessfully &&
+                answer.Result.TryGetFailure(out var absence) &&
+                absence.Reason == ClientAbsenceReason.TemporarilyUnavailable)
+            {
+                return UnavailableClient;
+            }
+        }
+
+        return null;
+    }
+
+    private static ClientTemporarilyUnavailableError UnavailableClient { get; } =
+        new("The client metadata document could not be retrieved for now");
 }
