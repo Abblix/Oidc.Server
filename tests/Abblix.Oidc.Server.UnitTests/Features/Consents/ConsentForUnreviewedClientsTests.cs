@@ -8,11 +8,15 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -43,6 +47,9 @@ public class ConsentForUnreviewedClientsTests
 
         /// <summary>The host's own provider, registered first, so the call granting everything adds nothing.</summary>
         HostsBeforeGranted,
+
+        /// <summary>The provider granting everything, decorated by the host, so the host's decorator answers first.</summary>
+        GrantedDecorated,
     }
 
     /// <summary>
@@ -62,12 +69,14 @@ public class ConsentForUnreviewedClientsTests
     [InlineData(Way.MetadataDocument, Consent.HostsAfterGranted, true, true)]
     [InlineData(Way.MetadataDocument, Consent.HostsBeforeGranted, true, true)]
     [InlineData(Way.MetadataDocument, Consent.None, true, true)]
+    [InlineData(Way.MetadataDocument, Consent.GrantedDecorated, true, true)]
     [InlineData(Way.DynamicRegistration, Consent.GrantedBefore, true, false)]
     [InlineData(Way.DynamicRegistration, Consent.GrantedAfter, true, false)]
     [InlineData(Way.DynamicRegistration, Consent.GrantedBefore, false, true)]
     [InlineData(Way.DynamicRegistration, Consent.HostsAfterGranted, true, true)]
     [InlineData(Way.DynamicRegistration, Consent.HostsBeforeGranted, true, true)]
     [InlineData(Way.DynamicRegistration, Consent.None, true, true)]
+    [InlineData(Way.DynamicRegistration, Consent.GrantedDecorated, true, true)]
     public async Task AHostGrantingEveryClientEverything_StartsOnlyWhenNobodyUnreviewedGetsIn(
         Way way,
         Consent consent,
@@ -115,6 +124,12 @@ public class ConsentForUnreviewedClientsTests
                 Register(services, way);
                 break;
 
+            case Consent.GrantedDecorated:
+                services.AddConsentGrantedForEveryClient();
+                Register(services, way);
+                services.Decorate<IUserConsentsProvider, HostsDecorator>();
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(consent), consent, null);
         }
@@ -156,6 +171,16 @@ public class ConsentForUnreviewedClientsTests
             default:
                 throw new ArgumentOutOfRangeException(nameof(way), way, null);
         }
+    }
+
+    /// <summary>
+    /// A host's decorator over the consent provider, which the check takes for the host's own provider.
+    /// </summary>
+    private sealed class HostsDecorator(IUserConsentsProvider inner) : IUserConsentsProvider
+    {
+        public Task<UserConsents> GetUserConsentsAsync(
+            TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
+            => inner.GetUserConsentsAsync(tenant, request, authSession);
     }
 
     private sealed class Registered(IServiceCollection services) : IOidcServerBuilder
