@@ -74,7 +74,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
             .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
-            .Bind(ValidateSubjectTokenOrigin)
+            .Bind(ctx => ValidateSubjectTokenOrigin(tenant, ctx))
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateActorTokenOrigin)
@@ -236,10 +236,12 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     /// the client as a resource server, or any for broker scenarios). The typ header is matched against the presented URI earlier, by the
     /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(
+        TenantDefinition tenant,
+        ValidationContext ctx)
     {
         var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
-        if (TokenOrigin.CheckSubject(subject.OriginalClientId, subject.Audiences, ctx.ClientInfo) is { } error)
+        if (TokenOrigin.CheckSubject(tenant, subject.OriginalClientId, subject.Audiences, ctx.ClientInfo) is { } error)
         {
             return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }

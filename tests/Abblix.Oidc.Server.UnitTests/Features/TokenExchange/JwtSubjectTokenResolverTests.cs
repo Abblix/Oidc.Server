@@ -146,13 +146,18 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
-    /// The presented token's audience reaches the context, where a client exchanging tokens addressed to it as a
-    /// resource server is matched by it.
+    /// The audience of a presented access token reaches the context, where a client exchanging tokens addressed to it
+    /// as a resource server is matched by it; a token of any other type is addressed to no resource server and carries
+    /// none there.
     /// </summary>
-    [Fact]
-    public async Task AudienceOfThePresentedToken_ReachesTheContext()
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken, true)]
+    [InlineData(JsonWebTokenTypes.Jwt, false)]
+    [InlineData(null, false)]
+    public async Task AudienceOfThePresentedToken_ReachesTheContext_OnlyForAnAccessToken(string? type, bool carried)
     {
         var jwt = NewJwt(subject: "user-1", issuer: null);
+        jwt.Header.Type = type;
         jwt.Payload.Audiences = ["https://mcp.example.com/", "https://other.example.com/"];
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
@@ -161,7 +166,10 @@ public class JwtSubjectTokenResolverTests
         var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
-        Assert.Equal(["https://mcp.example.com/", "https://other.example.com/"], ctx.Audiences!);
+        if (carried)
+            Assert.Equal(["https://mcp.example.com/", "https://other.example.com/"], ctx.Audiences!);
+        else
+            Assert.Null(ctx.Audiences);
     }
 
     /// <summary>

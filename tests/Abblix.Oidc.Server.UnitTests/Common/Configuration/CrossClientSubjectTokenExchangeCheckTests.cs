@@ -23,9 +23,10 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// </summary>
 public class CrossClientSubjectTokenExchangeCheckTests
 {
+    private const string Issuer = "https://auth.example.com";
+
     [Theory]
     [InlineData("Refused", true)]
-    [InlineData("AddressedToClient", true)]
     [InlineData("Any", true)]
     [InlineData("2", true)]
     [InlineData("3", false)]
@@ -44,5 +45,34 @@ public class CrossClientSubjectTokenExchangeCheckTests
         var refusals = new CrossClientSubjectTokenExchangeCheck().Check([tenant], new OidcOptions());
 
         Assert.Equal(starts, !refusals.Any());
+    }
+
+    /// <summary>
+    /// A client exchanging tokens addressed to it starts only naming a location of its own, and none of its locations
+    /// may be the issuer, the audience of every access token whose request named no resource.
+    /// </summary>
+    [Theory]
+    [InlineData(CrossClientSubjectTokenExchange.AddressedToClient, new[] { "https://mcp.example.com/" }, true)]
+    [InlineData(CrossClientSubjectTokenExchange.AddressedToClient, new string[0], false)]
+    [InlineData(CrossClientSubjectTokenExchange.AddressedToClient, null, false)]
+    [InlineData(CrossClientSubjectTokenExchange.AddressedToClient, new[] { "https://mcp.example.com/", Issuer }, false)]
+    [InlineData(CrossClientSubjectTokenExchange.Refused, new[] { Issuer }, false)]
+    [InlineData(CrossClientSubjectTokenExchange.Refused, null, true)]
+    [InlineData(CrossClientSubjectTokenExchange.Any, null, true)]
+    public void AClient_StartsOnlyWithLocationsItsSettingCanUse(
+        CrossClientSubjectTokenExchange setting,
+        string[]? locations,
+        bool starts)
+    {
+        var client = new ClientInfo("configured")
+        {
+            CrossClientSubjectTokenExchange = setting,
+            ResourceLocations = locations?.Select(location => new Uri(location)).ToArray(),
+        };
+        var tenant = new TenantDefinition { Id = "acme", Issuer = new Uri(Issuer), Clients = [client] };
+
+        var refusals = new CrossClientSubjectTokenExchangeCheck().Check([tenant], new OidcOptions()).ToArray();
+
+        Assert.Equal(starts, refusals.Length == 0);
     }
 }

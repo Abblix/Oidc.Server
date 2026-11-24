@@ -150,9 +150,12 @@ public sealed class JwtSubjectTokenResolver(
             // stays null, i.e. its origin is genuinely undeterminable.
             OriginalClientId = originalClientId,
 
-            // Whom the token is addressed to, which a client exchanging tokens issued for it as a resource server is
-            // matched by
-            Audiences = [.. jwt.Payload.Audiences],
+            // Whom an access token is addressed to, which a client exchanging tokens issued for it as a resource
+            // server is matched by. An ID token names a client there and an untyped JWT says nothing of the kind, so
+            // neither is addressed to a resource server
+            Audiences = JwtTypeName.Matches(jwt.Header.Type, JsonWebTokenTypes.AccessToken)
+                ? [.. jwt.Payload.Audiences]
+                : null,
 
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,

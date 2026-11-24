@@ -69,6 +69,34 @@ public partial class TokenExchangeGrantHandlerTests
     }
 
     /// <summary>
+    /// The issuer is the audience of every access token whose request named no resource, so a client naming it among its
+    /// locations exchanges no such token of another client.
+    /// </summary>
+    [Fact]
+    public async Task UnderAddressedToClient_ATokenAddressedToTheIssuer_IsNotExchanged()
+    {
+        var issuer = SingleIssuer.Tenant.Issuer.OriginalString;
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = "client-A",
+            Audiences = [issuer],
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        var client = ResourceServerClient(CrossClientSubjectTokenExchange.AddressedToClient);
+        client.ResourceLocations = [new Uri(issuer)];
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            client,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
     /// A client naming no location of its own exchanges no token of another client under AddressedToClient, whatever
     /// the token's audience says.
     /// </summary>

@@ -171,7 +171,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         // otherwise do to it from here
         // A refresh token is addressed to this server alone, so it names no location of the presenting client,
         // whatever one issued by 3.0 holds in its audience
-        if (TokenOrigin.CheckSubject(token.OwnerOf(), null, client) is { } refusal)
+        if (TokenOrigin.CheckSubject(tenant, token.OwnerOf(), null, client) is { } refusal)
             return refusal;
 
         var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);

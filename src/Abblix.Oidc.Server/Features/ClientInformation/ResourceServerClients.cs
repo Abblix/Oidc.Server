@@ -15,8 +15,9 @@ internal static class ResourceServerClients
 {
     /// <summary>
     /// Whether <paramref name="location"/>, as a token or an <c>authorization_details</c> entry names it, is one of the
-    /// <see cref="ClientInfo.ResourceLocations"/> of <paramref name="client"/>, compared exactly as written
-    /// (RFC 9396 section 12).
+    /// <see cref="ClientInfo.ResourceLocations"/> of <paramref name="client"/>, compared exactly as written: RFC 9396
+    /// section 12 for <c>locations</c>, and RFC 7519 section 2, which compares a StringOrURI value of <c>aud</c> as a
+    /// case-sensitive string.
     /// </summary>
     public static bool IsResourceServerFor(this ClientInfo client, string location)
         => client.ResourceLocations is { } locations &&

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.TokenExchange;
 
@@ -23,10 +24,15 @@ internal static class TokenOrigin
 	/// Null when <paramref name="presenter"/> may present a subject token issued to <paramref name="ownerId"/> and
 	/// addressed to <paramref name="audiences"/>, otherwise why it may not.
 	/// </summary>
+	/// <param name="tenant">The tenant the exchange is served at.</param>
 	/// <param name="ownerId">The client the token was issued to, null when that cannot be determined.</param>
 	/// <param name="audiences">The token's audience, null when it states none.</param>
 	/// <param name="presenter">The client presenting the token.</param>
-	public static OidcError? CheckSubject(string? ownerId, IEnumerable<string>? audiences, ClientInfo presenter)
+	public static OidcError? CheckSubject(
+		TenantDefinition tenant,
+		string? ownerId,
+		IEnumerable<string>? audiences,
+		ClientInfo presenter)
 	{
 		switch (presenter.CrossClientSubjectTokenExchange)
 		{
@@ -38,8 +44,11 @@ internal static class TokenOrigin
 
 			case CrossClientSubjectTokenExchange.AddressedToClient:
 				// A token addressed to one of the presenting client's own locations was issued for it as a resource
-				// server, whichever client asked for it, so its origin need not be known; any other is held to its owner
-				return audiences is not null && audiences.Any(presenter.IsResourceServerFor)
+				// server, whichever client asked for it, so its origin need not be known; any other is held to its owner.
+				// The issuer is the audience of every token whose request named no resource, so it is no location of a
+				// client (CrossClientSubjectTokenExchangeCheck refuses one at startup) and admits nothing here
+				return audiences is not null &&
+				       audiences.Any(audience => !tenant.IssuerIsNamedBy(audience) && presenter.IsResourceServerFor(audience))
 					? null
 					: OwnerCheck(ownerId, presenter);
 
