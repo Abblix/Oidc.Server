@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -71,7 +72,9 @@ public class ThrottledClientAuthenticatorTests
         return new(
             NullLogger<ThrottledClientAuthenticator>.Instance,
             _inner.Object,
-            new AuthenticationFailureBudget(CallerRateLimiters.Create(limit), _requestInfoProvider.Object),
+            new ServiceCollection()
+                .AddSingleton(new AuthenticationFailureBudget(CallerRateLimiters.Create(limit), _requestInfoProvider.Object))
+                .BuildServiceProvider(),
             new UnnamedSourceNotice(
                 new Logger<UnnamedSourceNotice>(recorded ?? new RecordingLoggerFactory()),
                 Options.Create(new OidcOptions { AuthenticationFailureLimit = limit })));
