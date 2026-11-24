@@ -18,10 +18,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// still holds its identifier, and every reader of the token asks here.
 /// </summary>
 /// <remarks>
-/// RFC 7592 section 5: the token is bound to one registration, so one issued on a read or an update invalidates its
-/// predecessors, and section 2.3 has it revoked once the client is deleted. The registration holds the identifier of
-/// the one token managing it, loses it to a revocation (<see cref="RegistrationAccessTokenRevocation"/>) and is gone
-/// with the client, so it is the whole record of the token. A client the store serves from the settings has no
+/// This server binds each registration to the identifier (jti) of the one token managing it. Registration and an update
+/// give the registration a new identifier, so the token an update replaces is discarded, as RFC 7592 appendix A.1 has
+/// the server do with a rotated token "if possible"; a read issues a token under the identifier the registration holds.
+/// A revocation (<see cref="RegistrationAccessTokenRevocation"/>) binds the registration to an identifier no token
+/// carries, and the registration is gone with the client, which invalidates its token as RFC 7592 sections 2.3 and 5
+/// require of a deprovisioned client. So the registration is the whole record of the token. A client the store serves from the settings has no
 /// registration, and no token is in force for it.
 /// </remarks>
 /// <param name="clientInfoManager">Holds each registration with the identifier of the token managing it.</param>

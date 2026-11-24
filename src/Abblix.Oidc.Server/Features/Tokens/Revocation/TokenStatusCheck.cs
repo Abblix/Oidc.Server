@@ -107,9 +107,9 @@ public sealed class TokenStatusCheck(
 	}
 
 	/// <summary>
-	/// The refusal of a registration access token that no longer manages a registration: revoked, replaced on a read or
-	/// an update, or whose client was deleted (RFC 7592 section 5), so every reader judges it as the client configuration
-	/// endpoint does.
+	/// The refusal of a registration access token that no longer manages a registration: revoked, replaced by an
+	/// update, or whose client was deleted (<see cref="RegistrationAccessTokenBinding"/>), so every reader judges it as
+	/// the client configuration endpoint does.
 	/// </summary>
 	private async Task<JwtValidationError?> RegistrationRefusalAsync(TenantDefinition tenant, JsonWebToken token)
 	{

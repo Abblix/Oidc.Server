@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -39,7 +40,7 @@ public class ClientRequestValidatorTests
 
     public ClientRequestValidatorTests()
     {
-        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object);
+        _validator = new ClientRequestValidator(new RegistrationAccessTokenBinding(_clients.Object), _tokenValidator.Object);
     }
 
     private static ClientRequest Request() => new()
@@ -67,6 +68,7 @@ public class ClientRequestValidatorTests
 
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Same(client, validRequest.Client);
+        _clients.Verify(c => c.TryFindRegisteredClientAsync(TestTenant.Matched, ClientId), Times.Once);
     }
 
     /// <summary>
