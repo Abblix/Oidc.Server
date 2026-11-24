@@ -99,7 +99,7 @@ public class PkceValidator(
 		}
 
 		if (context.Request.CodeChallengeMethod == CodeChallengeMethods.Plain &&
-		    !context.ClientInfo.PlainPkceAllowed)
+		    !AcceptsPlain(tenant, context.ClientInfo))
 		{
 			return context.InvalidRequest("The client is not allowed PKCE plain method");
 		}
@@ -113,6 +113,15 @@ public class PkceValidator(
 
 		return null;
 	}
+
+	/// <summary>
+	/// Whether <paramref name="client"/> may send a plain code challenge at <paramref name="tenant"/>: it is allowed
+	/// plain, and its security profile does not require S256. The one answer this validator refuses plain by and the
+	/// discovery document lists plain by.
+	/// </summary>
+	internal static bool AcceptsPlain(TenantDefinition tenant, ClientInfo client)
+		=> client.PlainPkceAllowed &&
+		   !SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile).RequireS256CodeChallenge;
 
 	/// <summary>
 	/// The rule a request without a code_challenge answers to: refused when PKCE is required of it.
