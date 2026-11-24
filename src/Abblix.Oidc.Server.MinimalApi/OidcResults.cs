@@ -153,7 +153,9 @@ public static class OidcResults
 
             TooManyRequestsError => Results.StatusCode(StatusCodes.Status429TooManyRequests),
 
+#pragma warning disable ABX9001 // The refusal of the experimental Client ID Metadata Documents
             ClientTemporarilyUnavailableError => Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
+#pragma warning restore ABX9001
 
             _ => null,
         };

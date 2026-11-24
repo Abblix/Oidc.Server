@@ -45,9 +45,8 @@ internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner)
 
     /// <summary>
     /// The refusal of a request whose client authentication failed, where a client the request named could not be had
-    /// for now (<see cref="ClientAbsenceReason.TemporarilyUnavailable"/>): the client the credential would have been
-    /// checked against is unknown for a reason that may pass, so the failure says nothing about the credential. Null
-    /// where every client the request named was found or refused.
+    /// for now (<see cref="ClientAbsenceReason.TemporarilyUnavailable"/>), whichever step of the authentication looked
+    /// it up. Null where every client the request named was found or refused.
     /// </summary>
     /// <remarks>
     /// Asked of the answers the authentication already received, so it fetches nothing. Experimental, as the reason it

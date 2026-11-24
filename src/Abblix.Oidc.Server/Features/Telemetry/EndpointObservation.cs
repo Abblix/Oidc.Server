@@ -140,11 +140,12 @@ internal static class EndpointObservation
         => result.TryGetFailure(out var error) ? error : null;
 
     /// <summary>
-    /// The error an authorization response refuses the request with, or null for any other response, a redirect to
-    /// a page the end user acts on included.
+    /// The error an authorization response refuses the request with, the one it is answered by its status with where
+    /// it has one (<see cref="AuthorizationError.Refusal"/>), or null for any other response, a redirect to a page the
+    /// end user acts on included.
     /// </summary>
     public static OidcError? ErrorOf(AuthorizationResponse response)
-        => response is AuthorizationError error ? new OidcError(error.Error, error.ErrorDescription) : null;
+        => response is AuthorizationError error ? error.Refusal ?? new OidcError(error.Error, error.ErrorDescription) : null;
 
     /// <summary>
     /// An outcome that never refuses.

@@ -6,13 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Subtype of <see cref="OidcError"/> that refuses a request whose client could not be authenticated because the
-/// client metadata document of the client it names could not be had for now, and no valid copy of it is held. It
+/// Subtype of <see cref="OidcError"/> that refuses a request whose client could not be authenticated while the client
+/// metadata document of a client it names could not be had for now, and no valid copy of it is held. It
 /// travels out as HTTP 503 with no body, as draft-ietf-oauth-client-id-metadata-document-03 section 6.1 has the token
 /// and pushed authorization request endpoints answer "for a transient failure, an HTTP 503 status code".
 /// </summary>
@@ -23,5 +25,6 @@ namespace Abblix.Oidc.Server.Common;
 /// description never reach a caller; a host reads them if it decorates the endpoint.
 /// </remarks>
 /// <param name="ErrorDescription">Why the request was refused.</param>
+[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 public sealed record ClientTemporarilyUnavailableError(string ErrorDescription)
     : OidcError(ErrorCodes.TemporarilyUnavailable, ErrorDescription);

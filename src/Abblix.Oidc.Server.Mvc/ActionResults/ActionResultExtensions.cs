@@ -106,7 +106,9 @@ public static class ActionResultExtensions
 
 			TooManyRequestsError => new StatusOnlyResult(StatusCodes.Status429TooManyRequests),
 
+#pragma warning disable ABX9001 // The refusal of the experimental Client ID Metadata Documents
 			ClientTemporarilyUnavailableError => new StatusOnlyResult(StatusCodes.Status503ServiceUnavailable),
+#pragma warning restore ABX9001
 
 			_ => null,
 		};
