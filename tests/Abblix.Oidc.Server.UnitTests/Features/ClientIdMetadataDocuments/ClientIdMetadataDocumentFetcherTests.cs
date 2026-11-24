@@ -157,6 +157,7 @@ public class ClientIdMetadataDocumentFetcherTests
     [InlineData("""{"client_id":"https://client.example.com/metadata.json\uDC00"}""")]
     [InlineData("""{"client_id":"https://client.example.com/metadata.json","token_endpoint_auth_methods_supported":["none\uD800"]}""")]
     [InlineData("""{"client_id":"https://client.example.com/metadata.json","jwks":{"keys":[{"kty":"EC","kid":"\uD800"}]}}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","\uD800":"name"}""")]
     public async Task ABodyThatIsNoJsonObject_IsRefused(string body)
     {
         _origin.Serve(Url, body);

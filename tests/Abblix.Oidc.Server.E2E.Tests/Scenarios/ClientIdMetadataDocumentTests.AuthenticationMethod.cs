@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -90,6 +91,32 @@ public partial class ClientIdMetadataDocumentTests
         Assert.Equal(1, _origin.RequestsTo(ClientId));
     }
 
+    /// <summary>
+    /// A tenant held to FAPI 2.0, which refuses a public client (FAPI 2.0 Security Profile section 5.3.2.1), holds a
+    /// document declaring none and the private key JWT to the latter, and refuses one declaring none alone.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { ClientAuthenticationMethods.None, ClientAuthenticationMethods.PrivateKeyJwt },
+        ClientAuthenticationMethods.PrivateKeyJwt)]
+    [InlineData(new[] { ClientAuthenticationMethods.None }, null)]
+    public async Task AFapiTenant_HoldsTheClientToAMethodItAdmits_OrRefusesIt(string[] declared, string? chosen)
+    {
+        Serve(DocumentDeclaring(declared));
+        await using var host = CreateHost();
+        var tenant = TenantListing("fapi", authority: null, ClientSecurityProfile.Fapi2);
+
+        var client = await FindAsync(host, tenant);
+
+        if (chosen is null)
+        {
+            Assert.False(client.TryGetSuccess(out _));
+            return;
+        }
+
+        Assert.True(client.TryGetSuccess(out var found), client.ToString());
+        Assert.Equal(chosen, found.TokenEndpointAuthMethod);
+    }
+
     private static JsonObject DocumentDeclaring(string[] methods)
     {
         var document = PublicClientDocument();
@@ -100,8 +127,13 @@ public partial class ClientIdMetadataDocumentTests
         return document;
     }
 
-    private static TenantDefinition TenantListing(string id, TestCertificateAuthority? authority) => new()
+    private static TenantDefinition TenantListing(
+        string id,
+        TestCertificateAuthority? authority,
+        ClientSecurityProfile profile = ClientSecurityProfile.None) => new()
     {
+        DefaultSecurityProfile = profile,
+        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         Id = id,
         Issuer = new Uri($"https://{id}.example.com"),
         TlsClientAuthCertificateAuthorities = authority is null ? [] : [authority.RootEncoded],
