@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -28,7 +29,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// <summary>
 /// Verifies the authorization-code reuse defense in <see cref="AuthorizationCodeReusePreventingDecorator"/>.
 /// The decorator claims the code before delegating to the inner processor, and reads back the tokens
-/// written at that key (RFC 6749 section 4.1.2, OAuth 2.0 Security BCP section 4.13). The two split by
+/// written at that key (RFC 6749 section 4.1.2, RFC 9700 section 4.2.4). The two split by
 /// WHEN the repeat arrives, not by where it comes from: the claim refuses one arriving beside the first,
 /// the write-back catches one arriving after it, and both hold however many processes are running - the
 /// claim's last-write-wins token check admits at most one caller wherever the callers are.
@@ -41,6 +42,8 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 public class AuthorizationCodeReusePreventingDecoratorTests
 {
     private const string Code = "the-authorization-code";
+    private const string GrantId = "the-grant-id";
+    private static readonly DateTimeOffset Now = new(2026, 11, 23, 12, 0, 0, TimeSpan.Zero);
 
     private readonly Mock<ITokenRequestProcessor> _inner = new(MockBehavior.Strict);
     private readonly Mock<ITokenRegistry> _tokenRegistry = new(MockBehavior.Strict);
@@ -49,7 +52,11 @@ public class AuthorizationCodeReusePreventingDecoratorTests
 
     public AuthorizationCodeReusePreventingDecoratorTests()
         => _decorator = new AuthorizationCodeReusePreventingDecorator(
-            _inner.Object, _tokenRegistry.Object, _codeService.Object);
+            _inner.Object,
+            _tokenRegistry.Object,
+            _codeService.Object,
+            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>(MockBehavior.Strict)),
+            new FakeTimeProvider(Now));
 
     private static ValidTokenRequest CreateRequest(AuthorizedGrant grant)
     {
@@ -57,13 +64,71 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         return new ValidTokenRequest(model, grant, new ClientInfo("client-1"), [], []);
     }
 
-    private static AuthorizedGrant CreateGrant(TokenInfo[]? issuedTokens = null)
+    private static AuthorizedGrant CreateGrant(TokenInfo[]? issuedTokens = null, string? grantId = null)
         => new(
             new AuthSession("subject", "session-1", DateTimeOffset.UnixEpoch, "idp"),
             new AuthorizationContext("client-1", [Scopes.OpenId], null))
         {
             IssuedTokens = issuedTokens,
+            GrantId = grantId,
         };
+
+    /// <summary>
+    /// A replayed code whose first redemption founded a refresh token family revokes the family, so the refresh token
+    /// rotated since and the access tokens minted from it are refused with the first ones (RFC 6749 section 4.1.2,
+    /// RFC 9700 section 4.2.4). The mark lasts as long as any token of the family could: the family was founded no
+    /// later than now, so no token of it outlives now by more than the client's refresh and access token lifetimes.
+    /// </summary>
+    [Fact]
+    public async Task ReusedCode_OfAGrantThatFoundedAFamily_RevokesTheFamily()
+    {
+        var expiresAt = Now.AddMinutes(10);
+        var issued = new[] { new TokenInfo("access-jti", expiresAt), new TokenInfo("refresh-jti", expiresAt) };
+        var request = CreateRequest(CreateGrant());
+        var familyRevokedUntil = Now + request.ClientInfo.RefreshToken.AbsoluteExpiresIn + request.ClientInfo.AccessTokenExpiresIn;
+        _codeService
+            .Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code))
+            .ReturnsAsync(CreateGrant(issued, GrantId));
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, It.IsAny<string>(), JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        _tokenRegistry.Verify(
+            r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, familyRevokedUntil),
+            Times.Once);
+        _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "access-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
+        _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "refresh-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
+        _inner.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A token of the first redemption that outlives the family's lifetimes, issued while the client's lifetimes were
+    /// longer, keeps the family revoked until it expires: the latest expiry among the tokens is the floor of the mark.
+    /// </summary>
+    [Fact]
+    public async Task ReusedCode_OfAGrantThatFoundedAFamily_RevokesItUntilItsLongestLivedTokenExpires()
+    {
+        var request = CreateRequest(CreateGrant());
+        var familyCeiling = Now + request.ClientInfo.RefreshToken.AbsoluteExpiresIn + request.ClientInfo.AccessTokenExpiresIn;
+        var longestLived = familyCeiling.AddHours(1);
+        var issued = new[] { new TokenInfo("access-jti", Now.AddMinutes(1)), new TokenInfo("refresh-jti", longestLived) };
+        _codeService
+            .Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code))
+            .ReturnsAsync(CreateGrant(issued, GrantId));
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, It.IsAny<string>(), JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
+
+        _tokenRegistry.Verify(
+            r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, longestLived),
+            Times.Once);
+    }
 
     /// <summary>
     /// When the code does not come back, the decorator rejects with invalid_grant and never invokes the
@@ -144,7 +209,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
     {
         var expiresAt = DateTimeOffset.UnixEpoch.AddHours(1);
         var accessToken = new Jwt.JsonWebToken { Payload = { JwtId = "access-jti", ExpiresAt = expiresAt } };
-        var refreshToken = new Jwt.JsonWebToken { Payload = { JwtId = "refresh-jti", ExpiresAt = expiresAt } };
+        var refreshToken = new Jwt.JsonWebToken { Payload = { JwtId = "refresh-jti", ExpiresAt = expiresAt, GrantId = GrantId } };
         var issued = new TokenIssued(
             new EncodedJsonWebToken(accessToken, "access_token_jwt"),
             TokenTypes.Bearer,
@@ -169,7 +234,8 @@ public class AuthorizationCodeReusePreventingDecoratorTests
             TestTenant.Matched,
             Code,
             It.Is<AuthorizedGrant>(grant => grant.IssuedTokens != null
-                && grant.IssuedTokens.Select(token => token.JwtId).SequenceEqual(new[] { "access-jti", "refresh-jti" })),
+                && grant.IssuedTokens.Select(token => token.JwtId).SequenceEqual(new[] { "access-jti", "refresh-jti" })
+                && grant.GrantId == GrantId),
             request.ClientInfo.AuthorizationCodeExpiresIn), Times.Once);
     }
 

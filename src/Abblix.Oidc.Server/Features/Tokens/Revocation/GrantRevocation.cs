@@ -40,12 +40,33 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
         if (refreshToken is not { GrantId: { } grantId, ExpiresAt: { } expiresAt })
             return;
 
-        var revokedUntil = await LastValidMomentAsync(tenant, refreshToken) is { } ceiling && ceiling > expiresAt
-            ? ceiling
-            : expiresAt;
-
-        await tokenRegistry.SetStatusAsync(tenant, grantId, JsonWebTokenStatus.Revoked, revokedUntil);
+        var ceiling = await LastValidMomentAsync(tenant, refreshToken);
+        await RevokeUntilAsync(tenant, grantId, ceiling, expiresAt);
     }
+
+    /// <summary>
+    /// Revokes the grant <paramref name="grantId"/> of <paramref name="client"/>, first issued no later than
+    /// <paramref name="issuedNoLaterThan"/>, when no refresh token of it is at hand.
+    /// </summary>
+    /// <param name="tenant">The tenant the grant belongs to.</param>
+    /// <param name="grantId">The grant to revoke.</param>
+    /// <param name="client">The client the grant was issued to, whose lifetimes bound its tokens.</param>
+    /// <param name="issuedNoLaterThan">A moment no earlier than the grant's first issuance.</param>
+    /// <param name="expiresAt">The latest expiry among the known tokens of the grant, the floor of the mark.</param>
+    public Task RevokeAsync(
+        TenantDefinition tenant,
+        string grantId,
+        ClientInfo client,
+        DateTimeOffset issuedNoLaterThan,
+        DateTimeOffset expiresAt)
+        => RevokeUntilAsync(tenant, grantId, LastValidMoment(client, issuedNoLaterThan), expiresAt);
+
+    private Task RevokeUntilAsync(TenantDefinition tenant, string grantId, DateTimeOffset? ceiling, DateTimeOffset floor)
+        => tokenRegistry.SetStatusAsync(
+            tenant,
+            grantId,
+            JsonWebTokenStatus.Revoked,
+            ceiling is { } value && value > floor ? value : floor);
 
     /// <summary>
     /// The last moment any token of the grant, refresh or access, could still be valid, or null when the grant's
@@ -58,7 +79,10 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
             return null;
 
         return (await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client)
-            ? issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn
+            ? LastValidMoment(client, issuedAt)
             : null;
     }
+
+    private static DateTimeOffset LastValidMoment(ClientInfo client, DateTimeOffset issuedAt)
+        => issuedAt + client.RefreshToken.AbsoluteExpiresIn + client.AccessTokenExpiresIn;
 }
