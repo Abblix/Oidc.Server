@@ -7,13 +7,18 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Sockets;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -79,24 +84,59 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// A document whose host name resolves to an address the server does not fetch from is refused where the connection
-    /// is made: a document "rejected on trust or validation grounds", the terminal failure of section 6.1, answered
-    /// invalid_client as a URL naming such an address is.
+    /// A name the resolver cannot answer for now (SocketError.TryAgain) is a network error, the transient failure of
+    /// section 6.1, though the server's SSRF validation refuses the send it cannot judge: a request is answered 503
+    /// without a valid copy of the document, and with one past its lifetime the copy serves it, as section 6.1 has the
+    /// server "SHOULD NOT discard previously cached valid client metadata on transient failures".
     /// </summary>
     [Theory]
-    [InlineData(Endpoint.Token)]
-    [InlineData(Endpoint.Pushed)]
-    public async Task ADocumentAtAnAddressRefusedOnConnecting_IsAnInvalidClient_NotA503(Endpoint endpoint)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADocumentWhoseNameCannotBeResolvedForNow_IsServedFromItsCopy_Or503(bool held)
     {
-        _origin.Answer(ClientId, () => throw new HttpRequestException(
-            "The connection failed",
-            new OutboundAddressRefusedException("SSRF protection: the name resolves to a private address")));
+        _origin.Serve(ClientId, PublicClientDocument().ToJsonString());
+        var resolverDown = !held;
+        var resolutions = 0;
+        await using var host = CreateHost(
+            // A copy is fresh for a moment, then fetched again by the next request
+            options => options.ClientIdMetadataDocuments.MinimumCacheDuration = CopyLifetime,
+            configureServices: services => services
+            .PostConfigure<HttpClientFactoryOptions>(ClientIdMetadataDocumentTransport.HttpClientName, factory =>
+                factory.HttpMessageHandlerBuilderActions.Add(builder =>
+                {
+                    // The server's own SSRF validation in front of the client's server, with a resolver the row turns off
+                    var guard = new SsrfValidatingHttpMessageHandler(
+                        builder.Services.GetRequiredService<IOptions<SecureHttpFetchOptions>>(),
+                        builder.Services.GetRequiredService<ISecureUriValidator>(),
+                        (_, _) =>
+                        {
+                            Interlocked.Increment(ref resolutions);
+                            return resolverDown
+                                ? throw new SocketException((int)SocketError.TryAgain)
+                                : Task.FromResult(new[] { IPAddress.Parse("2001:4860:4860::8888") });
+                        });
+                    guard.InnerHandler!.Dispose();
+                    guard.InnerHandler = _origin;
+                    builder.PrimaryHandler = guard;
+                })));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
 
-        var (status, body) = await SendAuthenticatedAsync(endpoint, Credential.None);
+        if (held)
+        {
+            using var first = await SendAsync(client, discovery, Arrival.Pushed);
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+            resolverDown = true;
+            await Task.Delay(CopyLifetime * 2, TestContext.Current.CancellationToken);
+        }
 
-        Assert.Equal(StatusCodes.Status401Unauthorized, status);
-        Assert.Contains(ErrorCodes.InvalidClient, body);
+        using var response = await SendAsync(client, discovery, Arrival.Pushed);
+
+        Assert.Equal(held ? HttpStatusCode.Created : HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(held ? 2 : 1, resolutions);
     }
+
+    private static readonly TimeSpan CopyLifetime = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
     /// Sends a request for <see cref="ClientId"/> to <paramref name="endpoint"/>, authenticated the way

@@ -23,8 +23,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// the server do with a rotated token "if possible"; a read issues a token under the identifier the registration holds.
 /// A revocation (<see cref="RegistrationAccessTokenRevocation"/>) binds the registration to an identifier no token
 /// carries, and the registration is gone with the client, which invalidates its token as RFC 7592 sections 2.3 and 5
-/// require of a deprovisioned client. So the registration is the whole record of the token. A client the store serves from the settings has no
-/// registration, and no token is in force for it.
+/// ask of a deprovisioned client. So the registration is the whole record of the token. A client the store serves from
+/// the settings has no registration, and no token is in force for it.
 /// </remarks>
 /// <param name="clientInfoManager">Holds each registration with the identifier of the token managing it.</param>
 public sealed class RegistrationAccessTokenBinding(IClientInfoManager clientInfoManager)

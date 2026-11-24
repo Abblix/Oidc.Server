@@ -79,16 +79,10 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
             return await ReadAsync(url, response, settings, linked.Token);
         }
-        catch (HttpRequestException exception) when (OutboundAddressRefusedException.IsRefusal(exception))
-        {
-            // A name found to resolve to an address this server does not fetch from, refused where the connection is
-            // made: section 6.1 counts a document "rejected on trust or validation grounds" a terminal failure, as a URL
-            // naming such an address is above
-            return Refused(url, MetadataDocumentFailure.Terminal($"the address is refused: {exception.Message}"));
-        }
         catch (Exception exception) when (exception is HttpRequestException or IOException)
         {
-            // Including a body broken off half way
+            // Including a name found to resolve to a private address only now, which may resolve otherwise next time,
+            // and a body broken off half way
             return Refused(url, MetadataDocumentFailure.Transient($"the request failed: {exception.Message}"));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
