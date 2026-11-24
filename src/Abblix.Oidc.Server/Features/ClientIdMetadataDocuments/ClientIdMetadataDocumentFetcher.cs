@@ -126,19 +126,9 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
                 $"the document is longer than {settings.MaxDocumentSize} bytes"));
         }
 
-        JsonNode? document;
-        try
-        {
-            // A member repeated is refused here rather than met by the first reading of it, which would throw
-            document = JsonNode.Parse(content, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = false });
-        }
-        catch (JsonException exception)
-        {
-            return Refused(url, MetadataDocumentFailure.Terminal($"the document is not valid JSON: {exception.Message}"));
-        }
-
-        if (document is not JsonObject json)
-            return Refused(url, MetadataDocumentFailure.Terminal("the document is not a JSON object"));
+        var parsed = MetadataDocumentJson.Parse(content);
+        if (!parsed.TryGetSuccess(out var json))
+            return Refused(url, parsed.GetFailure());
 
         return new FetchedDocument(json, DocumentLifetime.Of(response, settings));
     }
