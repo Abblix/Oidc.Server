@@ -44,7 +44,8 @@ public class TlsClientAuthenticatorTests
 
         _authenticator = new TlsClientAuthenticator(
             _loggerMock.Object,
-            _clientKeysProviderMock.Object);
+            _clientKeysProviderMock.Object,
+            TimeProvider.System);
     }
 
     /// <summary>
@@ -470,6 +471,56 @@ public class TlsClientAuthenticatorTests
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// RFC 8705 section 2.2 leaves the chain of a self-signed certificate unvalidated, so its own validity period is
+    /// what is checked: a certificate before or past it is refused, though its key is the one the client registered.
+    /// </summary>
+    [Theory]
+    [InlineData(-2, -1, false)]
+    [InlineData(1, 2, false)]
+    [InlineData(-1, 1, true)]
+    public async Task ACertificateOutsideItsValidityPeriod_IsRefused(int notBeforeDays, int notAfterDays, bool accepted)
+    {
+        using var key = RSA.Create(2048);
+        var now = TimeProvider.System.GetUtcNow();
+        using var cert = new CertificateRequest("CN=test-client", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(now.AddDays(notBeforeDays), now.AddDays(notAfterDays));
+        var client = new ClientInfo("test-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.SelfSignedTlsClientAuth };
+        _clientInfoProviderMock.Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client")).ReturnsAsync(client);
+        _clientKeysProviderMock.Setup(x => x.GetSigningKeys(client)).Returns(new[] { cert.ToJsonWebKey() }.ToAsyncEnumerable());
+
+        var result = await _authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = "test-client", ClientCertificate = cert }, _clientInfoProviderMock.Object);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A certificate carrying a key of a type no client key is compared with, such as DSA, authenticates nobody and is
+    /// refused as an invalid credential rather than failing the request.
+    /// </summary>
+    [Fact]
+    public async Task ACertificateWithAnUnsupportedKeyType_IsRefused()
+    {
+        using var key = DSA.Create(2048);
+        using var signer = RSA.Create(2048);
+        var now = TimeProvider.System.GetUtcNow();
+        var subject = new X500DistinguishedName("CN=test-client");
+        using var cert = new CertificateRequest(subject, new PublicKey(key), HashAlgorithmName.SHA256).Create(
+            subject,
+            X509SignatureGenerator.CreateForRSA(signer, RSASignaturePadding.Pkcs1),
+            now.AddDays(-1),
+            now.AddDays(1),
+            [1]);
+        var client = new ClientInfo("test-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.SelfSignedTlsClientAuth };
+        _clientInfoProviderMock.Setup(x => x.FindClientAsync(TestTenant.Matched, "test-client")).ReturnsAsync(client);
+
+        var result = await _authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = "test-client", ClientCertificate = cert }, _clientInfoProviderMock.Object);
+
+        Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
     }
 
     /// <summary>

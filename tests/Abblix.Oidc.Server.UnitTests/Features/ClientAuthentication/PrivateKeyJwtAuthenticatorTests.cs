@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
@@ -29,6 +30,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using System.Globalization;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -37,7 +39,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// as defined in RFC 7523 and OpenID Connect Core 1.0.
 /// Tests cover JWT validation, replay attack prevention, and various error conditions.
 /// </summary>
-public class PrivateKeyJwtAuthenticatorTests
+public partial class PrivateKeyJwtAuthenticatorTests
 {
     /// <summary>The clients of the request, which the authenticators under test receive and pass on.</summary>
     private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
@@ -61,10 +63,10 @@ public class PrivateKeyJwtAuthenticatorTests
     private const string BackChannelAuthenticationEndpoint = IssuerIdentifier + "/connect/bc-authorize";
 
     /// <summary>
-    /// The instant the authenticator reads, before the expiry every assertion here carries, so no assertion is
-    /// refused for its age on whatever day the suite runs.
+    /// The instant the authenticator reads, within the hour before the expiry every assertion here carries, so no
+    /// assertion is refused for its age, or for a lifetime past the default ceiling, on whatever day the suite runs.
     /// </summary>
-    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-06-01T00:00:00Z", CultureInfo.InvariantCulture);
+    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-12-31T23:30:00Z", CultureInfo.InvariantCulture);
 
     public PrivateKeyJwtAuthenticatorTests()
     {
@@ -435,7 +437,7 @@ public class PrivateKeyJwtAuthenticatorTests
         Assert.True(result.TryGetSuccess(out _));
         mocks.ReplayCache.Verify(
             r => r.TryReserveAsync(
-                It.Is<string>(id => id == jti),
+                It.Is<string>(id => id == SingleUseTokenKey.ClientAssertion(ClientId, jti)),
                 It.Is<DateTimeOffset>(exp =>
                     Math.Abs((exp - expiresAt).TotalSeconds) < 1)),
             Times.Once);
@@ -462,7 +464,7 @@ public class PrivateKeyJwtAuthenticatorTests
             .ReturnsAsync(new ValidJsonWebToken(validToken, clientInfo));
 
         mocks.ReplayCache
-            .Setup(r => r.TryReserveAsync("replayed-jti", It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TryReserveAsync(SingleUseTokenKey.ClientAssertion(ClientId, "replayed-jti"), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(false);
 
         var request = new ClientRequest
@@ -1201,7 +1203,8 @@ public class PrivateKeyJwtAuthenticatorTests
         Uri? tokenEndpoint,
         bool resolverRegistered = true,
         bool backChannelAuthenticationMapped = true,
-        bool pushedAuthorizationRequestMapped = true)
+        bool pushedAuthorizationRequestMapped = true,
+        TimeSpan? clientAssertionMaxLifetime = null)
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
@@ -1233,7 +1236,10 @@ public class PrivateKeyJwtAuthenticatorTests
             logger.Object,
             replayCache.Object,
             serviceProvider,
-            new FakeTimeProvider(Now));
+            new FakeTimeProvider(Now),
+            clientAssertionMaxLifetime is { } ceiling
+                ? Mock.Of<IOptionsMonitor<OidcOptions>>(m => m.CurrentValue == new OidcOptions { ClientAssertionMaxLifetime = ceiling })
+                : DefaultOidcOptions.Monitor());
 
         var mocks = new Mocks
         {

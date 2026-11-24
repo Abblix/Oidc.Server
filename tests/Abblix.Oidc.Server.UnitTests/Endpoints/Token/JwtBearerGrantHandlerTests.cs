@@ -14,6 +14,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -836,7 +837,7 @@ public partial class JwtBearerGrantHandlerTests
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		mocks.ReplayCache
-			.Setup(c => c.TryReserveAsync("unique-jti-12345", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.Setup(c => c.TryReserveAsync(SingleUseTokenKey.JwtBearerGrant(Issuer, "unique-jti-12345"), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
 			.ReturnsAsync(false);
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest

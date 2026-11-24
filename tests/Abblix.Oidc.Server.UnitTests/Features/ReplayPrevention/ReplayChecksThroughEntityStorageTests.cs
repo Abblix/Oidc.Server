@@ -150,7 +150,7 @@ public class ReplayChecksThroughEntityStorageTests
         Assert.True((await validator.ValidateAsync(Unprofiled, proof, cancellationToken: ct)).TryGetSuccess(out _));
         Assert.True((await validator.ValidateAsync(Unprofiled, proof, cancellationToken: ct)).TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
-        var key = Prefix + Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.Jti)));
+        var key = Prefix + SingleUseTokenKey.DPoPProof(builder.PublicJwk.ComputeJwkThumbprintBase64Url(), builder.Jti);
         Assert.Equal([key, key], _storage.Claimed);
     }
 
@@ -175,7 +175,42 @@ public class ReplayChecksThroughEntityStorageTests
 
         Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, clients.Object)).TryGetSuccess(out _));
         Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, request, clients.Object)).TryGetFailure(out _));
-        Assert.Equal([Prefix + jwtId, Prefix + jwtId], _storage.Claimed);
+        var key = Prefix + SingleUseTokenKey.ClientAssertion(ClientId, jwtId);
+        Assert.Equal([key, key], _storage.Claimed);
+    }
+
+    /// <summary>
+    /// RFC 7519 section 4.1.7 has a jti unique to its issuer, "collisions MUST be prevented among values produced by
+    /// different issuers as well", so two clients presenting one jti each authenticate once, and each is refused the
+    /// second time.
+    /// </summary>
+    [Fact]
+    public async Task TwoClientsPresentingOneJti_EachAuthenticatesOnce()
+    {
+        const string otherClientId = "client-b";
+        var clients = new Mock<IClientInfoProvider>();
+        foreach (var clientId in new[] { ClientId, otherClientId })
+        {
+            clients.Setup(p => p.FindClientAsync(Tenant, clientId)).ReturnsAsync(new ClientInfo(clientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+                ClientSecrets = [new ClientSecret { Value = Secret }],
+            });
+        }
+
+        var services = Services();
+        services.AddSingleton<ProfiledJwtValidator>();
+        await using var provider = services.BuildServiceProvider();
+        var authenticator = ActivatorUtilities.CreateInstance<ClientSecretJwtAuthenticator>(provider);
+
+        const string jwtId = "one-jti";
+        var first = await AssertionAsync(provider, jwtId);
+        var second = await AssertionAsync(provider, jwtId, otherClientId);
+
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, first, clients.Object)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, second, clients.Object)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, first, clients.Object)).TryGetFailure(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Tenant, second, clients.Object)).TryGetFailure(out _));
     }
 
     /// <summary>
@@ -233,7 +268,8 @@ public class ReplayChecksThroughEntityStorageTests
         Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetSuccess(out _));
         Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Equal([Prefix + "bearer-jti", Prefix + "bearer-jti"], _storage.Claimed);
+        var key = Prefix + SingleUseTokenKey.JwtBearerGrant("https://idp.example.com", "bearer-jti");
+        Assert.Equal([key, key], _storage.Claimed);
     }
 
     private ServiceCollection Services()
@@ -245,10 +281,18 @@ public class ReplayChecksThroughEntityStorageTests
         services.AddJsonWebTokens();
         services.AddKeyedSingleton<IEntityStorage>(TenantServiceKeys.Shared, _storage);
         services.AddReplayPrevention();
+        services.AddSingleton<IClientJwtValidator>(provider => new ClientJwtValidator(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ClientJwtValidator>.Instance,
+            Mock.Of<IRequestInfoProvider>(),
+            new ProfiledJwtValidator(provider.GetRequiredService<IJsonWebTokenValidator>()),
+            Mock.Of<IClientKeysProvider>(),
+            Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
+            TimeProvider.System,
+            Mock.Of<IClientSecretEncryptor>()));
         return services;
     }
 
-    private static async Task<ClientRequest> AssertionAsync(IServiceProvider provider, string jwtId)
+    private static async Task<ClientRequest> AssertionAsync(IServiceProvider provider, string jwtId, string clientId = ClientId)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -257,8 +301,8 @@ public class ReplayChecksThroughEntityStorageTests
             Payload =
             {
                 JwtId = jwtId,
-                Issuer = ClientId,
-                Subject = ClientId,
+                Issuer = clientId,
+                Subject = clientId,
                 Audiences = [Tenant.Issuer.OriginalString],
                 IssuedAt = now,
                 NotBefore = now,

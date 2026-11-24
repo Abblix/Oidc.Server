@@ -43,6 +43,7 @@ public sealed class TestTenantSettings
     public ClientSecretEncryptionSettings? ClientSecretEncryption { get; set; }
     public CustodianHeldKeys? CustodianKeys { get; set; }
     public Uri? MtlsBaseUri { get; set; }
+    public IReadOnlyCollection<string> TlsClientAuthCertificateAuthorities { get; set; } = [];
 
     /// <summary>
     /// The tenant these settings describe.
@@ -67,5 +68,6 @@ public sealed class TestTenantSettings
         ClientSecretEncryption = ClientSecretEncryption,
         CustodianKeys = CustodianKeys,
         MtlsBaseUri = MtlsBaseUri,
+        TlsClientAuthCertificateAuthorities = TlsClientAuthCertificateAuthorities,
     };
 }

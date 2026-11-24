@@ -29,12 +29,14 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
+/// <param name="options">Where the longest lifetime an assertion may have is read from.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     IReplayCache replayCache,
     IServiceProvider serviceProvider,
-    TimeProvider timeProvider)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider, serviceProvider)
+    TimeProvider timeProvider,
+    IOptionsMonitor<OidcOptions> options)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider, serviceProvider, options)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.

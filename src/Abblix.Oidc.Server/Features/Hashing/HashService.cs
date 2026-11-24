@@ -32,7 +32,8 @@ public class HashService : IHashService
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the specified hash algorithm is not supported.</exception>
     public byte[] Sha(HashAlgorithm algorithm, string data)
     {
-        var bytes = Encoding.ASCII.GetBytes(data);
+        // The UTF-8 octets, which a standard digest tool hashes
+        var bytes = Encoding.UTF8.GetBytes(data);
         return algorithm switch
         {
             HashAlgorithm.Sha256 => SHA256.HashData(bytes),

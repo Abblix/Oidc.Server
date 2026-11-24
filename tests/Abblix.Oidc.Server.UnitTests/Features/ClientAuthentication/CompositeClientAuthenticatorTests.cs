@@ -480,7 +480,7 @@ public class CompositeClientAuthenticatorTests
                 NullLogger<ClientSecretPostAuthenticator>.Instance,
                 TimeProvider.System,
                 new Mock<IHashService>().Object),
-            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance));
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, TimeProvider.System));
 
         var result = await composite.TryAuthenticateClientAsync(
             SingleIssuer.Tenant,
@@ -514,7 +514,7 @@ public class CompositeClientAuthenticatorTests
                 NullLogger<ClientSecretBasicAuthenticator>.Instance,
                 TimeProvider.System,
                 new Mock<IHashService>().Object),
-            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance));
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, TimeProvider.System));
     }
 
     /// <summary>

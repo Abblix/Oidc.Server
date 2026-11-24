@@ -12,18 +12,22 @@ using Abblix.Oidc.Server.Common.Configuration;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// The key the client secrets a tenant issues on dynamic registration are encrypted with, so the client configuration
-/// endpoint can return a client its secret when it reads its registration (RFC 7592 section 3 and Appendix A.1). The
-/// secret is verified against its hash as before; the encrypted value serves only that read.
+/// The key the client secrets a tenant issues on dynamic registration are encrypted with. The encrypted copy is what
+/// the client configuration endpoint returns a client when it reads its registration (RFC 7592 section 3 and Appendix
+/// A.1), and what the secret of a client_secret_jwt client is read from, as the key its assertion is verified with and
+/// the key a JWT is encrypted to it with. Every other method is verified against the secret's hash.
 /// </summary>
 /// <remarks>
 /// The secret is sealed the way pairwise subject identifiers are, by a deterministic authenticated encryption keyed by
 /// <see cref="Key"/>, and bound to the tenant and the client, so a value moved to another client opens nowhere. A
 /// server serving dynamic client registration refuses a tenant without these settings. A client registered before the
 /// tenant had a key holds only the hash of its secret, so a read of its registration answers without the secret.
-/// Replacing the key is allowed, and then every secret encrypted under the former one no longer opens: those clients
-/// still authenticate with their secrets, and a read of their registration answers without the secret, with a warning
-/// in the log.
+/// Replacing the key, or <see cref="HashAlgorithm"/>, is allowed, and then every secret encrypted under the former one
+/// opens to nothing: a client_secret_jwt client that keeps its secret only encrypted can no longer authenticate, nor be
+/// sent a JWT encrypted with a key derived from its secret, a client verified against its hash still authenticates,
+/// and a read of the registration answers without the secret, with a warning in the log. A host's own client store
+/// must keep <see cref="ClientSecret.EncryptedValue"/> as it was given, and a server node running a version that reads
+/// only <see cref="ClientSecret.Value"/> cannot authenticate such a client.
 /// </remarks>
 public record ClientSecretEncryptionSettings
 {

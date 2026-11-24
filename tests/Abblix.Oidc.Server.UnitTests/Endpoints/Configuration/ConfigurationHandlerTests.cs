@@ -34,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Abblix.Tests.Shared;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
@@ -511,7 +512,14 @@ public class ConfigurationHandlerTests
             ClientAuthenticationMethods.SelfSignedTlsClientAuth,
         ];
         string[] signing = [SigningAlgorithms.HS256, SigningAlgorithms.RS256, SigningAlgorithms.PS256, SigningAlgorithms.ES256];
-        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        // Trusting an authority for tls_client_auth, so the profile alone decides which methods are listed
+        using var authority = TestCertificateAuthority.Create();
+        var tenant = new TestIssuer
+        {
+            DefaultSecurityProfile = profile,
+            TlsClientAuthCertificateAuthorities = [authority.RootEncoded],
+        }.ToTenant();
 
         var accepted = new List<string>();
         foreach (var method in methods)
@@ -677,7 +685,7 @@ public class ConfigurationHandlerTests
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(MockBehavior.Strict), TestEncryptionAlgorithms.Every),
                 Mock.Of<IClientKeysProvider>(MockBehavior.Strict),
-                TimeProvider.System, TestEncryptionAlgorithms.Every),
+                TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()),
             Options.Create(options));
     }
 

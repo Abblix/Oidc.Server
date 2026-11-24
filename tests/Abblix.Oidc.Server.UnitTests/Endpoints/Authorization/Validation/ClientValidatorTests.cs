@@ -55,7 +55,7 @@ public class ClientValidatorTests
     private ClientValidator Validator(OidcOptions options)
         => new(
             new Mock<ILogger<ClientValidator>>(MockBehavior.Loose).Object,
-            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa(), TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa(), TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()),
             Options.Create(options));
 
     /// <summary>A creator performing the RSA key management algorithms, which are all a key below declares.</summary>

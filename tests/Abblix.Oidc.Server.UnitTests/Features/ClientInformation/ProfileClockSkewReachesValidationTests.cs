@@ -27,6 +27,7 @@ using System.Linq;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
@@ -59,10 +60,10 @@ public class ProfileClockSkewReachesValidationTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            new ProfiledJwtValidator(tokenValidator.Object),
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(tokenValidator.Object), TimeProvider.System),
+            DefaultOidcOptions.Monitor());
 
         await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {
@@ -158,7 +159,7 @@ public class ProfileClockSkewReachesValidationTests
             new ProfiledJwtValidator(tokenValidator.Object),
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
-            TimeProvider.System);
+            TimeProvider.System, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
 
         await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, new Mock<IClientInfoProvider>().Object, "header.payload.signature", TokenTypePolicy.CheckedByCaller, signingAlgorithms: null);
 

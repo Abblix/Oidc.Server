@@ -32,12 +32,17 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 /// <param name="serviceProvider">Resolves, per request, where the transport serves the token and backchannel
 /// authentication endpoints, for a client allowed such a URL as its assertion's audience.</param>
+/// <param name="options">Where the longest lifetime an assertion may have is read from, each time.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
     TimeProvider timeProvider,
-    IServiceProvider serviceProvider) : IClientAuthenticator
+    IServiceProvider serviceProvider,
+    IOptionsMonitor<OidcOptions> options) : IClientAuthenticator
 {
+    private readonly ClientAssertionReplay _replay = new(replayCache, options, timeProvider);
+    private readonly ClientAssertionAudience _audience = new(logger, serviceProvider);
+
     /// <summary>
     /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
     /// reads the same instant rather than capturing a second copy of the same dependency.
@@ -65,12 +70,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             static (self, _, token, client) => self.SigningAlgorithmMatchesRegistration(token, client),
             static (self, _, token, _) => self.IssuerMatchesSubject(token),
             static (self, _, token, client) => self.TypeIsClientAuthentication(token, client),
-            static (self, tenant, token, client) => self.AudienceIsAccepted(tenant, token, client),
+            static (self, tenant, token, client) => self._audience.IsAccepted(tenant, token, client),
         ];
 
     /// <summary>
     /// The checks a derived authenticator hands the JWT validator: the defaults, an expiry the assertion must
-    /// carry, and the audience left out, since <see cref="AudienceIsAccepted"/> alone judges it.
+    /// carry, and the audience left out, since <see cref="ClientAssertionAudience"/> alone judges it.
     /// </summary>
     /// <remarks>
     /// RFC 7521 Section 5.2 requires an "Expires At entity that limits the time window during which the
@@ -132,104 +137,6 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     }
 
     /// <summary>
-    /// Answers whether the assertion names an audience of <see cref="ClientInfo.ClientAssertionAudiences"/> in a form
-    /// the set admits: this tenant's issuer identifier, or, for a client granted
-    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL or its mutual-TLS alias, for one
-    /// granted <see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>, the backchannel authentication
-    /// endpoint URL or its alias, for one granted
-    /// <see cref="ClientAssertionAudiences.PushedAuthorizationRequestEndpoint"/>, the pushed authorization request
-    /// endpoint URL or its alias, each as a string, or in an array of strings beside others for a client granted
-    /// <see cref="ClientAssertionAudiences.AllowArray"/>.
-    /// </summary>
-    /// <remarks>
-    /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
-    /// does not contain its issuer identifier as its sole audience value", and "the token endpoint URL of the
-    /// authorization server MUST NOT be used as an audience value". Section 5 says the same of an assertion at
-    /// the pushed authorization request endpoint, and section 7 refers to [private_key_jwt.Disclosure] and
-    /// [Audience.Injection] for the attacks this closes: an audience other than the issuer, or one beside it,
-    /// would let an assertion a client minted for another server be presented here. The claim is
-    /// read as written rather than through the typed accessor, which skips members that are not strings and
-    /// would read the issuer beside one as the sole value. Compared by RFC 3986 section 6.2.1, as section 4
-    /// prescribes. A profile may narrow the set: FAPI 2.0 section 5.3.2.1 takes the issuer identifier alone, so
-    /// under such a profile the endpoint URLs and an array are refused whatever the client was granted, and
-    /// the client is refused here before its jti is spent, whatever order the authenticators run in.
-    /// </remarks>
-    private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
-    {
-        // What the client may name once its profile has narrowed the set, so the refusal logs what was applied
-        var audiences = clientInfo.ClientAssertionAudiences.AdmittedBy(
-            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
-        var allowArray = audiences.HasFlag(ClientAssertionAudiences.AllowArray);
-
-        var audience = token.Payload.Json[JwtClaimTypes.Audience];
-        if (audiences.HasFlag(ClientAssertionAudiences.Issuer) &&
-            AudienceClaim.Names(audience, allowArray, tenant.IssuerIsNamedBy))
-        {
-            return true;
-        }
-
-        if (NamesGrantedEndpoint(
-                tenant, audience, audiences, ClientAssertionAudiences.TokenEndpoint, OidcEndpoints.Token))
-        {
-            LogTokenEndpointAudienceAccepted(clientInfo.ClientId);
-            return true;
-        }
-
-        if (NamesGrantedEndpoint(
-                tenant,
-                audience,
-                audiences,
-                ClientAssertionAudiences.BackChannelAuthenticationEndpoint,
-                OidcEndpoints.BackChannelAuthentication))
-        {
-            LogBackChannelAuthenticationEndpointAudienceAccepted(clientInfo.ClientId);
-            return true;
-        }
-
-        if (NamesGrantedEndpoint(
-                tenant,
-                audience,
-                audiences,
-                ClientAssertionAudiences.PushedAuthorizationRequestEndpoint,
-                OidcEndpoints.PushedAuthorizationRequest))
-        {
-            LogPushedAuthorizationRequestEndpointAudienceAccepted(clientInfo.ClientId);
-            return true;
-        }
-
-        // Logged from the claim itself: the typed accessor skips members that are not strings, so for the issuer
-        // beside such a member it would log the issuer alone next to the refusal
-        LogAudienceIsNotOneTheClientMayName(
-            clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), audiences, tenant.IssuerAsWritten());
-        return false;
-    }
-
-    /// <summary>
-    /// Answers whether <paramref name="audiences"/> hold <paramref name="grant"/> and the audience claim names a
-    /// spelling of <paramref name="endpoint"/>, as a string or, when the set allows one, in an array.
-    /// </summary>
-    /// <remarks>
-    /// The spellings are resolved only once the grant is found, since they take a scope of their own, which a client
-    /// naming the issuer never needs.
-    /// </remarks>
-    private bool NamesGrantedEndpoint(
-        TenantDefinition tenant,
-        JsonNode? audience,
-        ClientAssertionAudiences audiences,
-        ClientAssertionAudiences grant,
-        OidcEndpoints endpoint)
-    {
-        if (!audiences.HasFlag(grant))
-            return false;
-
-        var spellings = tenant.AcceptedSpellings(serviceProvider, endpoint);
-        return AudienceClaim.Names(
-            audience,
-            audiences.HasFlag(ClientAssertionAudiences.AllowArray),
-            written => spellings.Contains(written, StringComparer.Ordinal));
-    }
-
-    /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
@@ -266,6 +173,13 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return ClientAuthenticationFailures.InvalidCredential;
         }
 
+        // Refused before the identifier is reserved below, so a request naming another client spends nothing
+        if (request.NamesAnotherClientThan(clientInfo.ClientId))
+        {
+            LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(request.ClientId));
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
+
         // Read once for both consumers below, and refused rather than thrown where the payload
         // cannot read them: the validator an override chose may not have looked at these claims,
         // and a malformed date is the assertion's fault, not a fault in this server.
@@ -282,7 +196,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return ClientAuthenticationFailures.InvalidCredential;
         }
 
-        if (!await ReserveTheAssertionAsync(token, timestamps, clientInfo))
+        if (!await ReserveTheAssertionAsync(tenant, token, timestamps, clientInfo))
         {
             return ClientAuthenticationFailures.InvalidCredential;
         }
@@ -434,10 +348,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// where a check added later is least likely to land underneath it: the natural place to add one
     /// in the caller is before the call.
     /// </remarks>
+    /// <param name="tenant">The tenant whose default profile the client's clock skew is drawn from.</param>
     /// <param name="token">The assertion whose identifier is being claimed.</param>
     /// <param name="timestamps">The assertion's timestamps, already read; the expiry bounds the reservation.</param>
     /// <param name="clientInfo">The client the assertion authenticates.</param>
-    private async Task<bool> ReserveTheAssertionAsync(JsonWebToken token, AssertionTimestamps timestamps, ClientInfo clientInfo)
+    private async Task<bool> ReserveTheAssertionAsync(
+        TenantDefinition tenant, JsonWebToken token, AssertionTimestamps timestamps, ClientInfo clientInfo)
     {
         // OIDC Core section 9: the client-authentication assertion's jti is REQUIRED - "A unique
         // identifier for the token, which can be used to prevent reuse of the token". Reject an
@@ -460,11 +376,19 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return false;
         }
 
-        // Single atomic reserve-and-check: record the jti and treat "already present" as a replay.
-        // One call avoids the read-then-write race a separate status check + mark step would leave
-        // between two concurrent presenters of the same assertion. Client authentication is handed no cancellation of
-        // the request, and the issuer's Released is not one: it lets memory go after a request under way finishes.
-        if (!await replayCache.TryReserveAsync(jwtId, expiry, CancellationToken.None))
+        // RFC 7523 section 3 item 4: "the authorization server may reject JWTs with an "exp" claim value that is
+        // unreasonably far in the future", and the reservation below would otherwise be held for as long
+        var forwardSkew = SecurityProfileRequirements
+            .For(clientInfo, tenant.DefaultSecurityProfile)
+            .ClockSkewOrDefault()
+            .Future;
+        if (_replay.WhyTooLong(expiry, timestamps.IssuedAt, forwardSkew) is { } tooLong)
+        {
+            LogLifetimeTooLong(clientInfo.ClientId, tooLong);
+            return false;
+        }
+
+        if (!await _replay.TryReserveAsync(clientInfo.ClientId, jwtId, expiry))
         {
             LogReplayDetected(jwtId, clientInfo.ClientId);
             return false;

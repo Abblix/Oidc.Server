@@ -493,6 +493,35 @@ public class ClientSecretAuthenticatorTests
     }
 
     /// <summary>
+    /// A secret that never expires authenticates beside an expired duplicate of it, whichever order they are kept in:
+    /// any matching secret still valid is enough.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ANeverExpiringSecretBesideAnExpiredDuplicate_Authenticates(bool expiredFirst)
+    {
+        const string clientId = "test-client";
+        const string secret = "test-secret";
+        var secretHash = ComputeSha256(secret);
+        ClientSecret expired = new() { Sha256Hash = secretHash, ExpiresAt = _clock.GetUtcNow().AddDays(-1) };
+        ClientSecret neverExpiring = new() { Sha256Hash = secretHash };
+        var clientInfo = new ClientInfo(clientId)
+        {
+            ClientSecrets = expiredFirst ? [expired, neverExpiring] : [neverExpiring, expired],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        };
+        _clientInfoProvider.Setup(p => p.FindClientAsync(TestTenant.Matched, clientId)).ReturnsAsync(clientInfo);
+        _hashService.Setup(h => h.Sha(HashAlg.Sha512, secret)).Returns(ComputeSha512(secret));
+        _hashService.Setup(h => h.Sha(HashAlg.Sha256, secret)).Returns(secretHash);
+
+        var result = await _authenticator.TestTryAuthenticateAsync(
+            clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// Verifies SHA512 secrets are checked before SHA256.
     /// SHA512 is preferred for stronger security.
     /// </summary>

@@ -90,15 +90,17 @@ public abstract partial class ClientSecretAuthenticator(
 	/// </returns>
 	private bool TryValidateClientSecret(ClientInfo client, [Credential] string secret)
 	{
-		var matchingSecret = _matcher.FindMatching(client, secret).MaxBy(item => item.ExpiresAt);
+		var matchingSecrets = _matcher.FindMatching(client, secret).ToArray();
 
-		if (matchingSecret == null)
+		if (matchingSecrets.Length == 0)
 		{
 			LogNoMatchingSecret(client.ClientId);
 			return false; // Invalid secret
 		}
 
-		if (matchingSecret.ExpiresAt.HasValue && matchingSecret.ExpiresAt.Value < clock.GetUtcNow())
+		// Any match still valid authenticates: one that never expires, or expires later, beside an expired duplicate
+		var now = clock.GetUtcNow();
+		if (!matchingSecrets.Any(item => item.ExpiresAt is null || now <= item.ExpiresAt))
 		{
 			LogSecretExpired(client.ClientId);
 			return false; // Secret is expired

@@ -531,6 +531,20 @@ public record OidcOptions
 	public JwtBearerOptions JwtBearer { get; set; } = new();
 
 	/// <summary>
+	/// The longest a client authentication assertion (private_key_jwt, client_secret_jwt) may be valid for: an assertion
+	/// whose exp lies further than this past its own iat, or past the current time and the forward clock skew its client
+	/// is allowed, is refused. One hour by default.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7523 section 3 lets the server reject an assertion whose exp is "unreasonably far in the future" (item 4)
+	/// or whose iat is "unreasonably far in the past" (item 6), and has a used jti kept "for the length of time for
+	/// which the JWT would be considered valid based on the applicable "exp" instant" (item 7): this one lifetime bounds
+	/// all three, so an assertion valid for days is neither accepted nor held for as long. A value of zero or less
+	/// stops the host at startup.
+	/// </remarks>
+	public TimeSpan ClientAssertionMaxLifetime { get; set; } = TimeSpan.FromHours(1);
+
+	/// <summary>
 	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
 	/// </summary>
 	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();

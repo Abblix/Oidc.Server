@@ -53,6 +53,7 @@
   <!-- What a test of a host's own cache registers, shared by every suite that checks the library uses it. -->
   <ItemGroup>
     <Compile Include="../Shared/HostRegistration.cs" Link="Shared/HostRegistration.cs" />
+    <Compile Include="../Shared/TestCertificateAuthority.cs" Link="Shared/TestCertificateAuthority.cs" />
     <Compile Include="../Shared/HostRegistrationExtensions.cs" Link="Shared/HostRegistrationExtensions.cs" />
     <Compile Include="../Shared/RecordingDistributedCache.cs" Link="Shared/RecordingDistributedCache.cs" />
   </ItemGroup>

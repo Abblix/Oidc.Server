@@ -236,4 +236,22 @@ public sealed class TenantDefinition
     /// reaches the tenant.
     /// </remarks>
     public Uri? MtlsBaseUri { get; init; }
+
+    /// <summary>
+    /// The certificates of the certificate authorities this tenant trusts to issue the certificates its
+    /// <c>tls_client_auth</c> clients authenticate with, each base64-encoded DER, as the <c>x5c</c> member of a JWK
+    /// carries one (RFC 7517 section 4.7). A self-signed one is a trust anchor; any other is an intermediate
+    /// certificate a client certificate may chain through to one of the anchors listed beside it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8705 section 2.1 has the PKI method rely "on a validated certificate chain [RFC5280]", and section 7.4 has
+    /// the authorization server "only accept, as trust anchors, a limited number of CAs whose certificate issuance
+    /// policy meets its security requirements". The chain is built against these authorities alone, and each tenant
+    /// keeps its own: an authority trusted by one tenant does
+    /// not vouch for a subject registered at another. Only the client's own certificate reaches the server, so an
+    /// intermediate certificate between it and the anchor is listed here. With none listed the tenant serves no
+    /// <c>tls_client_auth</c>: its discovery document does not name the method, registration refuses it, and a
+    /// client registered for it is refused. Judged when the tenant enters the server, by the check of the tenant list.
+    /// </remarks>
+    public IReadOnlyCollection<string> TlsClientAuthCertificateAuthorities { get; init; } = [];
 }

@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -25,13 +26,15 @@ public class ClientUpdateAuthenticationMethodTests(TestFactory factory) : TestBa
     /// <summary>
     /// RFC 7592 section 2.2 replaces the metadata, not the secret, and the update issues none: an update moving a client
     /// to a method its stored secret cannot serve is refused with invalid_client_metadata ("the authorization server
-    /// responds with an error as described in [RFC7591]"). A client_secret_basic registration stores only the secret's
-    /// hash, which client_secret_jwt cannot sign with; a public client holds no secret at all. A client_secret_jwt
-    /// registration stores the hash beside the value, so it moves to client_secret_basic and authenticates with it.
+    /// responds with an error as described in [RFC7591]"). A public client holds no secret at all. A registration stores
+    /// the secret's hash and its encrypted copy, so a client moves between client_secret_basic and client_secret_jwt and
+    /// authenticates with its secret either way, and a client_secret_jwt client updating its other metadata keeps
+    /// authenticating.
     /// </summary>
     [Theory]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, ClientAuthenticationMethods.ClientSecretJwt, false)]
     [InlineData(ClientAuthenticationMethods.None, ClientAuthenticationMethods.ClientSecretPost, false)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, ClientAuthenticationMethods.ClientSecretJwt, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, ClientAuthenticationMethods.ClientSecretJwt, true)]
     [InlineData(ClientAuthenticationMethods.ClientSecretJwt, ClientAuthenticationMethods.ClientSecretBasic, true)]
     public async Task An_update_moves_a_client_only_to_a_method_its_secret_serves(
         string registeredMethod, string updatedMethod, bool served)
@@ -83,17 +86,24 @@ public class ClientUpdateAuthenticationMethodTests(TestFactory factory) : TestBa
             updated.StatusCode == HttpStatusCode.OK,
             $"{(int)updated.StatusCode}: {updatedBody[ErrorResponse.Parameters.ErrorDescription]}");
 
+        var secret = registered[ResponseMembers.ClientSecret]!.GetValue<string>();
+        var form = new Dictionary<string, string> { [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials };
+        if (updatedMethod == ClientAuthenticationMethods.ClientSecretJwt)
+        {
+            form[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+            form[ClientRequest.Parameters.ClientAssertion] = await ClientSecretJwtAssertion.IssueWithSecretAsync(
+                clientId, secret, discovery.Issuer.OriginalString);
+        }
+
         using var token = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            }),
+            Content = new FormUrlEncodedContent(form),
         };
-        token.Headers.Authorization = new AuthenticationHeaderValue(
-            TokenTypes.Basic,
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                $"{clientId}:{registered[ResponseMembers.ClientSecret]!.GetValue<string>()}")));
+        if (updatedMethod != ClientAuthenticationMethods.ClientSecretJwt)
+        {
+            token.Headers.Authorization = new AuthenticationHeaderValue(
+                TokenTypes.Basic, Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{secret}")));
+        }
         using var tokenResponse = await client.SendAsync(token, TestContext.Current.CancellationToken);
 
         // The token response carries the access token, so only the error is quoted

@@ -231,6 +231,8 @@ internal static class LogEvents
             public const int TokenEndpointAudienceAccepted = Base + 15;
             public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
             public const int PushedAuthorizationRequestEndpointAudienceAccepted = Base + 17;
+            public const int ClientIdentifiersMismatch = Base + 18;
+            public const int LifetimeTooLong = Base + 19;
         }
 
         /// <summary>
@@ -248,20 +250,7 @@ internal static class LogEvents
             public const int NoMatchingSecret = Base + 4;
             public const int SecretExpired = Base + 5;
             public const int Authenticated = Base + 6;
-        }
-
-        /// <summary>
-        /// <c>Features/ClientAuthentication/ClientSecretJwtAuthenticator.cs</c> -
-        /// client_secret_jwt authentication via HMAC-signed JWT assertions
-        /// (sub-range 3040-3059).
-        /// </summary>
-        public static class ClientSecretJwtAuthenticator
-        {
-            private const int Base = 3040;
-
-            public const int WrongAuthMethod = Base + 2;
-            public const int NoSecretsConfigured = Base + 3;
-            public const int SecretWithoutRawValue = Base + 4;
+            public const int ClientIdentifiersMismatch = Base + 7;
         }
 
         /// <summary>
@@ -286,6 +275,8 @@ internal static class LogEvents
             public const int ClientNotFound = Base + 1;
             public const int NoMatchingPublicKey = Base + 2;
             public const int Authenticated = Base + 3;
+            public const int OutsideValidityPeriod = Base + 4;
+            public const int UnsupportedKeyType = Base + 5;
         }
 
         /// <summary>
@@ -299,6 +290,7 @@ internal static class LogEvents
 
             public const int NoTlsMetadataConfigured = Base + 1;
             public const int Authenticated = Base + 2;
+            public const int ChainNotValidated = Base + 3;
         }
 
         /// <summary>
@@ -320,7 +312,6 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
-            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 

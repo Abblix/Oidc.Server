@@ -46,6 +46,7 @@ internal sealed class TestIssuer
     public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
     public CustodianHeldKeys? CustodianKeys { get; set; }
     public Uri? MtlsBaseUri { get; set; }
+    public IReadOnlyCollection<string> TlsClientAuthCertificateAuthorities { get; set; } = [];
 
     /// <summary>
     /// The tenant these settings describe.
@@ -71,5 +72,6 @@ internal sealed class TestIssuer
         EncryptionKeys = EncryptionKeys,
         CustodianKeys = CustodianKeys,
         MtlsBaseUri = MtlsBaseUri,
+        TlsClientAuthCertificateAuthorities = TlsClientAuthCertificateAuthorities,
     };
 }

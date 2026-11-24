@@ -42,7 +42,6 @@ internal static class ClientManagementServiceCollectionExtensions
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
         services.TryAddSingleton<IInitialAccessTokenValidator, InitialAccessTokenValidator>();
         services.TryAddTransient(newClientOptionsFactory);
-        services.TryAddSingleton<IClientSecretEncryptor, IssuerClientSecretEncryptor>();
 
         // Refuse at startup an offline access for new clients the enumeration does not define, which every
         // registration takes and would otherwise fail on

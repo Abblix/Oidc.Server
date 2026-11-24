@@ -99,7 +99,7 @@ public class IssuerNamingIsOneAnswerTests
             new ProfiledJwtValidator(jwtValidator.Object),
             new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
             new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict).Object,
-            TimeProvider.System);
+            TimeProvider.System, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
 
         await validator.ValidateAsync(tenant, null, new Mock<IClientInfoProvider>().Object, "a.b.c", TokenTypePolicy.CheckedByCaller, signingAlgorithms: null);
         return captured!.ValidateAudience!;

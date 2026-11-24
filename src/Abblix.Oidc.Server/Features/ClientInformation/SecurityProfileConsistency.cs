@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -144,10 +145,12 @@ public static class SecurityProfileConsistency
     /// formatter's, where the JWT is issued.
     /// </remarks>
     /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to.</param>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The client.</param>
     /// <param name="requirements">The control bundle the client is held to.</param>
     public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
         ClientEncryptionKeyResolver encryptionKeyResolver,
+        TenantDefinition tenant,
         ClientInfo client,
         SecurityProfileRequirements requirements)
     {
@@ -169,7 +172,7 @@ public static class SecurityProfileConsistency
                 continue;
 
             var key = await encryptionKeyResolver.ResolveAsync(
-                requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
+                tenant, requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
             if (key is null)
             {
                 violations.Add(
