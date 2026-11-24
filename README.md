@@ -94,7 +94,13 @@ app.MapOidcEndpoints();
 app.Run();
 ```
 
-The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
+The issuer comes from configuration, so add it to `appsettings.json` before the first run:
+
+```json
+{
+  "Issuer": "https://localhost:5001"
+}
+```
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. Some hosts also call `app.UseMultiTenancy()`; [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) says which.
 
@@ -104,10 +110,14 @@ This is the outline, not a complete application: it serves discovery and the sig
 
 The quickstart uses the Minimal API adapter; an MVC application installs `Abblix.OIDC.Server.MVC`. Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
-[Abblix.OIDC](src/Abblix.Oidc/README.md) (the OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients), [Abblix.JWT](src/Abblix.Jwt/README.md) (JWT signing, encryption and validation on the platform's own cryptography), [Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md) (Security Event Tokens) and [Abblix.DependencyInjection](src/Abblix.DependencyInjection/README.md) (the registration patterns the server is built on) come with the server. The rest are optional: add each one only if you actually need its feature.
+The first four packages below come with the server. The rest are optional: add each one only if you actually need its feature.
 
 |Package|What it adds|
 |:-|:-|
+|[Abblix.OIDC](src/Abblix.Oidc/README.md)|The OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients|
+|[Abblix.JWT](src/Abblix.Jwt/README.md)|JWT signing, encryption and validation on the platform's own cryptography|
+|[Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md)|Security Event Tokens|
+|[Abblix.DependencyInjection](src/Abblix.DependencyInjection/README.md)|The registration patterns the server is built on|
 |[Abblix.JWT.Vault](src/Abblix.Jwt.Vault/README.md), [Abblix.JWT.Azure](src/Abblix.Jwt.Azure/README.md)|Signing and decryption keys held in, or sealed by, HashiCorp Vault or OpenBao Transit, or Azure Key Vault (see [External key custodians](EXTERNAL_KEYS.md))|
 |[Abblix.OIDC.Server.SharedSignals](src/Abblix.Oidc.Server.SharedSignals/README.md)|A Shared Signals transmitter for each tenant of the server|
 |[Abblix.SharedSignals](src/Abblix.SharedSignals/README.md), [.MinimalAPI](src/Abblix.SharedSignals.MinimalApi/README.md), [.Redis](src/Abblix.SharedSignals.Redis/README.md)|OpenID Shared Signals Framework 1.0 transmitter and receiver, its endpoints, and a Redis event outbox for several replicas|
