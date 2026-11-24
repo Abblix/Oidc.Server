@@ -17,6 +17,8 @@ using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Common.Constants;
+using Microsoft.AspNetCore.Cors;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -40,6 +42,9 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [AwaitTenantLoad]
 [RequireTenant]
 [OidcRouteValue]
+// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2: dynamic client registration is among the endpoints a browser-based
+// application calls, which "MUST also send the CORS header fields to allow access"
+[EnableCors(OidcConstants.CorsPolicyName)]
 [SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public class ClientManagementController : ControllerBase
 {
