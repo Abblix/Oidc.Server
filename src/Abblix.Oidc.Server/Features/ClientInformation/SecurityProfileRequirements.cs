@@ -90,15 +90,6 @@ public sealed record SecurityProfileRequirements
     public bool RequireCertificateBoundTokens { get; init; }
 
     /// <summary>
-    /// The profile refuses an access token sent to a protected resource in the URI query (RFC 6750 section 2.3), as
-    /// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 require, each in the words "shall not
-    /// accept access tokens in the query parameters". The <c>Authorization</c> header (RFC 6750 section 2.1,
-    /// RFC 9449 section 7.1) and the form-encoded body (RFC 6750 section 2.2) stay accepted: the clause names the
-    /// query alone. Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
-    /// </summary>
-    public bool RequireAccessTokenOutsideQuery { get; init; }
-
-    /// <summary>
     /// The profile has the protected resource answer with the <c>x-fapi-interaction-id</c> response header and log it,
     /// as FAPI 1.0 Part 1 section 6.2.1 requires: it "shall set the response header x-fapi-interaction-id to the value
     /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was
@@ -467,7 +458,6 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
-        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
 
@@ -528,7 +518,6 @@ public sealed record SecurityProfileRequirements
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireCertificateBoundTokens = true,
-        RequireAccessTokenOutsideQuery = true,
         RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
@@ -718,7 +707,6 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
-        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
@@ -890,8 +878,6 @@ public sealed record SecurityProfileRequirements
             RequireSenderConstrainedTokens =
                 RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
             RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
-            RequireAccessTokenOutsideQuery =
-                RequireAccessTokenOutsideQuery || other.RequireAccessTokenOutsideQuery,
             RequireFapiInteractionId = RequireFapiInteractionId || other.RequireFapiInteractionId,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,

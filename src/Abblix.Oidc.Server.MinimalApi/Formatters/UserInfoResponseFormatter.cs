@@ -45,7 +45,7 @@ public class UserInfoResponseFormatter(
         Result<UserInfoFoundResponse, OidcError> response)
     {
         var result = await response.MatchAsync(
-            onSuccess: async found => PrivateWhenTokenInQuery(request, await FormatSuccessAsync(found)),
+            onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
                 // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
                 // left at a protected resource is invalid_request, which SHOULD be a 400
@@ -67,16 +67,6 @@ public class UserInfoResponseFormatter(
             tenantAccessor.CurrentTenant().IssuerAsWritten(),
             DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
             advertiseBearer: true);
-
-    /// <summary>
-    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
-    /// header with the "private" option", these being requests carrying the token in the URI query. Merged into the
-    /// Cache-Control the endpoint sends on every response, whose no-store it keeps.
-    /// </summary>
-    private static IResult PrivateWhenTokenInQuery(UserInfoRequest request, IResult result)
-        => request.AccessTokenInQuery is null
-            ? result
-            : result.WithResponse(response => response.AddPrivateCacheDirective());
 
     private async Task<IResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {

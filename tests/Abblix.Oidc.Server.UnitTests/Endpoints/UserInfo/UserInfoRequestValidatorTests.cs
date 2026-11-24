@@ -517,7 +517,7 @@ public class UserInfoRequestValidatorTests
             tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.IsType<MissingAuthenticationError>(error);
         _accessTokenService.Verify(
             s => s.AuthenticateByAccessTokenAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>()),
             Times.Never);
@@ -539,7 +539,7 @@ public class UserInfoRequestValidatorTests
             SingleIssuer.Tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.IsType<MissingAuthenticationError>(error);
     }
 
     /// <summary>
@@ -577,18 +577,26 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// A client under no profile keeps RFC 6750 section 2.3: the token in the URI query is accepted.
+    /// The token in the URI query (RFC 6750 section 2.3) is refused for a client under no profile too, since a URL
+    /// carrying it lands in browser history and logs (RFC 9700 section 4.3.2). The query alone is a method the endpoint
+    /// does not support, answered like no token at all (RFC 6750 section 3.1), without reading the token, so the request
+    /// leaves nothing recorded about it.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenInQuery_OfUnprofiledClient_IsAccepted()
+    public async Task ValidateAsync_TokenInQuery_OfUnprofiledClient_IsRefusedWithoutReadingTheToken()
     {
-        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
+        ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
 
         var result = await _validator.ValidateAsync(
             SingleIssuer.Tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
 
-        Assert.True(result.TryGetSuccess(out var validRequest));
-        Assert.Same(clientInfo, validRequest.ClientInfo);
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<MissingAuthenticationError>(error);
+        _jwtValidator.Verify(
+            v => v.ValidateAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(),
+                It.IsAny<ValidationOptions>()),
+            Times.Never);
     }
 
     /// <summary>

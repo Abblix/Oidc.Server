@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -47,10 +48,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
 /// <param name="authorizationCodeService">
 /// The service responsible for managing the lifecycle of authorization codes.</param>
+/// <param name="grantRevocation">Revokes the refresh token family the first redemption founded.</param>
+/// <param name="clock">The moment a reuse is caught, no earlier than the family's founding.</param>
 public class AuthorizationCodeReusePreventingDecorator(
     ITokenRequestProcessor processor,
     ITokenRegistry tokenRegistry,
-    IAuthorizationCodeService authorizationCodeService): ITokenRequestProcessor
+    IAuthorizationCodeService authorizationCodeService,
+    GrantRevocation grantRevocation,
+    TimeProvider clock): ITokenRequestProcessor
 {
     /// <summary>
     /// Processes a valid token request, including revoking existing tokens if necessary and registering new tokens.
@@ -91,15 +96,10 @@ public class AuthorizationCodeReusePreventingDecorator(
                 "The authorization code was already used");
         }
 
-        // The claimed grant carries tokens from a prior successful redemption - a sequential reuse.
-        // Revoke those tokens (OAuth 2.0 Security BCP section 4.13) and reject.
+        // The claimed grant carries tokens from a prior successful redemption - a sequential reuse
         if (claimedGrant.IssuedTokens is { Length: > 0 } issuedTokens)
         {
-            foreach (var (jwtId, expiresAt) in issuedTokens)
-            {
-                await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
-            }
-
+            await RevokeAsync(tenant, issuedTokens, claimedGrant.GrantId, request.ClientInfo);
             return new OidcError(
                 ErrorCodes.InvalidGrant,
                 "The authorization code was already used");
@@ -126,14 +126,43 @@ public class AuthorizationCodeReusePreventingDecorator(
 
             if (issuedTokensList.Count > 0)
             {
+                // The family the refresh token founded is written back too, for a reuse to revoke it
                 await authorizationCodeService.UpdateAuthorizationGrantAsync(
                     tenant,
                     code,
-                    request.AuthorizedGrant with { IssuedTokens = issuedTokensList.ToArray() },
+                    request.AuthorizedGrant with
+                    {
+                        IssuedTokens = issuedTokensList.ToArray(),
+                        GrantId = tokenResponse.RefreshToken?.Token.Payload.GrantId,
+                    },
                     request.ClientInfo.AuthorizationCodeExpiresIn);
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Revokes what the first redemption of a reused code issued.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6749 section 4.1.2: the server "SHOULD revoke (when possible) all tokens previously issued based on that
+    /// authorization code", which RFC 9700 section 4.2.4 repeats. Those include what the first redemption's refresh
+    /// token was rotated into since, and the access tokens minted from it, so the family it founded is revoked with
+    /// the tokens it issued. A grant that records no family has its own tokens revoked.
+    /// </remarks>
+    private async Task RevokeAsync(TenantDefinition tenant, TokenInfo[] issuedTokens, string? grantId, ClientInfo client)
+    {
+        foreach (var (jwtId, expiresAt) in issuedTokens)
+        {
+            await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+        }
+
+        // The family was founded at the first redemption, which is no later than now
+        if (grantId is { Length: > 0 })
+        {
+            await grantRevocation.RevokeAsync(
+                tenant, grantId, client, clock.GetUtcNow(), issuedTokens.Max(token => token.ExpiresAt));
+        }
     }
 }

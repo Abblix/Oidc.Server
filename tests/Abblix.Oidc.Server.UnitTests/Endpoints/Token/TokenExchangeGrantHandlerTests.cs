@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// in-memory DI and assert the handler's pipeline (allowlist, actor rejection, dispatch,
 /// grant assembly) without involving JWT validation.
 /// </summary>
-public class TokenExchangeGrantHandlerTests
+public partial class TokenExchangeGrantHandlerTests
 {
     private const string ClientId = "test-client";
     private const string SubjectTokenWire = "header.payload.signature";
@@ -100,6 +100,34 @@ public class TokenExchangeGrantHandlerTests
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.AuthorizationDetails);
         Assert.Equal(adWire, grant.Context.AuthorizationDetails.ToJsonString());
+    }
+
+    /// <summary>
+    /// The DPoP key and the certificate the subject token is bound to bind the exchange grant, so the token endpoint
+    /// requires a proof of them (RFC 9449 section 5, RFC 8705 section 4).
+    /// </summary>
+    [Fact]
+    public async Task TheSubjectTokensBinding_BindsTheExchangeGrant()
+    {
+        var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = ClientId,
+            ProofKeyThumbprint = "the-dpop-key-thumbprint",
+            CertificateSha256Thumbprint = "the-certificate-thumbprint",
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("the-dpop-key-thumbprint", grant.Context.ProofKeyThumbprint);
+        Assert.Equal("the-certificate-thumbprint", grant.Context.CertificateSha256Thumbprint);
     }
 
     [Fact]

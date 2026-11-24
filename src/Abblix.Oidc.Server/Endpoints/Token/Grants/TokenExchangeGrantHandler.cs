@@ -497,11 +497,17 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
         // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than
         // silently dropping them
+        var (proofKeyThumbprint, certificateThumbprint) = SubjectTokenBinding.RequiredOf(subject, clientInfo);
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
             AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
+
+            // The keys the token endpoint then requires a proof of (RFC 9700 sections 2.2.1 and 2.2.2, the server's
+            // policy), as SubjectTokenBinding decides them
+            ProofKeyThumbprint = proofKeyThumbprint,
+            CertificateSha256Thumbprint = certificateThumbprint,
         };
 
         // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the

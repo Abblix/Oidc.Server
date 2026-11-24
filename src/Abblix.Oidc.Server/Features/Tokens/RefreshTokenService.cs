@@ -54,9 +54,13 @@ public class RefreshTokenService(
 	ITenantCatalog catalog) : IRefreshTokenService
 {
 	/// <inheritdoc />
+	public bool Rotates(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo)
+		=> RefreshTokenRotationPolicy.Rotates(tenant, clientInfo, refreshToken.Payload);
+
+	/// <inheritdoc />
 	public async Task<bool> TrySpendAsync(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		if (!RefreshTokenRotationPolicy.Rotates(tenant, clientInfo) ||
+		if (!Rotates(tenant, refreshToken, clientInfo) ||
 		    refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
 		{
 			return true;
@@ -100,9 +104,10 @@ public class RefreshTokenService(
 	{
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
-		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
-		if (expiresAt < now)
+		if (Outlived(issuedAt, now, clientInfo.RefreshToken))
 			return null;
+
+		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
 
 		// The same four claims as on an access token, answering the same four questions - except that one of
 		// them answers a different question here than its name suggests:
@@ -168,6 +173,18 @@ public class RefreshTokenService(
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
 
+	/// <summary>
+	/// Whether a refresh token family first issued at <paramref name="issuedAt"/> is past the lifetime
+	/// <paramref name="options"/> give it now: the one answer to whether such a token may still be redeemed and whether
+	/// it may be renewed.
+	/// </summary>
+	/// <remarks>
+	/// The token's own expiry was computed under the options in force when it was issued, so a host shortening the
+	/// client's absolute lifetime since leaves tokens whose expiry lies beyond the new ceiling.
+	/// </remarks>
+	private static bool Outlived(DateTimeOffset issuedAt, DateTimeOffset now, RefreshTokenOptions options)
+		=> CalculateExpiresAt(issuedAt, now, options) < now;
+
 	private static DateTimeOffset CalculateExpiresAt(
 		DateTimeOffset issuedAt,
 		DateTimeOffset now,
@@ -206,6 +223,15 @@ public class RefreshTokenService(
 		TenantDefinition tenant,
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
+		// RFC 6749 section 5.2: invalid_grant for a refresh token that is "expired", here by the client's current
+		// lifetime, before any token is issued from it
+		if (refreshToken.Payload.IssuedAt is { } issuedAt &&
+		    Outlived(issuedAt, clock.GetUtcNow(), clientInfo.RefreshToken))
+		{
+			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+				new OidcError(ErrorCodes.InvalidGrant, "The refresh token is past its client's refresh token lifetime"));
+		}
+
 		var authSession = refreshToken.Payload.ToAuthSession();
 		var authContext = refreshToken.Payload.ToAuthorizationContext();
 

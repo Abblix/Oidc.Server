@@ -196,6 +196,42 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
     }
 
+    /// <summary>
+    /// A reused authorization code revokes all tokens issued from it (RFC 6749 section 4.1.2, RFC 9700 section 4.2.4),
+    /// the refresh token the first redemption's token was rotated into and its access token included.
+    /// </summary>
+    [Fact]
+    public async Task Reusing_the_code_revokes_the_family_its_first_redemption_founded()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+        var redemption = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        };
+        var initial = await ExchangeCodeForTokensAsync(client, discovery, redemption);
+
+        var rotation = await RefreshAsync(client, discovery, initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>());
+        var rotated = await ReadJsonAsync(rotation);
+        Assert.True(rotation.IsSuccessStatusCode, $"refresh should rotate, got {(int)rotation.StatusCode}: {rotated}");
+        var rt2 = rotated[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var rotatedAccessToken = rotated[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        await AssertInvalidGrantAsync(await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, redemption));
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {

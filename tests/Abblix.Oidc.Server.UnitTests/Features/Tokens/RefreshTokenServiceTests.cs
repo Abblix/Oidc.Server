@@ -595,6 +595,49 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// A refresh token older than its client's absolute lifetime is refused with invalid_grant before any token is
+    /// issued from it, although its own expiry, set while the lifetime was longer, has not come: the lifetime it is
+    /// judged by is the one that decides whether it may be renewed, so a token that may be redeemed may be renewed.
+    /// </summary>
+    [Theory]
+    [InlineData(10, false)]
+    [InlineData(7, true)]
+    public async Task AuthorizeByRefreshToken_JudgesTheTokenByItsClientsCurrentLifetime(int issuedHoursAgo, bool accepted)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+            SlidingExpiresIn = null,
+        });
+        var issuedAt = _currentTime.AddHours(-issuedHoursAgo);
+        var refreshToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                Subject = UserId,
+                SessionId = SessionId,
+                AuthenticationTime = issuedAt,
+                IdentityProvider = "local",
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+                IssuedAt = issuedAt,
+                ExpiresAt = issuedAt + TimeSpan.FromHours(24),
+            },
+        };
+
+        var authorized = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, clientInfo);
+
+        Assert.Equal(accepted, authorized.TryGetSuccess(out _));
+        if (!accepted)
+        {
+            Assert.Equal(ErrorCodes.InvalidGrant, authorized.GetFailure().Error);
+            Assert.Null(await _service.CreateRefreshTokenAsync(
+                SingleIssuer.Tenant, CreateAuthSession(), CreateAuthorizationContext(), clientInfo, refreshToken, GrantId));
+        }
+    }
+
+    /// <summary>
     /// Verifies that CreateRefreshTokenAsync returns a properly formatted EncodedJsonWebToken
     /// containing both the decoded JWT and its encoded string representation.
     /// The encoded string is what gets transmitted to the client.
@@ -980,6 +1023,55 @@ public class RefreshTokenServiceTests
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             supersedesTheOldToken ? Times.Once() : Times.Never());
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// A public client's refresh token rotates unless it is bound to a DPoP key, over the client's policy and profile
+    /// (RFC 9700 section 2.2.2), for a client from a host's own store or kept through a registration update as for a
+    /// declared one. The decision is the presented token's binding: an unbound token of a client requiring DPoP
+    /// rotates, and a token bound by a proof the client sent unasked is reused.
+    /// </summary>
+    [Theory]
+    [InlineData(RefreshTokenReusePolicy.Reuse, false, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, true, true, false)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, true, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, false, true, false)]
+    [InlineData(RefreshTokenReusePolicy.WhenSenderConstrained, false, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Rotate, true, true, true)]
+    public async Task TrySpend_OfAPublicClient_RotatesUnlessTheTokenIsBoundToADPoPKey(
+        RefreshTokenReusePolicy reusePolicy,
+        bool requireDPoP,
+        bool tokenBoundToADPoPKey,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = reusePolicy,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.None;
+        clientInfo.RequireDPoP = requireDPoP;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+        if (tokenBoundToADPoPKey)
+            oldToken.Payload.Confirmation = new JsonWebTokenConfirmation { JwkThumbprint = "the-dpop-key-thumbprint" };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
         _tokenRegistry.Verify(
             registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
             supersedesTheOldToken ? Times.Once() : Times.Never());

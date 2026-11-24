@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
 /// The userinfo request binds the access_token parameter of the query and of the form-encoded body each to its own
-/// member (RFC 6750 sections 2.3 and 2.2), so a security profile can refuse the query alone. Driven through both hosts:
-/// a source that also filled the other member would read as the token sent twice and be refused.
+/// member (RFC 6750 sections 2.3 and 2.2), so the endpoint refuses the query alone and answers the body. Driven through
+/// both hosts: a source that also filled the other member would read as the token sent twice and be refused.
 /// </summary>
 public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(factory)
 {
@@ -36,35 +36,21 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
     private static FormUrlEncodedContent TokenInForm(string accessToken)
         => new(new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken });
 
-    [Fact]
-    public async Task A_token_in_the_query_alone_is_answered()
-    {
-        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
-
-        var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
     /// <summary>
-    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
-    /// header with the "private" option." The no-store every response of the endpoint carries stays beside it.
+    /// The token in the URI query (RFC 6750 section 2.3) is refused for every client, since a URL carrying it lands in
+    /// browser history and logs (RFC 9700 section 4.3.2). The query alone is a method the endpoint does not support,
+    /// which RFC 6750 section 3.1 answers like no token: 401 with a bare Bearer challenge, no error code.
     /// </summary>
     [Fact]
-    public async Task A_success_to_a_token_in_the_query_is_private_to_the_client()
+    public async Task A_token_in_the_query_alone_is_answered_as_no_token()
     {
         var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
 
         var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        // Read as the server sent it, before the client merges repeated lines into one value
-        var sent = Assert.Single(response.Headers.NonValidated[Microsoft.Net.Http.Headers.HeaderNames.CacheControl]);
-        var cacheControl = CacheControlHeaderValue.Parse(sent);
-        Assert.True(cacheControl.Private);
-        Assert.True(cacheControl.NoStore);
-        Assert.True(cacheControl.NoCache);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate, value => value.Scheme == TokenTypes.Bearer);
+        Assert.DoesNotContain("error=", challenge.Parameter ?? string.Empty);
     }
 
     [Fact]

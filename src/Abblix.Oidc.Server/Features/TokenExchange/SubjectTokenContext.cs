@@ -79,6 +79,19 @@ public sealed record SubjectTokenContext(
     public DateTimeOffset? ExpiresAt { get; init; }
 
     /// <summary>
+    /// The thumbprint of the DPoP key the subject_token is bound to (its <c>cnf.jkt</c>), which the client the token was
+    /// issued to proves to exchange it. <c>null</c> when the subject_token is bound to no DPoP key.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
+
+    /// <summary>
+    /// The SHA-256 thumbprint of the client certificate the subject_token is bound to (its <c>cnf.x5t#S256</c>), which
+    /// the client the token was issued to presents to exchange it. <c>null</c> when the subject_token is bound to no
+    /// certificate.
+    /// </summary>
+    public string? CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
     /// The session the subject_token belongs to. The exchanged token joins it, so revoking that session refuses every
     /// token derived from it, however many exchanges stand between them. A resolver refuses a token naming no session
     /// rather than resolving it.

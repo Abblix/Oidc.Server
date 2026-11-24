@@ -84,11 +84,17 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var userInfoEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint);
 
-        // OIDC Core 5.3.1: the access token may be presented as the access_token request parameter. This is the
-        // query branch of the generated UserInfoRequest.BindAsync (SupportsGet -> RequestValues(query, form)).
-        var viaQuery = await OidcFlows.GetJsonAsync(
-            client, OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }));
-        Assert.False(string.IsNullOrEmpty(viaQuery[IanaClaimTypes.Sub]?.GetValue<string>()));
+        // The query branch of the generated UserInfoRequest.BindAsync (SupportsGet -> RequestValues(query, form)) binds
+        // the token. The query alone is refused as a method the endpoint does not support (RFC 9700 section 4.3.2), so
+        // the token is sent beside the header: only a bound query token makes that two methods, an invalid_request
+        // (RFC 6750 section 3.1), where a token the binder missed would leave the header alone and be answered
+        using var viaQueryAndHeader = new HttpRequestMessage(
+            HttpMethod.Get,
+            OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }));
+        viaQueryAndHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        var viaQuery = await client.SendAsync(viaQueryAndHeader, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, viaQuery.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(viaQuery));
 
         // OIDC Core 5.3.1 RECOMMENDED form: the access token in the Authorization: Bearer header.
         using var request = new HttpRequestMessage(HttpMethod.Get, userInfoEndpoint);
@@ -97,7 +103,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         headerResponse.EnsureSuccessStatusCode();
         var viaHeader = JsonNode.Parse(
             await headerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(viaQuery[IanaClaimTypes.Sub]!.GetValue<string>(), viaHeader[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.False(string.IsNullOrEmpty(viaHeader[IanaClaimTypes.Sub]?.GetValue<string>()));
     }
 
     [Fact]

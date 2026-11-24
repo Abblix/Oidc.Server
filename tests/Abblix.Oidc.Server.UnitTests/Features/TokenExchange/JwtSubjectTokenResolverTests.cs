@@ -145,6 +145,36 @@ public class JwtSubjectTokenResolverTests
         Assert.Equal(jwt.Payload.ExpiresAt, ctx.ExpiresAt);
     }
 
+    /// <summary>
+    /// The DPoP key and the certificate the presented token is bound to reach the context, so the exchange must prove
+    /// them as presenting the token anywhere must (RFC 9449 section 7, RFC 8705 section 3); an unbound token binds none.
+    /// </summary>
+    [Theory]
+    [InlineData("the-dpop-key-thumbprint", null)]
+    [InlineData(null, "the-certificate-thumbprint")]
+    [InlineData(null, null)]
+    public async Task TheBindingOfThePresentedToken_ReachesTheContext(string? jwkThumbprint, string? certificateThumbprint)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        if (jwkThumbprint is not null || certificateThumbprint is not null)
+        {
+            jwt.Payload.Confirmation = new JsonWebTokenConfirmation
+            {
+                JwkThumbprint = jwkThumbprint,
+                CertificateSha256Thumbprint = certificateThumbprint,
+            };
+        }
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(jwkThumbprint, ctx.ProofKeyThumbprint);
+        Assert.Equal(certificateThumbprint, ctx.CertificateSha256Thumbprint);
+    }
+
     [Fact]
     public async Task AuthorizationDetailsClaim_DeepClonedIntoContext()
     {
