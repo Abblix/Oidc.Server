@@ -87,23 +87,20 @@ internal sealed class RequestScopedClientInfoProvider(IClientInfoProvider inner)
             : refusal;
 
     /// <summary>
-    /// <paramref name="outcome"/>, or <see cref="UnavailableClientRefusal"/> where the request met a client that could
-    /// not be had for now, whether the outcome is a refusal or a success standing for one.
+    /// <paramref name="refusal"/>, or <see cref="UnavailableClientRefusal"/> where the request met a client that could
+    /// not be had for now.
     /// </summary>
     /// <remarks>
-    /// For an endpoint answering a token it would not honor with success - revocation revoking nothing, introspection
-    /// reporting the token inactive - so a token judged without its client is not reported on as if it had been.
+    /// For an endpoint that answers a token it does not honor with success, as introspection reports such a token
+    /// inactive, so a token refused without its client is not reported on as if it had been judged.
     /// </remarks>
-    /// <param name="outcome">What the request's steps reached.</param>
-    public Result<T, OidcError> AnswerOf<T>(Result<T, OidcError> outcome)
+    /// <param name="refusal">The success-shaped refusal the request's steps reached.</param>
+    public Result<T, OidcError> AnswerOf<T>(T refusal)
     {
-        if (outcome.TryGetFailure(out var refusal))
-            return RefusalOf(refusal);
-
         if (UnavailableClientRefusal() is { } unavailable)
             return unavailable;
 
-        return outcome;
+        return refusal;
     }
 
     private static ClientTemporarilyUnavailableError UnavailableClient { get; } =

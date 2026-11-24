@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -27,40 +28,65 @@ public partial class ClientIdMetadataDocumentTests
     /// and for every step reading the token: the document no cache holds is fetched once per request.
     /// </summary>
     [Theory]
-    [InlineData(TokenReader.Refresh)]
-    [InlineData(TokenReader.Revocation)]
-    [InlineData(TokenReader.Introspection)]
-    public async Task AValidDocumentNoCacheHolds_IsFetchedOnceByARequestReadingItsToken(TokenReader reader)
+    [InlineData(TokenReader.Refresh, Caller.Owner)]
+    [InlineData(TokenReader.Revocation, Caller.Owner)]
+    [InlineData(TokenReader.Introspection, Caller.Introspector)]
+    public async Task AValidDocumentNoCacheHolds_IsFetchedOnceByARequestReadingItsToken(TokenReader reader, Caller caller)
     {
         var (host, client, discovery, tokens) = await IssueOfflineTokensAsync();
         await using var _ = host;
         var before = _origin.RequestsTo(ClientId);
 
-        using var response = await ReadAsync(client, discovery, tokens, reader, asOwner: reader != TokenReader.Introspection);
+        using var response = await ReadAsync(client, discovery, tokens, reader, caller);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(1, _origin.RequestsTo(ClientId) - before);
     }
 
     /// <summary>
-    /// A token of a client whose document cannot be had for now, read for a request of another client, is not judged
-    /// on a client the server could not find: the request is answered 503, as a failed authentication of such a client
-    /// is.
+    /// A token of a client whose document cannot be had for now, read for another client, is not judged on a client the
+    /// server could not find: introspected by a client authorized to introspect any token, or presented at the token
+    /// endpoint, where draft-ietf-oauth-client-id-metadata-document-03 section 6.1 has a transient failure answered
+    /// 503, the request is answered 503, as a failed authentication of such a client is.
     /// </summary>
     [Theory]
-    [InlineData(TokenReader.Refresh)]
-    [InlineData(TokenReader.Revocation)]
-    [InlineData(TokenReader.Introspection)]
-    public async Task ATokenOfAClientWhoseDocumentCannotBeHadForNow_IsAnswered503(TokenReader reader)
+    [InlineData(TokenReader.Refresh, Caller.Introspector)]
+    [InlineData(TokenReader.Introspection, Caller.Introspector)]
+    public async Task ATokenOfAClientWhoseDocumentCannotBeHadForNow_IsAnswered503(TokenReader reader, Caller caller)
     {
         var (host, client, discovery, tokens) = await IssueOfflineTokensAsync();
         await using var _ = host;
         _origin.Answer(ClientId, () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
 
-        using var response = await ReadAsync(client, discovery, tokens, reader, asOwner: false);
+        using var response = await ReadAsync(client, discovery, tokens, reader, caller);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A token that is not the caller's is answered as it is without the outage, since nothing its client's document
+    /// would say changes the answer: revocation revokes nothing with 200 (RFC 7009 section 2.1), and introspection by a
+    /// client not authorized to introspect another's token reports it inactive. Either tells the caller nothing about
+    /// a token that is not its own, its client's outage included.
+    /// </summary>
+    [Theory]
+    [InlineData(TokenReader.Revocation, Caller.Introspector)]
+    [InlineData(TokenReader.Introspection, Caller.Stranger)]
+    public async Task ATokenNotTheCallers_IsAnsweredAsWithoutTheOutageOfItsClientsDocument(TokenReader reader, Caller caller)
+    {
+        var (host, client, discovery, tokens) = await IssueOfflineTokensAsync();
+        await using var _ = host;
+        _origin.Answer(ClientId, () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        using var response = await ReadAsync(client, discovery, tokens, reader, caller);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (reader == TokenReader.Introspection)
+        {
+            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+            Assert.False(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+        }
     }
 
     /// <summary>
@@ -91,25 +117,24 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// Reads a token of <paramref name="tokens"/> the way <paramref name="reader"/> names: as the client it was issued to,
-    /// or as a client of the host's store.
+    /// Reads a token of <paramref name="tokens"/> the way <paramref name="reader"/> names, as <paramref name="who"/>.
     /// </summary>
     private static Task<HttpResponseMessage> ReadAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         JsonObject tokens,
         TokenReader reader,
-        bool asOwner)
+        Caller who)
     {
         var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
-        var caller = asOwner
-            ? new Dictionary<string, string> { [ClientRequest.Parameters.ClientId] = ClientId }
-            : new Dictionary<string, string>
-            {
-                [ClientRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
-                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            };
+        var caller = who switch
+        {
+            Caller.Owner => new Dictionary<string, string> { [ClientRequest.Parameters.ClientId] = ClientId },
+            Caller.Introspector => StoreClient(TestConstants.UnrestrictedClientId),
+            Caller.Stranger => StoreClient(TestConstants.ConfidentialClientId),
+            _ => throw new ArgumentOutOfRangeException(nameof(who), who, null),
+        };
 
         switch (reader)
         {
@@ -131,10 +156,30 @@ public partial class ClientIdMetadataDocumentTests
         }
     }
 
+    /// <summary>
+    /// A client of the host's store, authenticating with the secret every confidential test client carries.
+    /// </summary>
+    private static Dictionary<string, string> StoreClient(string clientId) => new()
+    {
+        [ClientRequest.Parameters.ClientId] = clientId,
+        [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+    };
+
     public enum TokenReader
     {
         Refresh,
         Revocation,
         Introspection,
+    }
+
+    /// <summary>
+    /// Who reads the token: the client it was issued to, a store client authorized to introspect any token, or a store
+    /// client that is not.
+    /// </summary>
+    public enum Caller
+    {
+        Owner,
+        Introspector,
+        Stranger,
     }
 }

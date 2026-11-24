@@ -73,30 +73,16 @@ public partial class IntrospectionRequestValidator(
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
 		// One lookup of the clients for the whole request: the client authentication, the reading of the token and the
-		// client it was issued to find each client once
-		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
-		var result = await AuthenticateAndReadAsync(tenant, introspectionRequest, clientRequest, clients);
-
-		// A request whose client, or the client of the token it names, could not be had for now is answered 503, as the
-		// token and pushed authorization request endpoints answer it (draft-ietf-oauth-client-id-metadata-document-03
+		// client it was issued to find each client once.
+		//
+		// A request whose client, or the client of the token it reports on, could not be had for now is answered 503, as
+		// the token and pushed authorization request endpoints answer it (draft-ietf-oauth-client-id-metadata-document-03
 		// section 6.1), rather than reporting active=false about a token nothing was found to refuse. RFC 7662 names no
-		// such answer, so this is the server's choice.
-		return clients.AnswerOf(result);
-	}
-
-	/// <summary>
-	/// Authenticates the client and reads the token the request names, finding every client through
-	/// <paramref name="clients"/>.
-	/// </summary>
-	private async Task<Result<ValidIntrospectionRequest, OidcError>> AuthenticateAndReadAsync(
-		TenantDefinition tenant,
-		IntrospectionRequest introspectionRequest,
-		ClientRequest clientRequest,
-		IClientInfoProvider clients)
-	{
+		// such answer, so this is the server's choice
+		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
 		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
-			return RefusalOf(authenticated.GetFailure());
+			return clients.RefusalOf(RefusalOf(authenticated.GetFailure()));
 
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
@@ -151,9 +137,13 @@ public partial class IntrospectionRequestValidator(
 		if (!clientInfo.AllowCrossClientIntrospection && !token.BelongsTo(clientInfo.ClientId))
 			return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 
+		// The records of a token are judged by its client - a cutoff on its subject opens the subject against it - so a
+		// token they refuse where that client could not be had for now is answered as such. Before here the client
+		// decides nothing: a token that is not authentic, or not the caller's to introspect, is inactive whatever its
+		// client's document says
 		var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
 		if (!recorded.TryGetSuccess(out var valid))
-			return Inactive(introspectionRequest, clientInfo, recorded.GetFailure());
+			return clients.AnswerOf(Inactive(introspectionRequest, clientInfo, recorded.GetFailure()));
 
 		return new ValidIntrospectionRequest(
 			introspectionRequest, clientInfo, valid, await TokenClientAsync(tenant, clients, valid, clientInfo));

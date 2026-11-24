@@ -108,23 +108,20 @@ public sealed class RequestScopedClientInfoProviderTests
     }
 
     /// <summary>
-    /// An outcome standing for a refusal though it is a success - a token revoked or reported on without its client -
-    /// is answered as the refusal of a client that could not be had for now, as a refusal is.
+    /// A refusal answered with success - a token reported inactive - is answered as the refusal of a client that could
+    /// not be had for now, as a refusal is.
     /// </summary>
     [Theory]
     [MemberData(nameof(Answers))]
-    public async Task AnyOutcome_IsTheUnavailableClientRefusal_OnlyAfterATemporarilyUnavailableAnswer(int index)
+    public async Task ASuccessShapedRefusal_IsTheUnavailableClientRefusal_OnlyAfterATemporarilyUnavailableAnswer(int index)
     {
         Answer(AnswerAt(index));
         var clients = new RequestScopedClientInfoProvider(_store.Object);
         await clients.FindClientAsync(Tenant, ClientId);
 
-        var success = clients.AnswerOf<string>("answered");
-        var refusal = clients.AnswerOf<string>(new OidcError(ErrorCodes.InvalidRequest, "refused"));
-        var moreThanOneMethod = clients.AnswerOf<string>(new MoreThanOneClientAuthenticationMethodError("two"));
+        var answer = clients.AnswerOf("inactive");
 
-        Assert.Equal(index == 3, success.TryGetFailure(out var instead) && instead is ClientTemporarilyUnavailableError);
-        Assert.Equal(index == 3, refusal.TryGetFailure(out var failure) && failure is ClientTemporarilyUnavailableError);
-        Assert.True(moreThanOneMethod.TryGetFailure(out var kept) && kept is MoreThanOneClientAuthenticationMethodError);
+        Assert.Equal(index == 3, answer.TryGetFailure(out var instead) && instead is ClientTemporarilyUnavailableError);
+        Assert.Equal(index != 3, answer.TryGetSuccess(out var kept) && kept == "inactive");
     }
 }

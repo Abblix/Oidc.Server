@@ -103,27 +103,10 @@ public partial class RevocationRequestValidator(
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
 		// One lookup of the clients for the whole request: the client authentication and the reading of the token find
-		// each client once
+		// each client once. Only the authentication can meet a client that cannot be had for now: the token is acted on
+		// only for the client it was issued to, whose answer the authentication already received, and a token of another
+		// client is answered alike whatever its client's document says
 		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
-		var result = await AuthenticateAndReadAsync(tenant, revocationRequest, clientRequest, clients);
-
-		// RFC 7009 section 2.2.1: "If the server responds with HTTP status code 503, the client must assume the token
-		// still exists and may retry after a reasonable delay", which is what a request is told whose client, or the
-		// client of the token it names, could not be had for now (draft-ietf-oauth-client-id-metadata-document-03
-		// section 6.1). Decided before the token is revoked, so nothing is revoked on a client not found.
-		return clients.AnswerOf(result);
-	}
-
-	/// <summary>
-	/// Authenticates the client and reads the token the request names, finding every client through
-	/// <paramref name="clients"/>.
-	/// </summary>
-	private async Task<Result<ValidRevocationRequest, OidcError>> AuthenticateAndReadAsync(
-		TenantDefinition tenant,
-		RevocationRequest revocationRequest,
-		ClientRequest clientRequest,
-		IClientInfoProvider clients)
-	{
 		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
@@ -132,9 +115,10 @@ public partial class RevocationRequestValidator(
 			if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
 				return moreThanOneMethod;
 
-			return new OidcError(
-				ErrorCodes.InvalidClient,
-				"The client is not authorized");
+			// RFC 7009 section 2.2.1: "If the server responds with HTTP status code 503, the client must assume the
+			// token still exists and may retry after a reasonable delay", which is what a client is told whose
+			// document could not be had for now (draft-ietf-oauth-client-id-metadata-document-03 section 6.1)
+			return clients.RefusalOf(new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"));
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read: reading it
