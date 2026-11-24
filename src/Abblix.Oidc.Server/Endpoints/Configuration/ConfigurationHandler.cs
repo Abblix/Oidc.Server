@@ -68,8 +68,8 @@ public sealed class ConfigurationHandler(
 		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
 		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
 		// enabled accepts no caller at all, so nothing is said about it.
-		var authenticationMethods = AdmittedAuthenticationMethods(
-			tenant, clientAuthenticator.ClientAuthenticationMethodsSupported);
+		var authenticationMethods = tenant.AdmittedAuthenticationMethods(
+			clientAuthenticator.ClientAuthenticationMethodsSupported);
 		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported)
 			.Where(options.Value.NewClientOptions.ClientSecret.Keys)
 			.ToArray();
@@ -194,23 +194,6 @@ public sealed class ConfigurationHandler(
 			or ClientAuthenticationMethods.ClientSecretJwt)
 			? algorithms
 			: null;
-
-	/// <summary>
-	/// The client authentication methods of <paramref name="methods"/> the tenant's profile admits a client
-	/// authenticating with: FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 admit mutual
-	/// TLS and the private key JWT alone, and refuse a public client. The tenant's profile binds every client it
-	/// serves, which is refused where it authenticates by the same rule, so a method it refuses is one no endpoint of
-	/// the tenant authenticates a client with, and RFC 8414 section 2 lists the methods "supported by this token
-	/// endpoint". A tenant listing no certificate authority for tls_client_auth serves no client with it either.
-	/// </summary>
-	private static string[] AdmittedAuthenticationMethods(TenantDefinition tenant, IEnumerable<string> methods)
-	{
-		var profile = SecurityProfileRequirements.For(tenant, client: null);
-		return methods
-			.Where(method => SecurityProfileConsistency.FindAuthenticationMethodViolations(method, profile).Count == 0)
-			.Where(method => TlsClientAuthCertificateAuthorities.Serve(tenant, method))
-			.ToArray();
-	}
 
 	/// <summary>
 	/// <paramref name="methods"/> where <paramref name="endpoint"/> is enabled, otherwise none.

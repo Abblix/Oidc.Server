@@ -21,7 +21,7 @@ public interface IClientCredentialFactory
     /// avoiding unnecessary secret generation for public clients or private_key_jwt authentication.
     /// </summary>
     /// <param name="tokenEndpointAuthMethod">Determines secret generation strategy based on OAuth 2.0 authentication method.</param>
-    /// <param name="clientId">Allows pre-registration scenarios where the client ID is externally provided.</param>
+    /// <param name="clientId">The identifier to register the client under, or null for one the server generates.</param>
     /// <returns>Complete credential set including both transmission format (plain secret) and storage format (hash).</returns>
     ClientCredentials Create(string tokenEndpointAuthMethod, string? clientId = null);
 }

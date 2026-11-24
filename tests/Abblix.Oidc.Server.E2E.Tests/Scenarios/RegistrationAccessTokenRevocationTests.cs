@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -87,6 +88,62 @@ public class RegistrationAccessTokenRevocationTests(TestFactory factory) : TestB
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
     }
 
+    /// <summary>
+    /// RFC 7662 section 2.2 answers a token that "is not active" with active=false, and a registration access token is
+    /// active exactly while its registration still holds it (RFC 7592 section 5): so introspection judges it as the
+    /// client configuration endpoint does, live until it is revoked, replaced or its client deleted. The caller is a
+    /// protected resource allowed to introspect tokens of others, since a deleted client cannot authenticate itself.
+    /// </summary>
+    [Theory]
+    [InlineData(RegistrationEnd.None, true)]
+    [InlineData(RegistrationEnd.Revoked, false)]
+    [InlineData(RegistrationEnd.Replaced, false)]
+    [InlineData(RegistrationEnd.Deleted, false)]
+    public async Task A_registration_access_token_is_introspected_active_only_while_its_registration_holds_it(
+        RegistrationEnd end, bool active)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery);
+
+        switch (end)
+        {
+            case RegistrationEnd.None:
+                break;
+
+            case RegistrationEnd.Revoked:
+                Assert.Equal(HttpStatusCode.OK, (await RevokeAsync(
+                    client, discovery, registration.AccessToken, registration.ClientId, registration.ClientSecret)).StatusCode);
+                break;
+
+            case RegistrationEnd.Replaced:
+                Assert.Equal(HttpStatusCode.OK, (await ReadAsync(
+                    client, registration.ConfigurationUri, registration.AccessToken, HttpMethod.Put, registration.ClientId)).StatusCode);
+                break;
+
+            case RegistrationEnd.Deleted:
+                Assert.Equal(HttpStatusCode.NoContent, (await ReadAsync(
+                    client, registration.ConfigurationUri, registration.AccessToken, HttpMethod.Delete)).StatusCode);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(end), end, null);
+        }
+
+        var introspection = await IntrospectAsync(
+            client, discovery, registration.AccessToken, TestConstants.UnrestrictedClientId);
+
+        Assert.Equal(active, introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+    }
+
+    public enum RegistrationEnd
+    {
+        None,
+        Revoked,
+        Replaced,
+        Deleted,
+    }
+
     private sealed record Registration(string ClientId, string ClientSecret, string AccessToken, Uri ConfigurationUri);
 
     /// <summary>
@@ -118,10 +175,26 @@ public class RegistrationAccessTokenRevocationTests(TestFactory factory) : TestB
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-    private static async Task<HttpResponseMessage> ReadAsync(HttpClient client, Uri configurationUri, string accessToken)
+    /// <summary>
+    /// Sends a request to the client configuration endpoint with <paramref name="accessToken"/>: a read by default, an
+    /// update of the client <paramref name="clientId"/> names, or a deletion.
+    /// </summary>
+    private static async Task<HttpResponseMessage> ReadAsync(
+        HttpClient client,
+        Uri configurationUri,
+        string accessToken,
+        HttpMethod? method = null,
+        string? clientId = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, configurationUri);
+        using var request = new HttpRequestMessage(method ?? HttpMethod.Get, configurationUri);
         request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        if (clientId is not null)
+        {
+            var metadata = Metadata();
+            metadata[RequestMembers.ClientId] = clientId;
+            request.Content = JsonContent.Create(metadata);
+        }
+
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 }

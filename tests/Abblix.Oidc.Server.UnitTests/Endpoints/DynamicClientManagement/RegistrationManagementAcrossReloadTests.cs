@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
@@ -53,7 +54,7 @@ public class RegistrationManagementAcrossReloadTests
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {
-        var result = await new ClientRequestValidator(clients, new TokenIsItsJti()).ValidateAsync(
+        var result = await new ClientRequestValidator(new RegistrationAccessTokenBinding(clients), new TokenIsItsJti()).ValidateAsync(
             _options.CurrentValue.ToTenant(),
             new ClientRequest
             {

@@ -168,8 +168,8 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A refresh token of a grant for a named resource carries that resource as its audience, and redeeming it
-    /// issues an access token for the same resource, as RFC 8707 section 2.2 shows a refresh token being used.
+    /// Redeeming a refresh token of a grant for a named resource issues an access token for the same resource, as
+    /// RFC 8707 section 2.2 shows a refresh token being used.
     /// </summary>
     [Fact]
     public async Task A_refresh_token_of_a_grant_for_a_resource_is_redeemed()

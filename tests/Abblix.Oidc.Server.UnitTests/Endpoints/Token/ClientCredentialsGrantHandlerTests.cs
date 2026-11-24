@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -199,6 +200,8 @@ public class ClientCredentialsGrantHandlerTests
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(GrantTypes.ClientCredentials, grant.AuthSession.IdentityProvider);
+        // The mark UserInfo and introspection read is the one this grant writes
+        Assert.True(ClientCredentialsSession.IsClientItself(grant.AuthSession.IdentityProvider));
     }
 
     /// <summary>

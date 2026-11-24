@@ -136,6 +136,8 @@ public static class OidcResults
     /// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
     /// body, because the status says the whole of it and no registered error code means "you asked too often".
     /// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+    /// A client whose metadata document could not be had for now is answered 503 with no body, the status
+    /// draft-ietf-oauth-client-id-metadata-document-03 section 6.1 names (experimental).
     /// </summary>
     /// <remarks>
     /// Every way of formatting an error passes through here first, so a refusal cannot take the status of
@@ -150,6 +152,10 @@ public static class OidcResults
                     .WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
 
             TooManyRequestsError => Results.StatusCode(StatusCodes.Status429TooManyRequests),
+
+#pragma warning disable ABX9001 // The refusal of the experimental Client ID Metadata Documents
+            ClientTemporarilyUnavailableError => Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
+#pragma warning restore ABX9001
 
             _ => null,
         };

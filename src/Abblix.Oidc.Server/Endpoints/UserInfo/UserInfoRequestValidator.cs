@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.UserInfoRequest;
@@ -154,7 +155,9 @@ public class UserInfoRequestValidator(
 	/// Admits the grant the token opened to the UserInfo Endpoint, or says why its authorization falls short.
 	/// </summary>
 	/// <remarks>
-	/// OpenID Connect Core 1.0 section 5.3: the endpoint is called "using an Access Token obtained through OpenID
+	/// OpenID Connect Core 1.0 section 5.3: the endpoint "returns Claims about the authenticated End-User", so a token
+	/// issued to the client itself, which names no end user, is refused as invalid_token before the openid scope is
+	/// judged. The endpoint is called "using an Access Token obtained through OpenID
 	/// Connect Authentication", which carries the openid scope. FAPI 2.0 Security Profile section 5.3.4 has the
 	/// resource server verify the authorization "is sufficient for the requested resource access and otherwise return
 	/// errors as in Section 3.1" of RFC 6750, which names that insufficient_scope.
@@ -164,6 +167,13 @@ public class UserInfoRequestValidator(
 		AuthorizedGrant grant,
 		ClientInfo clientInfo)
 	{
+		if (ClientCredentialsSession.IsClientItself(grant.AuthSession.IdentityProvider))
+		{
+			return new OidcError(
+				ErrorCodes.InvalidToken,
+				"The access token was issued to the client itself and names no end user");
+		}
+
 		if (!grant.Context.Scope.Contains(Scopes.OpenId, StringComparer.Ordinal))
 		{
 			// RFC 6750 section 3.1: insufficient_scope "MAY include the "scope" attribute with the scope necessary to

@@ -151,6 +151,13 @@ public class ClientIdMetadataDocumentFetcherTests
     // A member repeated, at the top and inside a key
     [InlineData("""{"client_id":"https://client.example.com/metadata.json","client_id":"https://client.example.com/metadata.json"}""")]
     [InlineData("""{"client_id":"https://client.example.com/metadata.json","jwks":{"keys":[{"kty":"EC","kty":"EC"}]}}""")]
+    // A string escaping a lone surrogate parses as JSON but decodes to no string (RFC 8259 section 8.2), wherever
+    // the escape stands
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","client_name":"\uD800"}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json\uDC00"}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","token_endpoint_auth_methods_supported":["none\uD800"]}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","jwks":{"keys":[{"kty":"EC","kid":"\uD800"}]}}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","\uD800":"name"}""")]
     public async Task ABodyThatIsNoJsonObject_IsRefused(string body)
     {
         _origin.Serve(Url, body);

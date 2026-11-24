@@ -24,6 +24,21 @@ public record NewClientOptions
     public ClientIdOptions ClientId { get; init; } = new();
 
     /// <summary>
+    /// Lets a client registering itself choose its client identifier by sending a <c>client_id</c> member. Off by
+    /// default: the server assigns every identifier and a proposed one is ignored, as RFC 9700 section 4.15.1
+    /// recommends.
+    /// </summary>
+    /// <remarks>
+    /// It governs the library's registration pipeline, which the dynamic client registration endpoint runs. A token
+    /// the client credentials grant issues carries <c>idp</c> set to <c>client_credentials</c>, in the token and in the
+    /// introspection response, which shows it to every caller for such a token alone, and the user information
+    /// endpoint refuses such a token. A proposed identifier is refused when another client holds it, or when it is an
+    /// <c>https</c> URL while client ID metadata documents are enabled. Applied on registration only: an RFC 7592
+    /// update keeps the identifier the client has.
+    /// </remarks>
+    public bool AcceptProposedClientId { get; init; }
+
+    /// <summary>
     /// Generation parameters and lifetime policy for the client secret issued to a newly registered client.
     /// </summary>
     public ClientSecretOptions ClientSecret { get; init; } = new();

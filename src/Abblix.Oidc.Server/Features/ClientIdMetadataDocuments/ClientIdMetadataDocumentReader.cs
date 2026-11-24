@@ -32,14 +32,12 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// document names, the credentials it must not carry, the authentication method the server picks and the grant and
 /// response types it keeps.
 /// </summary>
-/// <param name="clientAuthenticator">Names the client authentication methods this server supports.</param>
 /// <param name="grantTypeInformers">Name the grant types this server supports.</param>
 /// <param name="responseBuilders">Name the response types this server supports.</param>
 /// <param name="options">Holds the grant types the host allows a new client, read on each document.</param>
 /// <param name="fetchOptions">Holds the destinations the host opened for its own services, read on each document.
 /// </param>
 internal sealed class ClientIdMetadataDocumentReader(
-    IClientAuthenticator clientAuthenticator,
     IEnumerable<IGrantTypeInformer> grantTypeInformers,
     IEnumerable<IAuthorizationResponseBuilder> responseBuilders,
     IOptionsMonitor<OidcOptions> options,
@@ -77,13 +75,18 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// </summary>
     /// <param name="clientId">The client identifier URL the document was fetched from.</param>
     /// <param name="document">The document.</param>
-    public Result<ClientRegistrationRequest, MetadataDocumentFailure> Read(string clientId, JsonObject document)
+    /// <param name="supported">The client authentication methods the client may be held to: those the server offers
+    /// when the document itself is judged, those the tenant resolving the client admits when the client is.</param>
+    public Result<ClientRegistrationRequest, MetadataDocumentFailure> Read(
+        string clientId,
+        JsonObject document,
+        IReadOnlyCollection<string> supported)
     {
         var refusal = WhyIdentifierRefused(clientId, document) ?? WhyCredentialsRefused(document);
         if (refusal is not null)
             return MetadataDocumentFailure.Terminal(refusal);
 
-        return SelectAuthenticationMethod(document).Match(
+        return SelectAuthenticationMethod(document, supported).Match(
             method => Deserialize(document).Match(
                 metadata => Complete(clientId, document, metadata, method),
                 failure => failure),
@@ -234,17 +237,17 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// <summary>
     /// The client authentication method the client is held to, section 5.
     /// </summary>
-    private Result<string, MetadataDocumentFailure> SelectAuthenticationMethod(JsonObject document)
-        => DeclaredAuthenticationMethods(document).Match(Select, failure => failure);
+    private static Result<string, MetadataDocumentFailure> SelectAuthenticationMethod(
+        JsonObject document,
+        IReadOnlyCollection<string> supported)
+        => DeclaredAuthenticationMethods(document).Match(declared => Select(declared, supported), failure => failure);
 
-    private Result<string, MetadataDocumentFailure> Select(string[] declared)
+    private static Result<string, MetadataDocumentFailure> Select(string[] declared, IReadOnlyCollection<string> supported)
     {
         // Section 4.1: these "MUST NOT include client_secret_post, client_secret_basic, client_secret_jwt, or any other
         // method based around a shared symmetric secret"
         if (declared.FirstOrDefault(method => SharedSecretMethods.Contains(method, StringComparer.Ordinal)) is { } secret)
             return MetadataDocumentFailure.Terminal($"it declares {secret}, a method built on a shared secret");
-
-        var supported = clientAuthenticator.ClientAuthenticationMethodsSupported.ToHashSet(StringComparer.Ordinal);
 
         // Section 5 has the server "select one of the values ... that it supports", and section 5.1 shows the choice:
         // a client declaring ["none", "private_key_jwt"] at a server supporting private_key_jwt "should use the

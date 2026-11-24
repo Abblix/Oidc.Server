@@ -405,9 +405,10 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The locations this client answers for when it acts as a resource server, matched against the
-    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
-    /// issued to somebody else returns the entries addressed to one of these, and nothing when the
-    /// list is absent.
+    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry and, under
+    /// <see cref="CrossClientSubjectTokenExchange.AddressedToClient"/>, against the audience of a subject token
+    /// issued to another client. Introspecting a token issued to somebody else returns the entries addressed to
+    /// one of these, and nothing when the list is absent.
     /// </summary>
     /// <remarks>
     /// RFC 9396 section 9 obliges the server to make the granted details available to the resource server
@@ -435,15 +436,15 @@ public record ClientInfo(string ClientId)
     public Uri[]? ResourceLocations { get; set; }
 
     /// <summary>
-    /// RFC 8693 section 1.3: by default this AS rejects a Token Exchange request where the
-    /// <c>subject_token</c> was originally issued to a different client than the one presenting
-    /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
-    /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
-    /// to <c>true</c> to opt out of the default check. The opt-out also covers a subject_token whose
-    /// origin cannot be determined at all, which is otherwise refused: a client trusted to present
-    /// tokens issued to others is equally trusted to present one whose issuer cannot be read.
+    /// Which subject tokens issued to another client this client may present at the token exchange grant.
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Refused"/> by default, the guard against a
+    /// confused deputy turning a token issued to somebody else into one of its own;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.AddressedToClient"/> for a resource server
+    /// delegating upstream with the tokens presented to it;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Any"/> for a broker trusted with tokens issued
+    /// to others.
     /// </summary>
-    public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
+    public CrossClientSubjectTokenExchange CrossClientSubjectTokenExchange { get; set; }
 
     /// <summary>
     /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.

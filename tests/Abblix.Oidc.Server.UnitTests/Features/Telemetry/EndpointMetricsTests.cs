@@ -175,6 +175,20 @@ public sealed class EndpointMetricsTests : IDisposable
         Assert.Equal(counted, refusal[TelemetryTags.RateLimitBudget]);
     }
 
+    /// <summary>
+    /// A request refused because a client metadata document could not be had for now is counted apart from one
+    /// refused for a spent budget, though neither answer carries an error code on the wire.
+    /// </summary>
+    [Fact]
+    public async Task AClientNotToBeHadForNow_IsCountedApartFromASpentBudget()
+    {
+        await Token(new ClientTemporarilyUnavailableError("Not to be had for now"));
+        await Token(new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.Introspection));
+
+        var errors = _measured.Of(OidcMetrics.RequestDuration).Select(request => request[TelemetryTags.Error]).ToArray();
+        Assert.Equal([TelemetryTags.ClientMetadataUnavailable, ErrorCodes.TemporarilyUnavailable], errors);
+    }
+
     [Fact]
     public async Task SpentAuthenticationFailures_AreCountedAsARefusalAndPassOn()
     {

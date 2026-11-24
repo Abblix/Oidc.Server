@@ -133,7 +133,9 @@ public partial class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requester = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken) with
         {
-            AllowCrossClientSubjectTokenExchange = !requesterIsTheOwner,
+            CrossClientSubjectTokenExchange = requesterIsTheOwner
+                ? CrossClientSubjectTokenExchange.Refused
+                : CrossClientSubjectTokenExchange.Any,
         };
 
         var result = await handler.AuthorizeAsync(

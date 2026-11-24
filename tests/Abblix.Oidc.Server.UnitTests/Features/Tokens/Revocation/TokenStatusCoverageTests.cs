@@ -131,7 +131,8 @@ public class TokenStatusCoverageTests
                 Options.Create(new OidcOptions()),
                 clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter())),
-            new GrantRevocation(registry.Object, clients.Object));
+            new GrantRevocation(registry.Object, clients.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         var result = await check.CheckAsync(SingleIssuer.Tenant, token, ValidationOptions.Default);
 

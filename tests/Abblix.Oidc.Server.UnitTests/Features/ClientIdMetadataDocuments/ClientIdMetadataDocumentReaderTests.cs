@@ -33,7 +33,16 @@ public class ClientIdMetadataDocumentReaderTests
 {
     private const string ClientId = "https://client.example.com/metadata.json";
 
-    private static ClientIdMetadataDocumentReader CreateReader(
+    /// <summary>
+    /// A reader together with the client authentication methods it is handed as supported.
+    /// </summary>
+    private sealed record ReaderOver(ClientIdMetadataDocumentReader Reader, string[] Supported)
+    {
+        public Abblix.Utils.Result<ClientRegistrationRequest, MetadataDocumentFailure> ReadDocument(string clientId, JsonObject document)
+            => Reader.Read(clientId, document, Supported);
+    }
+
+    private static ReaderOver CreateReader(
         string[]? authenticationMethods = null,
         string[]? grantTypes = null,
         string[]? responseTypeParts = null,
@@ -41,13 +50,12 @@ public class ClientIdMetadataDocumentReaderTests
         Uri[]? allowedDestinations = null,
         string[]? documentGrantTypes = null)
     {
-        var authenticator = new Mock<IClientAuthenticator>();
-        authenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(authenticationMethods ??
+        string[] supported = authenticationMethods ??
         [
             ClientAuthenticationMethods.None,
             ClientAuthenticationMethods.PrivateKeyJwt,
             ClientAuthenticationMethods.ClientSecretBasic,
-        ]);
+        ];
 
         var grants = new Mock<IGrantTypeInformer>();
         grants.Setup(g => g.GrantTypesSupported).Returns(grantTypes ??
@@ -72,15 +80,14 @@ public class ClientIdMetadataDocumentReaderTests
             NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
             ClientIdMetadataDocuments = { AllowedGrantTypes = documentGrantTypes },
         };
-        return new ClientIdMetadataDocumentReader(
-            authenticator.Object,
+        return new ReaderOver(new ClientIdMetadataDocumentReader(
             [grants.Object],
             builders,
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options),
             Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor => monitor.CurrentValue == new SecureHttpFetchOptions
             {
                 AllowedDestinations = allowedDestinations,
-            }));
+            })), supported);
     }
 
     private static JsonObject Document(string json = "{}")
@@ -91,16 +98,16 @@ public class ClientIdMetadataDocumentReaderTests
         return document;
     }
 
-    private static ClientRegistrationRequest Read(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
+    private static ClientRegistrationRequest Read(JsonObject document, ReaderOver? reader = null)
     {
-        var result = (reader ?? CreateReader()).Read(ClientId, document);
+        var result = (reader ?? CreateReader()).ReadDocument(ClientId, document);
         Assert.True(result.TryGetSuccess(out var metadata), result.TryGetFailure(out var failure) ? failure.Reason : null);
         return metadata;
     }
 
-    private static void AssertRefused(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
+    private static void AssertRefused(JsonObject document, ReaderOver? reader = null)
     {
-        var result = (reader ?? CreateReader()).Read(ClientId, document);
+        var result = (reader ?? CreateReader()).ReadDocument(ClientId, document);
         Assert.True(result.TryGetFailure(out var failure), "the document was expected to be refused");
         Assert.False(failure.MayPass);
     }
