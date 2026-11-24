@@ -78,7 +78,7 @@ public class AuthorizationHandler(
         // convergence point for success and every error variant, after session_state is finalised.
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
         var response = await ProduceResponseAsync(tenant, request, clients);
-        if (await AuthenticationOwedAsync(tenant, response) is { } login)
+        if (await AuthenticationOwedAsync(tenant, response, clients) is { } login)
             return login;
 
         var encoded = await responseEncoder.EncodeAsync(tenant, response, clients);
@@ -91,18 +91,23 @@ public class AuthorizationHandler(
     /// authentication use case, prompt the user for credentials when needed, before redirecting the user."
     /// </summary>
     /// <remarks>
-    /// The end user goes to the login page as a valid request without a session does, the request stored for the page
-    /// as it was fetched. The page sends it back by its request_uri, the request fails the same check again, and the
-    /// error then goes on as one with a session: redirected to a trusted client, answered at the server for another. A
-    /// silent request (<c>prompt=none</c>) cannot show a login page, so its error is answered at once, and an error
-    /// without a redirect URI is answered by the server anyway. The login page signs the end user in before it sends the
-    /// request back, as it does for a request whose session max_age or acr_values leave out, or the request comes back
-    /// to it.
+    /// Only an error that is going to be redirected owes it, so trust is decided first: an error for a client whose
+    /// redirect URIs are not trusted is answered by the server at once, with nobody signed in. For a trusted client the
+    /// end user goes to the login page as a valid request without a session does, the request stored for the page as it
+    /// was fetched. The page sends it back by its request_uri, the request fails the same check again, and the error is
+    /// redirected. A silent request (<c>prompt=none</c>) cannot show a login page, so its error is answered at once, and
+    /// an error without a redirect URI is answered by the server anyway. The login page signs the end user in before it
+    /// sends the request back, as it does for a request whose session max_age or acr_values leave out, or the request
+    /// comes back to it.
     /// </remarks>
-    private async Task<LoginRequired?> AuthenticationOwedAsync(TenantDefinition tenant, AuthorizationResponse response)
+    private async Task<LoginRequired?> AuthenticationOwedAsync(
+        TenantDefinition tenant,
+        AuthorizationResponse response,
+        IClientInfoProvider clients)
     {
-        if (response is not AuthorizationError { RedirectUri: not null, Model: var model } ||
-            PromptPages.Asks(model, Prompts.None))
+        if (response is not AuthorizationError { RedirectUri: not null, Model: var model } error ||
+            PromptPages.Asks(model, Prompts.None) ||
+            !await IsRedirectedAsync(tenant, error, clients))
         {
             return null;
         }
@@ -116,7 +121,7 @@ public class AuthorizationHandler(
     /// An authorization error for a client whose redirect URIs are not trusted, answered by the server rather than at
     /// the client's redirect URI. RFC 9700 section 4.11.2 has the server "only automatically redirect the user agent if
     /// it trusts the redirection URI", while every error reaches the user agent without the end user choosing that
-    /// client: a refused request, a declined consent, a silent request. Decided once, after encoding, so an error the encoder
+    /// client: a refused request, a declined consent, a silent request. Decided after encoding, so an error the encoder
     /// itself makes of a response it could not pack is held to it too, and a packed one is answered without its JWT.
     /// </summary>
     private async Task<AuthorizationResponse> KeptAtTheServerUnlessTrustedAsync(
@@ -124,19 +129,24 @@ public class AuthorizationHandler(
         AuthorizationResponse response,
         IClientInfoProvider clients)
     {
-        if (response is not AuthorizationError { RedirectUri: not null } error)
-            return response;
-
-        // An error naming no client has no client to trust, so it stays at the server like an untrusted one
-        if (error.Model.ClientId is { } clientId &&
-            (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) &&
-            await redirectUriTrust.IsTrustedAsync(tenant, client))
+        if (response is not AuthorizationError { RedirectUri: not null } error ||
+            await IsRedirectedAsync(tenant, error, clients))
         {
-            return error;
+            return response;
         }
 
         return error with { RedirectUri = null, ResponseJwt = null };
     }
+
+    /// <summary>
+    /// Whether <paramref name="error"/> may be redirected to its client: the one answer the login owed before an error
+    /// and the error kept at the server are both read from. An error naming no client has no client to trust, so it
+    /// stays at the server like an untrusted one.
+    /// </summary>
+    private async Task<bool> IsRedirectedAsync(TenantDefinition tenant, AuthorizationError error, IClientInfoProvider clients)
+        => error.Model.ClientId is { } clientId &&
+           (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) &&
+           await redirectUriTrust.IsTrustedAsync(tenant, client);
 
     private async Task<AuthorizationResponse> ProduceResponseAsync(
         TenantDefinition tenant,

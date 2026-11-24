@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// RFC 9700 section 4.11.2: "The authorization server MUST always authenticate the user first and, with the exception
 /// of the silent authentication use case, prompt the user for credentials when needed, before redirecting the user."
 /// An erroneous request, here one naming a code challenge method the server does not support, reaches its error only
-/// once the end user has logged in.
+/// once the end user has logged in, where the error is going to be redirected.
 /// </remarks>
 public partial class PromptReturnTripTests
 {
@@ -69,23 +69,27 @@ public partial class PromptReturnTripTests
     }
 
     /// <summary>
-    /// The error of a client whose redirect URIs are not trusted goes through the login as well, and is then answered
-    /// by the server with status 400, as for an end user signed in from the start.
+    /// The error of a client whose redirect URIs are not trusted is not going to be redirected, so it owes no login: the
+    /// server answers it with status 400 at once, with nobody signed in.
     /// </summary>
     [Fact]
-    public async Task AnErrorOfAnUntrustedClient_WithNobodySignedIn_IsAnsweredByTheServerAfterTheLogin()
+    public async Task AnErrorOfAnUntrustedClient_WithNobodySignedIn_IsAnsweredByTheServerAtOnce()
     {
         var (client, endUser, host) = StartErroneous(trustEveryClient: false);
         using var _ = host;
         endUser.HasSession = false;
         var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            prompt: null,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = UnsupportedChallengeMethod,
+            });
 
-        var (clientId, sentTo) = await SendErroneousAsync(client, discovery, RequestTransport.RequestObject, prompt: null);
-        Assert.Equal(LoginPath, PathOf(sentTo));
-
-        endUser.SignInAgain();
         using var response = await client.GetAsync(
-            Authorize(discovery, clientId, QueryValue(sentTo, AuthorizationRequest.Parameters.RequestUri)!),
+            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
             TestContext.Current.CancellationToken);
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

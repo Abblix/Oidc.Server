@@ -137,6 +137,26 @@ public class AuthorizationHandlerTests
     }
 
     /// <summary>
+    /// The login is owed only before an error that is redirected: an error for a client whose redirect URIs are not
+    /// trusted is answered by the server at once, with nobody signed in, and nobody is asked who is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AnUntrustedClientsErrorWithoutAUser_IsAnsweredAtOnce()
+    {
+        var request = CreateRequest();
+        SetUpValidationError(request, request.RedirectUri);
+        SignedIn();
+        _redirectUriTrust
+            .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(false);
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Null(error.RedirectUri);
+        _sessions.Verify(s => s.GetAvailableAuthSessions(), Times.Never);
+    }
+
+    /// <summary>
     /// An error carrying a redirect URI but naming no client has no client whose redirect URIs could be trusted, so the
     /// server answers it.
     /// </summary>
