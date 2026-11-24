@@ -115,6 +115,51 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
+    /// <summary>
+    /// A public client's refresh token bound to no DPoP key must rotate (RFC 9700 section 2.2.2), and an exchange
+    /// issues no refresh token to rotate it into, so it is refused as a subject token, with invalid_request
+    /// (RFC 8693 section 2.2.2). A bound token of a public client, and a confidential client's token, are exchanged.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.None, false, false)]
+    [InlineData(ClientAuthenticationMethods.None, true, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false, true)]
+    public async Task ARefreshTokenThatMustRotate_IsNotExchanged(
+        string ownerAuthMethod,
+        bool boundToADPoPKey,
+        bool exchanged)
+    {
+        _clientInfoProvider
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, OriginalClientId))
+            .ReturnsAsync(new ClientInfo(OriginalClientId)
+            {
+                OfflineAccess = OfflineAccess.ConsentRequired,
+                TokenEndpointAuthMethod = ownerAuthMethod,
+            });
+        var jwt = NewRefreshJwt();
+        if (boundToADPoPKey)
+            jwt.Payload.Confirmation = new JsonWebTokenConfirmation { JwkThumbprint = "the-dpop-key-thumbprint" };
+        _jwtValidator
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(jwt);
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
+                new AuthorizationContext(OriginalClientId, [Scopes.OpenId], null)));
+
+        var result = await _resolver.ResolveAsync(
+            SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.Equal(exchanged, result.TryGetSuccess(out var context));
+        if (!exchanged)
+            Assert.Equal(ErrorCodes.InvalidRequest, result.GetFailure().Error);
+
+        // A bound token's key reaches the context, so the exchange must prove it (RFC 9449 section 5)
+        if (exchanged)
+            Assert.Equal(boundToADPoPKey ? "the-dpop-key-thumbprint" : null, context!.ProofKeyThumbprint);
+    }
+
     [Fact]
     public async Task ValidRefreshToken_ResolvesViaServiceLookup()
     {

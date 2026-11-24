@@ -158,7 +158,7 @@ public sealed class JwtSubjectTokenResolver(
             IdentityProvider = jwt.Payload.IdentityProvider,
             AuthContextClassRef = jwt.Payload.AuthContextClassRef,
             AuthenticationMethodReferences = jwt.Payload.AuthenticationMethodReferences?.ToList(),
-        };
+        }.BoundAs(jwt.Payload);
     }
 
     /// <summary>

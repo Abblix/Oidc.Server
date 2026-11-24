@@ -44,18 +44,21 @@ public partial class DPoPBindingValidator(ILogger<DPoPBindingValidator> logger) 
     }
 
     /// <summary>
-    /// RFC 8705 section 4: a grant issued with a certificate-bound token must be redeemed (e.g. on refresh) by
-    /// re-presenting the same certificate. Clients that authenticate via mutual TLS are skipped - their
-    /// authentication already proved certificate possession on this connection. For every other
-    /// authentication method (including public 'none') the binding is otherwise never checked, so a stolen
-    /// certificate-bound refresh token would be redeemable with no certificate at all while the issued
-    /// token stayed bound to the original thumbprint.
+    /// RFC 8705 section 4: a grant issued with a certificate-bound token is redeemed (e.g. on refresh) by
+    /// re-presenting the same certificate. A refresh by a client that authenticates via mutual TLS is not checked:
+    /// its authentication proves possession of its certificate on this connection, and its refresh token is bound to
+    /// the client rather than to one certificate. For every other authentication method (including public 'none') this
+    /// is where the binding is checked. A token exchange is checked for every client: the binding is the subject
+    /// token's, which the client proves by presenting that very certificate.
     /// </summary>
     private static OidcError? ValidateCertificateBinding(TokenValidationContext context)
     {
         var committedCertThumbprint = context.AuthorizedGrant.Context.CertificateSha256Thumbprint;
-        if (committedCertThumbprint is null || AuthenticatesByMutualTls(context.ClientInfo))
+        if (committedCertThumbprint is null ||
+            (AuthenticatesByMutualTls(context.ClientInfo) && context.Request.GrantType != GrantTypes.TokenExchange))
+        {
             return null;
+        }
 
         var presentedCertThumbprint = context is { ClientRequest.ClientCertificate: { } certificate }
             ? Base64Url.EncodeToString(SHA256.HashData(certificate.RawData))

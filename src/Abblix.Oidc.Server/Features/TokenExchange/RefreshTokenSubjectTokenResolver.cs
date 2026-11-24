@@ -32,10 +32,9 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <remarks>
 /// Unlike <see cref="JwtSubjectTokenResolver"/>, this implementation also touches refresh-token
 /// storage -- the wire-level string by itself is not enough to recover the issued scope and AD,
-/// since the JWT's payload carries only the identifying minimum (jti, exp, sub). The lookup
-/// service additionally enforces single-use / rotation semantics in environments that opt in
-/// to refresh-token rotation, so a token already redeemed will reject here exactly as it would
-/// in the refresh_token grant.
+/// since the JWT's payload carries only the identifying minimum (jti, exp, sub). A token already superseded by a
+/// rotation is refused here as in the refresh_token grant, its family revoked with it, but the exchange spends no
+/// token: it issues no refresh token to rotate into.
 /// </remarks>
 /// <param name="jwtValidator">Reads the refresh token: first that it is authentic, then, once the requesting client
 /// is found entitled to present it, what is recorded about it.</param>
@@ -74,14 +73,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }
 
-        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
-        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
-        if (!originalClient.OfflineAccess.IsAllowed())
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The token's client is not allowed offline access.");
-        }
+        if (RefusalOf(originalClient, jwt) is { } refusal)
+            return refusal;
 
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, jwt, originalClient);
         if (!grantLookup.TryGetSuccess(out var grant))
@@ -106,6 +99,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var authorizationDetails = (JsonArray?)grant.Context.AuthorizationDetails?.DeepClone();
         var act = (JsonObject?)grant.Context.Actor?.DeepClone();
 
+        // The token's binding travels with it, for the token endpoint to require of the client it was issued to
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
             Issuer: jwt.Payload.Issuer,
@@ -124,7 +118,34 @@ public sealed class RefreshTokenSubjectTokenResolver(
             IdentityProvider = grant.AuthSession.IdentityProvider,
             AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
             AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
-        };
+        }.BoundAs(jwt.Payload);
+    }
+
+    /// <summary>
+    /// Why <paramref name="refreshToken"/> of <paramref name="originalClient"/> is not exchanged, or null when it may be.
+    /// </summary>
+    private static OidcError? RefusalOf(ClientInfo originalClient, JsonWebToken refreshToken)
+    {
+        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
+        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
+        if (!originalClient.OfflineAccess.IsAllowed())
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token's client is not allowed offline access.");
+        }
+
+        // RFC 9700 section 2.2.2: a public client's refresh token is sender-constrained or rotated, and an exchange
+        // rotates nothing, since it issues no refresh token, so a token that must rotate is not taken as a subject.
+        // RFC 8693 section 2.2.2 answers a subject token "unacceptable based on policy" with invalid_request
+        if (RefreshTokenRotationPolicy.MustRotate(originalClient, refreshToken.Payload))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token is a public client's refresh token bound to no DPoP key, which is not exchanged.");
+        }
+
+        return null;
     }
 
     /// <summary>
