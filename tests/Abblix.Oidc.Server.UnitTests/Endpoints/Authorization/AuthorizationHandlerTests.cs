@@ -15,7 +15,10 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using System.Linq;
 using Core = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -56,13 +59,93 @@ public class AuthorizationHandlerTests
         _redirectUriTrust
             .Setup(t => t.IsTrustedAsync(TestTenant.Matched, It.IsAny<ClientInfo>()))
             .ReturnsAsync(true);
+        _sessions = new Mock<IAuthSessionService>(MockBehavior.Strict);
+        SignedIn(new AuthSession("subject", "session", AuthenticatedAt, "local"));
+        _cutoffs = new Mock<IRevocationCutoffChecker>(MockBehavior.Strict);
+        _cutoffs
+            .Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()))
+            .ReturnsAsync(false);
         _handler = new AuthorizationHandler(
             _clients.Object,
             _fetcher.Object,
             _validator.Object,
             _processor.Object,
             _encoder.Object,
-            _redirectUriTrust.Object);
+            _redirectUriTrust.Object,
+            _sessions.Object,
+            _cutoffs.Object);
+    }
+
+    private readonly Mock<IAuthSessionService> _sessions;
+    private readonly Mock<IRevocationCutoffChecker> _cutoffs;
+
+    private static readonly DateTimeOffset AuthenticatedAt = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    private void SignedIn(params AuthSession[] sessions)
+        => _sessions.Setup(s => s.GetAvailableAuthSessions()).Returns(sessions.ToAsyncEnumerable());
+
+    /// <summary>
+    /// RFC 9700 section 4.11.2: the server "MUST always authenticate the user first and, with the exception of the
+    /// silent authentication use case, prompt the user for credentials when needed, before redirecting the user". An
+    /// error bound for the client's redirect URI while nobody is signed in, or only somebody whose session a revocation
+    /// refuses, sends the end user to log in, carrying the request as it was fetched, and nothing is encoded.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HandleAsync_AnErrorWithoutAnAuthenticatedUser_SendsToLoginFirst(bool revokedSessionHeld)
+    {
+        var request = CreateRequest();
+        SetUpValidationError(request, request.RedirectUri);
+        if (revokedSessionHeld)
+        {
+            SignedIn(new AuthSession("subject", "revoked", AuthenticatedAt, "local"));
+            _cutoffs
+                .Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()))
+                .ReturnsAsync(true);
+        }
+        else
+        {
+            SignedIn();
+        }
+
+        var login = Assert.IsType<LoginRequired>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Same(request, login.Model);
+        _encoder.Verify(
+            e => e.EncodeAsync(TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>(), It.IsAny<IClientInfoProvider>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The exceptions to the login first: a silent request, which may show no page, and an error with no redirect URI,
+    /// which the server answers itself. Both are answered at once, as an error.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task HandleAsync_ASilentOrUnredirectedErrorWithoutAUser_IsAnsweredAtOnce(bool silent, bool hasRedirectUri)
+    {
+        var request = CreateRequest() with { Prompt = silent ? [Prompts.None] : null };
+        SetUpValidationError(request, hasRedirectUri ? request.RedirectUri : null);
+        SignedIn();
+
+        var error = Assert.IsType<AuthorizationError>(await _handler.HandleAsync(SingleIssuer.Tenant, request));
+
+        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
+        Assert.Equal(hasRedirectUri ? request.RedirectUri : null, error.RedirectUri);
+    }
+
+    private void SetUpValidationError(AuthorizationRequest request, Uri? redirectUri)
+    {
+        _fetcher
+            .Setup(f => f.FetchAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((Result<AuthorizationRequest, AuthorizationRequestValidationError>)request);
+        _validator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, request, It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync((Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>)
+                new AuthorizationRequestValidationError(
+                    ErrorCodes.InvalidScope, "The scope is not allowed", redirectUri, ResponseModes.Query));
     }
 
     /// <summary>
