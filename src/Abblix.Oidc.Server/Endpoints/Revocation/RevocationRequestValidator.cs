@@ -102,8 +102,29 @@ public partial class RevocationRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
-			tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
+		// One lookup of the clients for the whole request: the client authentication and the reading of the token find
+		// each client once
+		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+		var result = await AuthenticateAndReadAsync(tenant, revocationRequest, clientRequest, clients);
+
+		// RFC 7009 section 2.2.1: "If the server responds with HTTP status code 503, the client must assume the token
+		// still exists and may retry after a reasonable delay", which is what a request is told whose client, or the
+		// client of the token it names, could not be had for now (draft-ietf-oauth-client-id-metadata-document-03
+		// section 6.1). Decided before the token is revoked, so nothing is revoked on a client not found.
+		return clients.AnswerOf(result);
+	}
+
+	/// <summary>
+	/// Authenticates the client and reads the token the request names, finding every client through
+	/// <paramref name="clients"/>.
+	/// </summary>
+	private async Task<Result<ValidRevocationRequest, OidcError>> AuthenticateAndReadAsync(
+		TenantDefinition tenant,
+		RevocationRequest revocationRequest,
+		ClientRequest clientRequest,
+		IClientInfoProvider clients)
+	{
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
 			// RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -120,7 +141,7 @@ public partial class RevocationRequestValidator(
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
 		if (RevocationBudget.KeyFor(clientInfo, requestInfoProvider, unnamedSource) is not { } budgetKey)
-			return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
+			return await ReadTokenAsync(tenant, clients, revocationRequest, clientInfo);
 
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.
@@ -142,7 +163,7 @@ public partial class RevocationRequestValidator(
 			return RevocationBudget.Spent(lease);
 		}
 
-		return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
+		return await ReadTokenAsync(tenant, clients, revocationRequest, clientInfo);
 	}
 
 	/// <summary>
@@ -150,6 +171,7 @@ public partial class RevocationRequestValidator(
 	/// </summary>
 	private async Task<Result<ValidRevocationRequest, OidcError>> ReadTokenAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		RevocationRequest revocationRequest,
 		ClientInfo clientInfo)
 	{
@@ -158,7 +180,12 @@ public partial class RevocationRequestValidator(
 		// the check below. A token minted for a resource indicator names that resource in its audience, and
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
 		var authentic = await jwtValidator.ReadAuthenticAsync(
-			tenant, clientInfo, revocationRequest.Token, JwtTypes.IntrospectableTokens, ServiceTokenValidation.AnyAudience);
+			tenant,
+			clientInfo,
+			clients,
+			revocationRequest.Token,
+			JwtTypes.IntrospectableTokens,
+			ServiceTokenValidation.AnyAudience);
 
 		if (!authentic.TryGetSuccess(out var token))
 			return Refused(revocationRequest, authentic.GetFailure());
@@ -183,11 +210,11 @@ public partial class RevocationRequestValidator(
 			return ValidRevocationRequest.InvalidToken(revocationRequest);
 		}
 
-		var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
+		var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
 		if (!recorded.TryGetSuccess(out var valid))
 			return Refused(revocationRequest, recorded.GetFailure());
 
-		return new ValidRevocationRequest(revocationRequest, valid);
+		return new ValidRevocationRequest(revocationRequest, valid, clientInfo);
 	}
 
 	/// <summary>

@@ -35,7 +35,7 @@ public class TokenRequestValidatorTests
     public TokenRequestValidatorTests()
     {
         _contextValidator = new Mock<ITokenContextValidator>(MockBehavior.Strict);
-        _validator = new TokenRequestValidator(_contextValidator.Object);
+        _validator = new TokenRequestValidator(_contextValidator.Object, Mock.Of<IClientInfoProvider>());
     }
 
     private static TokenRequest CreateTokenRequest() => new()

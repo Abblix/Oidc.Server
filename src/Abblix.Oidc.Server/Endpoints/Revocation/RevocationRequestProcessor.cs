@@ -63,7 +63,7 @@ public class RevocationRequestProcessor(
 		// the same authorization grant". Revoking the grant does that, and refuses the other refresh tokens of a grant
 		// whose client reuses them. An access token's grant stays: the specification leaves that to the server.
 		if (request.Token is { Header.Type: JwtTypes.RefreshToken } refreshToken)
-			await grantRevocation.RevokeAsync(tenant, refreshToken.Payload);
+			await grantRevocation.RevokeAsync(tenant, refreshToken.Payload, request.ClientInfo);
 
 		return new TokenRevoked(
 			TokenId: payload?.JwtId,

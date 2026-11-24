@@ -70,7 +70,7 @@ public class RefreshTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(_tokenRegistry.Object),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog);
@@ -1159,7 +1159,7 @@ public class RefreshTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(_tokenRegistry.Object),
             new FixedSubjectTypeConverter(converter),
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog);

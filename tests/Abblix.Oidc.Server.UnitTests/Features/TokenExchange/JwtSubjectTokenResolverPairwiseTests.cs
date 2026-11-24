@@ -63,7 +63,7 @@ public class JwtSubjectTokenResolverPairwiseTests
             .Setup(p => p.FindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object);
+        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter));
     }
 
     [Fact]
@@ -89,10 +89,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             },
         };
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(RealSubject, ctx.Subject);
@@ -160,9 +160,9 @@ public class JwtSubjectTokenResolverPairwiseTests
         };
         jwt.Payload.Json[IanaClaimTypes.Act] = act;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        return await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        return await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
     }
 }

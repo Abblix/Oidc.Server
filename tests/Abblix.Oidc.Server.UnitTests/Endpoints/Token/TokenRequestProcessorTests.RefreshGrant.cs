@@ -118,7 +118,7 @@ public partial class TokenRequestProcessorTests
         var resolver = new Mock<ISubjectTokenResolver>(MockBehavior.Strict);
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<TenantDefinition>(), clientInfo, It.IsAny<string>(), It.IsAny<Uri>(),
+                It.IsAny<TenantDefinition>(), clientInfo, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<Uri>(),
                 It.IsAny<CancellationToken>()))
             .Callback(() => resolved = true)
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "Not resolved in this test."));
@@ -137,7 +137,7 @@ public partial class TokenRequestProcessorTests
                 SubjectTokenType = new Uri(TokenExchangeTokenTypes.RefreshToken),
             },
             clientInfo,
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         return resolved;
     }
@@ -150,13 +150,14 @@ public partial class TokenRequestProcessorTests
         var grantHandler = new Mock<IAuthorizationGrantHandler>(MockBehavior.Strict);
         grantHandler
             .Setup(h => h.AuthorizeAsync(
-                It.IsAny<TenantDefinition>(), It.IsAny<TokenRequest>(), clientInfo, It.IsAny<CancellationToken>()))
+                It.IsAny<TenantDefinition>(), It.IsAny<TokenRequest>(), clientInfo, It.IsAny<IClientInfoProvider>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)CreateAuthorizedGrant([Scopes.OfflineAccess]));
 
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = grantType },
             new ClientRequest())
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
         };
 

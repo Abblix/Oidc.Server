@@ -23,6 +23,12 @@ public record TokenValidationContext(TokenRequest Request, ClientRequest ClientR
     private AuthorizedGrant? _authorizedGrant;
 
     /// <summary>
+    /// The clients the request names, each found once for every step asking for it: client authentication and the
+    /// reading of a token the request presents.
+    /// </summary>
+    public required IClientInfoProvider Clients { get; init; }
+
+    /// <summary>
     /// Information about the client making the request, derived from the client authentication process.
     /// </summary>
     /// <exception cref="InvalidOperationException">

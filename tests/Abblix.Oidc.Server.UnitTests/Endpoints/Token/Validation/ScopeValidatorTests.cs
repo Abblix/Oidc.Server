@@ -45,6 +45,7 @@ public class ScopeValidatorTests
         var clientRequest = new ClientRequest();
         var context = new TokenValidationContext(tokenRequest, clientRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client"),
         };
         if (resources != null)
@@ -269,6 +270,7 @@ public class ScopeValidatorTests
     private static TokenValidationContext ContextOf(string grantType, ClientInfo client) => new(
         new TokenRequest { GrantType = grantType, Scope = [] }, new ClientRequest())
     {
+        Clients = Mock.Of<IClientInfoProvider>(),
         ClientInfo = client,
     };
 
@@ -341,6 +343,7 @@ public class ScopeValidatorTests
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = grantType, Scope = [Scopes.OfflineAccess] }, new ClientRequest())
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client")
             {
                 AllowedGrantTypes = [grantType],
@@ -367,6 +370,7 @@ public class ScopeValidatorTests
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = GrantTypes.Password, Scope = [Scopes.OfflineAccess] }, new ClientRequest())
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client")
             {
                 AllowedGrantTypes = [GrantTypes.Password, GrantTypes.RefreshToken],

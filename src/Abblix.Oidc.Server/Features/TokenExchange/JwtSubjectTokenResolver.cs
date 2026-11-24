@@ -35,12 +35,9 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// </remarks>
 /// <param name="jwtValidator">Validates own-issued JWTs (signature against AS keys, claims).</param>
 /// <param name="subjectTypeConverter">Opens a pairwise subject_token's <c>sub</c> back to the real subject.</param>
-/// <param name="clientInfoProvider">Resolves the client the subject_token was issued to, whose sector opens its
-/// pairwise subject.</param>
 public sealed class JwtSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
-    ISubjectTypeConverter subjectTypeConverter,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    ISubjectTypeConverter subjectTypeConverter) : ISubjectTokenResolver
 {
     /// <summary>
     /// The token types a subject token presented under <paramref name="tokenType"/> may carry, so a token issued
@@ -62,6 +59,7 @@ public sealed class JwtSubjectTokenResolver(
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
@@ -79,6 +77,7 @@ public sealed class JwtSubjectTokenResolver(
         var validation = await jwtValidator.ValidateAsync(
             tenant,
             client,
+            clients,
             subjectToken,
             accepted,
             ServiceTokenValidation.AnyAudience);
@@ -116,7 +115,7 @@ public sealed class JwtSubjectTokenResolver(
         // as the confused-deputy origin below.
         var originalClientId = jwt.OwnerOf();
 
-        var opened = await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId);
+        var opened = await OpenSubjectsAsync(tenant, clients, jwt.Payload, originalClientId);
         if (opened.TryGetFailure(out var openError))
         {
             return openError;
@@ -185,6 +184,7 @@ public sealed class JwtSubjectTokenResolver(
     /// </remarks>
     private async Task<Result<TokenSubjects, OidcError>> OpenSubjectsAsync(
         TenantDefinition tenant,
+        IClientInfoProvider clients,
         JsonWebTokenPayload payload,
         string? originalClientId)
     {
@@ -192,7 +192,7 @@ public sealed class JwtSubjectTokenResolver(
         if (originalClientId is null)
             return seen;
 
-        if (!(await clientInfoProvider.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out var originalClient))
+        if (!(await clients.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out var originalClient))
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
 
         if (subjectTypeConverter.Open(tenant, seen, originalClient) is not { } real)

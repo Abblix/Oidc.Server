@@ -382,6 +382,7 @@ public class DPoPTokenEndpointValidatorTests
         var clientRequest = new ClientRequest { DPoPProof = proofJwt, ClientCertificate = clientCertificate };
         return new TokenValidationContext(new TokenRequest(), clientRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequireDPoP = clientRequiresDPoP,

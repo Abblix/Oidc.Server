@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -30,7 +31,7 @@ public class TokenContextValidatorCompositeTests
     {
         var tokenRequest = new TokenRequest();
         var clientRequest = new ClientRequest();
-        return new TokenValidationContext(tokenRequest, clientRequest);
+        return new TokenValidationContext(tokenRequest, clientRequest) { Clients = Mock.Of<IClientInfoProvider>() };
     }
 
     /// <summary>

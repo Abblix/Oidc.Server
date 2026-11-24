@@ -57,7 +57,8 @@ public interface IRefreshTokenService
 	/// </remarks>
 	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="refreshToken">The refresh token presented for renewal.</param>
-	/// <param name="clientInfo">The client renewing it.</param>
+	/// <param name="clientInfo">The client renewing it, the one it was issued to, whose lifetimes bound the grant
+	/// revoked on a replay.</param>
 	/// <returns>True when the request may go on; false when the token had already been spent.</returns>
 	Task<bool> TrySpendAsync(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo);
 

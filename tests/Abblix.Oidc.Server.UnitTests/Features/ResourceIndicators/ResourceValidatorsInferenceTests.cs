@@ -116,7 +116,7 @@ public class ResourceValidatorsInferenceTests
             {
                 var context = new TokenValidationContext(
                     new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
-                    new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
+                    new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client };
                 var error = await new TokenResourceValidator(resourceManager)
                     .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 
@@ -200,7 +200,7 @@ public class ResourceValidatorsInferenceTests
         });
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["svc-a"], Scope = [OrdersRead] },
-            new ClientRequest { ClientId = ClientId });
+            new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager())
@@ -232,7 +232,7 @@ public class ResourceValidatorsInferenceTests
         });
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = grantType, Scope = [OrdersRead, BillingRead] },
-            new ClientRequest { ClientId = ClientId });
+            new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager())

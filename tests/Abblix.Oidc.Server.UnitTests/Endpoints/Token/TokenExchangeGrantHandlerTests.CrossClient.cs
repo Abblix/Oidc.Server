@@ -61,7 +61,7 @@ public partial class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             ResourceServerClient(setting),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.Equal(exchanged, result.TryGetSuccess(out _));
         if (!exchanged)
@@ -90,7 +90,7 @@ public partial class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             client,
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -117,7 +117,7 @@ public partial class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             client,
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -151,7 +151,7 @@ public partial class TokenExchangeGrantHandlerTests
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
         {
@@ -160,7 +160,7 @@ public partial class TokenExchangeGrantHandlerTests
         };
 
         var result = await handler.AuthorizeAsync(
-            SingleIssuer.Tenant, request, ResourceServerClient(setting), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, request, ResourceServerClient(setting), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.Equal(exchanged, result.TryGetSuccess(out _));
         if (!exchanged)

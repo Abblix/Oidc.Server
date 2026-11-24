@@ -33,17 +33,15 @@ public class RevocationRequestProcessorTests
     private readonly Mock<ITokenRegistry> _tokenRegistry;
     private readonly FakeTimeProvider _clock;
     private readonly RevocationRequestProcessor _processor;
-    private readonly Mock<IClientInfoProvider> _clients;
     private readonly Mock<IClientInfoManager> _registrations = new(MockBehavior.Strict);
 
     public RevocationRequestProcessorTests()
     {
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _processor = new RevocationRequestProcessor(
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, _clients.Object),
+            new GrantRevocation(_tokenRegistry.Object),
             new RegistrationAccessTokenRevocation(_registrations.Object, Mock.Of<ITokenIdGenerator>(), new RegistrationAccessTokenBinding(_registrations.Object)),
             _clock);
     }
@@ -66,7 +64,9 @@ public class RevocationRequestProcessorTests
         RevocationRequest request,
         JsonWebToken? token = null)
     {
-        return new ValidRevocationRequest(request, token!);
+        return token is null
+            ? ValidRevocationRequest.InvalidToken(request)
+            : new ValidRevocationRequest(request, token, new ClientInfo("client_1"));
     }
 
     /// <summary>

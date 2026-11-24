@@ -31,15 +31,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
 /// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
 /// instances.</param>
-/// <param name="clientInfoProvider">Finds the client a token presented by another was issued to, whose profile it is
-/// held to as well.</param>
 public class AuthServiceJwtValidator(
 	ProfiledJwtValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
-	IOptions<OidcOptions> oidcOptions,
-	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator, IAuthServiceJwtReader
+	IOptions<OidcOptions> oidcOptions) : IAuthServiceJwtValidator, IAuthServiceJwtReader
 {
 
 	/// <summary>
@@ -47,6 +44,8 @@ public class AuthServiceJwtValidator(
 	/// </summary>
 	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="client">The client presenting the token, or null where none is known.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
@@ -56,21 +55,23 @@ public class AuthServiceJwtValidator(
 	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,
+		IClientInfoProvider clients,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		var authentic = await ReadAuthenticAsync(tenant, client, jwt, tokenTypes, options);
+		var authentic = await ReadAuthenticAsync(tenant, client, clients, jwt, tokenTypes, options);
 		if (!authentic.TryGetSuccess(out var token))
 			return authentic;
 
-		return await ReadRecordsAsync(tenant, token, options);
+		return await ReadRecordsAsync(tenant, clients, token, options);
 	}
 
 	/// <inheritdoc/>
 	public async Task<Result<JsonWebToken, JwtValidationError>> ReadAuthenticAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,
+		IClientInfoProvider clients,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options)
@@ -106,7 +107,7 @@ public class AuthServiceJwtValidator(
 		if (!result.TryGetSuccess(out var token))
 			return result;
 
-		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, token, keyManagementAlgorithms) is { } algorithm)
+		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, clients, token, keyManagementAlgorithms) is { } algorithm)
 		{
 			return new JwtValidationError(
 				JwtError.InvalidToken,
@@ -129,9 +130,10 @@ public class AuthServiceJwtValidator(
 	/// <inheritdoc/>
 	public Task<Result<JsonWebToken, JwtValidationError>> ReadRecordsAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		ValidationOptions options)
-		=> statusCheck.CheckAsync(tenant, token, options);
+		=> statusCheck.CheckAsync(tenant, clients, token, options);
 
 	/// <summary>
 	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
@@ -151,9 +153,10 @@ public class AuthServiceJwtValidator(
 	/// every token the client was issued for its own registration.
 	/// </para>
 	/// </remarks>
-	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
+	private static async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
 		ClientInfo? presenter,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
@@ -164,7 +167,7 @@ public class AuthServiceJwtValidator(
 			return null;
 		}
 
-		if (!(await clientInfoProvider.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
+		if (!(await clients.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
 			return null;
 
 		return SecurityProfileRequirements.For(tenant, owner).AlgorithmOutside(token, keyManagementAlgorithms);

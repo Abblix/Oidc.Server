@@ -29,7 +29,8 @@ public partial class ClientIdMetadataDocumentTests
     /// Section 6.1: "At the token endpoint or pushed authorization request endpoint, the authorization server MUST
     /// return an invalid_client error, or for a transient failure, an HTTP 503 status code". A document whose server
     /// answers 503 or cannot be reached is a transient failure, whatever credential the request presents for the
-    /// client the document would describe.
+    /// client the document would describe. The revocation endpoint answers it alike, as RFC 7009 section 2.2.1 has a
+    /// client "assume the token still exists and may retry", and so does the introspection endpoint.
     /// </summary>
     [Theory]
     [InlineData(Endpoint.Token, Credential.None, Outage.ServiceUnavailable)]
@@ -42,6 +43,10 @@ public partial class ClientIdMetadataDocumentTests
     [InlineData(Endpoint.Pushed, Credential.PrivateKeyAssertion, Outage.ServiceUnavailable)]
     [InlineData(Endpoint.Pushed, Credential.SecretAssertion, Outage.ServiceUnavailable)]
     [InlineData(Endpoint.Pushed, Credential.Certificate, Outage.ServiceUnavailable)]
+    [InlineData(Endpoint.Revocation, Credential.None, Outage.ServiceUnavailable)]
+    [InlineData(Endpoint.Revocation, Credential.PrivateKeyAssertion, Outage.Unreachable)]
+    [InlineData(Endpoint.Introspection, Credential.PrivateKeyAssertion, Outage.ServiceUnavailable)]
+    [InlineData(Endpoint.Introspection, Credential.SecretAssertion, Outage.Unreachable)]
     public async Task ADocumentNotToBeHadForNow_IsAnswered503(Endpoint endpoint, Credential credential, Outage outage)
     {
         switch (outage)
@@ -153,6 +158,16 @@ public partial class ClientIdMetadataDocumentTests
             Endpoint.Token => (discovery.TokenEndpoint, CodeExchange("code", GeneratePkcePair().Verifier)),
             Endpoint.Pushed => (discovery.PushedAuthorizationRequestEndpoint!,
                 CodeFlowParameters(ClientId, GeneratePkcePair().Challenge)),
+            Endpoint.Revocation => (discovery.RevocationEndpoint!, new Dictionary<string, string>
+            {
+                [RevocationRequest.Parameters.Token] = "token",
+                [ClientRequest.Parameters.ClientId] = ClientId,
+            }),
+            Endpoint.Introspection => (discovery.IntrospectionEndpoint!, new Dictionary<string, string>
+            {
+                [IntrospectionRequest.Parameters.Token] = "token",
+                [ClientRequest.Parameters.ClientId] = ClientId,
+            }),
             _ => throw new ArgumentOutOfRangeException(nameof(endpoint), endpoint, null),
         };
 
@@ -193,6 +208,8 @@ public partial class ClientIdMetadataDocumentTests
     {
         Token,
         Pushed,
+        Revocation,
+        Introspection,
     }
 
     public enum Credential

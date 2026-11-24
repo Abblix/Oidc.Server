@@ -43,6 +43,8 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <param name="request">The token request (already authenticated against the client).</param>
 	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was
 	/// issued to the same client that is now redeeming it.</param>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names is looked
+	/// up, so the request finds each client once.</param>
 	/// <param name="cancellationToken">
 	/// Abandons the resolution when the caller stops waiting. CIBA holds this call open for the configured
 	/// long-polling timeout, so a handler that never receives the token goes on polling storage for a client
@@ -54,5 +56,5 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// </param>
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
 		TenantDefinition tenant,
-		TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken);
+		TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken);
 }

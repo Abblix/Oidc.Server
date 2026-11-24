@@ -65,6 +65,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
             tenant,
             context.Request with { Scope = TokenRequestScope.ServedFor(context) ?? [] },
             context.ClientInfo,
+            context.Clients,
             cancellationToken);
 
         if (result.TryGetFailure(out var error))

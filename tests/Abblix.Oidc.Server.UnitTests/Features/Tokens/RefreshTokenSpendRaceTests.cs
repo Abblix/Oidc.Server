@@ -108,7 +108,7 @@ public class RefreshTokenSpendRaceTests
             ids.Object,
             formatter.Object,
             registry,
-            new GrantRevocation(registry, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(registry),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options,
             SingleIssuer.LicensedCatalog);

@@ -30,11 +30,17 @@ public record ValidIntrospectionRequest
 	/// <param name="clientInfo">The authenticated client making the introspection request; it determines the
 	/// response format (plain JSON vs. a signed/encrypted JWT per RFC 9701).</param>
 	/// <param name="token">The parsed JWT to be reported as <c>active=true</c>.</param>
-	public ValidIntrospectionRequest(IntrospectionRequest model, ClientInfo clientInfo, JsonWebToken token)
+	/// <param name="tokenClient">The client the token was issued to, where it is not the caller and was found.</param>
+	public ValidIntrospectionRequest(
+		IntrospectionRequest model,
+		ClientInfo clientInfo,
+		JsonWebToken token,
+		ClientInfo? tokenClient)
 	{
 		Model = model;
 		ClientInfo = clientInfo;
 		Token = token;
+		TokenClient = tokenClient;
 	}
 
 	/// <summary>
@@ -78,6 +84,12 @@ public record ValidIntrospectionRequest
 	/// The authenticated client making the introspection request, used to select the response format (RFC 9701).
 	/// </summary>
 	public ClientInfo ClientInfo { get; }
+
+	/// <summary>
+	/// The client <see cref="Token"/> was issued to, where it is not the caller and was found, whose sector opens the
+	/// subject the token carries; null otherwise.
+	/// </summary>
+	public ClientInfo? TokenClient { get; }
 
 	/// <summary>
 	/// The JSON Web Token to introspect.

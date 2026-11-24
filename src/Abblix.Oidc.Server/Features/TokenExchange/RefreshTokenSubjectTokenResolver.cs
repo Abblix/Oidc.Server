@@ -39,27 +39,25 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <param name="jwtValidator">Reads the refresh token: first that it is authentic, then, once the requesting client
 /// is found entitled to present it, what is recorded about it.</param>
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
-/// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
-/// pairwise subject back to the real subject.</param>
 /// <param name="cutoffChecker">Asks whether a revocation refuses the session the refresh token continues, as the
 /// refresh grant asks.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
     IAuthServiceJwtReader jwtValidator,
     IRefreshTokenService refreshTokenService,
-    IClientInfoProvider clientInfoProvider,
     IRevocationCutoffChecker cutoffChecker) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
     {
         // A refresh token issued by 3.0 holds the resources of the grant it continues in its audience
         // (RefreshTokenResources), so the audience need not name this server
-        var validation = await ReadAsync(tenant, client, subjectToken);
+        var validation = await ReadAsync(tenant, client, clients, subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
             return validation.GetFailure();
 
@@ -68,7 +66,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var originalClientId = jwt.OwnerOf();
         ClientInfo? originalClient = null;
         if (originalClientId is null ||
-            !(await clientInfoProvider.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out originalClient))
+            !(await clients.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out originalClient))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }
@@ -155,11 +153,13 @@ public sealed class RefreshTokenSubjectTokenResolver(
     private async Task<Result<JsonWebToken, OidcError>> ReadAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         string subjectToken)
     {
         var authentic = await jwtValidator.ReadAuthenticAsync(
             tenant,
             client,
+            clients,
             subjectToken,
             TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
             ServiceTokenValidation.AnyAudience);
@@ -174,7 +174,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         if (TokenOrigin.CheckSubject(tenant, token.OwnerOf(), null, client) is { } refusal)
             return refusal;
 
-        var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
+        var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
         return recorded.TryGetSuccess(out var valid) ? valid : InvalidToken;
     }
 

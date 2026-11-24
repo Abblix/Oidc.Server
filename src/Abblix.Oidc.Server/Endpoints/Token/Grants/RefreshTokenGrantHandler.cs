@@ -54,8 +54,10 @@ public class RefreshTokenGrantHandler(
 	/// A task representing the outcome of the authorization process, either returning a successful grant with a new
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names
+	/// is looked up.</param>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
 	{
 		// RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -70,6 +72,7 @@ public class RefreshTokenGrantHandler(
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
 			tenant,
 			clientInfo,
+			clients,
 			request.RefreshToken,
 			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
 			ServiceTokenValidation.AnyAudience);

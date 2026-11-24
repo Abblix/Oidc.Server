@@ -52,6 +52,7 @@ public partial class TokenExchangeGrantHandlerTests
         var (grant, requester) = await ExchangeAsync(requesterIsTheOwner, proofKey: BoundKey, certificate: null);
         var context = new TokenValidationContext(ExchangeRequest(TokenExchangeTokenTypes.AccessToken), new ClientRequest())
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = requester,
             AuthorizedGrant = grant,
             ProofKeyThumbprint = presented switch
@@ -106,6 +107,7 @@ public partial class TokenExchangeGrantHandlerTests
         };
         var context = new TokenValidationContext(ExchangeRequest(TokenExchangeTokenTypes.AccessToken), clientRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = requester,
             AuthorizedGrant = grant,
         };
@@ -142,7 +144,7 @@ public partial class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             requester,
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant), result.TryGetFailure(out var failure) ? failure.ErrorDescription : null);
         return (grant, requester);

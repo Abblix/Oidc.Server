@@ -39,6 +39,8 @@ public interface IAuthServiceJwtReader
 	/// </remarks>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="client">The client presenting the token, or null where no client presents it.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="jwt">The JWT string to be validated.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">The validation options that control how the JWT is validated.</param>
@@ -46,6 +48,7 @@ public interface IAuthServiceJwtReader
 	Task<Result<JsonWebToken, JwtValidationError>> ReadAuthenticAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,
+		IClientInfoProvider clients,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options);
@@ -55,11 +58,14 @@ public interface IAuthServiceJwtReader
 	/// <paramref name="tenant"/> refuses it. A superseded refresh token found here revokes its grant.
 	/// </summary>
 	/// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="token">The token, already found authentic.</param>
 	/// <param name="options">The options it was read under, which decide whether a cutoff applies.</param>
 	/// <returns>The valid token, or why it was refused.</returns>
 	Task<Result<JsonWebToken, JwtValidationError>> ReadRecordsAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		ValidationOptions options);
 }

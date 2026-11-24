@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -29,9 +30,11 @@ public interface IRevocationCutoffChecker
     /// The refusal a cutoff calls for on this token, or <c>null</c> when no cutoff reaches it.
     /// </summary>
     /// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
+    /// <param name="clients">The clients of the request being served, where the client the token names is looked
+    /// up.</param>
     /// <param name="payload">The payload of a token that has already passed signature and lifetime checks.</param>
     /// <returns>A validation error when the token is refused, otherwise <c>null</c>.</returns>
-    Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, JsonWebTokenPayload payload);
+    Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, IClientInfoProvider clients, JsonWebTokenPayload payload);
 
     /// <summary>
     /// Whether a cutoff refuses this authentication session, so nothing may mint against it.

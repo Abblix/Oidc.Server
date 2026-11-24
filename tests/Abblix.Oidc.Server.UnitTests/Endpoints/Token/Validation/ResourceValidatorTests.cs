@@ -53,7 +53,7 @@ public class ResourceValidatorTests
             Scope = scope!,
         };
         var clientRequest = new ClientRequest();
-        return new TokenValidationContext(tokenRequest, clientRequest);
+        return new TokenValidationContext(tokenRequest, clientRequest) { Clients = Mock.Of<IClientInfoProvider>() };
     }
 
     /// <summary>
@@ -72,6 +72,7 @@ public class ResourceValidatorTests
             new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = [] },
             new ClientRequest())
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client") { AllowedScopes = ["orders.read"], DefaultScope = ["orders.read"] },
         };
 

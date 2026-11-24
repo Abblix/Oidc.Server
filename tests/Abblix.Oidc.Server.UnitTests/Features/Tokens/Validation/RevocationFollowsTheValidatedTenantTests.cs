@@ -127,8 +127,8 @@ public class RevocationFollowsTheValidatedTenantTests
             .ReturnsAsync((TenantDefinition tenant, string id) => StatusOf(tenant, id));
 
         var cutoffs = new Mock<IRevocationCutoffChecker>();
-        cutoffs.Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebTokenPayload>()))
-            .ReturnsAsync((TenantDefinition tenant, JsonWebTokenPayload _) =>
+        cutoffs.Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebTokenPayload>()))
+            .ReturnsAsync((TenantDefinition tenant, IClientInfoProvider _, JsonWebTokenPayload _) =>
                 recorded == Recorded.CutOff && tenant.Id == recordedAt.Id
                     ? new JwtValidationError(JwtError.TokenRevoked, "Cut off")
                     : null);
@@ -140,14 +140,13 @@ public class RevocationFollowsTheValidatedTenantTests
             new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()),
+                new GrantRevocation(registry.Object),
                 new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>())),
-            TestOidcOptions.Defaults(),
-            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>());
+            TestOidcOptions.Defaults());
 
         // The request served at a tenant, as tenant resolution leaves it, around the validation
         using var request = TenantScope.Enter(servedAt);
-        return await validator.ValidateAsync(Validated, null, "jwt", TokenTypePolicy.CheckedByCaller);
+        return await validator.ValidateAsync(Validated, null, Mock.Of<IClientInfoProvider>(), "jwt", TokenTypePolicy.CheckedByCaller);
 
         JsonWebTokenStatus StatusOf(TenantDefinition tenant, string id)
         {

@@ -24,9 +24,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// to the validation context. If the authentication fails, it returns an error indicating that the client is not authorized.
 /// </remarks>
 /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
-/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientInfoProvider clientInfoProvider)
-    : ITokenContextValidator
+public class ClientValidator(IClientAuthenticator clientAuthenticator) : ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client in the token request context. This method checks if the client
@@ -50,18 +48,13 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, context.Clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
             // client" an invalid_request, not a failed authentication
             if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
                 return moreThanOneMethod;
-
-            // draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "for a transient failure, an HTTP 503"
-            if (clients.UnavailableClientRefusal() is { } unavailable)
-                return unavailable;
 
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }

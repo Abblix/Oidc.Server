@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// </summary>
 public class ClientValidatorTests
 {
-    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    /// <summary>The client store the request carries; the authenticator it is handed to is a double.</summary>
     private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
 
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
@@ -35,13 +35,13 @@ public class ClientValidatorTests
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object, Clients);
+        _validator = new ClientValidator(_clientAuthenticator.Object);
     }
 
     private static TokenValidationContext CreateContext(ClientRequest? clientRequest = null)
     {
         var tokenRequest = new TokenRequest();
-        return new TokenValidationContext(tokenRequest, clientRequest ?? new ClientRequest());
+        return new TokenValidationContext(tokenRequest, clientRequest ?? new ClientRequest()) { Clients = Clients };
     }
 
     /// <summary>
