@@ -1297,6 +1297,31 @@ public class RefreshTokenServiceTests
         Assert.Equal([ApiResource, OtherApiResource], grant.Context.Resources!);
     }
 
+    /// <summary>
+    /// The RFC 8693 audiences of a grant are kept in the refresh token beside its resources and read back, so the access
+    /// tokens renewed from it are addressed to the same services; a grant naming none keeps no such claim.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TheAudiencesOfAGrant_AreKeptInItsRefreshToken(bool namesAudiences)
+    {
+        string[]? audiences = namesAudiences ? ["billing", "ledger"] : null;
+        var authContext = CreateAuthorizationContext() with { Audiences = audiences };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued!.Token, CreateClientInfo());
+
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.Equal(audiences is not null, issued.Token.Payload.Json.ContainsKey(RefreshTokenResources.AudiencesClaimType));
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(audiences, grant.Context.Audiences);
+    }
+
     private static readonly Uri ApiResource = new("https://api.example.com");
     private static readonly Uri OtherApiResource = new("https://other.example.com/mcp");
 

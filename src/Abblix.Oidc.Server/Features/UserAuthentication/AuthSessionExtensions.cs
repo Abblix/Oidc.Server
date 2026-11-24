@@ -48,6 +48,7 @@ public static class AuthSessionExtensions
         OidcClaimTypes.GrantId,
         RefreshTokenTenant.ClaimType,
         RefreshTokenResources.ClaimType,
+        RefreshTokenResources.AudiencesClaimType,
         IanaClaimTypes.Nonce,
         OidcClaimTypes.RequestedClaims,
         IanaClaimTypes.Cnf,

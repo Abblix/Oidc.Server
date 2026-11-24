@@ -14,8 +14,8 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// The resources of the grant a refresh token continues, kept in a claim of the server's own so the token's audience
-/// names only this server.
+/// The resources and audiences of the grant a refresh token continues, kept in claims of the server's own so the
+/// token's audience names only this server.
 /// </summary>
 /// <remarks>
 /// A resource server validating a token checks its issuer, signature and audience (RFC 9068 section 4), and many skip
@@ -34,9 +34,17 @@ internal static class RefreshTokenResources
     internal const string ClaimType = "abblix_resources";
 
     /// <summary>
+    /// The private claim the grant's RFC 8693 audiences, logical names of the services its access tokens are for, are
+    /// kept under, on the same terms as <see cref="ClaimType"/>. Absent where the grant names none.
+    /// </summary>
+    internal const string AudiencesClaimType = "abblix_audiences";
+
+    /// <summary>
     /// Writes <paramref name="context"/> into the refresh token <paramref name="payload"/>: as into an access token,
     /// except that the audience names the issuer and the resources are kept in the server's claim, as an empty list
-    /// where the grant names none, so every token carrying the claim says where its resources are.
+    /// where the grant names none, so every token carrying the claim says where its resources are. The grant's
+    /// audiences, which an access token carries in <c>aud</c> beside its resources, are kept beside them, so the access
+    /// tokens renewed from the refresh token are addressed to the same services.
     /// </summary>
     public static void ApplyTo(AuthorizationContext context, JsonWebTokenPayload payload)
     {
@@ -44,6 +52,7 @@ internal static class RefreshTokenResources
         payload.Audiences = [payload.Issuer.NotNull(nameof(payload.Issuer))];
         payload.Json[ClaimType] = new JsonArray(
             [.. (context.Resources ?? []).Select(resource => (JsonNode?)JsonValue.Create(resource.OriginalString))]);
+        payload.Json.SetArrayOrNull(AudiencesClaimType, context.Audiences);
     }
 
     /// <summary>
@@ -55,7 +64,12 @@ internal static class RefreshTokenResources
     /// </remarks>
     public static AuthorizationContext ToAuthorizationContext(JsonWebTokenPayload payload)
     {
-        var context = payload.ToAuthorizationContext();
+        var context = payload.ToAuthorizationContext() with
+        {
+            Audiences = payload.Json.GetArrayOfStringsOrNull(AudiencesClaimType)?.ToArray() is { Length: > 0 } audiences
+                ? audiences
+                : null,
+        };
         if (payload.Json.GetArrayOfStringsOrNull(ClaimType) is not { } values)
             return context;
 

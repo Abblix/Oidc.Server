@@ -12,6 +12,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -142,13 +143,17 @@ public class AuthSessionExtensionsTests
         Session(new JsonObject { ["tenant"] = "acme" }).ApplyTo(payload);
         payload.Json[OidcClaimTypes.GrantId] = "grant";
         payload.Json[IanaClaimTypes.MayAct] = new JsonObject { [JwtClaimTypes.Subject] = "service" };
-        new AuthorizationContext("client", [Scopes.OpenId], new RequestedClaims())
-        {
-            Nonce = "nonce",
-            ProofKeyThumbprint = "client-key",
-            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment" }),
-            Actor = new JsonObject { [JwtClaimTypes.Subject] = "service" },
-        }.ApplyTo(payload);
+        // Written as into a refresh token, whose resources and audiences are kept in the server's own claims
+        RefreshTokenResources.ApplyTo(
+            new AuthorizationContext("client", [Scopes.OpenId], new RequestedClaims(), [new Uri("https://api.example.com")])
+            {
+                Nonce = "nonce",
+                ProofKeyThumbprint = "client-key",
+                AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment" }),
+                Actor = new JsonObject { [JwtClaimTypes.Subject] = "service" },
+                Audiences = ["billing"],
+            },
+            payload);
 
         var session = payload.ToAuthSession();
 
