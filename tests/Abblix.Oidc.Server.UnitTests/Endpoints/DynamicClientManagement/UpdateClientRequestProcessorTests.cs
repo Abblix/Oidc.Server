@@ -202,13 +202,21 @@ public class UpdateClientRequestProcessorTests
     /// <summary>
     /// What the host set on the client and no registration request can carry stays with the client through an
     /// update: RFC 7592 section 2.2 replaces the client metadata, and these are not metadata. Its own security profile
-    /// among them, so the updated client is held to the profile the host holds it to.
+    /// among them, so the updated client is held to the profile the host holds it to. The token lifetimes the host sets
+    /// for new clients went to the client when it registered, so ones changed since leave it as it is.
     /// </summary>
     [Fact]
     public async Task AnUpdate_KeepsWhatTheHostSetOnTheClient()
     {
         ClientInfo? saved = null;
-        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions
+            {
+                AccessTokenExpiresIn = TimeSpan.FromSeconds(31),
+                SingleResourceAccessTokens = false,
+                RefreshToken = new() { AbsoluteExpiresIn = TimeSpan.FromHours(5) },
+            });
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
         var hostSet = new ClientInfo("client-1")
         {

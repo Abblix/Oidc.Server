@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -123,7 +124,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     /// <summary>
     /// Takes what the host set on <paramref name="stored"/> and no registration metadata can carry, its security
     /// profile among them: RFC 7592 section 2.2 replaces the client metadata, so an update keeps these as they were.
-    /// A new registration takes the defaults of <see cref="ClientInfo"/>.
+    /// A new registration takes what <see cref="NewClientOptions"/> sets instead.
     /// </summary>
     public ClientInfoBuilder WithHostSettingsOf(ClientInfo stored)
     {
@@ -133,11 +134,27 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 
     /// <summary>
     /// Sets the trust a new client is created with, which the registration metadata cannot carry. An update leaves it
-    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf"/>).
+    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf(ClientInfo)"/>).
     /// </summary>
     public ClientInfoBuilder WithTrust(ClientTrust trust)
     {
         _trust = trust;
+        return this;
+    }
+
+    /// <summary>
+    /// Takes what the host sets for a client it did not define, beyond the registration metadata: a new registration
+    /// and a client resolved from its metadata document get these, while every other such member keeps the default of
+    /// <see cref="ClientInfo"/>.
+    /// </summary>
+    public ClientInfoBuilder WithHostSettingsOf(NewClientOptions newClientOptions)
+    {
+        _hostSettings = new ClientInfo(clientId)
+        {
+            AccessTokenExpiresIn = newClientOptions.AccessTokenExpiresIn,
+            SingleResourceAccessTokens = newClientOptions.SingleResourceAccessTokens,
+            RefreshToken = newClientOptions.RefreshToken,
+        };
         return this;
     }
 

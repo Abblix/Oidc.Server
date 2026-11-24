@@ -29,6 +29,9 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
         // the checks of the request itself first, then those of the metadata it carries
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenContextValidator>(),
+            // Before every step that fetches what a request names, so a client nobody vetted asking for a grant it is
+            // not given is refused before the server fetches anything on its behalf
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OpenRegistrationGrantTypesValidator>(),
             // Before every step that judges a proposed client_id, which then sees none unless the host accepts it
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProposedClientIdValidator>(),
             // Before the check that the client_id is free, which would fetch the document a URL names

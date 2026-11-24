@@ -8,12 +8,13 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 
 🚀 Features
 - Client ID Metadata Documents, experimental ([draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)), see [below](#client-id-metadata-documents)
-- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`
+- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`, and while registration needs no initial access token, only the authorization code and refresh token grants unless that setting names others
 
 ✏️ Improvements
 - Outbound requests to client-supplied addresses connect only to the addresses checked for them, and a forward proxy is named in `SecureHttpFetchOptions.OutboundProxy`
 - Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
 - The offline access of dynamically registered clients set by `NewClientOptions.OfflineAccess`
+- The access token lifetime, refresh token policy and single-resource access tokens of dynamically registered clients and clients from metadata documents, set by `NewClientOptions`
 - TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 
 🛠 Fixes

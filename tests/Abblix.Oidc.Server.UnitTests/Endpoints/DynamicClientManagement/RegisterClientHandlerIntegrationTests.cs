@@ -101,6 +101,13 @@ public class RegisterClientHandlerIntegrationTests
         return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
 
+    /// <summary>
+    /// Names the grant types new clients may request, which a client registering without an initial access token
+    /// needs for any grant beyond those an end user takes part in, so a test reaches the gate it is about.
+    /// </summary>
+    private static Action<OidcOptions> Granting(params string[] grantTypes)
+        => opts => opts.NewClientOptions = opts.NewClientOptions with { AllowedGrantTypes = grantTypes };
+
     private static ClientRegistrationRequest CreateRequest(
         string[][]? responseTypes = null,
         string[]? grantTypes = null) => new()
@@ -174,7 +181,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_TokenResponseType_WithoutEnableImplicitFlow_RejectsAtRegistration()
     {
-        var provider = BuildProvider();
+        var provider = BuildProvider(configureOptions: Granting(GrantTypes.Implicit));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -197,7 +204,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_TokenResponseType_WithEnableImplicitFlow_Succeeds()
     {
-        var provider = BuildProvider(s => s.EnableImplicitFlow());
+        var provider = BuildProvider(s => s.EnableImplicitFlow(), Granting(GrantTypes.Implicit));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -220,7 +227,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_PasswordGrant_WithoutEnablePasswordGrant_RejectsAtRegistration()
     {
-        var provider = BuildProvider();
+        var provider = BuildProvider(configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.Password));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -241,7 +248,9 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_PasswordGrant_WithEnablePasswordGrant_Succeeds()
     {
-        var provider = BuildProvider(s => s.EnablePasswordGrant());
+        var provider = BuildProvider(
+            s => s.EnablePasswordGrant(),
+            Granting(GrantTypes.AuthorizationCode, GrantTypes.Password));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -452,6 +461,66 @@ public class RegisterClientHandlerIntegrationTests
         };
 
         var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.True(result.TryGetSuccess(out _),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    private static ClientRegistrationRequest MachineClientRequest() => CreateRequest(
+        responseTypes: [],
+        grantTypes: [GrantTypes.ClientCredentials]);
+
+    /// <summary>
+    /// While anybody may register and the host names no grant types, a client asking for a grant no end user takes
+    /// part in is refused by the pipeline a host invokes.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringOpenlyWithoutAHostSet_IsRefused()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var result = await handler.HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), MachineClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+    }
+
+    /// <summary>
+    /// A host naming the grant types decides them under open registration too.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringOpenlyWithinTheHostsSet_IsRegistered()
+    {
+        var provider = BuildProvider(
+            configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials));
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var result = await handler.HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), MachineClientRequest());
+
+        Assert.True(result.TryGetSuccess(out _),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    /// <summary>
+    /// A client presenting an initial access token was let in by whoever issued the token, so without a host set it
+    /// may request every grant type the server supports.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringWithAnInitialAccessTokenWithoutAHostSet_IsRegistered()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var token = await provider.GetRequiredService<IInitialAccessTokenService>().IssueTokenAsync(
+            tenant, "registration-portal", provider.GetRequiredService<TimeProvider>().GetUtcNow(), TimeSpan.FromHours(1));
+        var request = MachineClientRequest() with
+        {
+            AuthorizationHeaderLines = [new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt).ToString()],
+        };
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");

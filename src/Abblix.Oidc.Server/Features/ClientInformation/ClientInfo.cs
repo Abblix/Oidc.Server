@@ -149,7 +149,12 @@ public record ClientInfo(string ClientId)
     /// Specifies the lifetime of access tokens issued to this client.
     /// Shorter access token lifetimes reduce the risk of token leakage.
     /// </summary>
-    public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+    public TimeSpan AccessTokenExpiresIn { get; set; } = DefaultAccessTokenExpiresIn;
+
+    /// <summary>
+    /// The access token lifetime a client takes unless one is set on it, a dynamically registered client included.
+    /// </summary>
+    internal static readonly TimeSpan DefaultAccessTokenExpiresIn = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Whether every access token issued to this client names one resource. An authorization may still grant several

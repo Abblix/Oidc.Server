@@ -77,19 +77,27 @@ public record NewClientOptions
     /// <summary>
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
-    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
-    /// server supports.
+    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client registering with an initial access
+    /// token may request every grant type the server supports, and one registering without, while
+    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c>, only <c>authorization_code</c> and
+    /// <c>refresh_token</c>.
     /// </summary>
     /// <remarks>
-    /// A host that lets any caller register a client keeps registration to the flows it means to open: a set of
-    /// <c>authorization_code</c> and <c>refresh_token</c> admits clients that sign users in and refuses one asking for
-    /// <c>client_credentials</c>, which would get tokens with no user present. Clients the host defines itself are not
-    /// bound by it, and the discovery document still lists every grant type the server supports. Applied on
+    /// A grant no end user takes part in, such as <c>client_credentials</c>, gets tokens with no user present, so a
+    /// client nobody vetted gets only the grants that sign users in unless the host names others here. Clients the host
+    /// defines itself are not bound by it, and the discovery document still lists every grant type the server supports.
+    /// Applied on
     /// registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client registered
     /// before the limit was set keeps its grant types until its next update. An empty set, or one
     /// holding a blank value, is refused at startup.
     /// </remarks>
     public string[]? AllowedGrantTypes { get; init; }
+
+    /// <summary>
+    /// The grant types an end user takes part in, which a client nobody vetted gets unless the host names others: one
+    /// registering without an initial access token and one resolved from its metadata document.
+    /// </summary>
+    internal static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
     /// What a dynamically registered client's authentication assertions may name as their audience, and in which
@@ -142,4 +150,37 @@ public record NewClientOptions
     /// A value the enumeration does not define is refused at startup.
     /// </remarks>
     public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
+
+    /// <summary>
+    /// The lifetime of the access tokens a dynamically registered client is issued
+    /// (<see cref="ClientInfo.AccessTokenExpiresIn"/>), by default the one a client takes unless one is set on it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 metadata has no member for it, so it is the host's to set. Applied on registration and to every client
+    /// resolved from its metadata document; an RFC 7592 update keeps what the client was given, and the host changes a
+    /// stored client in its client store. A lifetime of zero or less is refused at startup.
+    /// </remarks>
+    public TimeSpan AccessTokenExpiresIn { get; init; } = ClientInfo.DefaultAccessTokenExpiresIn;
+
+    /// <summary>
+    /// Whether every access token a dynamically registered client is issued names one resource
+    /// (<see cref="ClientInfo.SingleResourceAccessTokens"/>). Off by default.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 metadata has no member for it, so it is the host's to set. Applied on registration and to every client
+    /// resolved from its metadata document; an RFC 7592 update keeps what the client was given.
+    /// </remarks>
+    public bool SingleResourceAccessTokens { get; init; }
+
+    /// <summary>
+    /// The lifetime and reuse policy of the refresh tokens a dynamically registered client is issued
+    /// (<see cref="ClientInfo.RefreshToken"/>). The defaults of <see cref="RefreshTokenOptions"/> by default.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 metadata has no member for it, so it is the host's to set. Applied on registration and to every client
+    /// resolved from its metadata document; an RFC 7592 update keeps what the client was given. An absolute lifetime
+    /// of zero or less, a sliding one of zero or less, and a reuse policy the enumeration does not define are refused
+    /// at startup.
+    /// </remarks>
+    public RefreshTokenOptions RefreshToken { get; init; } = new();
 }

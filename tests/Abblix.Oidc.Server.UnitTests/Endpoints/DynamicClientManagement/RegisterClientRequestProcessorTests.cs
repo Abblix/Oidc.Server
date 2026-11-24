@@ -338,6 +338,53 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
+    /// A registered client takes the token lifetimes and the single resource rule the host sets for new clients, which
+    /// registration metadata has no member for.
+    /// </summary>
+    [Fact]
+    public async Task ARegisteredClient_TakesTheTokenSettingsTheHostSetsForNewClients()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var newClients = new NewClientOptions
+        {
+            AccessTokenExpiresIn = TimeSpan.FromSeconds(37),
+            SingleResourceAccessTokens = true,
+            RefreshToken = new()
+            {
+                AbsoluteExpiresIn = TimeSpan.FromHours(3),
+                SlidingExpiresIn = null,
+                ReusePolicy = RefreshTokenReusePolicy.Rotate,
+            },
+        };
+
+        var result = await Processor(_clients.Object, newClients).ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(newClients.AccessTokenExpiresIn, stored!.ClientInfo.AccessTokenExpiresIn);
+        Assert.True(stored.ClientInfo.SingleResourceAccessTokens);
+        Assert.Equal(newClients.RefreshToken, stored.ClientInfo.RefreshToken);
+    }
+
+    /// <summary>
+    /// Left at their defaults, the settings for new clients give a registered client what a client takes unless one is
+    /// set on it, so a host setting none of them sees no change.
+    /// </summary>
+    [Fact]
+    public void TheDefaultTokenSettingsForNewClients_AreThoseOfAnyClient()
+    {
+        var newClients = new NewClientOptions();
+        var client = new ClientInfo("client-1");
+
+        Assert.Equal(client.AccessTokenExpiresIn, newClients.AccessTokenExpiresIn);
+        Assert.Equal(client.SingleResourceAccessTokens, newClients.SingleResourceAccessTokens);
+        Assert.Equal(client.RefreshToken, newClients.RefreshToken);
+    }
+
+    /// <summary>
     /// Records the level and event of each entry.
     /// </summary>
     private sealed class CapturingLogger<T> : ILogger<T>
