@@ -162,7 +162,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         clientInfo.ForceUserClaimsInIdentityToken = _hostSettings.ForceUserClaimsInIdentityToken;
         clientInfo.ForceAuthorizationDetailsInIdentityToken = _hostSettings.ForceAuthorizationDetailsInIdentityToken;
         clientInfo.ResourceLocations = _hostSettings.ResourceLocations;
-        clientInfo.AllowCrossClientSubjectTokenExchange = _hostSettings.AllowCrossClientSubjectTokenExchange;
+        clientInfo.CrossClientSubjectTokenExchange = _hostSettings.CrossClientSubjectTokenExchange;
         clientInfo.AllowCrossClientIntrospection = _hostSettings.AllowCrossClientIntrospection;
         clientInfo.ParseLoginHintTokenAsJwt = _hostSettings.ParseLoginHintTokenAsJwt;
         clientInfo.DefaultScope = _hostSettings.DefaultScope;

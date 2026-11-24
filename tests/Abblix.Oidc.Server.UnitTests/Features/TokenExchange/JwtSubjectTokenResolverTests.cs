@@ -146,6 +146,25 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
+    /// The presented token's audience reaches the context, where a client exchanging tokens addressed to it as a
+    /// resource server is matched by it.
+    /// </summary>
+    [Fact]
+    public async Task AudienceOfThePresentedToken_ReachesTheContext()
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        jwt.Payload.Audiences = ["https://mcp.example.com/", "https://other.example.com/"];
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(["https://mcp.example.com/", "https://other.example.com/"], ctx.Audiences!);
+    }
+
+    /// <summary>
     /// The DPoP key and the certificate the presented token is bound to reach the context, so the exchange must prove
     /// them as presenting the token anywhere must (RFC 9449 section 7, RFC 8705 section 3); an unbound token binds none.
     /// </summary>

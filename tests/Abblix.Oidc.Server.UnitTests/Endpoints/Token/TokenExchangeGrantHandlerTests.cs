@@ -787,7 +787,7 @@ public partial class TokenExchangeGrantHandlerTests
         var brokerClient = new ClientInfo(ClientId)
         {
             TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
-            AllowCrossClientSubjectTokenExchange = true,
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
@@ -809,7 +809,7 @@ public partial class TokenExchangeGrantHandlerTests
         var brokerClient = new ClientInfo(ClientId)
         {
             TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
-            AllowCrossClientSubjectTokenExchange = true,  // explicit opt-in for broker scenarios
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,  // explicit opt-in for broker scenarios
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 

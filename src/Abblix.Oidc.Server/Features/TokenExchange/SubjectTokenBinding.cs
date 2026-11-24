@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// This is the server's policy rather than a clause of RFC 8693: a sender-constrained token (RFC 9700 sections 2.2.1 and
 /// 2.2.2) must not buy new tokens for whoever holds it without its key. The client the token was issued to is the one
 /// that holds the key, so it is held to the binding; another client exchanging the token through
-/// <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>, a broker acting for the holder, never had that key and
+/// <see cref="ClientInfo.CrossClientSubjectTokenExchange"/>, a broker or resource server acting for the holder, never had that key and
 /// is not.
 /// </remarks>
 internal static class SubjectTokenBinding

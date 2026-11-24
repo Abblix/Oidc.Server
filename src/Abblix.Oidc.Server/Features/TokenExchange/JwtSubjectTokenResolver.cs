@@ -150,6 +150,10 @@ public sealed class JwtSubjectTokenResolver(
             // stays null, i.e. its origin is genuinely undeterminable.
             OriginalClientId = originalClientId,
 
+            // Whom the token is addressed to, which a client exchanging tokens issued for it as a resource server is
+            // matched by
+            Audiences = [.. jwt.Payload.Audiences],
+
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,

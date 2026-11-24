@@ -240,13 +240,9 @@ public class IntrospectionRequestProcessor(
 		JsonObject payload,
 		JsonObject narrowed)
 	{
-		if (caller.ResourceLocations is not { Length: > 0 } callerLocations ||
+		if (caller.ResourceLocations is not { Length: > 0 } ||
 		    payload[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
 			return;
-
-		var registered = callerLocations
-			.Select(location => location.OriginalString)
-			.ToHashSet(StringComparer.Ordinal);
 
 		var addressed = (details.ToTypedArray() ?? [])
 			.Select(detail => (Detail: detail, Matched: MatchedLocations(detail)))
@@ -261,7 +257,7 @@ public class IntrospectionRequestProcessor(
 
 		string[] MatchedLocations(AuthorizationDetail detail)
 			=> detail.Locations is { } locations
-				? locations.Where(registered.Contains).ToArray()
+				? locations.Where(caller.IsResourceServerFor).ToArray()
 				: [];
 	}
 
