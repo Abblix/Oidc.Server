@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 
@@ -78,6 +79,26 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
+    /// A document whose host name resolves to an address the server does not fetch from is refused where the connection
+    /// is made: a document "rejected on trust or validation grounds", the terminal failure of section 6.1, answered
+    /// invalid_client as a URL naming such an address is.
+    /// </summary>
+    [Theory]
+    [InlineData(Endpoint.Token)]
+    [InlineData(Endpoint.Pushed)]
+    public async Task ADocumentAtAnAddressRefusedOnConnecting_IsAnInvalidClient_NotA503(Endpoint endpoint)
+    {
+        _origin.Answer(ClientId, () => throw new HttpRequestException(
+            "The connection failed",
+            new OutboundAddressRefusedException("SSRF protection: the name resolves to a private address")));
+
+        var (status, body) = await SendAuthenticatedAsync(endpoint, Credential.None);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, status);
+        Assert.Contains(ErrorCodes.InvalidClient, body);
+    }
+
+    /// <summary>
     /// Sends a request for <see cref="ClientId"/> to <paramref name="endpoint"/>, authenticated the way
     /// <paramref name="credential"/> names, and returns the status and the body it is answered with.
     /// </summary>
@@ -115,7 +136,7 @@ public partial class ClientIdMetadataDocumentTests
         }
 
         if (credential == Credential.Certificate)
-            return (await PostWithCertificateAsync(host, uri, form), string.Empty);
+            return await PostWithCertificateAsync(host, uri, form);
 
         using var response = await FormPostHelpers.PostFormAsync(client, uri, form);
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));

@@ -198,7 +198,7 @@ public partial class ClientIdMetadataDocumentTests
                 await ClientSecretJwtAssertion.IssueWithKeyAsync(ClientId, key, discovery.Issuer.OriginalString);
         }
 
-        var status = await PostWithCertificateAsync(host, discovery.PushedAuthorizationRequestEndpoint!, parameters);
+        var (status, _) = await PostWithCertificateAsync(host, discovery.PushedAuthorizationRequestEndpoint!, parameters);
 
         Assert.Equal(valid, status == StatusCodes.Status201Created);
         Assert.Equal(1, _origin.RequestsTo(ClientId));
@@ -206,9 +206,9 @@ public partial class ClientIdMetadataDocumentTests
 
     /// <summary>
     /// Posts <paramref name="form"/> over a connection carrying a fresh self-signed TLS client certificate, which an
-    /// HTTP client of the test server cannot present, and returns the status it is answered with.
+    /// HTTP client of the test server cannot present, and returns the status and the body it is answered with.
     /// </summary>
-    private static async Task<int> PostWithCertificateAsync(
+    private static async Task<(int Status, string Body)> PostWithCertificateAsync(
         WebApplicationFactory<Program> host, Uri endpoint, Dictionary<string, string> form)
     {
         using var key = RSA.Create(2048);
@@ -230,7 +230,8 @@ public partial class ClientIdMetadataDocumentTests
             },
             TestContext.Current.CancellationToken);
 
-        return context.Response.StatusCode;
+        using var reader = new StreamReader(context.Response.Body);
+        return (context.Response.StatusCode, await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>

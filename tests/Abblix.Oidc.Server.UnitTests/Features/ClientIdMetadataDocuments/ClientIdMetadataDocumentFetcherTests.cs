@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Tests.Shared;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -109,6 +110,22 @@ public class ClientIdMetadataDocumentFetcherTests
     {
         _origin.Unreachable(Url);
         Assert.True((await FailedAsync()).MayPass);
+    }
+
+    /// <summary>
+    /// A host name found to resolve to an address the server does not fetch from is refused where the connection is
+    /// made, thrown by the transport as it is or wrapped. Section 6.1 counts a document "rejected on trust or
+    /// validation grounds" as a terminal failure, as a URL naming such an address is.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnAddressRefusedWhereTheConnectionIsMade_IsAFailureThatDoesNotPass(bool wrapped)
+    {
+        var refusal = new OutboundAddressRefusedException("SSRF protection: the name resolves to a private address");
+        _origin.Answer(Url, () => throw (wrapped ? new HttpRequestException("The connection failed", refusal) : refusal));
+
+        Assert.False((await FailedAsync()).MayPass);
     }
 
     /// <summary>
