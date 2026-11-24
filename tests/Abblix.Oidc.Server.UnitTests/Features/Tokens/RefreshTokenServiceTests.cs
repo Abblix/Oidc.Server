@@ -1243,6 +1243,8 @@ public class RefreshTokenServiceTests
     [InlineData(new string[0], null, null)]
     [InlineData(new string[0], new[] { "https://api.example.com" }, new[] { "https://api.example.com" })]
     [InlineData(new string[0], new string[0], null)]
+    [InlineData(new[] { "https://api.example.com" }, new string[0], null)]
+    [InlineData(new string[0], new[] { "not-a-uri", "https://api.example.com" }, new[] { "https://api.example.com" })]
     public async Task AuthorizeByRefreshToken_ReadsTheResourcesFromTheServersClaim_ElseFromTheAudience(
         string[] audienceResources,
         string[]? claimed,
