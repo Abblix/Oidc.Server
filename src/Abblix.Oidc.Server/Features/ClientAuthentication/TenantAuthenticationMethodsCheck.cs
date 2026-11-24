@@ -52,7 +52,8 @@ internal sealed class TenantAuthenticationMethodsCheck(IServiceProvider serviceP
 
         var profile = SecurityProfileRequirements.For(tenant, client: null);
         var reasons = offered.Select(method =>
-            $"{method}: {TenantClientAuthenticationMethods.WhyRefused(tenant, profile, method)}");
+            $"A client authenticating with {method} is refused: " +
+            TenantClientAuthenticationMethods.WhyRefused(tenant, profile, method));
 
         return $"{start}. {string.Join(". ", reasons)}.";
     }
