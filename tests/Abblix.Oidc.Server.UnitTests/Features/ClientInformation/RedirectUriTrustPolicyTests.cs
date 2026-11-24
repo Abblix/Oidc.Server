@@ -27,6 +27,8 @@ public sealed class RedirectUriTrustPolicyTests
 
     private readonly Mock<IClientInfoManager> _registrations = new(MockBehavior.Strict);
 
+    private readonly Mock<IClientInfoProvider> _clients = new(MockBehavior.Strict);
+
     /// <summary>
     /// A client from its metadata document is trusted only under a list of allowed prefixes, the host's own assessment
     /// of the URLs it serves; with none, or an empty one, any URL may name itself a client.
@@ -45,24 +47,47 @@ public sealed class RedirectUriTrustPolicyTests
 
     /// <summary>
     /// While registration needs no initial access token anybody may register a client, so a registered client is
-    /// untrusted, and one the settings or the host's store declare is trusted. With the token required, both are.
+    /// untrusted, and one the host's store still supplies is trusted. A client neither registered nor supplied any more,
+    /// as a registration removed while the request was answered leaves it, is untrusted. With the token required, every
+    /// client is trusted.
     /// </summary>
     [Theory]
-    [InlineData(false, true, false)]
-    [InlineData(false, false, true)]
-    [InlineData(true, true, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(false, false, true, true)]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, true, true, true)]
     public async Task ARegisteredClient_IsUntrustedWhileRegistrationIsOpen(
-        bool requireInitialAccessToken, bool registered, bool trusted)
+        bool requireInitialAccessToken, bool registered, bool stillSupplied, bool trusted)
     {
         var client = new ClientInfo(ClientId);
         _registrations
             .Setup(store => store.TryFindRegisteredClientAsync(Tenant, ClientId))
             .ReturnsAsync(registered ? new RegisteredClient(client, "registration-token-id") : null);
+        _clients
+            .Setup(store => store.FindClientAsync(Tenant, ClientId))
+            .ReturnsAsync(stillSupplied ? client : ClientAbsence.Unknown);
         var options = new OidcOptions { RequireInitialAccessToken = requireInitialAccessToken };
 
         Assert.Equal(trusted, await Policy(options).IsTrustedAsync(Tenant, client));
     }
 
+    /// <summary>
+    /// A client the tenant settings declare is trusted with registration open, and no store is asked about it.
+    /// </summary>
+    [Fact]
+    public async Task AClientTheSettingsDeclare_IsTrustedWhileRegistrationIsOpen()
+    {
+        var client = new ClientInfo(ClientId);
+        var tenant = new TestIssuer { Clients = [client] }.ToTenant();
+
+        Assert.True(await Policy(new OidcOptions { RequireInitialAccessToken = false }).IsTrustedAsync(tenant, client));
+        _registrations.VerifyNoOtherCalls();
+        _clients.VerifyNoOtherCalls();
+    }
+
     private RedirectUriTrustPolicy Policy(OidcOptions options)
-        => new(Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options), _registrations.Object);
+        => new(
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options),
+            _registrations.Object,
+            _clients.Object);
 }

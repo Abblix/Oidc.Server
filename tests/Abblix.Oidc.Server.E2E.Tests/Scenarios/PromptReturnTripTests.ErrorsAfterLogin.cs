@@ -12,6 +12,10 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -96,6 +100,68 @@ public partial class PromptReturnTripTests
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {body}");
         Assert.Null(response.Headers.Location);
         Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(body)![ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A registration removed after the request found its client, while registration is open, leaves a client nobody
+    /// answers for: its error is answered by the server with status 400, with the end user signed in, rather than
+    /// redirected to the client because it is no longer found among the registrations.
+    /// </summary>
+    [Fact]
+    public async Task AnErrorOfAClientWhoseRegistrationIsRemoved_IsAnsweredByTheServer()
+    {
+        var endUser = new SignedInEndUser();
+        using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
+            services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>());
+            services.Decorate<IAuthorizationRequestValidator, RegistrationRemovingValidator>();
+        }));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            prompt: null,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = UnsupportedChallengeMethod,
+            });
+
+        using var response = await client.GetAsync(
+            await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
+            TestContext.Current.CancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {body}");
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// Removes the registration of the client a request names once the request is validated, as its registrant
+    /// deleting it (RFC 7592 section 2.3) while the request is answered does.
+    /// </summary>
+    private sealed class RegistrationRemovingValidator(IAuthorizationRequestValidator inner, IClientInfoManager registrations)
+        : IAuthorizationRequestValidator
+    {
+        public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
+            TenantDefinition tenant,
+            AuthorizationRequest request,
+            IClientInfoProvider clients)
+        {
+            var result = await inner.ValidateAsync(tenant, request, clients);
+            if (request.ClientId is { } clientId &&
+                await registrations.TryFindRegisteredClientAsync(tenant, clientId) is { } registered)
+            {
+                await registrations.TryRemoveClientAsync(tenant, registered);
+            }
+
+            return result;
+        }
     }
 
     /// <summary>

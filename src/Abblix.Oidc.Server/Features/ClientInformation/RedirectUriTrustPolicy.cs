@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -20,14 +21,19 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// Two kinds of client are untrusted. One resolved from its client ID metadata document while
 /// <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/> names no prefix, since any URL may then name
-/// itself a client; a list of prefixes is the host's own assessment of the URLs it serves. And one registered
-/// dynamically while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c>, since anybody may then
-/// register one: the setting is read as it stands, so opening registration makes every registered client untrusted,
-/// whenever it registered. A client declared in the tenant settings or supplied by the host's own store is trusted.
+/// itself a client; a list of prefixes is the host's own assessment of the URLs it serves. And, while
+/// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and anybody may register a client, every client
+/// but one the tenant settings declare or the host's own store still supplies: a registered one, whenever it
+/// registered, and one whose registration is gone, which nobody answers for any more. The store is asked again rather
+/// than taken from the lookup the request made, so a registration removed meanwhile is not trusted for being absent.
 /// </remarks>
 /// <param name="options">The server's options, read at each decision.</param>
 /// <param name="registrations">The store of dynamically registered clients.</param>
-public sealed class RedirectUriTrustPolicy(IOptionsMonitor<OidcOptions> options, IClientInfoManager registrations)
+/// <param name="clients">The client store the server resolves clients by, the host's own where it registers one.</param>
+public sealed class RedirectUriTrustPolicy(
+    IOptionsMonitor<OidcOptions> options,
+    IClientInfoManager registrations,
+    IClientInfoProvider clients)
     : IRedirectUriTrustPolicy
 {
     /// <inheritdoc />
@@ -38,9 +44,15 @@ public sealed class RedirectUriTrustPolicy(IOptionsMonitor<OidcOptions> options,
         if (client.ResolvedFromMetadataDocument)
             return !OpenRegistration.AdmitsAnyDocument(settings);
 
-        if (!OpenRegistration.AdmitsAnyRegistrant(settings))
+        if (!OpenRegistration.AdmitsAnyRegistrant(settings) ||
+            tenant.Clients.Any(declared => declared.IsNamedBy(client.ClientId)))
+        {
             return true;
+        }
 
-        return await registrations.TryFindRegisteredClientAsync(tenant, client.ClientId) is null;
+        if (await registrations.TryFindRegisteredClientAsync(tenant, client.ClientId) is not null)
+            return false;
+
+        return (await clients.FindClientAsync(tenant, client.ClientId)).TryGetSuccess(out _);
     }
 }
