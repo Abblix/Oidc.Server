@@ -233,9 +233,9 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge without explicit method (defaults to plain).
-    /// Per RFC 7636 Section 4.3, missing code_challenge_method defaults to "plain".
-    /// Tests backward compatibility with minimal PKCE implementations.
+    /// A code_challenge without code_challenge_method is a plain one: RFC 7636 section 4.3, "Defaults to "plain" if not
+    /// present in the request". A client allowed plain is served, and the request that goes on carries the method, so
+    /// the code it is issued is verified the same way at the token endpoint.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithCodeChallengeWithoutMethod_ShouldUseDefaultPlain()
@@ -251,16 +251,15 @@ public class PkceValidatorTests
 
         // Assert
         Assert.Null(result);
+        Assert.Equal(CodeChallengeMethods.Plain, context.Request.CodeChallengeMethod);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge without method when plain not allowed.
-    /// Per RFC 7636 Section 4.3, if code_challenge_method is not specified, validator only
-    /// checks if plain method is explicitly used. Null method means client didn't specify,
-    /// so no validation against PlainPkceAllowed is performed.
+    /// A code_challenge without code_challenge_method is plain (RFC 7636 section 4.3), so a client not allowed plain is
+    /// refused with invalid_request, as it is when it names plain.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithCodeChallengeWithoutMethodWhenPlainNotAllowed_ShouldSucceed()
+    public async Task ValidateAsync_WithCodeChallengeWithoutMethodWhenPlainNotAllowed_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(
@@ -272,7 +271,8 @@ public class PkceValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>

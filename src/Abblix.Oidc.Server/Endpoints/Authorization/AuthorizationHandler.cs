@@ -25,12 +25,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// parameters into the response JWT, at the single convergence point for success and every error variant.</param>
 /// <param name="clientInfoProvider">The client store, which every step of one request asks through one
 /// <see cref="RequestScopedClientInfoProvider"/>, so the request finds its client once.</param>
+/// <param name="redirectUriTrust">Decides whether an authorization error may be redirected to the client.</param>
 public class AuthorizationHandler(
     IClientInfoProvider clientInfoProvider,
     IAuthorizationRequestFetcher fetcher,
     IAuthorizationRequestValidator validator,
     IAuthorizationRequestProcessor processor,
-    IAuthorizationResponseEncoder responseEncoder)
+    IAuthorizationResponseEncoder responseEncoder,
+    IRedirectUriTrustPolicy redirectUriTrust)
     : IAuthorizationHandler
 {
     /// <summary>
@@ -62,7 +64,31 @@ public class AuthorizationHandler(
         // convergence point for success and every error variant, after session_state is finalised.
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
         var response = await ProduceResponseAsync(tenant, request, clients);
-        return await responseEncoder.EncodeAsync(tenant, response, clients);
+        var encoded = await responseEncoder.EncodeAsync(tenant, response, clients);
+        return await KeptAtTheServerUnlessTrustedAsync(tenant, encoded, clients);
+    }
+
+    /// <summary>
+    /// An authorization error for a client whose redirect URIs are not trusted, answered by the server rather than at
+    /// the client's redirect URI. RFC 9700 section 4.11.2 has the server "always authenticate the user first" before
+    /// redirecting, and "only automatically redirect the user agent if it trusts the redirection URI", while every
+    /// error reaches the user agent without the end user choosing that client: a refused request before any
+    /// authentication, a declined consent, a silent request. Decided once, after encoding, so an error the encoder
+    /// itself makes of a response it could not pack is held to it too, and a packed one is answered without its JWT.
+    /// </summary>
+    private async Task<AuthorizationResponse> KeptAtTheServerUnlessTrustedAsync(
+        TenantDefinition tenant,
+        AuthorizationResponse response,
+        IClientInfoProvider clients)
+    {
+        if (response is not AuthorizationError { RedirectUri: not null, Model.ClientId: { } clientId } error)
+            return response;
+
+        var found = await clients.FindClientAsync(tenant, clientId);
+        if (found.TryGetSuccess(out var client) && await redirectUriTrust.IsTrustedAsync(tenant, client))
+            return error;
+
+        return error with { RedirectUri = null, ResponseJwt = null };
     }
 
     private async Task<AuthorizationResponse> ProduceResponseAsync(

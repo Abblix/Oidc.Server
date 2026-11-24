@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -76,7 +77,7 @@ public class EndSessionResponseFormatter(
             page = uriResolver.Content(page.OriginalString);
 
         return new SeeOtherResult(LogoutConfirmationPage.Address(page, request, confirmation.Confirmation))
-            .WithHeader(LogoutConfirmationPage.ReferrerPolicyHeader, LogoutConfirmationPage.NoReferrer);
+            .WithHeader(ReferrerPolicy.HeaderName, ReferrerPolicy.NoReferrer);
     }
 
     private ActionResult FormatSuccessResponse(EndSessionSuccess success)
@@ -88,7 +89,8 @@ public class EndSessionResponseFormatter(
                 success.FrontChannelLogoutRequestUris);
 
             return new ContentResult { Content = response.HtmlContent, ContentType = MediaTypeNames.Text.Html }
-                .WithHeader(HeaderNames.ContentSecurityPolicy, GetContentSecurityPolicy(response));
+                .WithHeader(HeaderNames.ContentSecurityPolicy, FrontChannelLogoutPage.ContentSecurityPolicy(response))
+                .WithHeader(HeaderNames.XFrameOptions, AntiFramingHeaders.XFrameOptions);
         }
 
         if (success.PostLogoutRedirectUri != null)
@@ -98,11 +100,4 @@ public class EndSessionResponseFormatter(
 
         return new NoContentResult();
     }
-
-    /// <summary>
-    /// Gets the Content-Security-Policy header value for this logout page.
-    /// </summary>
-    /// <param name="response"></param>
-    internal static string GetContentSecurityPolicy(FrontChannelLogoutResponse response)
-        => $"default-src 'none'; script-src 'nonce-{response.Nonce}'; style-src 'nonce-{response.Nonce}'; frame-src {string.Join(' ', response.FrameSources)}";
 }

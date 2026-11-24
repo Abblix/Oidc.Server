@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -56,10 +57,15 @@ public class TestFactory : SharedHostFactory<Program>, IAsyncLifetime
         // Open dynamic client registration (no initial access token) is the only test-mode tweak a real
         // consumer would not ship; everything else is the stock Abblix.Oidc.Server.MinimalApi behavior.
         builder.ConfigureTestServices(services =>
+        {
             services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                 new PostConfigureOptions<OidcOptions>(
                     Options.DefaultName,
-                    options => options.RequireInitialAccessToken = false)));
+                    options => options.RequireInitialAccessToken = false));
+
+            // The suite asks for the error responses of the clients it registers openly
+            EveryRedirectUriTrusted.Register(services);
+        });
     }
 
     protected override void ConfigureClient(HttpClient client) => client.BaseAddress = BaseAddress;

@@ -105,7 +105,9 @@ public class AuthorizationResponseFormatter(
 
         IResult result = response.ResponseMode switch
         {
-            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri).WithAntiFramingHeaders(),
+            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri)
+                .WithAntiFramingHeaders()
+                .WithHeader(ReferrerPolicy.HeaderName, ReferrerPolicy.NoReferrer),
             ResponseModes.Query => new SeeOtherResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
             ResponseModes.Fragment => new SeeOtherResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
             _ => throw new InvalidOperationException($"Response mode '{response.ResponseMode}' is not supported"),

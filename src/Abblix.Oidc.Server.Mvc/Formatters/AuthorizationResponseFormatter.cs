@@ -140,7 +140,7 @@ public class AuthorizationResponseFormatter(
             ResponseModes.FormPost => new OkObjectResult(dto)
             {
                 Formatters = { new AutoPostFormatter(parametersProvider, redirectUri) },
-            }.WithAntiFramingHeaders(),
+            }.WithAntiFramingHeaders().WithHeader(ReferrerPolicy.HeaderName, ReferrerPolicy.NoReferrer),
 
             ResponseModes.Query => new SeeOtherResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
             ResponseModes.Fragment => new SeeOtherResult(redirectUri.AddToFragment(GetParametersFrom(dto))),

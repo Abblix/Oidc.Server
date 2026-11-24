@@ -41,9 +41,16 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Creates an AuthorizationValidationContext for testing.
+    /// Creates an AuthorizationValidationContext for testing, for a native client, which may redirect to each kind of
+    /// URI these tests match: https, a private-use scheme and http on a loopback host.
     /// </summary>
     private static AuthorizationValidationContext CreateContext(
+        Uri? redirectUri,
+        params Uri[] registeredUris)
+        => CreateContextFor(ApplicationTypes.Native, redirectUri, registeredUris);
+
+    private static AuthorizationValidationContext CreateContextFor(
+        string applicationType,
         Uri? redirectUri,
         params Uri[] registeredUris)
     {
@@ -57,6 +64,7 @@ public class RedirectUriValidatorTests
 
         var clientInfo = new ClientInfo(ClientId)
         {
+            ApplicationType = applicationType,
             RedirectUris = registeredUris,
         };
 
@@ -279,23 +287,28 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts URIs with same host different casing.
-    /// Per RFC 3986 Section 3.2.2, host names are case-insensitive.
-    /// Tests validator correctly handles host case-insensitivity.
+    /// RFC 9700 section 4.1.3: the server "MUST ensure that the two URIs are equal; see Section 6.2.1 of [RFC3986],
+    /// Simple String Comparison". A spelling RFC 3986 normalizes to the registered URI is not that URI: host case, a
+    /// scheme in capitals, a default port written out, an encoded unreserved character, a dot segment, and an IPv6
+    /// loopback literal written in full, whose port alone may differ (RFC 8252 section 7.3).
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithDifferentHostCasing_ShouldSucceed()
+    [Theory]
+    [InlineData("https://client.example.com/callback", "https://CLIENT.EXAMPLE.COM/callback")]
+    [InlineData("https://client.example.com/callback", "HTTPS://client.example.com/callback")]
+    [InlineData("https://client.example.com/callback", "https://client.example.com:443/callback")]
+    [InlineData("https://client.example.com:443/callback", "https://client.example.com/callback")]
+    [InlineData("https://client.example.com/~user", "https://client.example.com/%7Euser")]
+    [InlineData("https://client.example.com/callback", "https://client.example.com/a/../callback")]
+    [InlineData("http://[::1]:61023/oauth2redirect", "http://[0:0:0:0:0:0:0:1]:61024/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2REDIRECT")]
+    public async Task ValidateAsync_ASpellingNormalizedToTheRegisteredUri_ShouldReturnError(
+        string registered, string requested)
     {
-        // Arrange
-        var registeredUri = new Uri("https://client.example.com/callback");
-        var redirectUri = new Uri("https://CLIENT.EXAMPLE.COM/callback");
-        var context = CreateContext(redirectUri, registeredUri);
+        var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
 
     /// <summary>
@@ -604,6 +617,7 @@ public class RedirectUriValidatorTests
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
     [InlineData("http://[::1]:61023/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
     [InlineData("http://127.0.0.1/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
+    [InlineData("http://[::1]/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
     public async Task ValidateAsync_LoopbackIpWithAnotherPort_ShouldSucceed(string registered, string requested)
     {
         var redirectUri = new Uri(requested);
@@ -699,6 +713,29 @@ public class RedirectUriValidatorTests
     {
         var context = CreateContext(new Uri(requested), new Uri(registered));
         context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
+    /// A client the host's own store supplies never met the check of the settings, so the endpoint holds its redirect URI
+    /// to the same rule: a web client redirects only to https (RFC 9700 section 2.6, RFC 8252 section 7.1), even to a
+    /// URI it registered, while a native client keeps the loopback and private-use redirects.
+    /// </summary>
+    [Theory]
+    [InlineData(ApplicationTypes.Web, "http://client.example.com/callback", false)]
+    [InlineData(ApplicationTypes.Web, "http://127.0.0.1:8080/callback", false)]
+    [InlineData(ApplicationTypes.Web, "com.example.app:/callback", false)]
+    [InlineData(ApplicationTypes.Web, "https://client.example.com/callback", true)]
+    [InlineData(ApplicationTypes.Native, "http://127.0.0.1:8080/callback", true)]
+    [InlineData(ApplicationTypes.Native, "http://client.example.com/callback", false)]
+    [InlineData(ApplicationTypes.Native, "myapp:/callback", false)]
+    public async Task ValidateAsync_ARegisteredRedirectUri_IsHeldToTheSchemesOfItsClientType(
+        string applicationType, string uri, bool accepted)
+    {
+        var context = CreateContextFor(applicationType, new Uri(uri), new Uri(uri));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

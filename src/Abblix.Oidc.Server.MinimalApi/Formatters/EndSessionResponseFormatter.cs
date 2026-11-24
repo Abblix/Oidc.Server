@@ -73,7 +73,7 @@ public class EndSessionResponseFormatter(
 
         var resolved = httpContextAccessor.ResolveInteractionUri(page);
         return new SeeOtherResult(LogoutConfirmationPage.Address(resolved, request, confirmation.Confirmation))
-            .WithHeader(LogoutConfirmationPage.ReferrerPolicyHeader, LogoutConfirmationPage.NoReferrer);
+            .WithHeader(ReferrerPolicy.HeaderName, ReferrerPolicy.NoReferrer);
     }
 
     private IResult FormatSuccessResponse(EndSessionSuccess success)
@@ -85,7 +85,8 @@ public class EndSessionResponseFormatter(
                 success.FrontChannelLogoutRequestUris);
 
             return Results.Content(logout.HtmlContent, MediaTypeNames.Text.Html)
-                .WithHeader(HeaderNames.ContentSecurityPolicy, GetContentSecurityPolicy(logout));
+                .WithHeader(HeaderNames.ContentSecurityPolicy, FrontChannelLogoutPage.ContentSecurityPolicy(logout))
+                .WithHeader(HeaderNames.XFrameOptions, AntiFramingHeaders.XFrameOptions);
         }
 
         if (success.PostLogoutRedirectUri != null)
@@ -93,7 +94,4 @@ public class EndSessionResponseFormatter(
 
         return Results.NoContent();
     }
-
-    private static string GetContentSecurityPolicy(FrontChannelLogoutResponse response)
-        => $"default-src 'none'; script-src 'nonce-{response.Nonce}'; style-src 'nonce-{response.Nonce}'; frame-src {string.Join(' ', response.FrameSources)}";
 }

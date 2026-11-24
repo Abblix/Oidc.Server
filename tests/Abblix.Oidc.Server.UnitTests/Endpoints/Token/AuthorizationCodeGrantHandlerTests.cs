@@ -164,13 +164,17 @@ public class AuthorizationCodeGrantHandlerTests
 	/// <summary>
 	/// RFC 6749 section 4.1.3: the server must "ensure that the "redirect_uri" parameter is present if the
 	/// "redirect_uri" parameter was included in the initial authorization request ... and if included ensure
-	/// that their values are identical". Identical means the very URI: a loopback redirect on another port
-	/// (accepted at the authorization endpoint by RFC 8252 section 7.3) and a path differing in case both fail.
+	/// that their values are identical". Identical means the very string: a loopback redirect on another port
+	/// (accepted at the authorization endpoint by RFC 8252 section 7.3), a path differing in case, and a spelling RFC
+	/// 3986 normalizes to the same URI (host case, a default port, an encoded unreserved character) all fail.
 	/// </summary>
 	[Theory]
 	[InlineData("https://client.example.com/callback2", "https://client.example.com/callback1")]
 	[InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
 	[InlineData("https://client.example.com/callback", "https://client.example.com/Callback")]
+	[InlineData("https://client.example.com/callback", "https://CLIENT.example.com/callback")]
+	[InlineData("https://client.example.com/callback", "https://client.example.com:443/callback")]
+	[InlineData("https://client.example.com/~user", "https://client.example.com/%7Euser")]
 	[InlineData("https://client.example.com/callback", null)]
 	[InlineData(null, "https://client.example.com/callback")]
 	public async Task ARedirectUriOtherThanTheAuthorizationRequests_ReturnsInvalidGrant(

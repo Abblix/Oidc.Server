@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Net.Http.Headers;
 
 namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 
@@ -77,9 +78,31 @@ public class EndSessionResponseFormatterTests
     }
 
     /// <summary>
+    /// The page that frames the clients' front-channel logout addresses is itself framed by nobody (RFC 9700 section
+    /// 4.16): its policy denies every ancestor beside naming the frames it loads, and X-Frame-Options covers user agents
+    /// without frame-ancestors.
+    /// </summary>
+    [Fact]
+    public async Task TheFrontChannelLogoutPage_IsFramedByNobody()
+    {
+        var tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
+
+        var sent = await HttpResultRunner.RunAsync(await Formatter(tenant, new FrontChannelPage()).FormatResponseAsync(
+            Request, new EndSessionSuccess(null, [new Uri("https://client.example.com/front-channel-logout")])));
+
+        Assert.Equal(StatusCodes.Status200OK, sent.StatusCode);
+        var policy = sent.Headers[HeaderNames.ContentSecurityPolicy].ToString();
+        Assert.Contains("frame-src https://client.example.com", policy);
+        Assert.Contains("frame-ancestors 'none'", policy);
+        Assert.Equal("DENY", sent.Headers[HeaderNames.XFrameOptions].ToString());
+    }
+
+    /// <summary>
     /// A formatter serving <paramref name="tenant"/> for a request that arrived under the tenant's issuer path.
     /// </summary>
-    private static EndSessionResponseFormatter Formatter(TenantDefinition tenant)
+    private static EndSessionResponseFormatter Formatter(
+        TenantDefinition tenant,
+        IFrontChannelLogoutService? frontChannelLogoutService = null)
     {
         var context = new DefaultHttpContext();
         context.Request.Scheme = Uri.UriSchemeHttps;
@@ -87,7 +110,7 @@ public class EndSessionResponseFormatterTests
         context.Request.PathBase = tenant.Issuer.AbsolutePath;
 
         return new EndSessionResponseFormatter(
-            new NoFrontChannelPage(),
+            frontChannelLogoutService ?? new NoFrontChannelPage(),
             new ServedBy(tenant),
             new HttpContextAccessor { HttpContext = context });
     }
@@ -103,5 +126,12 @@ public class EndSessionResponseFormatterTests
         public FrontChannelLogoutResponse GetFrontChannelLogoutResponse(
             Uri? postLogoutRedirectUri, IList<Uri> frontChannelLogoutUris)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FrontChannelPage : IFrontChannelLogoutService
+    {
+        public FrontChannelLogoutResponse GetFrontChannelLogoutResponse(
+            Uri? postLogoutRedirectUri, IList<Uri> frontChannelLogoutUris)
+            => new("<html></html>", "the-nonce", ["https://client.example.com"]);
     }
 }

@@ -314,6 +314,10 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Contains("default-src 'none'", policy);
         Assert.Contains(FrontChannelLogoutUri.GetLeftPart(UriPartial.Authority), policy);
         Assert.DoesNotContain("frame-src *", policy);
+
+        // The page frames the clients and is framed by nobody (RFC 9700 section 4.16)
+        Assert.Contains("frame-ancestors 'none'", policy);
+        Assert.Equal("DENY", response.Headers.GetValues(HeaderNames.XFrameOptions).Single());
     }
 
     /// <summary>
