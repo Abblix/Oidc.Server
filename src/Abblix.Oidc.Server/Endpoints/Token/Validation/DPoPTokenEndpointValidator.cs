@@ -65,7 +65,10 @@ public partial class DPoPTokenEndpointValidator(
                     "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
             }
 
-            return WillIssueCertificateBoundToken(context, profile) ? null : CertificateMissing();
+            if (WillIssueCertificateBoundToken(context, profile))
+                return null;
+
+            return CertificateMissing("The security profile issues certificate-bound access tokens only:");
         }
 
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
@@ -94,7 +97,10 @@ public partial class DPoPTokenEndpointValidator(
             // A client whose tokens are certificate-bound gets here only without a certificate - calling the token
             // endpoint outside mtls_endpoint_aliases (RFC 8705 section 5), say - so what it lacks is the certificate
             if (CertificateBoundAccessTokens.AreIssuedTo(context.ClientInfo, profile))
-                return CertificateMissing();
+            {
+                return CertificateMissing(
+                    "The security profile requires a sender-constrained token: present a DPoP proof, or");
+            }
 
             LogProofRequiredButMissing("security profile");
             return new OidcError(
@@ -107,18 +113,19 @@ public partial class DPoPTokenEndpointValidator(
     }
 
     /// <summary>
-    /// The refusal of a request whose token has to be certificate-bound and which presents no certificate to bind it
-    /// to. RFC 8705 section 3.4 leaves it to the server "whether to return an error or issue an unbound token", and a
-    /// profile requiring sender-constrained tokens rules out the second. The code is RFC 8705 section 2's for a
-    /// missing certificate, invalid_client, the mutual TLS the token would be bound through being what is missing.
+    /// The refusal of a request presenting no proof and no certificate from a client whose tokens are
+    /// certificate-bound, under a profile requiring sender-constrained tokens. RFC 8705 section 3.4 leaves it to the
+    /// server "whether to return an error or issue an unbound token", and the profile rules out the second. The code
+    /// is RFC 8705 section 2's for a missing certificate, invalid_client, the certificate being what such a client
+    /// lacks; <paramref name="requirement"/> states what else the profile accepts, a DPoP proof under FAPI 2.0.
     /// </summary>
-    private OidcError CertificateMissing()
+    private OidcError CertificateMissing(string requirement)
     {
-        LogProofRequiredButMissing("security profile");
+        LogCertificateRequiredButMissing();
         return new OidcError(
             ErrorCodes.InvalidClient,
-            "The security profile requires a certificate-bound token: present the client certificate over mutual " +
-            "TLS, at the token endpoint of mtls_endpoint_aliases when the server publishes one.");
+            requirement + " present the client certificate over mutual TLS, at the token endpoint of " +
+            "mtls_endpoint_aliases when the server publishes one.");
     }
 
     /// <summary>

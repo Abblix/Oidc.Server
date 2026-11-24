@@ -26,6 +26,12 @@ partial class DPoPTokenEndpointValidator
     private partial void LogProofRequiredButMissing(string triggerReason);
 
     [LoggerMessage(
+        EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.CertificateRequiredButMissing,
+        Level = LogLevel.Information,
+        Message = "Client certificate required at token endpoint for a certificate-bound token but not presented.")]
+    private partial void LogCertificateRequiredButMissing();
+
+    [LoggerMessage(
         EventId = LogEvents.DPoP.DPoPTokenEndpointValidator.ProofRejected,
         Level = LogLevel.Information,
         Message = "DPoP proof rejected at token endpoint: {Reason}.")]
