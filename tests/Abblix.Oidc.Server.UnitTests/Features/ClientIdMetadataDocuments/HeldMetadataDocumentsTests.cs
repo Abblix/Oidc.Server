@@ -139,7 +139,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
         var third = await GetAsync();
 
         Assert.Equal(2, _services.Origin.RequestsTo(Url));
-        Assert.Equal("Two", third!.Metadata.ClientName);
+        Assert.Equal("Two", System.Text.Json.Nodes.JsonNode.Parse(third!.Content)!["client_name"]!.GetValue<string>());
     }
 
     [Fact]

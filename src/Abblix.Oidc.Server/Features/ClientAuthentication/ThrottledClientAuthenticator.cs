@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common;
 
@@ -34,14 +35,19 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 /// <param name="logger">Records a refusal, naming the address it was charged to.</param>
 /// <param name="inner">The authenticator whose credentials this one decides whether to look at.</param>
-/// <param name="budget">The failures one source address gets.</param>
+/// <param name="serviceProvider">Resolves the failures one source address gets at the first authentication rather
+/// than when this authenticator is built: the checks of the server's settings ask it which methods it offers, and a
+/// host of the server's core registers what the budget reads the source address with only to serve requests.</param>
 /// <param name="unnamedSource">Says, once, that a request arrived from no address and so went uncounted.</param>
 internal sealed partial class ThrottledClientAuthenticator(
     ILogger<ThrottledClientAuthenticator> logger,
     IClientAuthenticator inner,
-    AuthenticationFailureBudget budget,
+    IServiceProvider serviceProvider,
     UnnamedSourceNotice unnamedSource) : IClientAuthenticator
 {
+    private readonly Lazy<AuthenticationFailureBudget> _budget =
+        new(serviceProvider.GetRequiredService<AuthenticationFailureBudget>);
+
     /// <inheritdoc />
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
@@ -58,6 +64,7 @@ internal sealed partial class ThrottledClientAuthenticator(
         ClientRequest request,
         IClientInfoProvider clients)
     {
+        var budget = _budget.Value;
         var source = budget.Source;
         if (source is null)
             unnamedSource.Report(CallerRateLimiters.AuthenticationFailures);

@@ -68,7 +68,14 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         if (document.Clients.TryGetValue(generation, out var client))
             return client;
 
-        client = await JudgeAsync(tenant, clientId, document.Metadata, settings.NewClientOptions);
+        var read = await documents.ReadAtAsync(tenant, clientId, document);
+        if (!read.TryGetSuccess(out var metadata))
+        {
+            LogClientRefused(clientId, tenant.Id, read.GetFailure().Reason);
+            return ClientAbsence.Refused;
+        }
+
+        client = await JudgeAsync(tenant, clientId, metadata, settings.NewClientOptions);
 
         // A refusal is not kept: section 6.2 has the server "MUST NOT cache documents which are invalid", and one is so
         // at this tenant
@@ -169,8 +176,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         // The checks fetch what the document names, its sector identifier among them, on the document's behalf
         using var strict = SpecialPurposeFetches.Enter();
 
-        // A copy, since a check may complete the metadata it judges and the document is shared by every tenant
-        var judged = await validator.ValidateAsync(tenant, metadata with { });
+        var judged = await validator.ValidateAsync(tenant, metadata);
         if (!judged.TryGetSuccess(out var context))
         {
             LogClientRefused(clientId, tenant.Id, judged.GetFailure().ErrorDescription);
