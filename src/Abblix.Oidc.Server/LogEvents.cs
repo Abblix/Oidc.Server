@@ -1095,6 +1095,17 @@ internal static class LogEvents
             public const int TrustedIssuerIsServedTenant = Base;
             public const int TrustedIssuersNotChecked = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Common/Configuration/RefreshTokenReusePolicyCheck.cs</c> - a client of a tenant read whose refresh token
+        /// reuse is not followed for every token (sub-range 10780-10799).
+        /// </summary>
+        public static class RefreshTokenReusePolicyCheck
+        {
+            private const int Base = 10780;
+
+            public const int ReuseNotFollowed = Base;
+        }
     }
 
     /// <summary>

@@ -652,8 +652,9 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// A refresh whose narrowed scope drops offline_access issues no new refresh token, yet the access token it
-    /// mints still came from the presented one, so it stays in that token's family and dies with it.
+    /// A refresh of a token that does not rotate, whose narrowed scope drops offline_access, issues no new refresh
+    /// token, yet the access token it mints still came from the presented one, so it stays in that token's family and
+    /// dies with it.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_RefreshWithoutOfflineAccess_KeepsTheAccessTokenInThePresentedFamily()
@@ -681,12 +682,16 @@ public partial class TokenRequestProcessorTests
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, authSession, narrowedContext)))
             .ReturnsAsync(CreateIdToken());
+        _refreshTokenService
+            .Setup(s => s.Rotates(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .Returns(false);
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(accessToken, tokenIssued.AccessToken);
         Assert.Null(tokenIssued.RefreshToken);
+        _refreshTokenService.Verify(s => s.Rotates(TestTenant.Matched, existingRefreshToken, request.ClientInfo), Times.Once);
         _refreshTokenService.VerifyNoOtherCalls();
         _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
     }

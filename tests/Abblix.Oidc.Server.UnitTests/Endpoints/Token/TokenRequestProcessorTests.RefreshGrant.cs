@@ -199,4 +199,57 @@ public partial class TokenRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var issued));
         return issued.RefreshToken is not null;
     }
+
+    /// <summary>
+    /// A refresh request naming a scope without offline_access renews a token that rotates, and spends it (RFC 9700
+    /// section 4.14.2). The successor carries the presented token's scope, as RFC 6749 section 6 requires.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RefreshNamingANarrowerScope_StillRenewsAndSpendsARotatingToken()
+    {
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        const string apiScope = "api";
+        var grantContext = new AuthorizationContext(TestConstants.DefaultClientId, [apiScope, Scopes.OfflineAccess], null);
+        var narrowedContext = grantContext with { Scope = [apiScope] };
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, grantContext, existingRefreshToken),
+            RefreshingClient(),
+            [],
+            []);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
+            .Returns(narrowedContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, authSession, narrowedContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromMinutes(10), [apiScope]));
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched, authSession, It.IsAny<AuthorizationContext>(), request.ClientInfo,
+                existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(CreateRefreshToken());
+        _refreshTokenService
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+        _refreshTokenService
+            .Setup(s => s.Rotates(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .Returns(true);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var issued));
+        Assert.NotNull(issued.RefreshToken);
+        _refreshTokenService.Verify(
+            s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched, authSession,
+                It.Is<AuthorizationContext>(context => context.Scope.Contains(Scopes.OfflineAccess)),
+                request.ClientInfo, existingRefreshToken, ExistingGrantId),
+            Times.Once);
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo),
+            Times.Once);
+    }
 }

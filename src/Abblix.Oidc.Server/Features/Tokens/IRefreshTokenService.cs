@@ -52,15 +52,23 @@ public interface IRefreshTokenService
 	/// Called once every token of the response has been issued, so a failure on the way leaves the presented
 	/// token unspent, and only when a new refresh token was issued for it. When another request has already
 	/// spent the token, the grant is revoked as for any replay of a superseded token, because two presentations
-	/// arriving together cannot be told from a stolen copy. A token the client's policy does not rotate is left
-	/// unspent, and so is one presented for a request that issues no new refresh token, such as one narrowing its
-	/// scope to leave out offline access.
+	/// arriving together cannot be told from a replay. A token that does not rotate (<see cref="Rotates"/>) is
+	/// left unspent.
 	/// </remarks>
 	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="refreshToken">The refresh token presented for renewal.</param>
 	/// <param name="clientInfo">The client renewing it.</param>
 	/// <returns>True when the request may go on; false when the token had already been spent.</returns>
 	Task<bool> TrySpendAsync(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo);
+
+	/// <summary>
+	/// Whether renewing <paramref name="refreshToken"/> spends it. The token endpoint renews such a token for any scope
+	/// the request names, so that it is spent.
+	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
+	/// <param name="refreshToken">The refresh token presented for renewal.</param>
+	/// <param name="clientInfo">The client renewing it.</param>
+	bool Rotates(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo);
 
 	/// <summary>
 	/// Reconstructs the <see cref="AuthorizedGrant"/> represented by a previously issued refresh
