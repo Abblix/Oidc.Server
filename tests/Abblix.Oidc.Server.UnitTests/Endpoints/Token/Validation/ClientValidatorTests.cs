@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Threading.Tasks;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -30,12 +33,120 @@ public class ClientValidatorTests
     private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
 
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
+    private readonly Mock<IAuthServiceJwtReader> _jwtReader;
     private readonly ClientValidator _validator;
 
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object, Clients);
+        _jwtReader = new Mock<IAuthServiceJwtReader>(MockBehavior.Strict);
+        _validator = new ClientValidator(_clientAuthenticator.Object, Clients, _jwtReader.Object);
+    }
+
+    private const string RefreshToken = "refresh-token";
+    private const string PublicClientId = "public-client";
+
+    private static TokenValidationContext RefreshContext(string grantType = GrantTypes.RefreshToken, string? clientId = null)
+        => new(
+            new TokenRequest { GrantType = grantType, RefreshToken = RefreshToken },
+            new ClientRequest { ClientId = clientId });
+
+    private void ArrangeRefreshTokenOf(string? clientId)
+    {
+        var token = new JsonWebToken();
+        token.Payload.ClientId = clientId;
+        _jwtReader
+            .Setup(r => r.ReadAuthenticAsync(
+                It.IsAny<TenantDefinition>(),
+                null,
+                RefreshToken,
+                It.IsAny<TokenTypePolicy>(),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+    }
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) sections 3.2.2 and 4.3.1: a refresh token request presenting no credential
+    /// and no client_id is authenticated as a request naming the client its refresh token was issued to, so a public
+    /// client is served without client_id, and through the same authenticators a request naming it goes through.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenRequestWithoutClientId_IsAuthenticatedAsTheClientItsTokenNames()
+    {
+        var context = RefreshContext();
+        ArrangeRefreshTokenOf(PublicClientId);
+        var publicClient = new ClientInfo(PublicClientId);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(
+                TestTenant.Matched, It.Is<ClientRequest>(r => r.ClientId == null), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(
+                TestTenant.Matched, It.Is<ClientRequest>(r => r.ClientId == PublicClientId), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(publicClient);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Same(publicClient, context.ClientInfo);
+    }
+
+    /// <summary>
+    /// A refresh token that cannot be read, or names no client, identifies none, so the request is refused as one
+    /// authenticating no client, and the authenticators are not asked again.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ARefreshTokenNamingNoClient_LeavesTheRequestUnauthenticated(bool readable)
+    {
+        var context = RefreshContext();
+        if (readable)
+        {
+            ArrangeRefreshTokenOf(null);
+        }
+        else
+        {
+            _jwtReader
+                .Setup(r => r.ReadAuthenticAsync(
+                    It.IsAny<TenantDefinition>(), null, RefreshToken, It.IsAny<TokenTypePolicy>(),
+                    It.IsAny<ValidationOptions>()))
+                .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "unreadable"));
+        }
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        _clientAuthenticator.Verify(
+            a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// The refresh token is read only for a refresh token request presenting no credential at all: one naming a
+    /// client_id, one presenting a credential that fails, and a request of another grant are answered for what they
+    /// present.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.RefreshToken, PublicClientId, false)]
+    [InlineData(GrantTypes.RefreshToken, null, true)]
+    [InlineData(GrantTypes.AuthorizationCode, null, false)]
+    public async Task ARequestOtherThanARefreshWithoutAnyCredential_DoesNotHaveItsRefreshTokenRead(
+        string grantType, string? clientId, bool credentialFails)
+    {
+        var context = RefreshContext(grantType, clientId);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(credentialFails ? ClientAuthenticationFailures.InvalidCredential : ClientAuthenticationFailures.NoCredential);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        _jwtReader.VerifyNoOtherCalls();
     }
 
     private static TokenValidationContext CreateContext(ClientRequest? clientRequest = null)

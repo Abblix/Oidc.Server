@@ -6,12 +6,16 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -25,7 +29,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </remarks>
 /// <param name="clientAuthenticator">The client authenticator used to authenticate the client.</param>
 /// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientInfoProvider clientInfoProvider)
+/// <param name="jwtReader">Reads the client a refresh token presented without client_id was issued to.</param>
+public class ClientValidator(
+    IClientAuthenticator clientAuthenticator,
+    IClientInfoProvider clientInfoProvider,
+    IAuthServiceJwtReader jwtReader)
     : ITokenContextValidator
 {
     /// <summary>
@@ -55,6 +63,13 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
         context.Clients = clients;
 
         var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
+        if (!authenticated.TryGetSuccess(out _) &&
+            authenticated.GetFailure() is UnauthenticatedCallerError &&
+            await NamedByTheRefreshTokenAsync(tenant, context.Request, clientRequest) is { } named)
+        {
+            authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, named, clients);
+        }
+
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -68,5 +83,42 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
 
         context.ClientInfo = clientInfo;
         return null;
+    }
+
+    /// <summary>
+    /// <paramref name="clientRequest"/> naming the client the refresh token of <paramref name="request"/> was issued
+    /// to, for a refresh token request presenting no credential and no client_id, or null where it names none.
+    /// </summary>
+    /// <remarks>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.2: client_id is "needed when a form of client authentication
+    /// that relies on the parameter is used, or the grant_type requires identification of public clients", and the
+    /// refresh token grant does not: section 4.3.1 has the server check the token against client_id only "if a
+    /// client_id is included in the request", the token being "bound to the client to which it was issued". The client
+    /// it names is then authenticated as a request naming it would be, so only a client of the method none is served
+    /// so, and a confidential one still has to authenticate ("Confidential clients MUST authenticate"). The token is
+    /// only read here, and nothing recorded about it is: the grant validates and spends it.
+    /// </remarks>
+    private async Task<ClientRequest?> NamedByTheRefreshTokenAsync(
+        TenantDefinition tenant,
+        TokenRequest request,
+        ClientRequest clientRequest)
+    {
+        if (request is not { GrantType: GrantTypes.RefreshToken, RefreshToken: { Length: > 0 } refreshToken } ||
+            clientRequest.ClientId.HasValue())
+        {
+            return null;
+        }
+
+        var token = await jwtReader.ReadAuthenticAsync(
+            tenant,
+            client: null,
+            refreshToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            ServiceTokenValidation.AnyAudience);
+
+        if (!token.TryGetSuccess(out var readToken) || readToken.Payload.ClientId is not { Length: > 0 } clientId)
+            return null;
+
+        return clientRequest with { ClientId = clientId };
     }
 }
