@@ -65,17 +65,7 @@ public partial class DPoPTokenEndpointValidator(
                     "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
             }
 
-            // RFC 6749 section 5.2, invalid_client: "Client authentication failed", the mutual TLS the token would be
-            // bound through being what is missing
-            if (!WillIssueCertificateBoundToken(context, profile))
-            {
-                LogProofRequiredButMissing("security profile");
-                return new OidcError(
-                    ErrorCodes.InvalidClient,
-                    "The security profile requires a certificate-bound token: authenticate with mutual TLS.");
-            }
-
-            return null;
+            return WillIssueCertificateBoundToken(context, profile) ? null : CertificateMissing();
         }
 
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
@@ -101,6 +91,11 @@ public partial class DPoPTokenEndpointValidator(
         // profile tightens, and the granular RequireDPoP toggle cannot weaken it.
         if (profile.RequireSenderConstrainedTokens && !WillIssueCertificateBoundToken(context, profile))
         {
+            // A client whose tokens are certificate-bound gets here only without a certificate - calling the token
+            // endpoint outside mtls_endpoint_aliases (RFC 8705 section 5), say - so what it lacks is the certificate
+            if (CertificateBoundAccessTokens.AreIssuedTo(context.ClientInfo, profile))
+                return CertificateMissing();
+
             LogProofRequiredButMissing("security profile");
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
@@ -109,6 +104,21 @@ public partial class DPoPTokenEndpointValidator(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The refusal of a request whose token has to be certificate-bound and which presents no certificate to bind it
+    /// to. RFC 8705 section 3.4 leaves it to the server "whether to return an error or issue an unbound token", and a
+    /// profile requiring sender-constrained tokens rules out the second. The code is RFC 8705 section 2's for a
+    /// missing certificate, invalid_client, the mutual TLS the token would be bound through being what is missing.
+    /// </summary>
+    private OidcError CertificateMissing()
+    {
+        LogProofRequiredButMissing("security profile");
+        return new OidcError(
+            ErrorCodes.InvalidClient,
+            "The security profile requires a certificate-bound token: present the client certificate over mutual " +
+            "TLS, at the token endpoint of mtls_endpoint_aliases when the server publishes one.");
     }
 
     /// <summary>
