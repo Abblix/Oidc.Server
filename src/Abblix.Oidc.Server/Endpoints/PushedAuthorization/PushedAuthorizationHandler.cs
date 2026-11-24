@@ -98,7 +98,7 @@ public class PushedAuthorizationHandler(
             const string notAuthorized = "The client is not authorized";
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient(notAuthorized))
             {
-                Refusal = await BasicChallenge.InvalidClientAsync(tenant, clientRequest, clients, notAuthorized),
+                Refusal = BasicChallenge.InvalidClient(clientRequest, notAuthorized),
             };
         }
 

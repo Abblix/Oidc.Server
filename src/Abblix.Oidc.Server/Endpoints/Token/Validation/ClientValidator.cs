@@ -62,13 +62,15 @@ public class ClientValidator(
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
         context.Clients = clients;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
-        if (!authenticated.TryGetSuccess(out _) &&
-            authenticated.GetFailure() is UnauthenticatedCallerError &&
+        // The client a refresh token presented without any credential names is the one authenticated, once: a first
+        // attempt without it would be charged to the source as a failed one, which a working client must never be
+        if (!(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, clientRequest, clients)).Any() &&
             await NamedByTheRefreshTokenAsync(tenant, context.Request, clientRequest) is { } named)
         {
-            authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, named, clients);
+            clientRequest = named;
         }
+
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
@@ -78,8 +80,7 @@ public class ClientValidator(
             // meet that client's outage too, but the answer to such a token does not depend on it, so only a failed
             // authentication is answered as one
             return clients.RefusalOf(authenticated.GetFailure() as MoreThanOneClientAuthenticationMethodError
-                                     ?? await BasicChallenge.InvalidClientAsync(
-                                         tenant, clientRequest, clients, "The client is not authorized"));
+                                     ?? BasicChallenge.InvalidClient(clientRequest, "The client is not authorized"));
         }
 
         context.ClientInfo = clientInfo;

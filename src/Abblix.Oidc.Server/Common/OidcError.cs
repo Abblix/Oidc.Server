@@ -58,9 +58,9 @@ public record OidcError(string Error, string ErrorDescription)
 
     /// <summary>
     /// Whether an <c>invalid_client</c> refusal answers with a <c>WWW-Authenticate: Basic</c> challenge and 401, as
-    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4 has it for a client that used HTTP Basic, the server's one HTTP
-    /// authentication scheme for clients, and for one registered for it; otherwise the refusal takes its endpoint's own
-    /// status and no challenge. Decided by <c>Features.ClientAuthentication.BasicChallenge</c>.
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4 has it for a request that used HTTP Basic, the server's one
+    /// HTTP authentication scheme for clients; otherwise the refusal takes its endpoint's own status and no
+    /// challenge. Decided by <c>Features.ClientAuthentication.BasicChallenge</c>.
     /// </summary>
     public bool BasicChallengeOwed { get; init; }
 }

@@ -119,8 +119,7 @@ public partial class RevocationRequestValidator(
 			// RFC 7009 section 2.2.1: "If the server responds with HTTP status code 503, the client must assume the
 			// token still exists and may retry after a reasonable delay", which is what a client is told whose
 			// document could not be had for now (draft-ietf-oauth-client-id-metadata-document-03 section 6.1)
-			return clients.RefusalOf(
-				await BasicChallenge.InvalidClientAsync(tenant, clientRequest, clients, "The client is not authorized"));
+			return clients.RefusalOf(BasicChallenge.InvalidClient(clientRequest, "The client is not authorized"));
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read: reading it

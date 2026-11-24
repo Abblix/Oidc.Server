@@ -107,17 +107,18 @@ public class ClientAuthenticationFailureTests(TestFactory factory) : TestBase(fa
     }
 
     /// <summary>
-    /// A client registered for client_secret_basic is owed the Basic challenge even when the request carried its
-    /// credential elsewhere: the challenge names the scheme it is to use.
+    /// The challenge reads the request alone: a client registered for client_secret_basic that sent its secret in the
+    /// body is answered as any request not using HTTP Basic, so the answer tells nothing of how the named client
+    /// authenticates, or whether it exists.
     /// </summary>
     [Theory]
-    [InlineData(Token)]
-    [InlineData(Revocation)]
-    [InlineData(Introspection)]
-    [InlineData(PushedAuthorization)]
-    [InlineData(DeviceAuthorization)]
-    [InlineData(BackChannelAuthentication)]
-    public async Task A_basic_client_failing_without_the_header_is_challenged_with_basic(string endpoint)
+    [InlineData(Token, HttpStatusCode.BadRequest)]
+    [InlineData(Revocation, HttpStatusCode.BadRequest)]
+    [InlineData(PushedAuthorization, HttpStatusCode.BadRequest)]
+    [InlineData(DeviceAuthorization, HttpStatusCode.BadRequest)]
+    [InlineData(Introspection, HttpStatusCode.Unauthorized)]
+    [InlineData(BackChannelAuthentication, HttpStatusCode.Unauthorized)]
+    public async Task A_basic_client_failing_without_the_header_is_not_challenged(string endpoint, HttpStatusCode expected)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -134,8 +135,8 @@ public class ClientAuthenticationFailureTests(TestFactory factory) : TestBase(fa
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.Basic);
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Empty(response.Headers.WwwAuthenticate);
     }
 
     private static Uri EndpointOf(DiscoveryDocument discovery, string endpoint) => endpoint switch

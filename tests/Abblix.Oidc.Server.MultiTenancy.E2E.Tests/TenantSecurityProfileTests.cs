@@ -153,7 +153,8 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, (await PushAsync(Acme)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await PushAsync(Globex)).StatusCode);
+        // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+        Assert.Equal(HttpStatusCode.BadRequest, (await PushAsync(Globex)).StatusCode);
     }
 
     /// <summary>

@@ -779,23 +779,32 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// offline_access beside the scope, or in the client's default, does not change whether openid is served, and is
-    /// judged here before the flow type the server's handling of offline_access depends on is known: an OAuth request
-    /// carrying it is served at the sole URI, an OpenID Connect one is refused.
+    /// offline_access beside the scope, or in the client's default, is judged here before the flow type is settled, by
+    /// the scope the request is served with: an OAuth request carrying it is served at the sole URI, an OpenID Connect
+    /// one is refused. offline_access alone is served as named when it is received (OpenID Connect Core 1.0 section 11:
+    /// prompt=consent for a client that may receive refresh tokens), a plain OAuth request, and is ignored otherwise,
+    /// the request then served the client's default.
     /// </summary>
     [Theory]
-    [InlineData(new[] { Scopes.Profile, Scopes.OfflineAccess }, null, true)]
-    [InlineData(new[] { Scopes.OpenId, Scopes.OfflineAccess }, null, false)]
-    [InlineData(new string[0], new[] { Scopes.Profile, Scopes.OfflineAccess }, true)]
-    [InlineData(new string[0], new[] { Scopes.OpenId, Scopes.OfflineAccess }, false)]
-    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, false)]
+    [InlineData(new[] { Scopes.Profile, Scopes.OfflineAccess }, null, false, true)]
+    [InlineData(new[] { Scopes.OpenId, Scopes.OfflineAccess }, null, false, false)]
+    [InlineData(new string[0], new[] { Scopes.Profile, Scopes.OfflineAccess }, false, true)]
+    [InlineData(new string[0], new[] { Scopes.OpenId, Scopes.OfflineAccess }, false, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, false, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, true, true)]
     public async Task ValidateAsync_RequestWithoutRedirectUri_AndOfflineAccess_IsJudgedByTheOpenIdScope(
-        string[] named, string[]? defaultScope, bool served)
+        string[] named, string[]? defaultScope, bool promptConsent, bool served)
     {
         var registered = new Uri(RegisteredUri);
         var context = CreateContext(null, registered);
-        context.Request = context.Request with { Scope = named };
+        context.Request = context.Request with
+        {
+            Scope = named,
+            Prompt = promptConsent ? [Prompts.Consent] : null,
+        };
         context.ClientInfo.DefaultScope = defaultScope;
+        context.ClientInfo.AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+        context.ClientInfo.OfflineAccess = OfflineAccess.ConsentRequired;
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

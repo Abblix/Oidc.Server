@@ -42,8 +42,8 @@ public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor
                 tenantAccessor.CurrentTenant().IssuerAsWritten()),
 
             // RFC 9126 section 2.3: errors take "the same format as is specified for error responses from the token
-            // endpoint in Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401
-            // with a challenge).
+            // endpoint in Section 5.2 of [RFC6749]", so through the token endpoint's own policy, whose invalid_client
+            // carries the Basic challenge where the refusal says one is owed.
             AuthorizationError error => new OidcError(error.Error, error.ErrorDescription).Format(
                 StatusCodes.Status400BadRequest,
                 tenantAccessor.CurrentTenant().IssuerAsWritten()),

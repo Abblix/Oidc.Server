@@ -117,7 +117,8 @@ public static class ActionResultExtensions
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
-	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
+	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge where one is
+	/// owed (OAuth 2.1 section 3.2.4), and the fallback status without one otherwise,
 	/// and the JSON error body per RFC 6749 Section 5.2.
 	/// <c>invalid_request</c> returns HTTP 400 with the JSON body whatever the fallback (RFC 6749 Section 5.2,
 	/// RFC 6750 Section 3.1), and a <see cref="BearerRequestError"/> adds a Bearer challenge carrying it. All other

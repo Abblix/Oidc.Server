@@ -83,23 +83,14 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
     {
         if (profile.RequireRedirectUriParameter ||
             context.ClientInfo.RedirectUris is not [var sole] ||
-            ServedWithOpenId(context))
+            context.ServedScope() is not { } served ||
+            served.Contains(Scopes.OpenId, StringComparer.Ordinal))
         {
             return null;
         }
 
         return sole;
     }
-
-    /// <summary>
-    /// Whether the request may be served the openid scope, named or as the client's default, or names none while it
-    /// has to. Asked before the flow type is known, which whether offline_access is ignored depends on, so the scope is
-    /// read without it: offline_access does not change whether openid is served, and a request naming it alone is
-    /// taken as served the default, which can only require the parameter where the server would not.
-    /// </summary>
-    private static bool ServedWithOpenId(AuthorizationValidationContext context)
-        => context.ClientInfo.ScopeServedFor([.. context.Request.Scope.Where(scope => scope != Scopes.OfflineAccess)])
-            is not { } served || served.Contains(Scopes.OpenId, StringComparer.Ordinal);
 
     /// <remarks>
     /// The query is held to OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3 too: it "MUST NOT include any parameters

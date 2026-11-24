@@ -129,6 +129,7 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
 
         _app = builder.Build();
         _app.UseMultiTenancy();
+        _app.UseCors();
         _app.MapOidcEndpoints();
         await _app.StartAsync(TestContext.Current.CancellationToken);
 

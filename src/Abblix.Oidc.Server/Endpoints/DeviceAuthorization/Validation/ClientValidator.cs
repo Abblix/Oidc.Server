@@ -43,8 +43,7 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
 
             // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
             // a failed client authentication invalid_client.
-            return await BasicChallenge.InvalidClientAsync(
-                tenant, context.ClientRequest, clients, "The client is not authorized");
+            return BasicChallenge.InvalidClient(context.ClientRequest, "The client is not authorized");
         }
 
         if (!clientInfo.MayUseGrantType(GrantTypes.DeviceAuthorization))

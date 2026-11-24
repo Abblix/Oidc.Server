@@ -130,7 +130,7 @@ public partial class DPoPTokenEndpointValidator(
             requirement + " present the client certificate over mutual TLS, at the token endpoint of " +
             "mtls_endpoint_aliases when the server publishes one.")
         {
-            BasicChallengeOwed = BasicChallenge.IsOwed(context.ClientRequest, context.ClientInfo),
+            BasicChallengeOwed = BasicChallenge.IsOwed(context.ClientRequest),
         };
     }
 

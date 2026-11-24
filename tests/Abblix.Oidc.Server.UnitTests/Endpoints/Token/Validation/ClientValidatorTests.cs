@@ -39,6 +39,10 @@ public class ClientValidatorTests
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
+        _clientAuthenticator
+            .Setup(a => a.FindPresentedCredentialsAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync([]);
         _jwtReader = new Mock<IAuthServiceJwtReader>(MockBehavior.Strict);
         _validator = new ClientValidator(_clientAuthenticator.Object, Clients, _jwtReader.Object);
     }
@@ -73,6 +77,8 @@ public class ClientValidatorTests
     /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) sections 3.2.2 and 4.3.1: a refresh token request presenting no credential
     /// and no client_id is authenticated as a request naming the client its refresh token was issued to, so a public
     /// client is served without client_id, and through the same authenticators a request naming it goes through.
+    /// Authenticated once, as that client: a first attempt without it would count as a failed one against the
+    /// source's budget, which a working client never spends.
     /// </summary>
     [Fact]
     public async Task ARefreshTokenRequestWithoutClientId_IsAuthenticatedAsTheClientItsTokenNames()
@@ -93,6 +99,30 @@ public class ClientValidatorTests
 
         Assert.Null(error);
         Assert.Same(publicClient, context.ClientInfo);
+        _clientAuthenticator.Verify(
+            a => a.TryAuthenticateClientAsync(
+                It.IsAny<TenantDefinition>(), It.Is<ClientRequest>(r => r.ClientId == null), It.IsAny<IClientInfoProvider>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The refusal of a refresh token request that sent no Authorization header owes no Basic challenge, whatever
+    /// method the client its token names is registered for: OAuth 2.1 section 3.2.4 owes the challenge to a request
+    /// that used HTTP Basic.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalOfTheClientTheTokenNames_OwesNoChallengeWithoutTheHeader()
+    {
+        var context = RefreshContext();
+        ArrangeRefreshTokenOf(PublicClientId);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        Assert.False(error?.BasicChallengeOwed);
     }
 
     /// <summary>
@@ -143,6 +173,14 @@ public class ClientValidatorTests
         string grantType, string? clientId, bool credentialFails)
     {
         var context = RefreshContext(grantType, clientId);
+        if (credentialFails)
+        {
+            _clientAuthenticator
+                .Setup(a => a.FindPresentedCredentialsAsync(
+                    It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+                .ReturnsAsync([nameof(ClientRequest.ClientSecret)]);
+        }
+
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(credentialFails ? ClientAuthenticationFailures.InvalidCredential : ClientAuthenticationFailures.NoCredential);
