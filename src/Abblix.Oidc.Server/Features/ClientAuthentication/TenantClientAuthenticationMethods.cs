@@ -36,6 +36,15 @@ internal static class TenantClientAuthenticationMethods
     }
 
     /// <summary>
+    /// Why <paramref name="tenant"/> admits no client authenticating with <paramref name="method"/>, or null where it
+    /// admits one.
+    /// </summary>
+    /// <param name="tenant">The tenant asked about.</param>
+    /// <param name="method">The client authentication method.</param>
+    public static string? WhyRefused(TenantDefinition tenant, string method)
+        => WhyRefused(tenant, SecurityProfileRequirements.For(tenant, client: null), method);
+
+    /// <summary>
     /// Why <paramref name="tenant"/>, held to <paramref name="profile"/>, admits no client authenticating with
     /// <paramref name="method"/>, or null where it admits one.
     /// </summary>
@@ -51,8 +60,8 @@ internal static class TenantClientAuthenticationMethods
         if (!TlsClientAuthCertificateAuthorities.Serve(tenant, method))
         {
             return $"the tenant lists no certificate authority in " +
-                   $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.TlsClientAuthCertificateAuthorities)} to " +
-                   "validate a client certificate against";
+                   $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.TlsClientAuthCertificateAuthorities)}, as " +
+                   "base64-encoded DER certificates, to validate a client certificate against";
         }
 
         return null;

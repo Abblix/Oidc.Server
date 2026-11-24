@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.LogoutNotification;
@@ -19,6 +20,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,6 +118,38 @@ public class TenantAuthenticationMethodsCheckTests
         Assert.Equal(refused, document.TokenEndpointAuthMethodsSupported is null);
         if (!refused)
             Assert.Equal(TenantClientAuthenticationMethods.Admitted(tenant, offered), document.TokenEndpointAuthMethodsSupported);
+    }
+
+    /// <summary>
+    /// A client registers for a method exactly where discovery lists it for the tenant: the registration's check of
+    /// the method asks the same owner discovery does.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task Registration_AcceptsTheMethodsDiscoveryLists(
+        ClientSecurityProfile profile,
+        string offer,
+        bool listsAuthority,
+        bool refused)
+    {
+        using var authority = TestCertificateAuthority.Create();
+        var tenant = TenantOf(profile, listsAuthority ? authority : null);
+        var offered = Offered(offer);
+        var validator = new TokenEndpointAuthMethodValidator(AuthenticatorOffering(offered));
+
+        var listed = (await HandlerOver(offered).HandleAsync(tenant)).TokenEndpointAuthMethodsSupported ?? [];
+        Assert.Equal(refused, !listed.Any());
+        foreach (var method in offered)
+        {
+            var registered = await validator.ValidateAsync(tenant, new ClientRegistrationValidationContext(
+                new ClientRegistrationRequest
+                {
+                    RedirectUris = [TestConstants.DefaultRedirectUri],
+                    TokenEndpointAuthMethod = method,
+                }));
+
+            Assert.Equal(listed.Contains(method), registered is null);
+        }
     }
 
     private static TenantDefinition TenantOf(ClientSecurityProfile profile, TestCertificateAuthority? authority)
