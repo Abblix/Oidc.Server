@@ -57,6 +57,44 @@ public class OmittedRedirectUriTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A request pushed without redirect_uri (RFC 9126) is stored and fetched by its request_uri, and the code it is
+    /// issued still remembers that its client named none: without PKCE it is redeemed without redirect_uri, as RFC 6749
+    /// section 4.1.3 asks for none where the authorization request included none.
+    /// </summary>
+    [Fact]
+    public async Task APushedRequestNamingNoRedirectUri_IsServedAtTheSoleRegisteredOne_AndRedeemedWithoutIt()
+    {
+        await using var host = Host();
+        using var client = CreateClient(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var pushed = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = WithoutPkceClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.Profile,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+        });
+        var requestUri = pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+
+        using var authorized = await client.GetAsync(QueryHelpers.BuildUri(discovery.AuthorizationEndpoint,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = WithoutPkceClientId,
+                [AuthorizationRequest.Parameters.RequestUri] = requestUri,
+            }), TestContext.Current.CancellationToken);
+        var location = authorized.Headers.Location;
+        Assert.NotNull(location);
+        Assert.StartsWith(TestConstants.RedirectUri + "?", location.OriginalString, StringComparison.Ordinal);
+        var code = System.Web.HttpUtility.ParseQueryString(location.Query)[ResponseParameters.Code];
+        Assert.NotNull(code);
+
+        using var response = await RedeemAsync(client, discovery, WithoutPkceClientId, code, verifier: null, redirectUri: null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
     /// OAuth 2.1 section 10.2: a client with several redirect URIs names one at the authorization endpoint and, with
     /// PKCE, none at the token endpoint.
     /// </summary>
@@ -105,6 +143,7 @@ public class OmittedRedirectUriTests(TestFactory factory) : TestBase(factory)
     [Theory]
     [InlineData(TestConstants.UnrestrictedClientId, Scopes.OpenId)]
     [InlineData(TwoRedirectUrisClientId, Scopes.Profile)]
+    [InlineData(TestConstants.UnrestrictedClientId, Scopes.OpenId + " " + Scopes.OfflineAccess)]
     public async Task ARequestNamingNoRedirectUri_ThatHasToNameOne_IsRefusedWithoutARedirect(string clientId, string scope)
     {
         await using var host = Host();

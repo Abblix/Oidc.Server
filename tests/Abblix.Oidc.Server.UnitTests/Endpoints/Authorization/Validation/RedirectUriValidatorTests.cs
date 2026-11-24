@@ -779,6 +779,31 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
+    /// offline_access beside the scope, or in the client's default, does not change whether openid is served, and is
+    /// judged here before the flow type the server's handling of offline_access depends on is known: an OAuth request
+    /// carrying it is served at the sole URI, an OpenID Connect one is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { Scopes.Profile, Scopes.OfflineAccess }, null, true)]
+    [InlineData(new[] { Scopes.OpenId, Scopes.OfflineAccess }, null, false)]
+    [InlineData(new string[0], new[] { Scopes.Profile, Scopes.OfflineAccess }, true)]
+    [InlineData(new string[0], new[] { Scopes.OpenId, Scopes.OfflineAccess }, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, false)]
+    public async Task ValidateAsync_RequestWithoutRedirectUri_AndOfflineAccess_IsJudgedByTheOpenIdScope(
+        string[] named, string[]? defaultScope, bool served)
+    {
+        var registered = new Uri(RegisteredUri);
+        var context = CreateContext(null, registered);
+        context.Request = context.Request with { Scope = named };
+        context.ClientInfo.DefaultScope = defaultScope;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(served, result == null);
+        Assert.Equal(served ? registered : null, context.ValidRedirectUri);
+    }
+
+    /// <summary>
     /// A request naming its redirect URI is not marked as one that named none.
     /// </summary>
     [Fact]

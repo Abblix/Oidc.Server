@@ -498,8 +498,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
         /// <summary>
         /// Classifies a parameter that one source marker restricts to the query or the form. It is a wire parameter
-        /// all the same, malformed and repeated like the others, and the query-or-form <c>source</c> counts it, so a
-        /// model that splits one parameter by source refuses it sent in both, as it refused it before the split.
+        /// all the same, malformed and repeated like the others, and counted in its own part alone: a copy in the
+        /// other part is never read, so it is not counted either.
         /// </summary>
         private void ClassifySingleSourceWire(IPropertySymbol property, string wireName, string sourceExpression)
         {

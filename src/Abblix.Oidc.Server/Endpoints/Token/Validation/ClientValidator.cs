@@ -97,7 +97,8 @@ public class ClientValidator(
     /// client_id is included in the request", the token being "bound to the client to which it was issued". The client
     /// it names is then authenticated as a request naming it would be, so only a client of the method none is served
     /// so, and a confidential one still has to authenticate ("Confidential clients MUST authenticate"). The token is
-    /// only read here, and nothing recorded about it is: the grant validates and spends it.
+    /// only read here, its lifetime aside and nothing recorded about it, for the client it names: the grant validates
+    /// it, answering an expired one invalid_grant as it does for a request naming its client, and spends it.
     /// </remarks>
     private async Task<ClientRequest?> NamedByTheRefreshTokenAsync(
         TenantDefinition tenant,
@@ -115,9 +116,9 @@ public class ClientValidator(
             client: null,
             refreshToken,
             TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
-            ServiceTokenValidation.AnyAudience);
+            ServiceTokenValidation.AnyAudience & ~ValidationOptions.ValidateLifetime);
 
-        if (!token.TryGetSuccess(out var readToken) || readToken.Payload.ClientId is not { Length: > 0 } clientId)
+        if (!token.TryGetSuccess(out var readToken) || readToken.OwnerOf() is not { Length: > 0 } clientId)
             return null;
 
         return clientRequest with { ClientId = clientId };

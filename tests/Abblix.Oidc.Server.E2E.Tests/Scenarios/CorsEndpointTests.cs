@@ -52,6 +52,7 @@ public class CorsEndpointTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("*", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.Contains(method, string.Join(',', response.Headers.GetValues("Access-Control-Allow-Methods")));
     }
 
     /// <summary>

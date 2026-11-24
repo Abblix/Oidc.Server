@@ -54,14 +54,18 @@ public class ClientValidatorTests
     private void ArrangeRefreshTokenOf(string? clientId)
     {
         var token = new JsonWebToken();
+        token.Header.Type = JwtTypes.RefreshToken;
         token.Payload.ClientId = clientId;
+
+        // Read for the client it names whatever its lifetime, so an expired one reaches the grant, which answers it
+        // invalid_grant
         _jwtReader
             .Setup(r => r.ReadAuthenticAsync(
                 It.IsAny<TenantDefinition>(),
                 null,
                 RefreshToken,
                 It.IsAny<TokenTypePolicy>(),
-                It.IsAny<ValidationOptions>()))
+                It.Is<ValidationOptions>(options => (options & ValidationOptions.ValidateLifetime) == 0)))
             .ReturnsAsync(token);
     }
 
