@@ -26,6 +26,7 @@ public class NewClientTokenLifetimesValidatorTests
 {
     private const string Section = nameof(OidcOptions.NewClientOptions);
     private const string RefreshToken = $"{Section}.{nameof(NewClientOptions.RefreshToken)}";
+    private const string BoundRefreshToken = $"{Section}:{nameof(NewClientOptions.RefreshToken)}";
 
     private static ValidateOptionsResult Validate(NewClientOptions newClients)
         => new NewClientTokenLifetimesValidator().Validate(name: null, new OidcOptions { NewClientOptions = newClients });
@@ -51,6 +52,18 @@ public class NewClientTokenLifetimesValidatorTests
         },
         {
             new NewClientOptions { RefreshToken = new() { SlidingExpiresIn = TimeSpan.Zero } },
+            $"{RefreshToken}.{nameof(RefreshTokenOptions.SlidingExpiresIn)}"
+        },
+        {
+            new NewClientOptions { AccessTokenExpiresIn = TimeSpan.MaxValue },
+            $"{Section}.{nameof(NewClientOptions.AccessTokenExpiresIn)}"
+        },
+        {
+            new NewClientOptions { RefreshToken = new() { AbsoluteExpiresIn = TimeSpan.MaxValue } },
+            $"{RefreshToken}.{nameof(RefreshTokenOptions.AbsoluteExpiresIn)}"
+        },
+        {
+            new NewClientOptions { RefreshToken = new() { SlidingExpiresIn = TimeSpan.MaxValue } },
             $"{RefreshToken}.{nameof(RefreshTokenOptions.SlidingExpiresIn)}"
         },
         {
@@ -100,11 +113,11 @@ public class NewClientTokenLifetimesValidatorTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [$"{Section}:AccessTokenExpiresIn"] = "00:03:00",
-            [$"{Section}:SingleResourceAccessTokens"] = "true",
-            [$"{Section}:{nameof(NewClientOptions.RefreshToken)}:AbsoluteExpiresIn"] = "02:00:00",
-            [$"{Section}:{nameof(NewClientOptions.RefreshToken)}:SlidingExpiresIn"] = "00:30:00",
-            [$"{Section}:{nameof(NewClientOptions.RefreshToken)}:ReusePolicy"] = nameof(RefreshTokenReusePolicy.Rotate),
+            [$"{Section}:{nameof(NewClientOptions.AccessTokenExpiresIn)}"] = "00:03:00",
+            [$"{Section}:{nameof(NewClientOptions.SingleResourceAccessTokens)}"] = "true",
+            [$"{BoundRefreshToken}:{nameof(RefreshTokenOptions.AbsoluteExpiresIn)}"] = "02:00:00",
+            [$"{BoundRefreshToken}:{nameof(RefreshTokenOptions.SlidingExpiresIn)}"] = "00:30:00",
+            [$"{BoundRefreshToken}:{nameof(RefreshTokenOptions.ReusePolicy)}"] = nameof(RefreshTokenReusePolicy.Rotate),
         }).Build();
 
         var options = new OidcOptions();

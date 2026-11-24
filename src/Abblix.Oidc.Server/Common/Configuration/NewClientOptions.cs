@@ -77,10 +77,9 @@ public record NewClientOptions
     /// <summary>
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
-    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client registering with an initial access
-    /// token may request every grant type the server supports, and one registering without, while
-    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c>, only <c>authorization_code</c> and
-    /// <c>refresh_token</c>.
+    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
+    /// server supports while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>true</c>, and only
+    /// <c>authorization_code</c> and <c>refresh_token</c> while it is <c>false</c>.
     /// </summary>
     /// <remarks>
     /// A grant no end user takes part in, such as <c>client_credentials</c>, gets tokens with no user present, so a
@@ -158,7 +157,8 @@ public record NewClientOptions
     /// <remarks>
     /// RFC 7591 metadata has no member for it, so it is the host's to set. Applied on registration and to every client
     /// resolved from its metadata document; an RFC 7592 update keeps what the client was given, and the host changes a
-    /// stored client in its client store. A lifetime of zero or less is refused at startup.
+    /// stored client in its client store. A lifetime of zero or less, or one longer than ten years, is refused at
+    /// startup.
     /// </remarks>
     public TimeSpan AccessTokenExpiresIn { get; init; } = ClientInfo.DefaultAccessTokenExpiresIn;
 
@@ -178,9 +178,9 @@ public record NewClientOptions
     /// </summary>
     /// <remarks>
     /// RFC 7591 metadata has no member for it, so it is the host's to set. Applied on registration and to every client
-    /// resolved from its metadata document; an RFC 7592 update keeps what the client was given. An absolute lifetime
-    /// of zero or less, a sliding one of zero or less, and a reuse policy the enumeration does not define are refused
-    /// at startup.
+    /// resolved from its metadata document; an RFC 7592 update keeps what the client was given. An absolute or sliding
+    /// lifetime of zero or less, or one longer than ten years, and a reuse policy the enumeration does not define are
+    /// refused at startup.
     /// </remarks>
     public RefreshTokenOptions RefreshToken { get; init; } = new();
 }
