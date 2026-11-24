@@ -103,9 +103,10 @@ public partial class RevocationRequestValidator(
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
 		// One lookup of the clients for the whole request: the client authentication and the reading of the token find
-		// each client once. Only the authentication can meet a client that cannot be had for now: the token is acted on
-		// only for the client it was issued to, whose answer the authentication already received, and a token of another
-		// client is answered alike whatever its client's document says
+		// each client once. Only a failed authentication is answered as meeting a client that cannot be had for now: a
+		// token of the caller finds the answer the authentication received, and reading a token of another client may
+		// look that client up too, to hold the token to its profile, but such a token is answered alike whatever its
+		// client's document says
 		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
 		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
