@@ -10,7 +10,6 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
-using Abblix.Oidc.Server.Features.Tokens.Validation;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
@@ -28,9 +27,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </remarks>
 /// <param name="clientInfoManager">Holds each registration with the identifier of the token managing it.</param>
 /// <param name="tokenIdGenerator">Generates the identifier no token carries.</param>
+/// <param name="binding">Finds the registration the token still manages.</param>
 public sealed class RegistrationAccessTokenRevocation(
     IClientInfoManager clientInfoManager,
-    ITokenIdGenerator tokenIdGenerator)
+    ITokenIdGenerator tokenIdGenerator,
+    RegistrationAccessTokenBinding binding)
 {
     /// <summary>
     /// Revokes <paramref name="registrationAccessToken"/> where it still manages its registration; a token already
@@ -40,14 +41,7 @@ public sealed class RegistrationAccessTokenRevocation(
     /// <param name="registrationAccessToken">A registration access token this server issued, found authentic.</param>
     public async Task RevokeAsync(TenantDefinition tenant, JsonWebToken registrationAccessToken)
     {
-        if (registrationAccessToken is not { Payload.JwtId: { } tokenId } ||
-            registrationAccessToken.OwnerOf() is not { } clientId)
-        {
-            return;
-        }
-
-        var registration = await clientInfoManager.TryFindRegisteredClientAsync(tenant, clientId);
-        if (registration is null || registration.RegistrationAccessTokenId != tokenId)
+        if (await binding.FindRegistrationAsync(tenant, registrationAccessToken) is not { } registration)
             return;
 
         // Taken only while the registration still holds the token: one the token was replaced on or removed from in

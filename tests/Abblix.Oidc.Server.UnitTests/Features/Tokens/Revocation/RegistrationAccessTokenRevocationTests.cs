@@ -34,7 +34,8 @@ public class RegistrationAccessTokenRevocationTests
     {
         var tokenIds = new Mock<ITokenIdGenerator>();
         tokenIds.Setup(generator => generator.GenerateTokenId()).Returns(NewTokenId);
-        _revocation = new RegistrationAccessTokenRevocation(_registrations.Object, tokenIds.Object);
+        _revocation = new RegistrationAccessTokenRevocation(
+            _registrations.Object, tokenIds.Object, new RegistrationAccessTokenBinding(_registrations.Object));
     }
 
     [Fact]

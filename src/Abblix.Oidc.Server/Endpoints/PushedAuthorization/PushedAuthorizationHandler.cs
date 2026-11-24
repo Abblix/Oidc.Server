@@ -84,6 +84,15 @@ public class PushedAuthorizationHandler(
             if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
                 return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidRequest(moreThanOneMethod.ErrorDescription));
 
+            // draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "for a transient failure, an HTTP 503"
+            if (clients.UnavailableClientRefusal() is { } unavailable)
+            {
+                return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient(unavailable.ErrorDescription))
+                {
+                    Refusal = unavailable,
+                };
+            }
+
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
         }
 

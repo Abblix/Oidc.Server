@@ -50,14 +50,18 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
             // client" an invalid_request, not a failed authentication
             if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
                 return moreThanOneMethod;
+
+            // draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "for a transient failure, an HTTP 503"
+            if (clients.UnavailableClientRefusal() is { } unavailable)
+                return unavailable;
 
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }

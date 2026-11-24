@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
@@ -29,10 +30,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
 /// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
 /// <param name="grantRevocation">Revokes the grant of a replayed refresh token.</param>
+/// <param name="registrationBinding">Says whether a registration access token still manages its registration.</param>
 public sealed class TokenStatusCheck(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffChecker cutoffChecker,
-	GrantRevocation grantRevocation)
+	GrantRevocation grantRevocation,
+	RegistrationAccessTokenBinding registrationBinding)
 {
 	/// <summary>
 	/// <paramref name="token"/> when nothing recorded at <paramref name="tenant"/> refuses it, otherwise the refusal.
@@ -46,10 +49,12 @@ public sealed class TokenStatusCheck(
 		ValidationOptions options)
 	{
 		// Chain of Responsibility: what is recorded about the principal, then about the token's grant family,
-		// then about the token itself; the first refusal answers
+		// then about the token itself, then about the registration a registration access token manages; the first
+		// refusal answers
 		var refusal = await CutoffRefusalAsync(tenant, token, options)
 		              ?? await GrantFamilyRefusalAsync(tenant, token)
-		              ?? await TokenStatusRefusalAsync(tenant, token);
+		              ?? await TokenStatusRefusalAsync(tenant, token)
+		              ?? await RegistrationRefusalAsync(tenant, token);
 
 		return refusal is null ? token : refusal;
 	}
@@ -99,6 +104,22 @@ public sealed class TokenStatusCheck(
 			JsonWebTokenStatus.Unknown or JsonWebTokenStatus.Used => null,
 			_ => throw new ArgumentOutOfRangeException(nameof(token), status, "A token status without a family verdict."),
 		};
+	}
+
+	/// <summary>
+	/// The refusal of a registration access token that no longer manages a registration: revoked, replaced by an
+	/// update, or whose client was deleted (<see cref="RegistrationAccessTokenBinding"/>), so every reader judges it as
+	/// the client configuration endpoint does.
+	/// </summary>
+	private async Task<JwtValidationError?> RegistrationRefusalAsync(TenantDefinition tenant, JsonWebToken token)
+	{
+		if (!JwtTypeName.Matches(token.Header.Type, JwtTypes.RegistrationAccessToken) ||
+		    await registrationBinding.FindRegistrationAsync(tenant, token) is not null)
+		{
+			return null;
+		}
+
+		return new JwtValidationError(JwtError.TokenRevoked, "The registration access token manages no registration");
 	}
 
 	/// <summary>

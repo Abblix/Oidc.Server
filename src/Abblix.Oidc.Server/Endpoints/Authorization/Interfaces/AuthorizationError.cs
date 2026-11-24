@@ -59,6 +59,14 @@ public record AuthorizationError(
 		OAuthErrorDescription.Sanitize(ErrorDescription);
 
 	/// <summary>
+	/// The error a request is refused with by its HTTP status rather than as an OAuth error response, which a
+	/// formatter answering by status sends in place of <see cref="Error"/>; null for an OAuth error. Set on a pushed
+	/// authorization request refused with a <see cref="ClientTemporarilyUnavailableError"/>, which is experimental, and
+	/// <see cref="Error"/> then carries the invalid_client a formatter not answering by status sends.
+	/// </summary>
+	public OidcError? Refusal { get; init; }
+
+	/// <summary>
 	/// Constructs an instance of <see cref="AuthorizationError"/> from an <see cref="AuthorizationRequest"/> and
 	/// an <see cref="AuthorizationRequestValidationError"/>.
 	/// </summary>

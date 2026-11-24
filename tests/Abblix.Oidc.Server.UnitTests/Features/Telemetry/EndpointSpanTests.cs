@@ -234,6 +234,28 @@ public sealed class EndpointSpanTests : IDisposable
         Assert.Equal("code id_token", span.GetTagItem(TelemetryTags.ResponseType));
     }
 
+    /// <summary>
+    /// A pushed request refused by its status is recorded by the error it is answered with, not by the OAuth error
+    /// carried for a formatter that does not answer by status.
+    /// </summary>
+    [Fact]
+    public async Task APushedRequestRefusedByItsStatus_ClosesTheSpanWithTheRefusalsCode()
+    {
+        var request = new AuthorizationRequest();
+        var inner = new Mock<IPushedAuthorizationHandler>();
+        inner
+            .Setup(h => h.HandleAsync(TestTenant.Matched, request, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new AuthorizationError(request, ErrorCodes.InvalidClient, "Refused", ResponseModes.Query, null)
+            {
+                Refusal = new ClientTemporarilyUnavailableError("Not to be had for now"),
+            });
+        var observed = new ObservedPushedAuthorizationHandler(inner.Object, _instruments);
+
+        var span = await SpanOf(() => observed.HandleAsync(SingleIssuer.Tenant, request, new ClientRequest()));
+
+        Assert.Equal(TelemetryTags.ClientMetadataUnavailable, span.GetTagItem(TelemetryTags.Error));
+    }
+
     [Theory]
     [InlineData(new[] { ResponseTypes.IdToken, ResponseTypes.Code }, "code id_token")]
     [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, "code")]

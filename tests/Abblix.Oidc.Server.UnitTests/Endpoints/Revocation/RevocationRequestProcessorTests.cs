@@ -44,7 +44,7 @@ public class RevocationRequestProcessorTests
         _processor = new RevocationRequestProcessor(
             _tokenRegistry.Object,
             new GrantRevocation(_tokenRegistry.Object, _clients.Object),
-            new RegistrationAccessTokenRevocation(_registrations.Object, Mock.Of<ITokenIdGenerator>()),
+            new RegistrationAccessTokenRevocation(_registrations.Object, Mock.Of<ITokenIdGenerator>(), new RegistrationAccessTokenBinding(_registrations.Object)),
             _clock);
     }
 

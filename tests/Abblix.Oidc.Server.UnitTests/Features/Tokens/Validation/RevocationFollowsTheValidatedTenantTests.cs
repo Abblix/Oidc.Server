@@ -140,7 +140,8 @@ public class RevocationFollowsTheValidatedTenantTests
             new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()),
+                new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>())),
             TestOidcOptions.Defaults(),
             Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>());
 

@@ -65,4 +65,25 @@ public sealed class RequestScopedClientInfoProviderTests
 
         _store.Verify(store => store.FindClientAsync(TestTenant.Matched, ClientId), Times.Exactly(2));
     }
+
+    /// <summary>
+    /// A request is refused as one whose client could not be had for now only where a client it named was answered
+    /// so: draft-ietf-oauth-client-id-metadata-document-03 section 6.1 tells a transient failure from a terminal one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Answers))]
+    public async Task TheUnavailableClientRefusal_FollowsOnlyATemporarilyUnavailableAnswer(int index)
+    {
+        Answer(AnswerAt(index));
+        _store
+            .Setup(store => store.FindClientAsync(TestTenant.Matched, "other"))
+            .ReturnsAsync(ClientAbsence.Unknown);
+        var clients = new RequestScopedClientInfoProvider(_store.Object);
+
+        Assert.Null(clients.UnavailableClientRefusal());
+        await clients.FindClientAsync(Tenant, "other");
+        await clients.FindClientAsync(Tenant, ClientId);
+
+        Assert.Equal(index == 3, clients.UnavailableClientRefusal() is not null);
+    }
 }
