@@ -742,7 +742,8 @@ public class AuthServiceJwtValidatorTests
             new TokenStatusCheck(
                 registry.Object,
                 new Mock<IRevocationCutoffChecker>(MockBehavior.Strict).Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()),
+                new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>())),
             TestOidcOptions.Defaults(),
             _clientInfoProvider.Object);
 
@@ -767,6 +768,7 @@ public class AuthServiceJwtValidatorTests
     {
         var token = CreateValidToken();
         token.Header.Type = JwtTypes.RegistrationAccessToken;
+        token.Payload.JwtId = NothingRecorded.RegistrationAccessTokenId;
         _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
@@ -986,6 +988,7 @@ public class AuthServiceJwtValidatorTests
         const string ownerId = "owner";
         var token = CreateValidToken();
         token.Header.Type = JwtTypes.RegistrationAccessToken;
+        token.Payload.JwtId = NothingRecorded.RegistrationAccessTokenId;
         token.Header.Algorithm = SigningAlgorithms.RS256;
         token.Payload.Subject = ownerId;
         token.Payload.Audiences = [ExpectedIssuer];

@@ -64,7 +64,8 @@ public class TokenStatusCheckTests
         _check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object));
+            new GrantRevocation(_registry.Object, _clients.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
         _cutoffs
@@ -502,7 +503,8 @@ public class TokenStatusCheckTests
         var check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object));
+            new GrantRevocation(_registry.Object, _clients.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         Checking(new JsonWebToken
         {
