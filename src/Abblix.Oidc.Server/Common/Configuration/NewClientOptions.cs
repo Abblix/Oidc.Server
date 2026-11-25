@@ -80,9 +80,8 @@ public record NewClientOptions
     /// <summary>
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
-    /// included, is refused with <c>invalid_client_metadata</c>. By default the grants OAuth 2.1 leaves to an
-    /// interactive sign-in, <c>authorization_code</c> and <c>refresh_token</c>; the host lists any other grant its new
-    /// clients use.
+    /// included, is refused with <c>invalid_client_metadata</c>. Unset, the grants OAuth 2.1 leaves to an interactive
+    /// sign-in, <see cref="SignInGrantTypes"/>; the host lists any other grant its new clients use.
     /// </summary>
     /// <remarks>
     /// A grant outside an interactive sign-in, such as <c>client_credentials</c>, gets tokens with no user present, so
@@ -92,9 +91,23 @@ public record NewClientOptions
     /// update, since an update replaces the metadata whole, so a client registered before the list was changed keeps
     /// its grant types until its next update. A client resolved from its metadata document is held to it beside
     /// <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>. An empty set, or one holding a blank value,
-    /// stops the start of a host serving dynamic client registration.
+    /// stops the start of a host serving dynamic client registration or client ID metadata documents. Unset rather
+    /// than holding the default, so a list bound from configuration is taken as written: the configuration binder adds
+    /// to a list already there.
     /// </remarks>
-    public string[] AllowedGrantTypes { get; init; } = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    public string[]? AllowedGrantTypes { get; init; }
+
+    /// <summary>
+    /// The grant types OAuth 2.1 leaves to an interactive sign-in, the authorization code and the refresh token: what
+    /// a list of grant types left unset, for new clients or for document clients, stands for.
+    /// </summary>
+    internal static IReadOnlyList<string> SignInGrantTypes { get; } = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+
+    /// <summary>
+    /// The grant types a new client may request: <see cref="AllowedGrantTypes"/>, or <see cref="SignInGrantTypes"/>
+    /// while it is unset.
+    /// </summary>
+    internal IReadOnlyList<string> GrantTypesAllowed => AllowedGrantTypes ?? SignInGrantTypes;
 
     /// <summary>
     /// What a dynamically registered client's authentication assertions may name as their audience, and in which

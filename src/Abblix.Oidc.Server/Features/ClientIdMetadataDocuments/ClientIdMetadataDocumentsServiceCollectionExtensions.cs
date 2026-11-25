@@ -60,6 +60,10 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
         services.PostConfigure<OidcOptions>(options => options.ClientIdMetadataDocuments.Enabled = true);
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdMetadataDocumentOptionsValidator>());
+        // A document client's grant types are narrowed to those of new clients, so a list refusing every registration
+        // refuses every document too
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientGrantTypesValidator>());
 
         services.AddSsrfHttpClient(ClientIdMetadataDocumentTransport.HttpClientName, (serviceProvider, client) =>
             client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value

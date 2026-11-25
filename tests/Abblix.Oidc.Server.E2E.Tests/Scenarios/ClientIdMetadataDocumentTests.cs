@@ -323,8 +323,11 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         document[RegistrationMembers.ResponseTypes] = new JsonArray();
         document.Remove(RegistrationMembers.RedirectUris);
         Serve(document);
-        await using var host = CreateHost(options => options.ClientIdMetadataDocuments.AllowedGrantTypes =
-            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]);
+        await using var host = CreateHost(options => options.ClientIdMetadataDocuments =
+            options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            });
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 

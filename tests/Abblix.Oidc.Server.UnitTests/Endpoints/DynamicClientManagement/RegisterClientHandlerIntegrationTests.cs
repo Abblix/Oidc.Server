@@ -548,8 +548,8 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// While anybody may register and the host lists no grant types of its own, a client asking for a grant no end
-    /// user takes part in is refused by the pipeline a host invokes.
+    /// While anybody may register and the host keeps the default grant types, a client asking for a grant no end user
+    /// takes part in is refused by the pipeline a host invokes.
     /// </summary>
     [Fact]
     public async Task AMachineClient_RegisteringOpenlyUnderTheDefaultGrantTypes_IsRefused()

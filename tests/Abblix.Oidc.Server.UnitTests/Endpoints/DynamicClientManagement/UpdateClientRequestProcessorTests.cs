@@ -35,8 +35,10 @@ public class UpdateClientRequestProcessorTests
         CreateProcessor(
             Action<RegisteredClient> onSave,
             bool registrationHeld = true,
-            NewClientOptions? newClients = null)
+            NewClientOptions? newClients = null,
+            OidcOptions? settings = null)
     {
+        var options = settings ?? new OidcOptions { NewClientOptions = newClients ?? new NewClientOptions() };
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
             .Setup(m => m.TryUpdateClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
@@ -56,10 +58,7 @@ public class UpdateClientRequestProcessorTests
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
             clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
             Mock.Of<IClientSecretEncryptor>(),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions
-            {
-                NewClientOptions = newClients ?? new NewClientOptions(),
-            }));
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options));
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }
@@ -126,6 +125,27 @@ public class UpdateClientRequestProcessorTests
         await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.Equal((string[])[Scopes.Profile], saved!.AllowedScopes);
+    }
+
+    /// <summary>
+    /// The settings for new clients are read as an update is built, so settings changed after the processor was built,
+    /// as a configuration reload changes them, decide the next update.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdate_TakesTheSettingsInForceWhenItIsMade()
+    {
+        ClientInfo? saved = null;
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { Scope = [Scopes.Profile] } };
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo, settings: settings);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        settings.NewClientOptions = new NewClientOptions { Scope = [Scopes.Email] };
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal((string[])[Scopes.Email], saved!.AllowedScopes);
     }
 
     /// <summary>

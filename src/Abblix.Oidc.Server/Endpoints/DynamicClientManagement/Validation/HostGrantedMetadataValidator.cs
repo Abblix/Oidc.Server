@@ -40,7 +40,7 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
                    request.TokenExchangeAudiences,
                    granted.TokenExchangeAudiences,
                    Parameters.TokenExchangeAudiences)
-               ?? WithinAllowedGrantTypes(request.GrantTypes, granted.AllowedGrantTypes);
+               ?? WithinAllowedGrantTypes(request.GrantTypes, granted.GrantTypesAllowed);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
     /// was not given one from the refusal, while a replaced list would register it without the grant it means to use,
     /// and without the <c>authorization_code</c> or <c>implicit</c> grant its response types need.
     /// </remarks>
-    private static OidcError? WithinAllowedGrantTypes(string[] requested, string[] allowed)
+    private static OidcError? WithinAllowedGrantTypes(string[] requested, IReadOnlyList<string> allowed)
     {
         var outside = requested.Where(grantType => !allowed.Contains(grantType, StringComparer.Ordinal)).ToArray();
         return outside.Length > 0

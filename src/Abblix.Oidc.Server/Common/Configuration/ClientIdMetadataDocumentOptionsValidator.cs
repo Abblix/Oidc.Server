@@ -95,9 +95,9 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
     }
 
     private static string? WhyGrantTypesRefused(ClientIdMetadataDocumentOptions settings)
-        => settings.AllowedGrantTypes is not { Length: > 0 } grantTypes || grantTypes.Any(string.IsNullOrWhiteSpace)
+        => settings.AllowedGrantTypes is { } grantTypes && (grantTypes.Length == 0 || grantTypes.Any(string.IsNullOrWhiteSpace))
             ? $"{Section}.{nameof(settings.AllowedGrantTypes)} names no grant type, or a blank one. Name the grant types a " +
-              "client resolved from its document may use; by default they are the authorization code and the refresh " +
+              "client resolved from its document may use, or leave it unset for the authorization code and the refresh " +
               "token."
             : null;
 

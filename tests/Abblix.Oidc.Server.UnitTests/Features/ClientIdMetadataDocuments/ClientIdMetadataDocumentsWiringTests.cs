@@ -66,6 +66,20 @@ public class ClientIdMetadataDocumentsWiringTests
     }
 
     /// <summary>
+    /// The settings a document client takes have one place, <see cref="OidcOptions.NewClientOptions"/>: the feature
+    /// registers no service of their own a host could set without effect.
+    /// </summary>
+    [Fact]
+    public void TheSettingsForNewClients_AreNoServiceOfTheirOwn()
+    {
+        var services = Hosting();
+        Register(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Null(provider.GetService<NewClientOptions>());
+    }
+
+    /// <summary>
     /// A client store registered after the feature replaces the one resolving documents, while discovery would still
     /// advertise them.
     /// </summary>

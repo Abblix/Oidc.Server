@@ -97,8 +97,8 @@ public record ClientIdMetadataDocumentOptions
     public int MaxHeldDocuments { get; set; } = 10_000;
 
     /// <summary>
-    /// The grant types a client resolved from its document may use, by default those an end user takes part in: the
-    /// authorization code and the refresh token.
+    /// The grant types a client resolved from its document may use. Unset, those an end user takes part in,
+    /// <see cref="NewClientOptions.SignInGrantTypes"/>.
     /// </summary>
     /// <remarks>
     /// A document is anybody's, so a grant no end user approves, such as client credentials, would give whoever wrote
@@ -107,9 +107,16 @@ public record ClientIdMetadataDocumentOptions
     /// <c>none</c> is never given the client credentials, password or JWT bearer grant: RFC 6749 section 4.4 says
     /// "The client credentials grant type MUST only be used by confidential clients". A document's client given that
     /// grant gets tokens whose <c>idp</c> is <c>client_credentials</c>, which marks them as the client's own (RFC 9700
-    /// section 4.15.1). An empty list and a blank entry are refused at startup.
+    /// section 4.15.1). An empty list and a blank entry are refused at startup. Unset rather than holding the default,
+    /// so a list bound from configuration is taken as written: the configuration binder adds to a list already there.
     /// </remarks>
-    public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    public string[]? AllowedGrantTypes { get; set; }
+
+    /// <summary>
+    /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or
+    /// <see cref="NewClientOptions.SignInGrantTypes"/> while it is unset.
+    /// </summary>
+    internal IReadOnlyList<string> GrantTypesAllowed => AllowedGrantTypes ?? NewClientOptions.SignInGrantTypes;
 
     /// <summary>
     /// The longest a fetch of a document may take, its body included. Default: 5 seconds.

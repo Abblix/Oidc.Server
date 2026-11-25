@@ -81,7 +81,7 @@ public class ClientIdMetadataDocumentReaderTests
         var options = new OidcOptions
         {
             NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes ?? forDocuments },
-            ClientIdMetadataDocuments = { AllowedGrantTypes = forDocuments },
+            ClientIdMetadataDocuments = new ClientIdMetadataDocumentOptions { AllowedGrantTypes = forDocuments },
         };
         return new ReaderOver(new ClientIdMetadataDocumentReader(
             [grants.Object],

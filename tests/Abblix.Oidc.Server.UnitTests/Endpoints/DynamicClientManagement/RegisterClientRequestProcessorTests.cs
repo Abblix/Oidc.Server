@@ -172,6 +172,27 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
+    /// The settings for new clients are read as a client registers, so settings changed after the processor was built,
+    /// as a configuration reload changes them, decide the next registration.
+    /// </summary>
+    [Fact]
+    public async Task ARegistration_TakesTheSettingsInForceWhenItIsMade()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { Scope = ["read"] } };
+        var processor = Processor(_clients.Object, settings: settings);
+
+        settings.NewClientOptions = new NewClientOptions { Scope = ["write"] };
+        await processor.ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.Equal((string[])["write"], stored!.ClientInfo.AllowedScopes);
+    }
+
+    /// <summary>
     /// A registered client takes the assertion audiences the host grants new clients, since registration metadata has
     /// no member for them, and a tenant held to FAPI 2.0 gives it the issuer alone whatever the host grants.
     /// </summary>

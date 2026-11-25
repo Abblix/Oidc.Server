@@ -62,8 +62,11 @@ public partial class ClientIdMetadataDocumentTests
         var document = DocumentDeclaring([ClientAuthenticationMethods.TlsClientAuth, ClientAuthenticationMethods.None]);
         document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials);
         Serve(document);
-        await using var host = CreateHost(options => options.ClientIdMetadataDocuments.AllowedGrantTypes =
-            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]);
+        await using var host = CreateHost(options => options.ClientIdMetadataDocuments =
+            options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            });
 
         var client = await FindAsync(host, TenantListing("acme", authority: null));
 
@@ -86,7 +89,10 @@ public partial class ClientIdMetadataDocumentTests
         await using var host = CreateHost(options =>
         {
             options.RequireInitialAccessToken = false;
-            options.ClientIdMetadataDocuments.AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials];
+            options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            };
             options.NewClientOptions = options.NewClientOptions with
             {
                 AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
@@ -118,7 +124,10 @@ public partial class ClientIdMetadataDocumentTests
         Serve(document);
         await using var host = CreateHost(options =>
         {
-            options.ClientIdMetadataDocuments.AllowedGrantTypes = new ClientIdMetadataDocumentOptions().AllowedGrantTypes;
+            options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = new ClientIdMetadataDocumentOptions().AllowedGrantTypes,
+            };
             options.NewClientOptions = options.NewClientOptions with
             {
                 AllowedGrantTypes = new NewClientOptions().AllowedGrantTypes,
