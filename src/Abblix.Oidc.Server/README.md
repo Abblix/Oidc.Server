@@ -21,7 +21,7 @@ Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before 
 
 🛠 Fixes
 - In-process caches when the host registers none
-- A tenant holding a null where a value is required refused on its own, the other tenants served
+- A tenant read from a store that holds a null where a value is required refused on its own, the other tenants served
 - The client secret issued at registration returned by registration reads and updates ([RFC 7592](https://datatracker.ietf.org/doc/html/rfc7592))
 - Client authentication methods of the revocation and introspection endpoints published in discovery ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))
 - Discovery lists only the client authentication methods a tenant's security profile admits
@@ -93,10 +93,10 @@ builder.Services
     .AddClientIdMetadataDocuments();
 ```
 
-- A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
-- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients. Unless `NewClientOptions.AllowedResources` names resources, the client gets access tokens for none.
+- A client resolved this way authenticates with `none` or with a method that proves a key or a certificate, such as `private_key_jwt` with a key its document publishes. A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
+- `NewClientOptions` limits what the client may ask for; a grant type outside `NewClientOptions.AllowedGrantTypes` is left out of the client rather than refusing its document. Unless `NewClientOptions.AllowedResources` names resources, the client gets access tokens for none.
 - Such a client gets only the authorization code and refresh token grants unless you name others in `ClientIdMetadataDocuments.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
-- A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
+- A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration assigns every `client_id` unless `NewClientOptions.AcceptProposedClientId` lets registrants propose theirs, and then it refuses a proposed one that is an `https` URL.
 - The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services. A host that sets `BlockPrivateNetworks` to false does not start with this feature on.
 - To try the feature with a client on your own machine, set `ClientIdMetadataDocuments.DocumentAddresses` to `ClientIdMetadataDocumentAddresses.AllowLoopback`. The server then fetches a document from `localhost` or a loopback address, but only for a tenant whose issuer is itself on `localhost` or a loopback address, as section 10.7 of the draft allows for development. Other private addresses are still refused, and so are the URLs inside the document. A tenant with a public issuer gets nothing from the setting, and a client naming a loopback address there is refused with a warning saying so. A host running in the Production environment, or sending outbound requests through `OutboundProxy`, does not start with it set.
 - When a document cannot be fetched for a reason that may pass, such as a timeout, an unreachable host or a 5xx answer, and no valid copy is held, the token and pushed authorization request endpoints answer `503 Service Unavailable` with no body. A document that is fetched and refused gets `invalid_client` there. This follows section 6.1 of draft-03 and is experimental: it may change with the final specification. The authorization endpoint answers both cases with `invalid_client` and does not redirect to the client.
