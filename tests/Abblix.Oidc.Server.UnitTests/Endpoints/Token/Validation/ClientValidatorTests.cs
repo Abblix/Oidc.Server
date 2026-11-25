@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -192,6 +194,45 @@ public class ClientValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
         _jwtReader.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 8705 section 2: a client authenticating with mutual TLS must "include the client_id parameter", so a refresh
+    /// token request presenting a client certificate without client_id is not authenticated as the tls_client_auth
+    /// client its token names, although the authenticators count the certificate as nothing presented; it is refused
+    /// invalid_client, its token unread.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshWithAClientCertificateWithoutClientId_IsNotAuthenticatedAsTheClientItsTokenNames()
+    {
+        const string mutualTlsClientId = "mtls-client";
+        using var key = RSA.Create(2048);
+        using var certificate = new CertificateRequest(
+                $"CN={mutualTlsClientId}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(
+                new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.RefreshToken, RefreshToken = RefreshToken },
+            new ClientRequest { ClientCertificate = certificate });
+        ArrangeRefreshTokenOf(mutualTlsClientId);
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(
+                TestTenant.Matched, It.Is<ClientRequest>(r => r.ClientId == mutualTlsClientId), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(new ClientInfo(mutualTlsClientId) { TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth });
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(
+                TestTenant.Matched, It.Is<ClientRequest>(r => r.ClientId == null), It.IsAny<IClientInfoProvider>()))
+            .ReturnsAsync(ClientAuthenticationFailures.NoCredential);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidClient, error?.Error);
+        _jwtReader.Verify(
+            r => r.ReadAuthenticAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(),
+                It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()),
+            Times.Never);
     }
 
     /// <summary>

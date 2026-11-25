@@ -144,8 +144,8 @@ public static class ActionResultExtensions
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
 				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
-			// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: a 401 with a Basic challenge for a client that
-			// used HTTP Basic or is registered for it, Basic being the only Authorization-header scheme the
+			// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: a 401 with a Basic challenge for a request that
+			// authenticated with HTTP Basic, Basic being the only Authorization-header scheme the
 			// client-authenticating endpoints support; the error itself stays in the JSON body because RFC 7617
 			// defines no error attributes for the Basic scheme. Any other refusal of client authentication takes the
 			// endpoint's status

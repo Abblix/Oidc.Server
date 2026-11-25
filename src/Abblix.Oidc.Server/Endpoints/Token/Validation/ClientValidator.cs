@@ -90,7 +90,8 @@ public class ClientValidator(
 
     /// <summary>
     /// <paramref name="clientRequest"/> naming the client the refresh token of <paramref name="request"/> was issued
-    /// to, for a refresh token request presenting no credential and no client_id, or null where it names none.
+    /// to, for a refresh token request presenting no credential, no client certificate and no client_id, or null
+    /// where it names none.
     /// </summary>
     /// <remarks>
     /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.2: client_id is "needed when a form of client authentication
@@ -101,6 +102,12 @@ public class ClientValidator(
     /// so, and a confidential one still has to authenticate ("Confidential clients MUST authenticate"). The token is
     /// only read here, its lifetime aside and nothing recorded about it, for the client it names: the grant validates
     /// it, answering an expired one invalid_grant as it does for a request naming its client, and spends it.
+    /// <para>
+    /// A request presenting a client certificate is left as it is: RFC 8705 section 2 has a client authenticating
+    /// with mutual TLS "include the client_id parameter", so a certificate without it authenticates no client,
+    /// although the authenticators, looking for the certificate's client by client_id, count it as nothing
+    /// presented.
+    /// </para>
     /// </remarks>
     private async Task<ClientRequest?> NamedByTheRefreshTokenAsync(
         TenantDefinition tenant,
@@ -109,7 +116,8 @@ public class ClientValidator(
         IClientInfoProvider clients)
     {
         if (request is not { GrantType: GrantTypes.RefreshToken, RefreshToken: { Length: > 0 } refreshToken } ||
-            clientRequest.ClientId.HasValue())
+            clientRequest.ClientId.HasValue() ||
+            clientRequest.ClientCertificate is not null)
         {
             return null;
         }
