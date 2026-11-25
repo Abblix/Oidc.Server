@@ -11,9 +11,9 @@ Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before 
 - Server requirements of OAuth 2.1 ([draft-ietf-oauth-v2-1-17](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17))
 
 ✏️ Improvements
-- Tokens of a session revoked when the session ends ([RFC 10017](https://datatracker.ietf.org/doc/html/rfc10017)), unless `OidcOptions.RevokeSessionTokensOnLogout` is false
+- Tokens of a session revoked when the session ends, wherever this server checks them ([RFC 10017](https://datatracker.ietf.org/doc/html/rfc10017)), unless `OidcOptions.RevokeSessionTokensOnLogout` is false
 - Cross-client token exchange of access tokens addressed to the client, through `ClientInfo.CrossClientSubjectTokenExchange` ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
-- The grant types, offline access, resources and token settings of dynamically registered clients and clients from metadata documents, set by `NewClientOptions`
+- The grant types, offline access, resources and token settings of dynamically registered clients set by `NewClientOptions`, which also sets the offline access, resources and token settings of clients from metadata documents
 - Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
 - TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 - A logout confirmation page a tenant names in `TenantDefinition.LogoutConfirmationUri`
