@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -32,10 +35,27 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Whether the client was resolved from the metadata document its identifier names, so the server's fetches of
-    /// its URIs are held to the special-purpose address registries as written. Set by the server, never by
-    /// configuration.
+    /// its URIs are held to the special-purpose address registries as written, and a host's
+    /// <see cref="IRedirectUriTrustPolicy"/> can tell such a client from one somebody registered. Set by the server,
+    /// never by configuration or a stored record: it is neither written to nor read from JSON.
     /// </summary>
-    internal bool ResolvedFromMetadataDocument { get; set; }
+    [JsonIgnore]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public bool ResolvedFromMetadataDocument { get; internal set; }
+
+    /// <summary>
+    /// Whether somebody answering for the deployment let the client in, decided when the client was created and kept
+    /// with it: <see cref="ClientTrust.Reviewed"/>, the default, for a client the host declares, and the value the
+    /// server set for one it registered or resolved. A record naming none is reviewed.
+    /// </summary>
+    /// <remarks>
+    /// A host changing it writes the client's record, and every replica answers from that record once it reads it
+    /// again: a registration in the host's <see cref="MultiTenancy.ITenantClientRegistrationStore"/> on its next lookup,
+    /// a client declared in a tenant read from a tenant store at the next reading of the store
+    /// (<see cref="OidcOptions.RefreshTenantsEvery"/>). A client resolved from its metadata document has it decided
+    /// again as the document is fetched again, within <see cref="ClientIdMetadataDocumentOptions.MaximumCacheDuration"/>.
+    /// </remarks>
+    public ClientTrust Trust { get; set; }
 
     /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from
@@ -84,6 +104,17 @@ public record ClientInfo(string ClientId)
     /// enhancing security for public clients. A native app and a public client use PKCE whatever this states, as
     /// <see cref="EffectivePkceRequired"/> answers.
     /// </summary>
+    /// <remarks>
+    /// False marks the client as an OAuth 2.0 client in the sense of OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 1.8,
+    /// where "Which rules apply to a given client is determined by the authorization server's configuration for that
+    /// client". Section 7.5.1.1 has the server enforce code_challenge and code_verifier "unless both of the following
+    /// criteria are met: The client is a confidential client" and "there is reasonable assurance by the authorization
+    /// server that the client implements the OpenID Connect nonce mechanism properly". Such a client may then send an
+    /// authorization request without a code_challenge, including one carrying no nonce, which OpenID Connect Core 1.0
+    /// section 3.1.2.1 leaves optional in the code flow, so the server cannot have that assurance of every request it
+    /// admits: setting this to false is the deployment's statement that the client is held to OAuth 2.0 rather than to
+    /// OAuth 2.1.
+    /// </remarks>
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
@@ -129,7 +160,12 @@ public record ClientInfo(string ClientId)
     /// Specifies the lifetime of access tokens issued to this client.
     /// Shorter access token lifetimes reduce the risk of token leakage.
     /// </summary>
-    public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+    public TimeSpan AccessTokenExpiresIn { get; set; } = DefaultAccessTokenExpiresIn;
+
+    /// <summary>
+    /// The access token lifetime a client takes unless one is set on it, a dynamically registered client included.
+    /// </summary>
+    internal static readonly TimeSpan DefaultAccessTokenExpiresIn = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Whether every access token issued to this client names one resource. An authorization may still grant several
@@ -399,9 +435,10 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The locations this client answers for when it acts as a resource server, matched against the
-    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
-    /// issued to somebody else returns the entries addressed to one of these, and nothing when the
-    /// list is absent.
+    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry and, under
+    /// <see cref="CrossClientSubjectTokenExchange.AddressedToClient"/>, against the audience of a subject token
+    /// issued to another client. Introspecting a token issued to somebody else returns the entries addressed to
+    /// one of these, and nothing when the list is absent.
     /// </summary>
     /// <remarks>
     /// RFC 9396 section 9 obliges the server to make the granted details available to the resource server
@@ -429,15 +466,15 @@ public record ClientInfo(string ClientId)
     public Uri[]? ResourceLocations { get; set; }
 
     /// <summary>
-    /// RFC 8693 section 1.3: by default this AS rejects a Token Exchange request where the
-    /// <c>subject_token</c> was originally issued to a different client than the one presenting
-    /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
-    /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
-    /// to <c>true</c> to opt out of the default check. The opt-out also covers a subject_token whose
-    /// origin cannot be determined at all, which is otherwise refused: a client trusted to present
-    /// tokens issued to others is equally trusted to present one whose issuer cannot be read.
+    /// Which subject tokens issued to another client this client may present at the token exchange grant.
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Refused"/> by default, the guard against a
+    /// confused deputy turning a token issued to somebody else into one of its own;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.AddressedToClient"/> for a resource server
+    /// delegating upstream with the tokens presented to it;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Any"/> for a broker trusted with tokens issued
+    /// to others.
     /// </summary>
-    public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
+    public CrossClientSubjectTokenExchange CrossClientSubjectTokenExchange { get; set; }
 
     /// <summary>
     /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
@@ -849,6 +886,14 @@ public record ClientInfo(string ClientId)
     /// A version identifier for the client software per RFC 7591 Section 2.
     /// </summary>
     public string? SoftwareVersion { get; set; }
+
+    /// <summary>
+    /// The software statement the client was registered with, as it was presented and validated (RFC 7591 section
+    /// 2.3), or <c>null</c> for a client registered without one. The metadata it carries stays the client's through
+    /// every RFC 7592 update, and every registration, read and update response returns it unmodified (RFC 7591 section
+    /// 3.2.1).
+    /// </summary>
+    public string? SoftwareStatement { get; set; }
 
     /// <summary>
     /// Expiration time for this dynamically registered client in distributed cache.

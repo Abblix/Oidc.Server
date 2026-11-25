@@ -53,10 +53,16 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
     {
         public IEnumerable<string> ClientAuthenticationMethodsSupported => [];
 
-        public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+            TenantDefinition tenant,
+            ClientRequest request,
+            IClientInfoProvider clients)
             => Task.FromResult<IEnumerable<string>>(PresentedKey() is null ? [] : [ApiKeyHeader]);
 
-        public Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+        public Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+            TenantDefinition tenant,
+            ClientRequest request,
+            IClientInfoProvider clients)
             => Task.FromResult(Authenticate(tenant));
 
         /// <summary>
@@ -123,6 +129,7 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
 
         _app = builder.Build();
         _app.UseMultiTenancy();
+        _app.UseCors();
         _app.MapOidcEndpoints();
         await _app.StartAsync(TestContext.Current.CancellationToken);
 

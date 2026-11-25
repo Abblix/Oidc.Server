@@ -43,8 +43,13 @@ public interface IClientAuthenticator
     /// </remarks>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The client request.</param>
+    /// <param name="clients">The clients of the request being served, so a client the request names is looked up once
+    /// for every step of it.</param>
     /// <returns>The places, each named once.</returns>
-    Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request);
+    Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients);
 
     /// <summary>
     /// Attempts to authenticate a client based on the provided request, answering one of three outcomes: the client
@@ -63,6 +68,10 @@ public interface IClientAuthenticator
     /// </remarks>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing authentication information.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <returns>The authenticated client, or why it is not one.</returns>
-    Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request);
+    Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients);
 }

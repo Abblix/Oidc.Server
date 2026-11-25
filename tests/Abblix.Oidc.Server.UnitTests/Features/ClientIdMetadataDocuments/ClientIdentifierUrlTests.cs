@@ -8,6 +8,7 @@
 
 using System;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Utils;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientIdMetadataDocuments;
@@ -26,9 +27,40 @@ public class ClientIdentifierUrlTests
     [InlineData("https://[2001:4860:4860::8888]/client")]
     public void AUrlWithinTheRules_IsFetchedFromItself(string clientId)
     {
-        Assert.Null(ClientIdentifierUrl.WhyNotFetched(clientId, out var url));
+        Assert.Null(ClientIdentifierUrl.WhyNotFetched(clientId, OutboundAddressRule.NoSpecialPurpose, out var url));
         Assert.Equal(clientId, url!.AbsoluteUri);
+        Assert.True(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
     }
+
+    /// <summary>
+    /// Registration withholds every spelling of an https URL, not only the one a document is fetched under, so no
+    /// registration holds an id reading as a document's URL.
+    /// </summary>
+    [Theory]
+    [InlineData("HTTPS://client.example.com/metadata.json")]
+    [InlineData("Https://client.example.com/metadata.json")]
+    [InlineData("hTtPs://client.example.com/metadata.json")]
+    [InlineData(" https://client.example.com/metadata.json")]
+    [InlineData("https://client.example.com/metadata.json ")]
+    [InlineData(" HTTPS://client.example.com/metadata.json ")]
+    [InlineData("\thttps://client.example.com/metadata.json")]
+    [InlineData("https://client.example.com/metadata.json\r\n")]
+    [InlineData("https://Client.Example.com:443/metadata.json")]
+    [InlineData("https://client.example.com")]
+    [InlineData("https://")]
+    public void AnHttpsUrlInAnySpelling_IsWithheldFromRegistration(string clientId)
+        => Assert.True(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
+
+    [Theory]
+    [InlineData("client-1")]
+    [InlineData("ABC")]
+    [InlineData("httpsclient")]
+    [InlineData("https-client")]
+    [InlineData("http://client.example.com/metadata.json")]
+    [InlineData("HTTP://client.example.com/metadata.json")]
+    [InlineData("urn:example:client")]
+    public void AnIdThatIsNoHttpsUrl_MayBeRegistered(string clientId)
+        => Assert.False(ClientIdentifierUrl.IsWithheldFromRegistration(clientId));
 
     [Theory]
     // "MUST use the https URL scheme", compared as written
@@ -68,9 +100,27 @@ public class ClientIdentifierUrlTests
     [InlineData("https://client.example.com/a b")]
     public void AUrlBreakingARule_IsNotFetched(string clientId)
     {
-        Assert.NotNull(ClientIdentifierUrl.WhyNotFetched(clientId, out var url));
+        Assert.NotNull(ClientIdentifierUrl.WhyNotFetched(clientId, OutboundAddressRule.NoSpecialPurpose, out var url));
         Assert.Null(url);
     }
+
+    /// <summary>
+    /// Section 10.7's exception reaches loopback as written, and nothing else of the special-purpose registries: not a
+    /// private network, not link-local, and not a mapped or NAT64 form of a loopback address.
+    /// </summary>
+    [Theory]
+    [InlineData("https://127.0.0.1/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, true)]
+    [InlineData("https://127.0.0.2:8443/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, true)]
+    [InlineData("https://[::1]:5001/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, true)]
+    [InlineData("https://127.0.0.1/metadata.json", OutboundAddressRule.NoSpecialPurpose, false)]
+    [InlineData("https://[::1]:5001/metadata.json", OutboundAddressRule.NoSpecialPurpose, false)]
+    [InlineData("https://10.0.0.5/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, false)]
+    [InlineData("https://192.168.1.5/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, false)]
+    [InlineData("https://169.254.169.254/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, false)]
+    [InlineData("https://[::ffff:7f00:1]/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, false)]
+    [InlineData("https://[64:ff9b::7f00:1]/metadata.json", OutboundAddressRule.NoSpecialPurposeButLoopback, false)]
+    public void ALiteralAddress_IsFetchedOnlyWhenItsRuleReachesIt(string clientId, OutboundAddressRule rule, bool fetched)
+        => Assert.Equal(fetched, ClientIdentifierUrl.WhyNotFetched(clientId, rule, out _) is null);
 
     [Theory]
     [InlineData("https://apps.example.com/client", true)]

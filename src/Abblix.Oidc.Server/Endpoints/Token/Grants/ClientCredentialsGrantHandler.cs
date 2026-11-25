@@ -33,6 +33,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// - CI/CD pipelines
 /// The client must authenticate itself before this handler is invoked, using methods such as
 /// client_secret_basic, client_secret_post, or private_key_jwt.
+/// <para>
+/// A token of this grant is issued to the client itself. Its <c>idp</c> claim is <c>client_credentials</c>, its
+/// <c>client_id</c> claim is the client's identifier, and its <c>sub</c> is that identifier too, or the client's
+/// pseudonym of it when the client is registered with pairwise subject identifiers. Its <c>idp</c> marks it as the
+/// client's own (RFC 9700 section 4.15.1). Introspection by a caller other than the token's client shows <c>idp</c>
+/// for such a token alone, keeping an end user's identity provider private, and the user information endpoint refuses
+/// such a token.
+/// </para>
 /// </remarks>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
@@ -58,8 +66,10 @@ public class ClientCredentialsGrantHandler(
 	/// <param name="request">The token request containing the requested scope and other parameters.</param>
 	/// <param name="clientInfo">Information about the authenticated client making the request.</param>
 	/// <returns>A task that completes with an authorized grant containing the client session and context.</returns>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names
+	/// is looked up.</param>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
 	{
 		// Extract the requested scope from the request (may be null/empty)
 		var scope = request.Scope;
@@ -77,7 +87,7 @@ public class ClientCredentialsGrantHandler(
 			Subject: clientInfo.ClientId,
 			SessionId: sessionIdGenerator.GenerateSessionId(),
 			AuthenticationTime: timeProvider.GetUtcNow(),
-			IdentityProvider: GrantTypes.ClientCredentials);
+			IdentityProvider: ClientCredentialsSession.IdentityProvider);
 
 		// Create and return the authorized grant
 		var grant = new AuthorizedGrant(authSession, context);

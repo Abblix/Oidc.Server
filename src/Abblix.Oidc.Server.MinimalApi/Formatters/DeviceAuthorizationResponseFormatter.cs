@@ -32,7 +32,8 @@ public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor
         return Task.FromResult(response.Match<IResult>(
             onSuccess: success => Results.Json(success),
             // RFC 8628 section 3.2: an error is answered "in the same way as the token endpoint specified in
-            // Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401).
+            // Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401 with a Basic
+            // challenge where one is owed, the endpoint status otherwise).
             onFailure: error => error.Format(
                 StatusCodes.Status400BadRequest,
                 tenantAccessor.CurrentTenant().IssuerAsWritten())));

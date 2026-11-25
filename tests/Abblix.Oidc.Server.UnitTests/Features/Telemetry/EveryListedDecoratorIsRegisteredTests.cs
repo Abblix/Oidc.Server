@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
@@ -98,7 +101,16 @@ public sealed class EveryListedDecoratorIsRegisteredTests
         services.AddCheckSession();
         services.AddOidcServices(options =>
         {
-            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
+            options.Tenants.Add(new TenantDefinition
+            {
+                Id = TestIssuer.TenantId,
+                Issuer = TestConstants.DefaultIssuer,
+                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
+                ClientSecretEncryption = new ClientSecretEncryptionSettings
+                {
+                    Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
+            });
         });
 
         return services;

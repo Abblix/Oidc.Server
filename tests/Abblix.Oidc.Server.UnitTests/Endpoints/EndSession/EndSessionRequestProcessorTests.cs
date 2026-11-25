@@ -140,6 +140,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithAuthenticatedSession_ShouldSignOutAndReturnSuccess()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession();
@@ -165,15 +168,13 @@ public class EndSessionRequestProcessorTests
     }
 
     /// <summary>
-    /// With the option on, ending a session revokes the tokens issued within it, so a refresh token from the
-    /// browser session the user just closed stops working.
+    /// By default, ending a session revokes the tokens issued within it, so a refresh token from the browser
+    /// session the user just closed stops working.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_WhenLogoutRevokesTokens_RecordsASessionCutoff()
+    public async Task ProcessAsync_ByDefault_RecordsASessionCutoff()
     {
         // Arrange
-        _options.RevokeSessionTokensOnLogout = true;
-
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession(sessionId: "session_abc");
 
@@ -200,14 +201,15 @@ public class EndSessionRequestProcessorTests
     }
 
     /// <summary>
-    /// Off by default, so an upgrade does not sign out the native applications of every user who logs out of
-    /// the browser. The specification leaves this open, so the default is a deployment's choice rather than a
-    /// requirement, and the safe default is the one that changes nothing.
+    /// A deployment that turns the option off keeps a session's tokens working after its logout, which is what a
+    /// native application staying signed in while the browser session ends relies on.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_ByDefault_DoesNotRevokeTheSessionTokens()
+    public async Task ProcessAsync_WhenRevocationIsOff_DoesNotRevokeTheSessionTokens()
     {
         // Arrange
+        _options.RevokeSessionTokensOnLogout = false;
+
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession();
 
@@ -317,6 +319,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithAffectedClients_ShouldNotifyAllClients()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1", "client_2");
@@ -334,11 +339,11 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_2"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_2"))
             .ReturnsAsync(client2);
 
         _logoutNotifier
@@ -361,6 +366,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WithNonExistentClient_ShouldSkipNotification()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1", "client_missing");
@@ -377,12 +385,12 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_missing"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_missing"))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         _logoutNotifier
             .Setup(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()))
@@ -406,6 +414,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldCreateLogoutContextWithSessionAndSubject()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_456", "session_789", "client_1");
@@ -423,7 +434,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -448,6 +459,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldReturnFrontChannelLogoutUris()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1");
@@ -464,7 +478,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -492,6 +506,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldSignOutBeforeNotifyingClients()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1");
@@ -510,7 +527,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -562,6 +579,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_ShouldAwaitInFlightClientNotifications()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1");
@@ -578,7 +598,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
@@ -603,6 +623,9 @@ public class EndSessionRequestProcessorTests
     [Fact]
     public async Task ProcessAsync_WhenClientNotificationThrows_StillCompletesLogout()
     {
+        // The revoker is left unset here, so logout must not reach it
+        _options.RevokeSessionTokensOnLogout = false;
+
         // Arrange
         var request = CreateValidEndSessionRequest();
         var authSession = CreateAuthSession("user_123", "session_123", "client_1");
@@ -618,7 +641,7 @@ public class EndSessionRequestProcessorTests
 
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier

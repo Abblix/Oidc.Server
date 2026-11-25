@@ -32,65 +32,47 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <remarks>
 /// Unlike <see cref="JwtSubjectTokenResolver"/>, this implementation also touches refresh-token
 /// storage -- the wire-level string by itself is not enough to recover the issued scope and AD,
-/// since the JWT's payload carries only the identifying minimum (jti, exp, sub). The lookup
-/// service additionally enforces single-use / rotation semantics in environments that opt in
-/// to refresh-token rotation, so a token already redeemed will reject here exactly as it would
-/// in the refresh_token grant.
+/// since the JWT's payload carries only the identifying minimum (jti, exp, sub). A token already superseded by a
+/// rotation is refused here as in the refresh_token grant, its family revoked with it, but the exchange spends no
+/// token: it issues no refresh token to rotate into.
 /// </remarks>
-/// <param name="jwtValidator">Validates the refresh-token JWT's signature and lifetime.</param>
+/// <param name="jwtValidator">Reads the refresh token: first that it is authentic, then, once the requesting client
+/// is found entitled to present it, what is recorded about it.</param>
 /// <param name="refreshTokenService">Resolves the JWT to the original authorised grant.</param>
-/// <param name="clientInfoProvider">Resolves the client the refresh token was issued to, whose sector opens a
-/// pairwise subject back to the real subject.</param>
 /// <param name="cutoffChecker">Asks whether a revocation refuses the session the refresh token continues, as the
 /// refresh grant asks.</param>
 public sealed class RefreshTokenSubjectTokenResolver(
-    IAuthServiceJwtValidator jwtValidator,
+    IAuthServiceJwtReader jwtValidator,
     IRefreshTokenService refreshTokenService,
-    IClientInfoProvider clientInfoProvider,
     IRevocationCutoffChecker cutoffChecker) : ISubjectTokenResolver
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
     {
-        // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
-        // need not name this server
-        var validation = await jwtValidator.ValidateAsync(
-            tenant,
-            client,
-            subjectToken,
-            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
-            ServiceTokenValidation.AnyAudience);
+        // A refresh token issued by 3.0 holds the resources of the grant it continues in its audience
+        // (RefreshTokenResources), so the audience need not name this server
+        var validation = await ReadAsync(tenant, client, clients, subjectToken);
         if (!validation.TryGetSuccess(out var jwt))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The token is invalid or has expired.");
-        }
+            return validation.GetFailure();
 
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
         // subject is opened against that client's sector.
-        var originalClientId = jwt.Payload.ClientId;
-        var originalClient = originalClientId is null
-            ? null
-            : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
-        if (originalClient is null)
+        var originalClientId = jwt.OwnerOf();
+        ClientInfo? originalClient = null;
+        if (originalClientId is null ||
+            !(await clients.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out originalClient))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
         }
 
-        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
-        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
-        if (!originalClient.OfflineAccess.IsAllowed())
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                "The token's client is not allowed offline access.");
-        }
+        if (RefusalOf(originalClient, jwt) is { } refusal)
+            return refusal;
 
         var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, jwt, originalClient);
         if (!grantLookup.TryGetSuccess(out var grant))
@@ -115,6 +97,7 @@ public sealed class RefreshTokenSubjectTokenResolver(
         var authorizationDetails = (JsonArray?)grant.Context.AuthorizationDetails?.DeepClone();
         var act = (JsonObject?)grant.Context.Actor?.DeepClone();
 
+        // The token's binding travels with it, for the token endpoint to require of the client it was issued to
         return new SubjectTokenContext(
             Subject: grant.AuthSession.Subject,
             Issuer: jwt.Payload.Issuer,
@@ -123,10 +106,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
         {
             Act = act,
 
-            // Origin tracking from the recovered grant -- the refresh_token's storage record
-            // names the client it was issued to. Mismatch with the requesting client triggers
-            // the handler's cross-client guard.
-            OriginalClientId = grant.Context.ClientId,
+            // The client the token belongs to, which the handler's cross-client guard judges as it does here
+            OriginalClientId = originalClientId,
 
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
@@ -135,6 +116,70 @@ public sealed class RefreshTokenSubjectTokenResolver(
             IdentityProvider = grant.AuthSession.IdentityProvider,
             AuthContextClassRef = grant.AuthSession.AuthContextClassRef,
             AuthenticationMethodReferences = grant.AuthSession.AuthenticationMethodReferences?.ToList(),
-        };
+        }.BoundAs(jwt.Payload);
     }
+
+    /// <summary>
+    /// Why <paramref name="refreshToken"/> of <paramref name="originalClient"/> is not exchanged, or null when it may be.
+    /// </summary>
+    private static OidcError? RefusalOf(ClientInfo originalClient, JsonWebToken refreshToken)
+    {
+        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
+        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
+        if (!originalClient.OfflineAccess.IsAllowed())
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token's client is not allowed offline access.");
+        }
+
+        // RFC 9700 section 2.2.2: a public client's refresh token is sender-constrained or rotated, and an exchange
+        // rotates nothing, since it issues no refresh token, so a token that must rotate is not taken as a subject.
+        // RFC 8693 section 2.2.2 answers a subject token "unacceptable based on policy" with invalid_request
+        if (RefreshTokenRotationPolicy.MustRotate(originalClient, refreshToken.Payload))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The token is a public client's refresh token bound to no DPoP key, which is not exchanged.");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <paramref name="subjectToken"/> as a refresh token this server issued and still honors, which
+    /// <paramref name="client"/> may present.
+    /// </summary>
+    private async Task<Result<JsonWebToken, OidcError>> ReadAsync(
+        TenantDefinition tenant,
+        ClientInfo client,
+        IClientInfoProvider clients,
+        string subjectToken)
+    {
+        var authentic = await jwtValidator.ReadAuthenticAsync(
+            tenant,
+            client,
+            clients,
+            subjectToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            ServiceTokenValidation.AnyAudience);
+        if (!authentic.TryGetSuccess(out var token))
+            return InvalidToken;
+
+        // The handler's cross-client guard, decided here before the token's records are read, because reading them
+        // revokes the grant of a superseded refresh token, which a client holding another client's token would
+        // otherwise do to it from here
+        // A refresh token is addressed to this server alone, so it names no location of the presenting client,
+        // whatever one issued by 3.0 holds in its audience
+        if (TokenOrigin.CheckSubject(tenant, token.OwnerOf(), null, client) is { } refusal)
+            return refusal;
+
+        var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
+        return recorded.TryGetSuccess(out var valid) ? valid : InvalidToken;
+    }
+
+    /// <summary>
+    /// The answer to a token that is not a refresh token this server issued and still honors.
+    /// </summary>
+    private static OidcError InvalidToken => new(ErrorCodes.InvalidRequest, "The token is invalid or has expired.");
 }

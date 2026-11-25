@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 /// <summary>
@@ -22,7 +24,7 @@ internal static class ClientIdMetadataDocumentsExperiment
     public const string DiagnosticId = "ABX9001";
 
     /// <summary>Where the diagnostic points: the feature's section of the package README.</summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S1075",
+    [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "The address is the published documentation of the feature, which a host follows from its build.")]
     public const string UrlFormat =
         "https://github.com/Abblix/Oidc.Server/blob/master/src/Abblix.Oidc.Server/README.md#client-id-metadata-documents";

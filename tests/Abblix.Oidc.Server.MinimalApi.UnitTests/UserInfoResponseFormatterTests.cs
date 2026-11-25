@@ -191,7 +191,8 @@ public class UserInfoResponseFormatterTests
         var clientJwtFormatter = new ClientJwtFormatter(
             NullLogger<ClientJwtFormatter>.Instance,
             issuer, new ClientEncryptionKeyResolver(
-                issuer, clientKeys.Object, TimeProvider.System, Get<Abblix.Jwt.EncryptionAlgorithmsProvider>()), serviceKeys.Object,
+                issuer, clientKeys.Object, TimeProvider.System, Get<Abblix.Jwt.EncryptionAlgorithmsProvider>(),
+                Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()), serviceKeys.Object,
             Get<Abblix.Jwt.SigningAlgorithmsProvider>());
         var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(

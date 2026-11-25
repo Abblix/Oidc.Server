@@ -103,8 +103,9 @@ public record ClientSecret
 	}
 
 	/// <summary>
-	/// The plain-text value of the client secret. This property is required for authentication methods
-	/// that need the raw secret value, such as client_secret_jwt (which uses HMAC signatures).
+	/// The plain-text value of a client secret the host declares, for the uses that need the value itself rather than
+	/// its hash: the HMAC key of a client_secret_jwt assertion and the key a JWT is encrypted to the client with. A
+	/// client registered dynamically keeps its secret in <see cref="EncryptedValue"/> instead.
 	/// </summary>
 	/// <remarks>
 	/// While storing plain-text secrets poses security risks, some authentication methods like
@@ -112,6 +113,20 @@ public record ClientSecret
 	/// This value should be stored securely and access should be restricted.
 	/// </remarks>
 	public string? Value { get; init; }
+
+	/// <summary>
+	/// The secret encrypted for the client it was issued to, by the client secret encryption key of its tenant
+	/// (<see cref="MultiTenancy.TenantDefinition.ClientSecretEncryption"/>), so the client configuration endpoint can
+	/// return it when the client reads its registration (RFC 7592 section 3). Null for a secret issued before the tenant
+	/// had such a key, and for one the host declares; a read then answers without the secret.
+	/// </summary>
+	/// <remarks>
+	/// A client_secret_jwt client's assertion is verified with the secret decrypted from here, and a JWT encrypted to it
+	/// with a key derived from it; every other method is verified against the hashes. Without the key it was encrypted
+	/// with it opens to nothing, so replacing the tenant's key ends the client_secret_jwt authentication of a client
+	/// that keeps its secret only here.
+	/// </remarks>
+	public byte[]? EncryptedValue { get; init; }
 
 	/// <summary>
 	/// The expiration date and time for the client secret. Secrets past this date are considered
@@ -135,6 +150,7 @@ public record ClientSecret
 		builder.Append("Sha256Hash = ").Append(Sha256Hash is null ? "none" : "set");
 		builder.Append(", Sha512Hash = ").Append(Sha512Hash is null ? "none" : "set");
 		builder.Append(", Value = ").Append(Value is null ? "none" : "set");
+		builder.Append(", EncryptedValue = ").Append(EncryptedValue is null ? "none" : "set");
 		builder.Append(", ExpiresAt = ").Append(ExpiresAt);
 		return true;
 	}

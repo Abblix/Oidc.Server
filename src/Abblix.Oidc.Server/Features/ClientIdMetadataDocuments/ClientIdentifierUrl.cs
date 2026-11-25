@@ -8,6 +8,7 @@
 
 using System.Net;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
@@ -33,8 +34,10 @@ internal static class ClientIdentifierUrl
     /// Why <paramref name="clientId"/> is not a Client Identifier URL this server fetches, or null when it is one.
     /// </summary>
     /// <param name="clientId">The client identifier as the request carries it.</param>
+    /// <param name="rule">The rule the document is fetched by, which judges an address the URL names as written
+    /// (<see cref="SpecialPurposeFetches.DocumentRuleAt"/>).</param>
     /// <param name="url">The URL the document is fetched from, which is <paramref name="clientId"/> itself.</param>
-    public static string? WhyNotFetched(string clientId, out Uri? url)
+    public static string? WhyNotFetched(string clientId, OutboundAddressRule rule, out Uri? url)
     {
         url = null;
 
@@ -68,11 +71,51 @@ internal static class ClientIdentifierUrl
         }
 
         // Section 10.7 holds the URL to the special-purpose address registries as written, the NAT64 prefix included
-        // whatever IPv4 address it carries; a name is judged when it is resolved, by the transport's own validation
-        if (IPAddress.TryParse(parsed.Host, out var literal) && PrivateNetworks.IsSpecialPurposeAddress(literal))
+        // whatever IPv4 address it carries, loopback aside where its exception applies; a name is judged when it is
+        // resolved, by the transport's own validation
+        if (IPAddress.TryParse(parsed.Host, out var literal) && rule.Refuses(literal))
             return "it names a special-purpose address";
 
         url = parsed;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="clientId"/> is withheld from dynamic registration as a URL a metadata document may name:
+    /// every client identifier this server fetches, and every id <see cref="Uri"/> reads as an absolute https URL.
+    /// </summary>
+    /// <remarks>
+    /// Section 9.1 has a server issuing client identifiers of its own beside documents "ensure that the client_id
+    /// strings it generates do not start with https://". An id the server never fetches is withheld as well when
+    /// <see cref="Uri"/> reads it as https, as it does with the scheme in capitals or with the white space it trims
+    /// around the id.
+    /// </remarks>
+    /// <param name="clientId">The client identifier a registration proposes.</param>
+    public static bool IsWithheldFromRegistration(string clientId)
+        => clientId.StartsWith(HttpsPrefix, StringComparison.Ordinal) ||
+           (Uri.TryCreate(clientId, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// Why the server does not send a request to <paramref name="url"/>, a Client Identifier URL about to be fetched,
+    /// or null when it does: the refusals made before the request, so a URL refused on them is refused on trust grounds
+    /// rather than as a network failure.
+    /// </summary>
+    /// <param name="url">The URL the document is fetched from.</param>
+    /// <param name="validator">The synchronous SSRF rules.</param>
+    /// <param name="allowedDestinations">The host's <see cref="SecureHttpFetchOptions.AllowedDestinations"/>.</param>
+    public static string? WhyNotReached(Uri url, ISecureUriValidator validator, Uri[]? allowedDestinations)
+    {
+        // Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use
+        // IP addresses". The handler judges the address the name resolves to again before the request is sent. A
+        // loopback host the scope lets this fetch reach, by the same section's exception, is judged there alone
+        if (!SpecialPurposeFetches.PermitsLoopbackHost(url) && validator.Validate(url) is { } rejection)
+            return $"the URL is not one this server may reach: {rejection}";
+
+        // A destination the host named reaches past those rules for its own services, chosen by the host or by a
+        // registered client; a client identifier is chosen by whoever sends a request, so it is never one of them
+        if (SecureUriValidator.IsAllowedDestination(url, allowedDestinations))
+            return "the URL is one the host allows for its own services";
+
         return null;
     }
 

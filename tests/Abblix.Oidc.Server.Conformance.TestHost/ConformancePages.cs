@@ -119,6 +119,9 @@ public sealed class ConformancePages(TenantDefinition tenant)
         IClientInfoProvider clients)
     {
         var pending = await pendingRequests.TryGetAsync(tenant, new Uri(requestUri));
-        return pending?.ClientId is { } clientId ? await clients.TryFindClientAsync(tenant, clientId) : null;
+        if (pending?.ClientId is not { } clientId)
+            return null;
+
+        return (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) ? client : null;
     }
 }

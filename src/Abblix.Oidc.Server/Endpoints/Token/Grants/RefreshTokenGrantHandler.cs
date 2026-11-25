@@ -25,11 +25,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <c>rt+jwt</c>, recovers the original <see cref="AuthorizedGrant"/>, and rejects the request with
 /// <c>invalid_grant</c> when the refreshing client differs from the client that received the token.
 /// </summary>
-/// <param name="jwtValidator">Validates the refresh-token JWT issued by this server.</param>
+/// <param name="jwtValidator">Reads the refresh token: first that it is authentic, then, once it is found to belong
+/// to the client presenting it, what is recorded about it.</param>
 /// <param name="refreshTokenService">Resolves the refresh-token JWT to an <see cref="AuthorizedGrant"/>
 /// and enforces single-use / rotation semantics.</param>
 public class RefreshTokenGrantHandler(
-	IAuthServiceJwtValidator jwtValidator,
+	IAuthServiceJwtReader jwtValidator,
 	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
 {
 	/// <summary>
@@ -54,8 +55,10 @@ public class RefreshTokenGrantHandler(
 	/// A task representing the outcome of the authorization process, either returning a successful grant with a new
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names
+	/// is looked up.</param>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
 	{
 		// RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -64,39 +67,48 @@ public class RefreshTokenGrantHandler(
 			return ErrorFactory.MissingParameter(TokenRequest.Parameters.RefreshToken);
 		}
 
-		// Validate the refresh token's JWT structure and authenticity using the JWT validator service. Its audience
-		// holds the resources of the grant it continues (RefreshTokenService), so it need not name this server.
-		var jwtValidationResult = await jwtValidator.ValidateAsync(
+		// A refresh token issued by 3.0 holds the resources of the grant it continues in its audience
+		// (RefreshTokenResources), so the audience need not name this server.
+		var authentic = await jwtValidator.ReadAuthenticAsync(
 			tenant,
 			clientInfo,
+			clients,
 			request.RefreshToken,
 			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
 			ServiceTokenValidation.AnyAudience);
 
-		if (jwtValidationResult.TryGetFailure(out var error))
+		if (authentic.TryGetFailure(out var error))
 		{
 			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
 		}
 
-		var token = jwtValidationResult.GetSuccess();
+		// RFC 6749 section 6: the server MUST "ensure that the refresh token was issued to the authenticated client".
+		// Decided before the token's records are read, because reading them revokes the grant of a superseded refresh
+		// token, which a client holding another client's token would otherwise do to it from here, and they are judged by
+		// the token's own client, whose answer decides nothing for a token that is not the caller's
+		var presented = authentic.GetSuccess();
+		if (!presented.BelongsTo(clientInfo.ClientId))
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"The specified grant belongs to another client");
+		}
 
-		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
-		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens
-		// a pairwise subject back to the real subject.
-		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, token, clientInfo);
+		var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, presented, ServiceTokenValidation.AnyAudience);
+		if (recorded.TryGetFailure(out error))
+		{
+			return new OidcError(ErrorCodes.InvalidGrant, error.ErrorDescription);
+		}
+
+		// The authenticated client is the one the refresh token was issued to, so its sector opens a pairwise subject
+		// back to the real subject.
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, recorded.GetSuccess(), clientInfo);
 		if (result.TryGetFailure(out var authError))
 		{
 			return authError;
 		}
 
 		var grant = result.GetSuccess();
-		if (grant.Context.ClientId != clientInfo.ClientId)
-		{
-			// If the client information in the token doesn't match the request, return an error.
-			return new OidcError(
-				ErrorCodes.InvalidGrant,
-				"The specified grant belongs to another client");
-		}
 
 		// A refresh token exists only for offline access, so withdrawing the permission ends the ones already issued;
 		// renewing without a new refresh token would leave the presented one unspent and reusable until it expires

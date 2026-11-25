@@ -94,8 +94,10 @@ public class BackChannelAuthenticationGrantHandler(
     /// Either an authorized grant if authentication succeeded, or an error indicating why the request failed
     /// (authorization_pending, access_denied, expired_token, slow_down, or invalid_grant).
     /// </returns>
+    /// <param name="clients">The clients of the request being served, where a client a presented token names
+    /// is looked up.</param>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -378,7 +380,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// </remarks>
     private static OidcError? TokenEndpointRefusal(ClientInfo clientInfo, IBackChannelGrantProcessor processor)
     {
-        if (clientInfo is { ClientType: ClientType.Public })
+        if (ConfidentialGrantTypes.Refuses(clientInfo.TokenEndpointAuthMethod, GrantTypes.Ciba))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");

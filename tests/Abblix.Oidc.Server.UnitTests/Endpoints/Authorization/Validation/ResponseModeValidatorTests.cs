@@ -64,6 +64,7 @@ public class ResponseModeValidatorTests
 
         var context = new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             FlowType = flowType,
             // In the real pipeline FlowTypeValidator sets this to the flow default before

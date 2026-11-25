@@ -143,7 +143,7 @@ public partial class JwtBearerGrantHandlerTests
 			tenant ?? SingleIssuer.Tenant,
 			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
 			new ClientInfo(ClientId),
-			TestContext.Current.CancellationToken);
+Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 
 		return captured!.ValidateAudience!;
 	}

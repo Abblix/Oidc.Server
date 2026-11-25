@@ -44,7 +44,11 @@ public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAc
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status403Forbidden),
 
                 // CIBA Core 1.0 section 13: errors are "sent in the same format as Token Error Responses", with
-                // invalid_client under HTTP 401 and the rest under 400, so through the token endpoint's own policy.
+                // invalid_client under HTTP 401 and the rest under 400. The section names 401 whether or not a Basic
+                // challenge is owed: no other method a client authenticates by has an HTTP scheme a challenge could name
+                { Error: ErrorCodes.InvalidClient }
+                    => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().IssuerAsWritten()),
+
                 _ => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().IssuerAsWritten()),
             }));
 

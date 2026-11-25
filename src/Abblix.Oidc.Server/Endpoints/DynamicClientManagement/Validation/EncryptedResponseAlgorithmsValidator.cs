@@ -51,12 +51,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
 /// <param name="encryptionAlgorithms">Tells which key types a key management algorithm is carried out with.</param>
+/// <param name="secretEncryptor">Decrypts the secret a stored client keeps encrypted.</param>
 public class EncryptedResponseAlgorithmsValidator(
     IJwtAlgorithmsProvider jwtAlgorithms,
     IAuthServiceKeysProvider serviceKeys,
     IClientInfoProvider clientInfoProvider,
     TimeProvider timeProvider,
-    EncryptionAlgorithmsProvider encryptionAlgorithms) : IClientRegistrationContextValidator
+    EncryptionAlgorithmsProvider encryptionAlgorithms,
+    IClientSecretEncryptor secretEncryptor) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
@@ -247,7 +249,7 @@ public class EncryptedResponseAlgorithmsValidator(
 
     /// <summary>
     /// Whether the server will hold the client's secret itself: a new registration keeps it for the authentication
-    /// methods <see cref="RegisterClientRequestProcessor.KeepsSecretValue"/> names, and an update keeps the secrets the
+    /// methods <see cref="ClientSecretValues.AreReadFor"/> names, and an update keeps the secrets the
     /// stored client holds (RFC 7592 section 2.2).
     /// </summary>
     private async Task<bool> HoldsSecretAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
@@ -256,11 +258,11 @@ public class EncryptedResponseAlgorithmsValidator(
         switch (context.Operation)
         {
             case DynamicClientOperation.Register:
-                return RegisterClientRequestProcessor.KeepsSecretValue(request.TokenEndpointAuthMethod);
+                return ClientSecretValues.AreReadFor(request.TokenEndpointAuthMethod);
 
             case DynamicClientOperation.Update:
                 if (request.ClientId is null ||
-                    await clientInfoProvider.TryFindClientAsync(tenant, request.ClientId) is not { } stored)
+                    !(await clientInfoProvider.FindClientAsync(tenant, request.ClientId)).TryGetSuccess(out var stored))
                 {
                     return false;
                 }
@@ -271,7 +273,8 @@ public class EncryptedResponseAlgorithmsValidator(
                     ClientSecrets = stored.ClientSecrets,
                     TokenEndpointAuthMethod = request.TokenEndpointAuthMethod,
                 };
-                return ClientSecretEncryptionKey.SecretOf(updated, timeProvider.GetUtcNow()) is not null;
+                return ClientSecretEncryptionKey.SecretOf(
+                    tenant, updated, timeProvider.GetUtcNow(), secretEncryptor) is not null;
 
             default:
                 throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");

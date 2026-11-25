@@ -62,73 +62,91 @@ internal class RedirectUrisValidator : SyncClientRegistrationContextValidator
         {
             foreach (var uri in redirectUris)
             {
-                if (uri is not { IsAbsoluteUri: true })
-                    return ErrorFactory.InvalidRedirectUri(
-                        $"{Parameters.RedirectUris} must contain only absolute URIs");
-
-                if (uri.Fragment.HasValue())
-                    return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} must not contain fragment");
-
-                var applicationType = context.Request.ApplicationType;
-                switch (applicationType)
-                {
-                    // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
-                    case ApplicationTypes.Web when uri.Scheme != Uri.UriSchemeHttps:
-                        return ErrorFactory.InvalidRedirectUri(
-                            $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
-
-                    // Web Clients MUST NOT use localhost as the hostname
-                    case ApplicationTypes.Web when LoopbackHosts.IsAnyLoopbackHost(uri):
-                        return ErrorFactory.InvalidRedirectUri(
-                            $"{Parameters.RedirectUris} must not use host name {uri.Host}");
-
-                    // OpenID Connect Dynamic Client Registration 1.0 section 2: "loopback URLs use localhost or the IP
-                    // loopback literals 127.0.0.1 or [::1] as the hostname". The refusal recommends the IP literals,
-                    // because only they accept any port at the authorization endpoint (RFC 8252 sections 7.3 and 8.3)
-                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp
-                                                      && !LoopbackHosts.IsNativeLoopbackHost(uri):
-                        return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register http: {Parameters.RedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1], which accept any port");
-
-                    // OpenID Connect Dynamic Client Registration 1.0 section 2: "Native Clients MUST only register
-                    // redirect_uris using custom URI schemes or loopback URLs using the http scheme", and "The
-                    // Authorization Server MUST verify that all the registered redirect_uris conform". The claimed https
-                    // redirect RFC 8252 section 7.2 offers a native app is "indistinguishable to the authorization server
-                    // from a regular web-based client redirect URI", so the refusal names the registration serving it
-                    case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
-                        return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes or "
-                            + $"http loopback URLs; register a claimed https redirect URI as '{Parameters.ApplicationType}' "
-                            + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
-                            + $"{ClientAuthenticationMethods.None}");
-
-                    // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period
-                    // character (".") SHOULD be rejected". The javascript, data and vbscript schemes carry none, and a
-                    // response posted to one of them would run in this server's origin
-                    case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri):
-                        return ErrorFactory.InvalidRedirectUri(
-                            $"Native Clients MUST only register {Parameters.RedirectUris} using a private-use URI "
-                            + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");
-
-                    // Any other case of Web or Native application types is correct
-                    case ApplicationTypes.Web:
-                    case ApplicationTypes.Native:
-                        break;
-
-                    // A REFUSAL, not a throw. The [AllowedValues] attribute on the member is not
-                    // enforced against a JSON body - the same gap the nullability annotation has above -
-                    // so this arm is reachable by anybody who posts a registration, and a throw here
-                    // leaves the request as a server fault rather than as an answer the caller can act
-                    // on. It became reachable for a whole class of clients when these checks stopped
-                    // being gated on the grant types.
-                    default:
-                        return ErrorFactory.InvalidClientMetadata(
-                            $"'{Parameters.ApplicationType}' names no application type this server "
-                            + $"knows: it must be '{ApplicationTypes.Web}' or '{ApplicationTypes.Native}'");
-                }
+                if (RefusalOf(uri, request.ApplicationType) is { } refusal)
+                    return refusal;
             }
         }
 
         return null; // All validations passed successfully
+    }
+
+    /// <summary>
+    /// The refusal of one registered redirect URI of a client of <paramref name="applicationType"/>, or null where it
+    /// conforms.
+    /// </summary>
+    private static OidcError? RefusalOf(Uri? uri, string applicationType)
+    {
+        if (uri is not { IsAbsoluteUri: true })
+            return ErrorFactory.InvalidRedirectUri(
+                $"{Parameters.RedirectUris} must contain only absolute URIs");
+
+        if (uri.Fragment.HasValue())
+            return ErrorFactory.InvalidRedirectUri($"{Parameters.RedirectUris} must not contain fragment");
+
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3: "The query string component MUST NOT include any
+        // parameters defined for use in the authorization response"
+        if (RedirectUriQuery.ResponseParameterIn(uri) is { } parameter)
+            return ErrorFactory.InvalidRedirectUri(
+                $"{Parameters.RedirectUris} must not name the authorization response parameter '{parameter}' " +
+                "in its query");
+
+        switch (applicationType)
+        {
+            // Web Clients using the OAuth Implicit Grant Type MUST only register URLs using the https scheme as redirect_uris
+            case ApplicationTypes.Web when !RedirectUriSchemes.IsAllowed(uri, native: false):
+                return ErrorFactory.InvalidRedirectUri(
+                    $"{Parameters.RedirectUris} must be secure ({Uri.UriSchemeHttps})");
+
+            // Web Clients MUST NOT use localhost as the hostname
+            case ApplicationTypes.Web when LoopbackHosts.IsAnyLoopbackHost(uri):
+                return ErrorFactory.InvalidRedirectUri(
+                    $"{Parameters.RedirectUris} must not use host name {uri.Host}");
+
+            // OpenID Connect Dynamic Client Registration 1.0 section 2: "loopback URLs use localhost or the IP
+            // loopback literals 127.0.0.1 or [::1] as the hostname". The refusal recommends the IP literals,
+            // because only they accept any port at the authorization endpoint (RFC 8252 sections 7.3 and 8.3)
+            case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttp
+                                              && !LoopbackHosts.IsNativeLoopbackHost(uri):
+                return ErrorFactory.InvalidRedirectUri(
+                    $"Native Clients MUST only register http: {Parameters.RedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1], which accept any port");
+
+            // OpenID Connect Dynamic Client Registration 1.0 section 2: "Native Clients MUST only register
+            // redirect_uris using custom URI schemes or loopback URLs using the http scheme", and "The
+            // Authorization Server MUST verify that all the registered redirect_uris conform". The claimed https
+            // redirect RFC 8252 section 7.2 offers a native app is "indistinguishable to the authorization server
+            // from a regular web-based client redirect URI", so the refusal names the registration serving it
+            case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
+                return ErrorFactory.InvalidRedirectUri(
+                    $"Native Clients MUST only register {Parameters.RedirectUris} using custom URI schemes or "
+                    + $"http loopback URLs; register a claimed https redirect URI as '{Parameters.ApplicationType}' "
+                    + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
+                    + $"{ClientAuthenticationMethods.None}");
+
+            // RFC 8252 section 8.4: "At a minimum, any private-use URI scheme that doesn't contain a period
+            // character (".") SHOULD be rejected". The javascript, data and vbscript schemes carry none, and a
+            // response posted to one of them would run in this server's origin
+            case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri, native: true):
+                return ErrorFactory.InvalidRedirectUri(
+                    $"Native Clients MUST only register {Parameters.RedirectUris} using a private-use URI "
+                    + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");
+
+            // Any other case of Web or Native application types is correct
+            case ApplicationTypes.Web:
+            case ApplicationTypes.Native:
+                break;
+
+            // A REFUSAL, not a throw. The [AllowedValues] attribute on the member is not
+            // enforced against a JSON body - the same gap the nullability annotation has above -
+            // so this arm is reachable by anybody who posts a registration, and a throw here
+            // leaves the request as a server fault rather than as an answer the caller can act
+            // on. It became reachable for a whole class of clients when these checks stopped
+            // being gated on the grant types.
+            default:
+                return ErrorFactory.InvalidClientMetadata(
+                    $"'{Parameters.ApplicationType}' names no application type this server "
+                    + $"knows: it must be '{ApplicationTypes.Web}' or '{ApplicationTypes.Native}'");
+        }
+
+        return null;
     }
 }

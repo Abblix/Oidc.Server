@@ -31,15 +31,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
 /// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
 /// instances.</param>
-/// <param name="clientInfoProvider">Finds the client a token presented by another was issued to, whose profile it is
-/// held to as well.</param>
 public class AuthServiceJwtValidator(
 	ProfiledJwtValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
-	IOptions<OidcOptions> oidcOptions,
-	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator
+	IOptions<OidcOptions> oidcOptions) : IAuthServiceJwtValidator, IAuthServiceJwtReader
 {
 
 	/// <summary>
@@ -47,6 +44,8 @@ public class AuthServiceJwtValidator(
 	/// </summary>
 	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="client">The client presenting the token, or null where none is known.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
@@ -56,9 +55,26 @@ public class AuthServiceJwtValidator(
 	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,
+		IClientInfoProvider clients,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
+	{
+		var authentic = await ReadAuthenticAsync(tenant, client, clients, jwt, tokenTypes, options);
+		if (!authentic.TryGetSuccess(out var token))
+			return authentic;
+
+		return await ReadRecordsAsync(tenant, clients, token, options);
+	}
+
+	/// <inheritdoc/>
+	public async Task<Result<JsonWebToken, JwtValidationError>> ReadAuthenticAsync(
+		TenantDefinition tenant,
+		ClientInfo? client,
+		IClientInfoProvider clients,
+		string jwt,
+		TokenTypePolicy tokenTypes,
+		ValidationOptions options)
 	{
 		// The profile of the client presenting the token where it is known, else the tenant's, so a token this server
 		// signed or encrypted otherwise before that profile was in force is refused. Each JWE layer is recorded for
@@ -91,7 +107,7 @@ public class AuthServiceJwtValidator(
 		if (!result.TryGetSuccess(out var token))
 			return result;
 
-		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, token, keyManagementAlgorithms) is { } algorithm)
+		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, clients, token, keyManagementAlgorithms) is { } algorithm)
 		{
 			return new JwtValidationError(
 				JwtError.InvalidToken,
@@ -108,8 +124,16 @@ public class AuthServiceJwtValidator(
 			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
 
-		return await statusCheck.CheckAsync(tenant, token, options);
+		return token;
 	}
+
+	/// <inheritdoc/>
+	public Task<Result<JsonWebToken, JwtValidationError>> ReadRecordsAsync(
+		TenantDefinition tenant,
+		IClientInfoProvider clients,
+		JsonWebToken token,
+		ValidationOptions options)
+		=> statusCheck.CheckAsync(tenant, clients, token, options);
 
 	/// <summary>
 	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
@@ -121,19 +145,29 @@ public class AuthServiceJwtValidator(
 	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
 	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
 	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
-	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
-	/// token's azp or sole audience.
+	/// processing JWTs". The owner is the one <see cref="TokenOwnership.OwnerOf"/> names.
+	/// <para>
+	/// A registration access token is the exception: this server alone creates and reads it, and creates it under the
+	/// tenant's profile (<see cref="Endpoints.DynamicClientManagement.RegistrationAccessTokenService"/>), which is
+	/// what it is read under here as well. Holding it to the profile a host raised the managed client to would refuse
+	/// every token the client was issued for its own registration.
+	/// </para>
 	/// </remarks>
-	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
+	private static async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
 		ClientInfo? presenter,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
+		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RegistrationAccessToken) ||
+		    token.OwnerOf() is not { } ownerId ||
+		    ownerId == presenter?.ClientId)
+		{
 			return null;
+		}
 
-		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
+		if (!(await clients.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
 			return null;
 
 		return SecurityProfileRequirements.For(tenant, owner).AlgorithmOutside(token, keyManagementAlgorithms);
@@ -166,7 +200,8 @@ public class AuthServiceJwtValidator(
 	/// The issuer is the only acceptable audience. Registration and initial access tokens round-trip here naming it,
 	/// and an access token whose request named no resource carries the issuer for the same reason, since RFC 9068
 	/// Section 4 has a resource server reject a token whose audience does not name it. A reader whose token may be
-	/// addressed to somebody else, such as a refresh token whose audience holds its grant's resources, does not ask
+	/// addressed to somebody else, such as a refresh token issued by 3.0, whose audience holds its grant's resources
+	/// (<see cref="RefreshTokenResources"/>), does not ask
 	/// for this check (<see cref="ServiceTokenValidation.AnyAudience"/>).
 	/// <para>
 	/// A client identifier is deliberately not accepted. An audience names the party meant to consume the

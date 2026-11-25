@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
@@ -31,14 +32,12 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// document names, the credentials it must not carry, the authentication method the server picks and the grant and
 /// response types it keeps.
 /// </summary>
-/// <param name="clientAuthenticator">Names the client authentication methods this server supports.</param>
 /// <param name="grantTypeInformers">Name the grant types this server supports.</param>
 /// <param name="responseBuilders">Name the response types this server supports.</param>
 /// <param name="options">Holds the grant types the host allows a new client, read on each document.</param>
 /// <param name="fetchOptions">Holds the destinations the host opened for its own services, read on each document.
 /// </param>
 internal sealed class ClientIdMetadataDocumentReader(
-    IClientAuthenticator clientAuthenticator,
     IEnumerable<IGrantTypeInformer> grantTypeInformers,
     IEnumerable<IAuthorizationResponseBuilder> responseBuilders,
     IOptionsMonitor<OidcOptions> options,
@@ -76,13 +75,18 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// </summary>
     /// <param name="clientId">The client identifier URL the document was fetched from.</param>
     /// <param name="document">The document.</param>
-    public Result<ClientRegistrationRequest, MetadataDocumentFailure> Read(string clientId, JsonObject document)
+    /// <param name="supported">The client authentication methods the client may be held to: those the server offers
+    /// when the document itself is judged, those the tenant resolving the client admits when the client is.</param>
+    public Result<ClientRegistrationRequest, MetadataDocumentFailure> Read(
+        string clientId,
+        JsonObject document,
+        IReadOnlyCollection<string> supported)
     {
         var refusal = WhyIdentifierRefused(clientId, document) ?? WhyCredentialsRefused(document);
         if (refusal is not null)
             return MetadataDocumentFailure.Terminal(refusal);
 
-        return SelectAuthenticationMethod(document).Match(
+        return SelectAuthenticationMethod(document, supported).Match(
             method => Deserialize(document).Match(
                 metadata => Complete(clientId, document, metadata, method),
                 failure => failure),
@@ -125,12 +129,15 @@ internal sealed class ClientIdMetadataDocumentReader(
         // A ping or push notification is posted from the stored backchannel authentication request, where the client
         // is no longer at hand, so its fetch could not be held to the special-purpose registries section 10.7 asks
         // for. The backchannel grant goes with the mode, as any grant this server does not serve such a client, and
-        // the document is refused only when nothing is left of it
+        // the document is refused only when nothing is left of it. A client authenticating with none never holds the
+        // flow, so it loses the delivery mode and its endpoint too, whether it declares the grant or not, and is not
+        // refused for naming a mode of a flow it cannot have
         var notified = metadata.BackChannelTokenDeliveryMode is
             BackchannelTokenDeliveryModes.Ping or BackchannelTokenDeliveryModes.Push;
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes, authenticationMethod);
         if (notified)
-            grantTypes = Array.FindAll(grantTypes, grantType => grantType != GrantTypes.Ciba);
+            grantTypes = grantTypes.Where(grantType => grantType != GrantTypes.Ciba).ToArray();
+        var backChannelLost = BackChannelLost(notified, authenticationMethod);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes)
             .Where(responseType => IsServedBy(responseType, grantTypes))
             .ToArray();
@@ -155,13 +162,20 @@ internal sealed class ClientIdMetadataDocumentReader(
             PkceRequired = true,
             GrantTypes = grantTypes,
             ResponseTypes = responseTypes,
-            BackChannelTokenDeliveryMode = notified ? null : metadata.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = notified ? null : metadata.BackChannelClientNotificationEndpoint,
+            BackChannelTokenDeliveryMode = backChannelLost ? null : metadata.BackChannelTokenDeliveryMode,
+            BackChannelClientNotificationEndpoint = backChannelLost ? null : metadata.BackChannelClientNotificationEndpoint,
             ApplicationType = document.ContainsKey(Parameters.ApplicationType)
                 ? metadata.ApplicationType
                 : ApplicationTypeOf(metadata.RedirectUris),
         };
     }
+
+    /// <summary>
+    /// Whether the client the document describes goes without the backchannel delivery mode it names: its
+    /// notifications are not served, or it authenticates in a way that never holds the backchannel grant.
+    /// </summary>
+    private static bool BackChannelLost(bool notified, string authenticationMethod)
+        => notified || ConfidentialGrantTypes.Refuses(authenticationMethod, GrantTypes.Ciba);
 
     /// <summary>
     /// Why the document carries credentials a public document must not, section 4.1.
@@ -223,17 +237,17 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// <summary>
     /// The client authentication method the client is held to, section 5.
     /// </summary>
-    private Result<string, MetadataDocumentFailure> SelectAuthenticationMethod(JsonObject document)
-        => DeclaredAuthenticationMethods(document).Match(Select, failure => failure);
+    private static Result<string, MetadataDocumentFailure> SelectAuthenticationMethod(
+        JsonObject document,
+        IReadOnlyCollection<string> supported)
+        => DeclaredAuthenticationMethods(document).Match(declared => Select(declared, supported), failure => failure);
 
-    private Result<string, MetadataDocumentFailure> Select(string[] declared)
+    private static Result<string, MetadataDocumentFailure> Select(string[] declared, IReadOnlyCollection<string> supported)
     {
         // Section 4.1: these "MUST NOT include client_secret_post, client_secret_basic, client_secret_jwt, or any other
         // method based around a shared symmetric secret"
         if (declared.FirstOrDefault(method => SharedSecretMethods.Contains(method, StringComparer.Ordinal)) is { } secret)
             return MetadataDocumentFailure.Terminal($"it declares {secret}, a method built on a shared secret");
-
-        var supported = clientAuthenticator.ClientAuthenticationMethodsSupported.ToHashSet(StringComparer.Ordinal);
 
         // Section 5 has the server "select one of the values ... that it supports", and section 5.1 shows the choice:
         // a client declaring ["none", "private_key_jwt"] at a server supporting private_key_jwt "should use the
@@ -252,17 +266,6 @@ internal sealed class ClientIdMetadataDocumentReader(
     }
 
     /// <summary>
-    /// The grant types an end user takes part in, which a document client gets unless the host names others.
-    /// </summary>
-    private static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
-
-    /// <summary>
-    /// The grant types that issue tokens on the client's word alone, which a client proving nothing never gets.
-    /// </summary>
-    private static readonly string[] ConfidentialGrantTypes =
-        [GrantTypes.ClientCredentials, GrantTypes.Password, GrantTypes.JwtBearer];
-
-    /// <summary>
     /// The grant types of <paramref name="declared"/> this server supports and the host allows a document client.
     /// </summary>
     /// <remarks>
@@ -270,7 +273,8 @@ internal sealed class ClientIdMetadataDocumentReader(
     /// a document is filtered: section 6 has the server keep "the intersection of what the Client ID Metadata Document
     /// declares and what the Authorization Servers supports", and what the host allows is what it supports for such a
     /// client, so one document can serve servers allowing different grant types. A client authenticating with
-    /// <c>none</c> loses the grants RFC 6749 section 4.4 keeps for confidential clients, whatever the host allows.
+    /// <c>none</c> loses the grants <see cref="ConfidentialGrantTypes"/> keeps for a client that authenticates itself,
+    /// whatever the host allows.
     /// </remarks>
     private string[] SupportedGrantTypes(string[] declared, string authenticationMethod)
     {
@@ -279,13 +283,12 @@ internal sealed class ClientIdMetadataDocumentReader(
             .ToHashSet(StringComparer.Ordinal);
 
         var settings = options.CurrentValue;
-        supported.IntersectWith(settings.ClientIdMetadataDocuments.AllowedGrantTypes ?? UserGrantTypes);
+        supported.IntersectWith(settings.ClientIdMetadataDocuments.GrantTypesAllowed);
 
         if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
             supported.IntersectWith(allowed);
 
-        if (authenticationMethod == ClientAuthenticationMethods.None)
-            supported.ExceptWith(ConfidentialGrantTypes);
+        supported.ExceptWith(ConfidentialGrantTypes.RefusedTo(authenticationMethod, supported));
 
         return declared.Where(grantType => grantType is not null && supported.Contains(grantType))
             .Distinct(StringComparer.Ordinal)

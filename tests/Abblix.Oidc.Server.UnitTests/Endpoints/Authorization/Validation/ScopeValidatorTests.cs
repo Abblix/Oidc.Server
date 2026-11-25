@@ -117,6 +117,7 @@ public class ScopeValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             FlowType = flowType,
             ResponseMode = ResponseModes.Query,

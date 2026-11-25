@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -31,55 +32,115 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// each tenant, since the tenant's scopes, resources and security profile judge it.
 /// </remarks>
 /// <param name="inner">The client store.</param>
-/// <param name="logger">Records why an identifier was not resolved.</param>
+/// <param name="logger">Records a client resolved from its document, and why an identifier was not resolved.</param>
 /// <param name="documents">The documents fetched and held.</param>
 /// <param name="scopes">Opens the container a document is judged in, since the checks it passes are scoped services.
 /// </param>
 /// <param name="options">The host's settings, read on each lookup.</param>
+/// <param name="environment">Whether the host runs in Production, where no document is fetched from loopback.</param>
 internal sealed partial class ClientIdMetadataDocumentClients(
     IClientInfoProvider inner,
     ILogger<ClientIdMetadataDocumentClients> logger,
     HeldMetadataDocuments documents,
     IServiceScopeFactory scopes,
-    IOptionsMonitor<OidcOptions> options) : IClientInfoProvider
+    IOptionsMonitor<OidcOptions> options,
+    ProductionEnvironment environment) : IClientInfoProvider
 {
     /// <inheritdoc />
-    public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
+    public async Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
-        var stored = await inner.TryFindClientAsync(tenant, clientId);
-        if (stored is not null)
+        // A store the host registered may answer with a client held under another spelling of the URL, which section 3
+        // has compared "using simple string comparison": that client is not the one the URL names
+        var stored = await inner.FindClientAsync(tenant, clientId);
+        if (stored.TryGetSuccess(out var storedClient) && storedClient.IsNamedBy(clientId))
             return stored;
 
         var settings = options.CurrentValue;
-        var url = Fetched(tenant, clientId, settings);
+        var url = Fetched(tenant, clientId, settings, out var rule);
         if (url is null)
-            return null;
+            return NamesAUrl(clientId) ? ClientAbsence.Refused : ClientAbsence.Unknown;
 
-        var held = await documents.GetAsync(clientId, url);
-        if (held is null)
-            return null;
+        var held = await documents.GetAsync(clientId, url, rule);
+        if (!held.TryGetSuccess(out var document))
+            return held.GetFailure().MayPass ? ClientAbsence.TemporarilyUnavailable : ClientAbsence.Refused;
 
-        var generation = (tenant.Id, tenant.Generation);
-        if (held.Clients.TryGetValue(generation, out var client))
-            return client;
+        if (document.ClientAt(tenant) is { } heldClient)
+            return heldClient;
 
-        client = await JudgeAsync(tenant, clientId, held.Metadata, settings.NewClientOptions);
+        var read = await documents.ReadAtAsync(tenant, clientId, document);
+        if (!read.TryGetSuccess(out var metadata))
+        {
+            LogClientRefused(clientId, tenant.Id, read.GetFailure().Reason);
+            return ClientAbsence.Refused;
+        }
+
+        var client = await JudgeAsync(tenant, clientId, metadata, settings.NewClientOptions);
 
         // A refusal is not kept: section 6.2 has the server "MUST NOT cache documents which are invalid", and one is so
         // at this tenant
-        return client is null ? null : held.Clients.GetOrAdd(generation, client);
+        if (client is null)
+            return ClientAbsence.Refused;
+
+        return Keep(tenant, document, client);
     }
+
+    /// <summary>
+    /// Holds <paramref name="client"/>, the client <paramref name="document"/> describes at <paramref name="tenant"/>,
+    /// with the document for the tenant's generation, unless a lookup racing this one held its own first, and answers
+    /// with the client held.
+    /// </summary>
+    /// <remarks>
+    /// The lookup whose client is held records it, so a document is recorded once per tenant generation however many
+    /// requests read the client it holds; a document fetched again once its copy expires holds, and records, its
+    /// client anew. A scope or a list of resources left unset is recorded as absent, which leaves the client any of
+    /// them. Internal rather than private so a test can play the lookup that loses the race, which no request can be
+    /// made to lose on demand.
+    /// </remarks>
+    internal ClientInfo Keep(TenantDefinition tenant, HeldMetadataDocument document, ClientInfo client)
+    {
+        if (!document.TryHold(tenant, client, out var held))
+            return held;
+
+        LogClientResolved(
+            tenant.Id,
+            client.ClientId,
+            Sanitized.Values(client.EffectiveGrantTypes),
+            Sanitized.Values(client.AllowedScopes),
+            client.AllowedResources);
+
+        return client;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="clientId"/> is written as an <c>https</c> URL, which only a client identifier URL is: an
+    /// identifier that is not names no document, and its client is unknown like any other.
+    /// </summary>
+    private static bool NamesAUrl(string clientId)
+        => clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal);
 
     /// <summary>
     /// The URL to fetch <paramref name="clientId"/>'s document from, or null when it is not fetched.
     /// </summary>
-    private Uri? Fetched(TenantDefinition tenant, string clientId, OidcOptions settings)
+    private Uri? Fetched(TenantDefinition tenant, string clientId, OidcOptions settings, out OutboundAddressRule rule)
     {
-        var why = ClientIdentifierUrl.WhyNotFetched(clientId, out var url);
+        // Decided at each lookup, a held document's included, so a tenant whose issuer is not on loopback is never
+        // served a document another tenant's fetch reached loopback for
+        var addresses = settings.ClientIdMetadataDocuments.DocumentAddresses;
+        rule = SpecialPurposeFetches.DocumentRuleAt(tenant.Issuer, addresses, environment.IsCurrent);
+
+        // Said apart from every other refusal, so a host that set the exception reads why this tenant does not get it
+        if (Uri.TryCreate(clientId, UriKind.Absolute, out var named) &&
+            SpecialPurposeFetches.LoopbackWithheldAt(tenant.Issuer, addresses, environment.IsCurrent, named))
+        {
+            LogLoopbackWithheld(clientId, tenant.Id, tenant.Issuer);
+            return null;
+        }
+
+        var why = ClientIdentifierUrl.WhyNotFetched(clientId, rule, out var url);
         if (why is not null)
         {
             // An identifier that is no URL at all is an unknown client like any other, and says nothing worth a line
-            if (clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal))
+            if (NamesAUrl(clientId))
                 LogIdentifierNotFetched(clientId, why);
 
             return null;
@@ -141,8 +202,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         // The checks fetch what the document names, its sector identifier among them, on the document's behalf
         using var strict = SpecialPurposeFetches.Enter();
 
-        // A copy, since a check may complete the metadata it judges and the document is shared by every tenant
-        var judged = await validator.ValidateAsync(tenant, metadata with { });
+        var judged = await validator.ValidateAsync(tenant, metadata);
         if (!judged.TryGetSuccess(out var context))
         {
             LogClientRefused(clientId, tenant.Id, judged.GetFailure().ErrorDescription);
@@ -153,9 +213,10 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         // secret: section 4.1 leaves a document none
         var client = new ClientInfoBuilder(clientId, context.Request)
             .WithSectorIdentifier(context.SectorIdentifier)
+            .WithHostSettingsOf(newClientOptions)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
-            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultAllowedResources(newClientOptions.UnreviewedClientResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
@@ -164,6 +225,10 @@ internal sealed partial class ClientIdMetadataDocumentClients(
 
         // Every later fetch of the client's URIs is held to the registries as written (section 10.7)
         client.ResolvedFromMetadataDocument = true;
+
+        // Decided as the client is resolved and held with it: a list of prefixes is the host's own assessment of the URLs
+        // it serves, and without one any URL may name itself a client
+        client.Trust = OpenRegistration.AdmitsAnyDocument(options.CurrentValue) ? ClientTrust.Unreviewed : ClientTrust.Reviewed;
         return client;
     }
 }

@@ -30,8 +30,10 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// <param name="validator">Validates the resolved request against client metadata and protocol rules.</param>
 /// <param name="processor">Persists the authentication request and produces the
 /// <c>auth_req_id</c>/<c>expires_in</c>/<c>interval</c> response.</param>
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
 public class BackChannelAuthenticationHandler(
     IClientAuthenticator clientAuthenticator,
+    IClientInfoProvider clientInfoProvider,
     IBackChannelAuthenticationRequestFetcher fetcher,
     IBackChannelAuthenticationRequestValidator validator,
     IBackChannelAuthenticationRequestProcessor processor) : IBackChannelAuthenticationHandler
@@ -60,7 +62,8 @@ public class BackChannelAuthenticationHandler(
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -69,7 +72,7 @@ public class BackChannelAuthenticationHandler(
                 return moreThanOneMethod;
 
             // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed"
-            return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+            return BasicChallenge.InvalidClient(clientRequest, "The client is not authorized");
         }
 
         // Judged before the request object is read too, so a caller naming a client the flow is not open to, a public
@@ -100,7 +103,8 @@ public class BackChannelAuthenticationHandler(
         // authentication method registered for its client_id". A client registered with the method "none" authenticates
         // nobody, so the flow is not open to it. Section 13: unauthorized_client, "The Client is not authorized to use
         // this authentication flow"
-        if (!clientInfo.MayUseGrantType(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
+        if (!clientInfo.MayUseGrantType(GrantTypes.Ciba) ||
+            ConfidentialGrantTypes.Refuses(clientInfo.TokenEndpointAuthMethod, GrantTypes.Ciba))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");

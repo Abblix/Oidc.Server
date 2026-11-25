@@ -105,7 +105,9 @@ public class AuthorizationResponseFormatter(
 
         IResult result = response.ResponseMode switch
         {
-            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri).WithAntiFramingHeaders(),
+            ResponseModes.FormPost => new FormPostResult(parametersProvider, dto, redirectUri)
+                .WithAntiFramingHeaders()
+                .WithHeader(ReferrerPolicy.HeaderName, ReferrerPolicy.NoReferrer),
             ResponseModes.Query => new SeeOtherResult(redirectUri.AddToQuery(GetParametersFrom(dto))),
             ResponseModes.Fragment => new SeeOtherResult(redirectUri.AddToFragment(GetParametersFrom(dto))),
             _ => throw new InvalidOperationException($"Response mode '{response.ResponseMode}' is not supported"),
@@ -161,21 +163,8 @@ public class AuthorizationResponseFormatter(
     private async Task<IResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
         var stored = await authorizationRequestStorage.StoreAsync(tenantAccessor.CurrentTenant(), request, options.Value.AuthenticationRequestExpiresIn);
-        var resolved = ResolveContent(uri);
+        var resolved = httpContextAccessor.ResolveInteractionUri(uri);
         var target = resolved.AddToQuery([(options.Value.RequestUriParameterName, stored.RequestUri.OriginalString)]);
         return new SeeOtherResult(target);
-    }
-
-    /// <summary>
-    /// Resolves a relative interaction URI to an absolute one against the current request's application base URL,
-    /// honoring the <c>~/</c> application-root prefix (the Minimal API counterpart of the MVC <c>IUriResolver</c>).
-    /// </summary>
-    private Uri ResolveContent(Uri uri)
-    {
-        if (uri.IsAbsoluteUri)
-            return uri;
-
-        var request = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
-        return request.ResolveInteractionUri(uri.OriginalString);
     }
 }

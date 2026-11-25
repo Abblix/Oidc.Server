@@ -128,11 +128,22 @@ public record ClientRegistrationRequest
     public string[]? Contacts { get; init; }
 
     /// <summary>
-    /// A client-proposed <c>client_id</c>. Servers MAY ignore this and assign their own identifier;
-    /// when accepted, the value is echoed back in the registration response.
+    /// The <c>client_id</c> an RFC 7592 section 2.2 update carries, which must be the client's own. On a registration
+    /// it is a proposal, ignored unless the host accepts proposals
+    /// (<see cref="Common.Configuration.NewClientOptions.AcceptProposedClientId"/>), and the response names the
+    /// identifier the client was registered under.
     /// </summary>
     [JsonPropertyName(Parameters.ClientId)]
     public string? ClientId { get; init; }
+
+    /// <summary>
+    /// The <c>client_secret</c> an RFC 7592 section 2.2 update carries back, which "MUST match the currently issued
+    /// client secret for that client": an update carrying another is refused, and none ever replaces the secret
+    /// issued. A registration carrying one is not given it either, since the server issues every secret.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientSecret)]
+    [Credential]
+    public string? ClientSecret { get; init; }
 
     /// <summary>
     /// The <c>client_name</c> (RFC 7591 section 2): a human-readable display name for the client, shown to end-users
@@ -725,13 +736,12 @@ public record ClientRegistrationRequest
     /// through the family API rather than by registering the contract directly.
     /// </para>
     /// <para>
-    /// These are body members and nothing else. A claim carried in a trusted <c>software_statement</c>
-    /// never appears here, so a host reading one of these values is reading the client's own assertion
-    /// even when the software statement contradicts it - and RFC 7591 Section 2 gives the software
-    /// statement precedence: "If the same client metadata name is present in both locations and the
-    /// software statement is trusted by the authorization server, the value of a claim in the software
-    /// statement MUST take precedence". A host acting on a member that its software statements can also
-    /// carry has to resolve that itself.
+    /// A validation step running after the software statement check reads these with the members of a
+    /// trusted <c>software_statement</c> laid over the body's, as RFC 7591 Section 2 has it: "If the same
+    /// client metadata name is present in both locations and the software statement is trusted by the
+    /// authorization server, the value of a claim in the software statement MUST take precedence". The
+    /// claims a statement carries as a JWT (<c>iss</c>, <c>iat</c> and the like) are not client metadata
+    /// and never appear here.
     /// </para>
     /// <para>
     /// What arrives here is attacker-controlled, unlike the provider metadata a client keeps the same
@@ -776,12 +786,12 @@ public record ClientRegistrationRequest
         /// responsible for the client.</summary>
         public const string Contacts = "contacts";
 
-        /// <summary>The <c>client_id</c> registration parameter; a client-proposed identifier that the OP
-        /// may accept or ignore.</summary>
+        /// <summary>The <c>client_id</c> parameter an RFC 7592 update carries; on a registration, a proposal the
+        /// server ignores unless the host accepts proposals.</summary>
         public const string ClientId = "client_id";
 
         /// <summary>The <c>client_secret</c> a client update request carries when the server issued one
-        /// (RFC 7592 section 2.2); the update keeps the issued secret whatever this member says.</summary>
+        /// (RFC 7592 section 2.2), which must be the secret issued; the update keeps that secret.</summary>
         public const string ClientSecret = "client_secret";
 
         /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name

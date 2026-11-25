@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Tests.Shared;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -81,7 +82,7 @@ public class ClientIdMetadataDocumentTransportTests
         await using var provider = services.BuildServiceProvider();
         var tenant = new TenantDefinition { Id = "tenant", Issuer = new Uri("https://issuer.example.com/") };
 
-        Assert.Null(await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(tenant, clientId));
+        Assert.False((await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(tenant, clientId)).TryGetSuccess(out _));
         Assert.Equal(1, origin.RequestsTo(clientId));
     }
 
@@ -104,7 +105,7 @@ public class ClientIdMetadataDocumentTransportTests
         var documents = provider.GetRequiredService<HeldMetadataDocuments>();
 
         foreach (var url in new[] { first, first, second, second })
-            Assert.NotNull(await documents.GetAsync(url, new Uri(url)));
+            Assert.True((await documents.GetAsync(url, new Uri(url), OutboundAddressRule.NoSpecialPurpose)).TryGetSuccess(out _));
 
         Assert.Equal(1, origin.RequestsTo(first));
         Assert.Equal(2, origin.RequestsTo(second));
@@ -125,9 +126,9 @@ public class ClientIdMetadataDocumentTransportTests
         var documents = provider.GetRequiredService<HeldMetadataDocuments>();
 
         Assert.Null(provider.GetService<Microsoft.Extensions.Caching.Memory.IMemoryCache>());
-        var first = await documents.GetAsync(clientId, new Uri(clientId));
-        var second = await documents.GetAsync(clientId, new Uri(clientId));
-        Assert.Same(first, second);
+        var first = await documents.GetAsync(clientId, new Uri(clientId), OutboundAddressRule.NoSpecialPurpose);
+        var second = await documents.GetAsync(clientId, new Uri(clientId), OutboundAddressRule.NoSpecialPurpose);
+        Assert.Same(first.GetSuccess(), second.GetSuccess());
         Assert.Equal(1, origin.RequestsTo(clientId));
     }
 

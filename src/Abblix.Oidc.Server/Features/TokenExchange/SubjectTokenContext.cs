@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -65,6 +66,13 @@ public sealed record SubjectTokenContext(
     public string? OriginalClientId { get; init; }
 
     /// <summary>
+    /// The audience of the subject_token, which <see cref="ClientInformation.CrossClientSubjectTokenExchange.AddressedToClient"/>
+    /// matches against the presenting client's own locations to exchange a token issued to another client. <c>null</c>
+    /// when the resolver states none, which matches no location.
+    /// </summary>
+    public IReadOnlyCollection<string>? Audiences { get; init; }
+
+    /// <summary>
     /// The refresh token family the subject_token carries, so the exchanged token joins it and a revoked family
     /// refuses the exchanged token too (RFC 9700 section 4.14.2). The authority the exchange hands out comes from
     /// the subject_token, so it must not outlive the grant that token came from. <c>null</c> when the
@@ -77,6 +85,19 @@ public sealed record SubjectTokenContext(
     /// authority of the subject_token and never extends it. <c>null</c> when the subject_token states no expiry.
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// The thumbprint of the DPoP key the subject_token is bound to (its <c>cnf.jkt</c>), which the client the token was
+    /// issued to proves to exchange it. <c>null</c> when the subject_token is bound to no DPoP key.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
+
+    /// <summary>
+    /// The SHA-256 thumbprint of the client certificate the subject_token is bound to (its <c>cnf.x5t#S256</c>), which
+    /// the client the token was issued to presents to exchange it. <c>null</c> when the subject_token is bound to no
+    /// certificate.
+    /// </summary>
+    public string? CertificateSha256Thumbprint { get; init; }
 
     /// <summary>
     /// The session the subject_token belongs to. The exchanged token joins it, so revoking that session refuses every
@@ -102,4 +123,30 @@ public sealed record SubjectTokenContext(
     /// subject_token states none.
     /// </summary>
     public ICollection<string>? AuthenticationMethodReferences { get; init; }
+
+    /// <summary>
+    /// The <c>act</c> claim of a token exchanged from this subject_token, with <paramref name="actor"/> acting where an
+    /// actor_token was presented.
+    /// </summary>
+    /// <remarks>
+    /// Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's act object names
+    /// the actor's subject; any prior act chain inherited from the subject_token becomes the new actor's nested
+    /// act.act, preserving the full delegation path. Without an actor_token the subject_token's own chain is kept as it
+    /// is: a delegated token exchanged again still acts for somebody else, and only a subject_token carrying no act
+    /// yields a token without one.
+    /// </remarks>
+    /// <param name="actor">The resolved actor_token, or null where none was presented.</param>
+    public JsonObject? ActorChainWith(SubjectTokenContext? actor)
+    {
+        if (actor is null)
+            return (JsonObject?)Act?.DeepClone();
+
+        var actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
+        if (Act is not null)
+        {
+            actorClaim[IanaClaimTypes.Act] = Act.DeepClone();
+        }
+
+        return actorClaim;
+    }
 }

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Tests.Shared;
 
 namespace Abblix.Oidc.Server.Conformance.TestHost;
 
@@ -36,6 +37,12 @@ public static class ConformanceServer
 
         // The suite's sector identifier modules run only against a server advertising pairwise subjects
         PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) },
+
+        // The suite registers its clients dynamically, which needs the key their secrets are kept encrypted with
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
     };
 
     /// <summary>The server options the plans run under, serving <paramref name="tenant"/>.</summary>
@@ -56,6 +63,9 @@ public static class ConformanceServer
             ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
             AllowOfflineAccessWithUserAgentAccessToken = true,
         };
+
+        // The plans register implicit, hybrid, CIBA and machine clients without a token
+        EveryGrantTypeForNewClients.Apply(options);
 
         // The server's own tokens take one algorithm, and the FAPI clients' profiles admit only PS256 and ES256, which
         // the tenant's key, declaring no algorithm, produces

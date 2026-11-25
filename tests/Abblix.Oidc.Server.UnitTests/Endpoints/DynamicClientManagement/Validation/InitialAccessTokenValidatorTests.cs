@@ -47,7 +47,7 @@ public class InitialAccessTokenValidatorTests
 
         _validator = new InitialAccessTokenValidator(
             _jwtValidator.Object,
-            optionsMonitor.Object);
+            optionsMonitor.Object, Mock.Of<IClientInfoProvider>());
     }
 
     private static IReadOnlyList<string>? LinesOf(AuthenticationHeaderValue? authHeader = null)
@@ -73,7 +73,7 @@ public class InitialAccessTokenValidatorTests
     {
         var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidToken(jwtId: null));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
@@ -145,7 +145,7 @@ public class InitialAccessTokenValidatorTests
         var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
@@ -166,7 +166,7 @@ public class InitialAccessTokenValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, null, "jwt-token",
+                TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "jwt-token",
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
@@ -186,7 +186,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken(subject: subject);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
@@ -210,7 +210,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
@@ -230,8 +230,8 @@ public class InitialAccessTokenValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, opts) => capturedOptions = opts))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, ClientInfo?, IClientInfoProvider, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, _, opts) => capturedOptions = opts))
             .ReturnsAsync(token);
 
         await _validator.ValidateAsync(SingleIssuer.Tenant, lines);

@@ -66,8 +66,8 @@ public class ClientAssertionAudienceTests(TestFactory factory) : TestBase(factor
     [Theory]
     [InlineData(TestConstants.PushedAuthorizationRequestAudienceClientId, PushedAuthorizationRequestEndpoint, HttpStatusCode.Created)]
     [InlineData(TestConstants.PushedAuthorizationRequestAudienceClientId, Issuer, HttpStatusCode.Created)]
-    [InlineData(TestConstants.PushedAuthorizationRequestAudienceClientId, TokenEndpoint, HttpStatusCode.Unauthorized)]
-    [InlineData(TestConstants.ClientSecretJwtClientId, PushedAuthorizationRequestEndpoint, HttpStatusCode.Unauthorized)]
+    [InlineData(TestConstants.PushedAuthorizationRequestAudienceClientId, TokenEndpoint, HttpStatusCode.BadRequest)]
+    [InlineData(TestConstants.ClientSecretJwtClientId, PushedAuthorizationRequestEndpoint, HttpStatusCode.BadRequest)]
     [InlineData(TestConstants.ClientSecretJwtClientId, Issuer, HttpStatusCode.Created)]
     public async Task APushedRequestsAssertion_NamesItsEndpointOnlyWhereTheHostGrantedIt(
         string clientId, string audience, HttpStatusCode expected)
@@ -91,7 +91,7 @@ public class ClientAssertionAudienceTests(TestFactory factory) : TestBase(factor
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(expected == response.StatusCode, $"{response.StatusCode}: {body}");
-        if (expected == HttpStatusCode.Unauthorized)
+        if (expected == HttpStatusCode.BadRequest)
         {
             Assert.Equal(
                 ErrorCodes.InvalidClient,

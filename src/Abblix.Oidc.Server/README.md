@@ -8,12 +8,14 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 
 🚀 Features
 - Client ID Metadata Documents, experimental ([draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)), see [below](#client-id-metadata-documents)
-- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`
+- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`, and while registration needs neither an initial access token nor a software statement from a trusted issuer, only the authorization code and refresh token grants unless that setting names others
+- While registration needs neither of them, a registered client gets access tokens for no resource unless `NewClientOptions.AllowedResources` names some, and so does a client resolved from its metadata document
 
 ✏️ Improvements
 - Outbound requests to client-supplied addresses connect only to the addresses checked for them, and a forward proxy is named in `SecureHttpFetchOptions.OutboundProxy`
 - Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
 - The offline access of dynamically registered clients set by `NewClientOptions.OfflineAccess`
+- The access token lifetime, refresh token policy and single-resource access tokens of dynamically registered clients and clients from metadata documents, set by `NewClientOptions`
 - TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 
 🛠 Fixes
@@ -94,11 +96,14 @@ builder.Services
 ```
 
 - A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
-- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients.
+- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients. Unless `NewClientOptions.AllowedResources` names resources, the client gets access tokens for none.
 - Such a client gets only the authorization code and refresh token grants unless you name others in `ClientIdMetadataDocuments.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
 - A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
 - The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services. A host that sets `BlockPrivateNetworks` to false does not start with this feature on.
+- To try the feature with a client on your own machine, set `ClientIdMetadataDocuments.DocumentAddresses` to `ClientIdMetadataDocumentAddresses.AllowLoopback`. The server then fetches a document from `localhost` or a loopback address, but only for a tenant whose issuer is itself on `localhost` or a loopback address, as section 10.7 of the draft allows for development. Other private addresses are still refused, and so are the URLs inside the document. A tenant with a public issuer gets nothing from the setting, and a client naming a loopback address there is refused with a warning saying so. A host running in the Production environment, or sending outbound requests through `OutboundProxy`, does not start with it set.
+- When a document cannot be fetched for a reason that may pass, such as a timeout, an unreachable host or a 5xx answer, and no valid copy is held, the token and pushed authorization request endpoints answer `503 Service Unavailable` with no body. A document that is fetched and refused gets `invalid_client` there. This follows section 6.1 of draft-03 and is experimental: it may change with the final specification. The authorization endpoint answers both cases with `invalid_client` and does not redirect to the client.
 - A redirect URI must use `https`, `http` to a loopback address, or a private-use scheme such as `com.example.app`. Every other URI in the document must use `https`.
+- Without `AllowedClientIdPrefixes`, an authorization error for such a client is answered by the server with status 400 rather than sent to the client's redirect URI (RFC 9700 section 4.11.2), and so is one for a client registered dynamically while `RequireInitialAccessToken` is false. A successful authorization still reaches the client. To decide which clients' redirect URIs you trust, register your own `IRedirectUriTrustPolicy`.
 
 Nobody reviewed these clients, so the consent page is the end user's only check on them. Show the host name of the `client_id` next to the client's name. If you show its logo, fetch the image and serve it yourself rather than linking to `logo_uri` (section 10.9 of the draft). A host that grants every client everything it asks for (`AddConsentGrantedForEveryClient`) and sets no `AllowedClientIdPrefixes` does not start, because any URL could then get the user's tokens without the user being asked. Set the prefixes, or register a consent provider that asks the user. A consent your provider remembers must be keyed by the `client_id` URL and the resource together (section 10.12 of the draft), so a consent given to one client is never reused for another.
 

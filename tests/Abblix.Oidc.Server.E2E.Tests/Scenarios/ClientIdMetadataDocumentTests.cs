@@ -26,6 +26,7 @@ using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -36,7 +37,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// A client identifying itself by the URL of its own metadata document (draft-ietf-oauth-client-id-metadata-document),
 /// on a host that turned the feature on, as it meets the discovery, authorization, token and registration endpoints.
 /// </summary>
-public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(factory)
+public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(factory)
 {
     private const string ClientId = "https://client.example.com/oauth/metadata.json";
 
@@ -116,6 +117,41 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// A client resolved from its document is unreviewed while any URL may name itself a client, so its authorization
+    /// error is answered by the server; under a list of prefixes, the host's own assessment of the URLs it serves, it is
+    /// reviewed and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
+    /// own policy reads only it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AClientFromItsDocument_IsReviewedOnlyUnderAPrefixList(bool listed)
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost(
+            listed ? options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://client.example.com/"] : null,
+            services => services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>()));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters[AuthorizationRequest.Parameters.CodeChallengeMethod] = "S384";
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters), TestContext.Current.CancellationToken);
+
+        var location = response.Headers.Location?.OriginalString;
+        if (listed)
+        {
+            Assert.StartsWith(TestConstants.RedirectUri, location);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Null(location);
+        }
+    }
+
+    /// <summary>
     /// Section 4.2: the server "MUST ensure that the redirect URL in an authorization request is an exact match ... of
     /// a registered redirect URL", and the document is what registers them.
     /// </summary>
@@ -161,8 +197,7 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
-        // A refusal is not held (section 6.2: the server "MUST NOT cache error responses"), so each lookup of the
-        // client within the request asks again; one refused before any fetch reaches nothing
+        // One refused before any fetch reaches nothing
         Assert.Equal(fetched, _origin.RequestsTo(ClientId) > 0);
     }
 
@@ -301,7 +336,9 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
@@ -318,7 +355,9 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         using var response = await FormPostHelpers.PostFormAsync(
             client, discovery.TokenEndpoint, CodeExchange("code", GeneratePkcePair().Verifier));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
@@ -507,18 +546,48 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
-    /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
-    /// strings it generates do not start with https://", so a registrant cannot take a document's URL.
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at the endpoints of the flow, so a public
+    /// client declaring the backchannel grant in poll mode loses the grant and the mode with it, and still resolves:
+    /// the registration checks would refuse a client authenticating with none that kept the mode.
     /// </summary>
     [Fact]
-    public async Task ARegistrationNamingAClientIdentifierUrl_IsRefused()
+    public async Task APublicDocumentPollingForBackchannelTokens_ResolvesWithoutTheFlow()
     {
-        Serve(PublicClientDocument());
+        var document = PublicClientDocument();
+        document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.Ciba);
+        document[RegistrationMembers.BackChannelTokenDeliveryMode] = "poll";
+        Serve(document);
+
         await using var host = CreateHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(ClientId, challenge));
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, CodeExchange(code, verifier));
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// Section 9.1: a server issuing client identifiers of its own beside documents "SHOULD ensure that the client_id
+    /// strings it generates do not start with https://", so a registrant cannot take a document's URL, in whatever
+    /// spelling of it, where the host lets registrants propose their client_id.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientId)]
+    [InlineData("HTTPS://client.example.com/oauth/metadata.json")]
+    [InlineData("Https://client.example.com/oauth/metadata.json")]
+    [InlineData(" https://client.example.com/oauth/metadata.json")]
+    [InlineData("https://client.example.com/oauth/metadata.json ")]
+    public async Task ARegistrationNamingAClientIdentifierUrl_IsRefused(string clientId)
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost(AcceptingProposedClientIds);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
         var metadata = PublicClientDocument();
-        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://attacker.example.com/cb");
+        metadata[RegistrationMembers.ClientId] = clientId;
+        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://other.example.com/cb");
 
         using var response = await client.PostAsync(
             discovery.RegistrationEndpoint,
@@ -528,6 +597,67 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, await ErrorResponseReader.ErrorCodeOf(response));
         Assert.Equal(0, _origin.RequestsTo(ClientId));
+
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+        Assert.NotEmpty(code);
+    }
+
+    /// <summary>
+    /// A host that assigns every client_id ignores a proposed URL, so the registrant is given an identifier of the
+    /// server's and the URL still names the client its document describes.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationNamingAClientIdentifierUrl_IsGivenAnIdentifierOfTheServers()
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = PublicClientDocument();
+        metadata[RegistrationMembers.RedirectUris] = new JsonArray("https://other.example.com/cb");
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        Assert.NotEqual(ClientId, registered[RegistrationMembers.ClientId]!.GetValue<string>());
+        Assert.Equal(0, _origin.RequestsTo(ClientId));
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+        Assert.NotEmpty(code);
+    }
+
+    private static void AcceptingProposedClientIds(OidcOptions options)
+        => options.NewClientOptions = options.NewClientOptions with { AcceptProposedClientId = true };
+
+    /// <summary>
+    /// Section 3 compares Client Identifier URLs "using simple string comparison", so a registration held under
+    /// another spelling of the URL, however it got into the store, is not the client the URL names: the client is
+    /// resolved from its document and redirected where the document says.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationUnderAnotherSpellingOfTheUrl_IsNotTheClientItNames()
+    {
+        Serve(PublicClientDocument());
+        await using var host = CreateHost();
+        var registered = new ClientInfo("HTTPS://client.example.com/oauth/metadata.json")
+        {
+            RedirectUris = [new Uri("https://other.example.com/cb")],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+        };
+        using (TestTenant.Enter(host.Services))
+        {
+            Assert.True(await host.Services.GetRequiredService<IClientInfoManager>()
+                .TryAddClientAsync(TestTenant.Of(host.Services), new RegisteredClient(registered, "jti")));
+        }
+
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge));
+
+        Assert.NotEmpty(code);
+        Assert.Equal(1, _origin.RequestsTo(ClientId));
     }
 
     private static Dictionary<string, string> CodeExchange(string code, string verifier) => new()

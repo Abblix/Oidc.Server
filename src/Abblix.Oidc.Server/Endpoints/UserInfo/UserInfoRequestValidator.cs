@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.UserInfoRequest;
@@ -28,7 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
 /// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
-/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form or query parameter, exactly one of them),
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form parameter, exactly one of them; one in the
+/// query is ignored),
 /// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
@@ -85,7 +87,7 @@ public class UserInfoRequestValidator(
 		// No client presents a bearer token, so the validator holds it to the profile of the client it names (FAPI 2.0
 		// section 5.4.1, "when creating or processing JWTs"), each JWE layer included.
 		var result = await jwtValidator.ValidateAsync(
-			tenant, client: null, jwtAccessToken,
+			tenant, client: null, clientInfoProvider, jwtAccessToken,
 			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
 			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
@@ -98,11 +100,9 @@ public class UserInfoRequestValidator(
 		// before the proof: the lookup only reads, while the proof check spends the proof's jti. A pairwise access
 		// token's 'sub' is also opened back to the real subject with the client's sector further down.
 		var clientId = token.Payload.ClientId;
-		var clientInfo = clientId is not null
-			? await clientInfoProvider.TryFindClientAsync(tenant, clientId)
-			: null;
-
-		if (clientInfo == null)
+		ClientInfo? clientInfo = null;
+		if (clientId is null ||
+		    !(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out clientInfo))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidToken,
@@ -145,19 +145,6 @@ public class UserInfoRequestValidator(
 		if (mtlsError is not null)
 			return mtlsError;
 
-		// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1: a resource server "shall not accept
-		// access tokens in the query parameters". Which profile holds the client is known only from the validated token, so the refusal comes
-		// here, still before the token opens the user's session. Extraction admits exactly one source, so a token in
-		// the query is the token that was validated.
-		if (userInfoRequest.AccessTokenInQuery != null &&
-		    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequireAccessTokenOutsideQuery)
-		{
-			return new OidcError(
-				ErrorCodes.InvalidRequest,
-				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header or the request body, " +
-				$"the '{Parameters.AccessToken}' query parameter is not accepted under the client's security profile");
-		}
-
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
 		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenant, token, clientInfo))
@@ -168,7 +155,9 @@ public class UserInfoRequestValidator(
 	/// Admits the grant the token opened to the UserInfo Endpoint, or says why its authorization falls short.
 	/// </summary>
 	/// <remarks>
-	/// OpenID Connect Core 1.0 section 5.3: the endpoint is called "using an Access Token obtained through OpenID
+	/// OpenID Connect Core 1.0 section 5.3: the endpoint "returns Claims about the authenticated End-User", so a token
+	/// issued to the client itself, which names no end user, is refused as invalid_token before the openid scope is
+	/// judged. The endpoint is called "using an Access Token obtained through OpenID
 	/// Connect Authentication", which carries the openid scope. FAPI 2.0 Security Profile section 5.3.4 has the
 	/// resource server verify the authorization "is sufficient for the requested resource access and otherwise return
 	/// errors as in Section 3.1" of RFC 6750, which names that insufficient_scope.
@@ -178,6 +167,13 @@ public class UserInfoRequestValidator(
 		AuthorizedGrant grant,
 		ClientInfo clientInfo)
 	{
+		if (ClientCredentialsSession.IsClientItself(grant.AuthSession.IdentityProvider))
+		{
+			return new OidcError(
+				ErrorCodes.InvalidToken,
+				"The access token was issued to the client itself and names no end user");
+		}
+
 		if (!grant.Context.Scope.Contains(Scopes.OpenId, StringComparer.Ordinal))
 		{
 			// RFC 6750 section 3.1: insufficient_scope "MAY include the "scope" attribute with the scope necessary to
@@ -195,8 +191,8 @@ public class UserInfoRequestValidator(
 
 	/// <summary>
 	/// Extracts the access token from exactly one source per RFC 6750 section 2: the <c>Authorization</c> header (Bearer or
-	/// DPoP scheme), the <c>access_token</c> parameter in the body, or the same parameter in the query, never two of
-	/// them. Returns the typed
+	/// DPoP scheme) or the <c>access_token</c> parameter in the body; the two together are an invalid request, and a
+	/// token in the query is never read (OAuth 2.1 section 5.1). Returns the typed
 	/// <see cref="MissingAuthenticationError"/> when neither is present so the challenge builder omits error
 	/// attributes.
 	/// </summary>
@@ -210,30 +206,29 @@ public class UserInfoRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		// The query and the body are told apart only so a profile can refuse one of them
-		if (userInfoRequest is { AccessTokenInForm: not null, AccessTokenInQuery: not null })
-			return new OidcError(
-				ErrorCodes.InvalidRequest,
-				$"The '{Parameters.AccessToken}' parameter must be passed in the request body or the query, " +
-				"but not in both at the same time");
-
-		var parameter = userInfoRequest.AccessToken;
+		// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 5.1: "resource servers MUST ignore access tokens in a URI query
+		// parameter", so the query is not bound at all: a token there neither authenticates the request nor counts as a
+		// second method beside another. RFC 9700 section 4.3.2 forbids clients to send it there, and FAPI 2.0 Security
+		// Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 have a resource server "not accept access tokens in
+		// the query parameters"
+		var parameter = userInfoRequest.AccessTokenInForm;
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader == null)
 		{
-			if (parameter != null)
-				return parameter;
+			if (parameter is { } inForm)
+				return inForm;
 
 			// RFC 6750 section 3.1: a request with no authentication information at all gets a bare WWW-Authenticate
-			// challenge - the typed marker tells the challenge builder to omit the error attributes.
+			// challenge - the typed marker tells the challenge builder to omit the error attributes
 			return new MissingAuthenticationError(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
-				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
+				$"or '{Parameters.AccessToken}' parameter of the request body, but none of them specified");
 		}
 
-		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access
-		// token", an invalid_request like the body and the query together above. Decided before the scheme, since a
-		// request carrying a token does not lack authentication information whatever its header names
+		// RFC 6750 section 3.1: the header and the body parameter together are "more than one method for including an
+		// access token", an invalid_request.
+		// Decided before the scheme, since a request carrying a token does not lack authentication information
+		// whatever its header names
 		if (parameter != null)
 			return new OidcError(
 				ErrorCodes.InvalidRequest,

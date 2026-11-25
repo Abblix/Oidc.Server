@@ -52,10 +52,31 @@ public class UpdateClientRequestProcessorTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
             clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
-            newClients ?? new NewClientOptions());
+            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
 
         return (processor, clientInfoManager, tokenService, idGenerator);
+    }
+
+    /// <summary>
+    /// The trust a client was registered with is no registration metadata, so an update keeps it, whichever it is.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientTrust.Reviewed)]
+    [InlineData(ClientTrust.Unreviewed)]
+    public async Task AnUpdate_KeepsTheTrustTheClientWasRegisteredWith(ClientTrust trust)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var existing = new RegisteredClient(new ClientInfo("client-1") { Trust = trust }, "jti-current");
+        var request = new ValidUpdateClientRequest(new UpdateClientRequest(new ClientRequest(), model), existing, model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal(trust, saved!.Trust);
     }
 
     [Fact]
@@ -182,13 +203,21 @@ public class UpdateClientRequestProcessorTests
     /// <summary>
     /// What the host set on the client and no registration request can carry stays with the client through an
     /// update: RFC 7592 section 2.2 replaces the client metadata, and these are not metadata. Its own security profile
-    /// among them, so the updated client is held to the profile the host holds it to.
+    /// among them, so the updated client is held to the profile the host holds it to. The token lifetimes the host sets
+    /// for new clients went to the client when it registered, so ones changed since leave it as it is.
     /// </summary>
     [Fact]
     public async Task AnUpdate_KeepsWhatTheHostSetOnTheClient()
     {
         ClientInfo? saved = null;
-        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions
+            {
+                AccessTokenExpiresIn = TimeSpan.FromSeconds(31),
+                SingleResourceAccessTokens = false,
+                RefreshToken = new() { AbsoluteExpiresIn = TimeSpan.FromHours(5) },
+            });
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
         var hostSet = new ClientInfo("client-1")
         {
@@ -203,7 +232,7 @@ public class UpdateClientRequestProcessorTests
             ForceUserClaimsInIdentityToken = true,
             ForceAuthorizationDetailsInIdentityToken = true,
             ResourceLocations = [new Uri("https://payments.example.com/")],
-            AllowCrossClientSubjectTokenExchange = true,
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.AddressedToClient,
             AllowCrossClientIntrospection = true,
             ParseLoginHintTokenAsJwt = false,
             DefaultScope = [Scopes.Profile],
@@ -237,7 +266,7 @@ public class UpdateClientRequestProcessorTests
         Assert.Equal(
             hostSet.ForceAuthorizationDetailsInIdentityToken, saved.ForceAuthorizationDetailsInIdentityToken);
         Assert.Equal(hostSet.ResourceLocations, saved.ResourceLocations);
-        Assert.Equal(hostSet.AllowCrossClientSubjectTokenExchange, saved.AllowCrossClientSubjectTokenExchange);
+        Assert.Equal(hostSet.CrossClientSubjectTokenExchange, saved.CrossClientSubjectTokenExchange);
         Assert.Equal(hostSet.AllowCrossClientIntrospection, saved.AllowCrossClientIntrospection);
         Assert.Equal(hostSet.ParseLoginHintTokenAsJwt, saved.ParseLoginHintTokenAsJwt);
         Assert.Equal(hostSet.DefaultScope, saved.DefaultScope);

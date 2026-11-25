@@ -258,7 +258,9 @@ public sealed class CallerBudgetShapeTests
         using var first = await PostWrongSecretAsync(client, discovery.TokenEndpoint);
         using var second = await PostWrongSecretAsync(client, discovery.TokenEndpoint);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(HttpStatusCode.BadRequest, first.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
         Assert.NotNull(second.Headers.RetryAfter?.Delta);
         await AssertNoBodyAsync(second);

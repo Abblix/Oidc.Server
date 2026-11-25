@@ -30,11 +30,13 @@ public interface IPushedAuthorizationRequestValidator
     /// <param name="clientInfo">The client that authenticated the request, before its request object was read.</param>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.</param>
     /// <returns>A task that upon completion provides a validation result, indicating either success and validity
     /// of the request or the presence of errors.</returns>
     Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         TenantDefinition tenant,
         ClientInfo clientInfo,
         AuthorizationRequest authorizationRequest,
-        ClientRequest clientRequest);
+        ClientRequest clientRequest,
+        IClientInfoProvider clients);
 }

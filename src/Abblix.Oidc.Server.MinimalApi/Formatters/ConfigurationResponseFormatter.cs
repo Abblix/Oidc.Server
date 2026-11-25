@@ -103,6 +103,11 @@ public class ConfigurationResponseFormatter : IConfigurationResponseFormatter<IR
 
             TokenEndpointAuthMethodsSupported = response.TokenEndpointAuthMethodsSupported,
             TokenEndpointAuthSigningAlgValuesSupported = response.TokenEndpointAuthSigningAlgValuesSupported,
+            RevocationEndpointAuthMethodsSupported = response.RevocationEndpointAuthMethodsSupported,
+            RevocationEndpointAuthSigningAlgValuesSupported = response.RevocationEndpointAuthSigningAlgValuesSupported,
+            IntrospectionEndpointAuthMethodsSupported = response.IntrospectionEndpointAuthMethodsSupported,
+            IntrospectionEndpointAuthSigningAlgValuesSupported =
+                response.IntrospectionEndpointAuthSigningAlgValuesSupported,
             TlsClientCertificateBoundAccessTokens = response.TlsClientCertificateBoundAccessTokens,
 
             IdTokenSigningAlgValuesSupported = response.IdTokenSigningAlgValuesSupported,

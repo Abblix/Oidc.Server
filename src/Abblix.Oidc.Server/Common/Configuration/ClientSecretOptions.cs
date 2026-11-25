@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt.Signing;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -15,12 +17,12 @@ public record ClientSecretOptions
 {
     /// <summary>
     /// The length of the generated client secret, in characters.
-    /// The default is 32: a client authenticating with <c>client_secret_jwt</c> (OpenID Connect
-    /// Core section 9) uses the secret's UTF-8 bytes as the HMAC key, and RFC 7518 section 3.2 requires an HS256
-    /// key of at least 32 bytes. A host whose clients sign with HS384 or HS512 should raise this to
-    /// 48 or 64 respectively so the derived key meets that algorithm's floor.
+    /// The default is 64: a client authenticating with <c>client_secret_jwt</c> (OpenID Connect
+    /// Core section 9) uses the secret's UTF-8 bytes as the HMAC key, and RFC 7518 section 3.2 requires a key at least
+    /// as long as the hash, 32 bytes for HS256, 48 for HS384 and 64 for HS512, so a secret of the default length keys
+    /// all three. A shorter one keys only the algorithms its length allows, and discovery names only those.
     /// </summary>
-    public int Length { get; init; } = 32;
+    public int Length { get; init; } = 64;
 
     /// <summary>
     /// The expiration duration for the client secret.
@@ -28,4 +30,14 @@ public record ClientSecretOptions
     /// Default value is 30 days.
     /// </summary>
     public TimeSpan ExpiresAfter { get; init; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Whether a client_secret_jwt client given a secret of <see cref="Length"/> can sign with
+    /// <paramref name="algorithm"/>: every algorithm but an HS one, and an HS one only where that length keys it (RFC
+    /// 7518 section 3.2), as the client's assertion is verified with no other key. The one answer discovery publishes
+    /// and registration accepts.
+    /// </summary>
+    /// <param name="algorithm">The token endpoint authentication signing algorithm.</param>
+    internal bool Keys(string algorithm)
+        => !HmacAlgorithms.All.Contains(algorithm) || HmacAlgorithms.KeyedBy(Length).Contains(algorithm);
 }

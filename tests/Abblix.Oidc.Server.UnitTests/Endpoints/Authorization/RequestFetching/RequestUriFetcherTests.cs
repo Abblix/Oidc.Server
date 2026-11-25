@@ -36,12 +36,12 @@ public class RequestUriFetcherTests
     {
         var fetcher = new RequestUriFetcher(
             NullLogger<RequestUriFetcher>.Instance,
-            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object,
             new Mock<ISecureHttpFetcher>(MockBehavior.Strict).Object);
 
         var result = await fetcher.FetchAsync(
             SingleIssuer.Tenant,
-            new AuthorizationRequest { RequestUri = new Uri("https://client.example.com/request.jwt") });
+            new AuthorizationRequest { RequestUri = new Uri("https://client.example.com/request.jwt") },
+            new Mock<IClientInfoProvider>(MockBehavior.Strict).Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -59,17 +59,18 @@ public class RequestUriFetcherTests
         var requestUri = new Uri("https://client.example.com/request.jwt");
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
-            .Setup(provider => provider.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client"))
+            .Setup(provider => provider.FindClientAsync(It.IsAny<TenantDefinition>(), "client"))
             .ReturnsAsync(new ClientInfo("client") { RequestUris = [requestUri] });
         var http = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         http
             .Setup(fetcher => fetcher.FetchAsync<string>(requestUri, false))
             .ReturnsAsync("header.payload.signature" + ending);
-        var fetcher = new RequestUriFetcher(NullLogger<RequestUriFetcher>.Instance, clients.Object, http.Object);
+        var fetcher = new RequestUriFetcher(NullLogger<RequestUriFetcher>.Instance, http.Object);
 
         var result = await fetcher.FetchAsync(
             SingleIssuer.Tenant,
-            new AuthorizationRequest { ClientId = "client", RequestUri = requestUri });
+            new AuthorizationRequest { ClientId = "client", RequestUri = requestUri },
+            clients.Object);
 
         Assert.True(result.TryGetSuccess(out var request));
         Assert.Equal("header.payload.signature", request.Request);

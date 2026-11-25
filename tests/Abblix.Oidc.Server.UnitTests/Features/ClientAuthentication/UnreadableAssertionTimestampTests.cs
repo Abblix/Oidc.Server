@@ -57,13 +57,13 @@ public class UnreadableAssertionTimestampTests
     [InlineData(JwtClaimTypes.NotBefore)]
     public async Task AnAssertionWithATimestampOutsideTheRepresentableRange_IsRefused(string claim)
     {
-        var (authenticator, replayCache) = Build(payload => payload[claim] = 99999999999999);
+        var (authenticator, replayCache, clients) = Build(payload => payload[claim] = 99999999999999);
 
         var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, clients);
 
         Assert.False(result.TryGetSuccess(out _));
 
@@ -82,18 +82,18 @@ public class UnreadableAssertionTimestampTests
     [Fact]
     public async Task AnAssertionWithReadableTimestamps_Authenticates()
     {
-        var (authenticator, _) = Build(_ => { });
+        var (authenticator, _, clients) = Build(_ => { });
 
         var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
-        });
+        }, clients);
 
         Assert.True(result.TryGetSuccess(out _));
     }
 
-    private static (ClientSecretJwtAuthenticator, Mock<IReplayCache>) Build(Action<JsonObject> corrupt)
+    private static (ClientSecretJwtAuthenticator, Mock<IReplayCache>, IClientInfoProvider) Build(Action<JsonObject> corrupt)
     {
         var token = new JsonWebToken
         {
@@ -121,7 +121,7 @@ public class UnreadableAssertionTimestampTests
         };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         // Hands the token back without reading a single claim of it, which is what leaves the
         // timestamps to be met first by the authenticator.
@@ -144,12 +144,11 @@ public class UnreadableAssertionTimestampTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            new ProfiledJwtValidator(tokenValidator.Object),
-            clientInfoProvider.Object,
             new FakeTimeProvider(Now),
             replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(tokenValidator.Object), new FakeTimeProvider(Now)),
+            DefaultOidcOptions.Monitor());
 
-        return (authenticator, replayCache);
+        return (authenticator, replayCache, clientInfoProvider.Object);
     }
 }

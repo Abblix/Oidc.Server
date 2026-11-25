@@ -986,6 +986,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         var clients = new Mock<IClientInfoManager>();
         clients.Setup(manager => manager.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), removed)).ReturnsAsync(true);
         var result = await new RemoveClientRequestProcessor(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveClientRequestProcessor>.Instance,
                 clients.Object,
                 TimeProvider.System,
                 served.ResolvedBy)

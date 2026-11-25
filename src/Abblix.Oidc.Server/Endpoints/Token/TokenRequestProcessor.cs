@@ -74,12 +74,13 @@ public class TokenRequestProcessor(
 		// follows what was granted, while the access token may carry less, narrowed to the resources it names.
 		string[] grantedScope = [..grantedContext.Scope];
 
-		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
-		var issuesRefreshToken = mayIssueDerivedTokens && IssuesRefreshToken(grantedScope);
-
 		var presentedRefreshToken = request.AuthorizedGrant is RefreshTokenAuthorizedGrant { RefreshToken: var refreshToken }
 			? refreshToken
 			: null;
+
+		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
+		var issuesRefreshToken = mayIssueDerivedTokens &&
+		                         IssuesRefreshToken(tenant, clientInfo, grantedScope, presentedRefreshToken);
 
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
@@ -183,16 +184,27 @@ public class TokenRequestProcessor(
 
 	/// <summary>
 	/// Whether a grant that may produce derived tokens adds a refresh token: one left with <c>offline_access</c> in
-	/// its granted scope.
+	/// its granted scope, or one renewing a presented refresh token that renewing spends.
 	/// </summary>
 	/// <remarks>
 	/// The granted scope keeps <c>offline_access</c> only for a client allowed offline access that may receive a
 	/// refresh token (<see cref="OfflineAccessIgnoredUnlessAllowed"/>), so a client that may redeem one neither through
 	/// the refresh token grant nor through a token exchange is issued none, and RFC 6749 section 1.5 leaves issuing one
 	/// to the server.
+	/// <para>
+	/// A token that rotates (RFC 9700 sections 2.2.2 and 4.14.2) is renewed, and so spent, for any scope the request
+	/// names, a narrower one without <c>offline_access</c> included. The successor carries the scope of the presented
+	/// token, since RFC 6749 section 6 has a new refresh token's scope "identical to that of the refresh token included
+	/// by the client in the request".
+	/// </para>
 	/// </remarks>
-	private static bool IssuesRefreshToken(string[] grantedScope)
-		=> grantedScope.HasFlag(Scopes.OfflineAccess);
+	private bool IssuesRefreshToken(
+		TenantDefinition tenant,
+		ClientInfo clientInfo,
+		string[] grantedScope,
+		JsonWebToken? presentedRefreshToken)
+		=> grantedScope.HasFlag(Scopes.OfflineAccess) ||
+		   (presentedRefreshToken != null && refreshTokenService.Rotates(tenant, presentedRefreshToken, clientInfo));
 
 	/// <summary>
 	/// Whether the grant type may produce a refresh token or an ID token besides its access token.

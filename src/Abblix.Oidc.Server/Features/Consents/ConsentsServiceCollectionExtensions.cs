@@ -6,8 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Consents;
 
@@ -47,6 +51,49 @@ public static class ConsentsServiceCollectionExtensions
 		services.TryAddSingleton<IUserConsentsProvider, NullConsentService>();
 		return services;
 	}
+
+	/// <summary>
+	/// Arms the startup check that a host granting every client everything (<see cref="AddConsentGrantedForEveryClient"/>)
+	/// lets no client in that nobody reviewed: a metadata document from any URL, or a registration nobody authorized.
+	/// </summary>
+	internal static IServiceCollection AddConsentForUnreviewedClientsCheck(this IServiceCollection services)
+	{
+		// Armed by each way a client nobody reviewed gets in, once whichever comes first
+		if (services.Any(descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsentForUnreviewedClients>)))
+			return services;
+
+		services.AddOptions<ConsentForUnreviewedClients>()
+			.Configure<IOptions<OidcOptions>>((check, options) =>
+			{
+				var settings = options.Value;
+				var grantedToEveryClient = GrantsConsentToEveryClient(services);
+				check.GrantedToAnyUrl = grantedToEveryClient &&
+					settings.ClientIdMetadataDocuments.Enabled &&
+					OpenRegistration.AdmitsAnyDocument(settings);
+				check.GrantedToAnyRegistrant = grantedToEveryClient &&
+					settings.EnabledEndpoints.HasFlag(OidcEndpoints.RegisterClient) &&
+					OpenRegistration.AdmitsAnyRegistrant(settings);
+			})
+			.Validate(check => !check.GrantedToAnyUrl, ConsentForUnreviewedClients.AnyUrlMessage)
+			.Validate(check => !check.GrantedToAnyRegistrant, ConsentForUnreviewedClients.AnyRegistrantMessage)
+			.ValidateOnStart();
+		return services;
+	}
+
+	/// <summary>
+	/// Whether the consent provider the container resolves grants every client everything it asks for.
+	/// </summary>
+	/// <remarks>
+	/// Read from the registration the container resolves, the last one, by the type it registers, so neither the order
+	/// of the host's calls nor building the provider at startup decides it. A host's own provider, or one it builds by
+	/// an untyped factory, is not that one.
+	/// </remarks>
+	private static bool GrantsConsentToEveryClient(IServiceCollection services)
+		=> services.LastOrDefault(descriptor =>
+				   descriptor is { IsKeyedService: false } &&
+				   descriptor.ServiceType == typeof(IUserConsentsProvider))?
+			   .ResolveImplementationType() is { } implementation &&
+		   typeof(NullConsentService).IsAssignableFrom(implementation);
 
 	/// <summary>
 	/// Arms the startup check that the host chose how consent is obtained: a host registering neither its own

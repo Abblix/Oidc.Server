@@ -15,6 +15,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -104,12 +105,13 @@ internal sealed class ProofValidator(
         // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
         // the documented probabilistic guarantee accepted under RFC 9449 section 11.1.
-        // The jti is reserved as its digest, which section 11.1 offers against memory exhaustion: "a server that is
-        // tracking jti values should reject DPoP proof JWTs with unnecessarily large jti values or store only a hash
-        // thereof". The digest is the one a PKCE code_challenge or a nonce is kept under against reuse, and it
-        // refuses no client, where a length limit would have to guess what every client generates.
+        // The jti is reserved as its digest under the proof's key, which section 11.1 offers against memory exhaustion:
+        // "a server that is tracking jti values should reject DPoP proof JWTs with unnecessarily large jti values or
+        // store only a hash thereof". It refuses no client, where a length limit would have to guess what every client
+        // generates.
+        var thumbprint = jwk.ComputeJwkThumbprintBase64Url();
         var fresh = await replayCache.TryReserveAsync(
-            Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(jwtId))),
+            SingleUseTokenKey.DPoPProof(thumbprint, jwtId),
             issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
             cancellationToken);
 
@@ -120,7 +122,7 @@ internal sealed class ProofValidator(
                 "DPoP proof jti has already been used within the acceptance window.");
         }
 
-        return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
+        return new Proof(jwt, jwk, thumbprint, jwtId, issuedAt);
     }
 
     /// <summary>

@@ -238,6 +238,7 @@ public class SignInOverSessionTests
 
         var context = new Abblix.Oidc.Server.Endpoints.Authorization.Validation.AuthorizationValidationContext(model)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(clientId),
             ResponseMode = ResponseModes.Query,
             Scope = [new ScopeDefinition(Scopes.OpenId)],
@@ -295,7 +296,7 @@ public class SignInOverSessionTests
 
         var clients = new Mock<IClientInfoProvider>();
         clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((TenantDefinition _, string clientId) => Client(clientId));
         services.Replace(ServiceDescriptor.Singleton(clients.Object));
 

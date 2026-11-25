@@ -26,20 +26,16 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Introspection;
 /// </summary>
 public class IntrospectionRequestProcessorTests
 {
-    private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter;
     private readonly IntrospectionRequestProcessor _processor;
 
     public IntrospectionRequestProcessorTests()
     {
-        // Neither is reached for a caller that is the token's own client, nor for one that is not pairwise,
+        // Not reached for a caller that is the token's own client, nor for one that is not pairwise,
         // which is every case in this class: none of them introduces a pairwise caller.
-        _clientInfoProvider = new Mock<IClientInfoProvider>();
         _subjectTypeConverter = new Mock<ISubjectTypeConverter>();
 
-        _processor = new IntrospectionRequestProcessor(
-            _clientInfoProvider.Object,
-            _subjectTypeConverter.Object);
+        _processor = new IntrospectionRequestProcessor(_subjectTypeConverter.Object);
     }
 
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
@@ -71,7 +67,7 @@ public class IntrospectionRequestProcessorTests
     {
         var clientId = callerClientId ?? token?.Payload.ClientId ?? "test_client";
         var caller = new ClientInfo(clientId) { ResourceLocations = callerResourceLocations };
-        return new ValidIntrospectionRequest(request, caller, token!);
+        return new ValidIntrospectionRequest(request, caller, token!, tokenClient: null);
     }
 
     /// <summary>

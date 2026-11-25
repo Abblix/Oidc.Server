@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -35,6 +36,7 @@ internal static class TenantSettingsChecksServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, RedirectUrisCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientIdsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientOfflineAccessCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, CrossClientSubjectTokenExchangeCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientAssertionAudiencesCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, RefreshTokenReusePolicyCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, PairwiseClientsCheck>(),
@@ -44,7 +46,8 @@ internal static class TenantSettingsChecksServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, ProfileSigningKeysCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ProfileServiceTokensCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClockSkewCeilingCheck>(),
-            ServiceDescriptor.Singleton<ITenantsCheck, BackChannelClientAuthenticationCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ConfidentialGrantTypesCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, TenantAuthenticationMethodsCheck>(),
         ]);
 
         return services;

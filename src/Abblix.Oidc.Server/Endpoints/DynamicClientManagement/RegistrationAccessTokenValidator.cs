@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
@@ -27,7 +28,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Section 1.2 describes.
 /// </summary>
 /// <param name="jwtValidator">JWT validator used for signature and lifetime checks.</param>
-public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
+/// <param name="clientInfoProvider">Finds the client the token names.</param>
+public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator, IClientInfoProvider clientInfoProvider)
     : IRegistrationAccessTokenValidator
 {
     /// <inheritdoc />
@@ -55,6 +57,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         var result = await jwtValidator.ValidateAsync(
             tenant,
             client: null,
+            clientInfoProvider,
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))

@@ -1,11 +1,1 @@
-[
-  {
-    "test-name": "fapi-ciba-id1-ensure-authorization-request-with-potentially-bad-binding-message",
-    "variant": "*",
-    "configuration-filename": "*/abblix-ciba-*.json",
-    "current-block": "",
-    "condition": "ExpectBindingMessageCorrectDisplay",
-    "expected-result": "failure",
-    "comment": "Fails whenever automated_ciba_approval_url is set, since nobody looks at the consumption device; the suite's own .gitlab-ci/expected-failures-ciba.json lists it as always failing in automated tests"
-  }
-]
+[]

@@ -63,9 +63,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
+        IClientInfoProvider clients,
         CancellationToken cancellationToken)
     {
-        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
+        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo, clients);
 
         return initial
             .Bind(ValidateRequiredParameters)
@@ -74,7 +75,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
             .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
-            .Bind(ValidateSubjectTokenOrigin)
+            .Bind(ctx => ValidateSubjectTokenOrigin(tenant, ctx))
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateActorTokenOrigin)
@@ -90,6 +91,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     private sealed record ValidationContext(
         TokenRequest Request,
         ClientInfo ClientInfo,
+        IClientInfoProvider Clients,
         SubjectTokenContext? Subject = null,
         SubjectTokenContext? Actor = null);
 
@@ -222,7 +224,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
         var result = await ResolveTokenAsync(
             tenant,
-            ctx.ClientInfo,
+            ctx,
             TokenRequest.Parameters.SubjectToken,
             ctx.Request.SubjectTokenType,
             subjectToken,
@@ -232,13 +234,16 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     /// <summary>
     /// The subject_token must have been issued to the requesting client
-    /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
-    /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
+    /// (confused-deputy guard; <see cref="ClientInfo.CrossClientSubjectTokenExchange"/> admits one addressed to
+    /// the client as a resource server, or any for broker scenarios). The typ header is matched against the presented URI earlier, by the
     /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(
+        TenantDefinition tenant,
+        ValidationContext ctx)
     {
-        if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
+        var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
+        if (TokenOrigin.CheckSubject(tenant, subject.OriginalClientId, subject.Audiences, ctx.ClientInfo) is { } error)
         {
             return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }
@@ -300,7 +305,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
         var result = await ResolveTokenAsync(
             tenant,
-            ctx.ClientInfo,
+            ctx,
             TokenRequest.Parameters.ActorToken,
             ctx.Request.ActorTokenType,
             actorToken,
@@ -309,16 +314,15 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     }
 
     /// <summary>
-    /// Applies the same origin guard to the actor_token (when present) that
-    /// <see cref="ValidateSubjectTokenOrigin"/> applies to the subject_token. No-op when
-    /// the request had no actor.
+    /// Holds the actor_token (when present) to the client it was issued to, as
+    /// <see cref="TokenOrigin.CheckActor"/> decides. No-op when the request had no actor.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateActorTokenOrigin(ValidationContext ctx)
     {
         if (ctx.Actor is not { } actor)
             return ctx;
 
-        return CheckTokenOrigin(actor, ctx.ClientInfo) is { } error
+        return TokenOrigin.CheckActor(actor.OriginalClientId, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
     }
@@ -376,41 +380,6 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     }
 
     /// <summary>
-    /// The origin guard applied identically to subject and actor tokens; the token's type is judged where it is
-    /// validated, against the type it was presented under.
-    /// </summary>
-    private static OidcError? CheckTokenOrigin(
-        SubjectTokenContext token,
-        ClientInfo clientInfo)
-    {
-        // The confused-deputy check needs an origin to compare against, and an absent one is the case
-        // it cannot decide: a token whose issuing client is undeterminable may or may not belong to the
-        // presenting client, and the guard exists precisely because the difference matters. Refusing is
-        // the only reading that keeps the check meaningful - skipping on absence would let a subject_token
-        // shaped to hide its origin pass the guard that a token naming another client fails.
-        // AllowCrossClientSubjectTokenExchange remains the single opt-out: a client trusted to present
-        // tokens it was not issued is equally trusted to present one whose issuer cannot be read.
-        if (!clientInfo.AllowCrossClientSubjectTokenExchange)
-        {
-            if (token.OriginalClientId is not { Length: > 0 } originalClient)
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The client the token was issued to could not be determined.");
-            }
-
-            if (!string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal))
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The token was issued to a different client than the one presenting it.");
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Resolves a subject_token or an actor_token through the resolver registered for its type.
     /// </summary>
     /// <remarks>
@@ -426,13 +395,13 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
         TenantDefinition tenant,
-        ClientInfo clientInfo,
+        ValidationContext ctx,
         string parameterName,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
     {
-        var result = await ResolveByTypeAsync(tenant, clientInfo, tokenType, tokenValue, cancellationToken);
+        var result = await ResolveByTypeAsync(tenant, ctx, tokenType, tokenValue, cancellationToken);
         return result.MapFailure(
             failure => new OidcError(WireErrorOf(failure.Error), $"{parameterName}: {failure.ErrorDescription}"));
     }
@@ -449,7 +418,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
         TenantDefinition tenant,
-        ClientInfo clientInfo,
+        ValidationContext ctx,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
@@ -462,7 +431,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
+        return await resolver.ResolveAsync(tenant, ctx.ClientInfo, ctx.Clients, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
@@ -498,34 +467,22 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
         }
 
-        // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
-        // act object names the actor's subject; any prior act chain inherited from the
-        // subject_token becomes the new actor's nested act.act, preserving the full delegation
-        // path. Without an actor_token the subject_token's own chain is kept as it is: a delegated
-        // token exchanged again still acts for somebody else, and only a subject_token carrying no
-        // act yields a token without one.
-        JsonObject? actorClaim;
-        if (actor is not null)
-        {
-            actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
-            if (subject.Act is not null)
-            {
-                actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
-            }
-        }
-        else
-        {
-            actorClaim = (JsonObject?)subject.Act?.DeepClone();
-        }
+        var actorClaim = subject.ActorChainWith(actor);
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
         // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than
         // silently dropping them
+        var (proofKeyThumbprint, certificateThumbprint) = SubjectTokenBinding.RequiredOf(subject, clientInfo);
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
             AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
+
+            // The keys the token endpoint then requires a proof of (RFC 9700 sections 2.2.1 and 2.2.2, the server's
+            // policy), as SubjectTokenBinding decides them
+            ProofKeyThumbprint = proofKeyThumbprint,
+            CertificateSha256Thumbprint = certificateThumbprint,
         };
 
         // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the

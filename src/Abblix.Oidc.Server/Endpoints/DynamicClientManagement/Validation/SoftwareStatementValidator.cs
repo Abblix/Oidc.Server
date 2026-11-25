@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -38,10 +39,74 @@ public partial class SoftwareStatementValidator(
     : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// The metadata a trusted statement carries replaces the request's (RFC 7591 section 3.1.1), so every later step
+    /// judges, and the registration stores, the statement's values. An RFC 7592 update then lays the statement the
+    /// client registered with over its body last: RFC 7592 section 3 lets the server "reject or replace any of the
+    /// client's requested metadata values submitted during the registration or update requests", and the values a
+    /// trusted statement fixed are not the client's to change by a body it asserts itself (RFC 7591 section 5,
+    /// "Unless used as a claim in a software statement, the authorization server MUST treat all client metadata as
+    /// self-asserted").
+    /// </remarks>
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+    {
+        if (await ValidatePresentedAsync(tenant, context) is { } error)
+            return error;
+
+        if (context is { Operation: DynamicClientOperation.Update, StoredClient.SoftwareStatement: { } registered })
+            context.Request = OverlaidOnRequest(context, registered);
+
+        return null;
+    }
+
+    /// <summary>
+    /// The request with the metadata of <paramref name="registered"/>, the statement the stored client was registered
+    /// with, laid over it. The server validated that statement before storing it, so its signature is not judged
+    /// again, and a stored statement that does not read is a store the server did not write.
+    /// </summary>
+    private static ClientRegistrationRequest OverlaidOnRequest(
+        ClientRegistrationValidationContext context,
+        string registered)
+    {
+        var parsed = JwsCompactParser.Parse(registered.Split('.'));
+        if (parsed.TryGetFailure(out var parseError))
+        {
+            throw new InvalidOperationException(
+                $"The stored {nameof(ClientInfo.SoftwareStatement)} does not read: {parseError.ErrorDescription}");
+        }
+
+        var overlaid = SoftwareStatementMetadata.OverlaidOn(context.Request, parsed.GetSuccess().Payload.Json);
+        if (overlaid.TryGetFailure(out var overlayError))
+        {
+            throw new InvalidOperationException(
+                $"The stored {nameof(ClientInfo.SoftwareStatement)} does not read as client metadata: {overlayError}");
+        }
+
+        return overlaid.GetSuccess();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="presented"/> is the statement the updated client was registered with. RFC 7592 section
+    /// 2.2 has an update carry back the fields the read returned, that statement among them: it is the stored one,
+    /// laid over the update after the presented one, not a new statement to judge, so its own validity ending does
+    /// not shut the client out of its registration.
+    /// </summary>
+    private static bool IsTheRegisteredStatement(ClientRegistrationValidationContext context, string? presented)
+        => context is { Operation: DynamicClientOperation.Update, StoredClient.SoftwareStatement: { } registered } &&
+           string.Equals(presented, registered, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Validates the statement the request presents and lays the metadata it carries over the request's.
+    /// </summary>
+    private async Task<OidcError?> ValidatePresentedAsync(
+        TenantDefinition tenant,
+        ClientRegistrationValidationContext context)
     {
         var softwareStatementOptions = options.CurrentValue.SoftwareStatement;
         var softwareStatement = context.Request.SoftwareStatement;
+
+        if (IsTheRegisteredStatement(context, softwareStatement))
+            return null;
 
         // RFC 7591 section 3.2.2 keeps invalid_software_statement for "The software statement presented is invalid"
         // and unapproved_software_statement for one "not approved for use by this authorization server": a statement
@@ -52,6 +117,9 @@ public partial class SoftwareStatementValidator(
                 return ErrorFactory.InvalidClientMetadata(
                     "A software_statement is required for client registration");
 
+            // An empty one presents no statement, so none is registered: what the request leaves carries only a
+            // statement this step validated
+            context.Request = context.Request with { SoftwareStatement = null };
             return null;
         }
 
@@ -109,7 +177,18 @@ public partial class SoftwareStatementValidator(
                 $"A token of type '{statement.Header.Type}' cannot be used as a software statement");
         }
 
-        return ValidateSoftwareId(softwareStatementOptions, statement);
+        if (ValidateSoftwareId(softwareStatementOptions, statement) is { } softwareIdError)
+            return softwareIdError;
+
+        var overlaid = SoftwareStatementMetadata.OverlaidOn(context.Request, statement.Payload.Json);
+        if (overlaid.TryGetFailure(out var description))
+        {
+            return ErrorFactory.InvalidSoftwareStatement(
+                $"The software_statement does not carry client metadata that reads: {description}");
+        }
+
+        context.Request = overlaid.GetSuccess();
+        return null;
     }
 
     /// <summary>

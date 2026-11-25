@@ -1,7 +1,7 @@
 # Abblix.SecurityEvents
 
-Security Event Tokens ([RFC 8417](https://www.rfc-editor.org/rfc/rfc8417.html)) and Subject
-Identifiers ([RFC 9493](https://www.rfc-editor.org/rfc/rfc9493.html)) for .NET.
+Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) and Subject
+Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)) for .NET.
 
 It also carries the receiving half of OpenID Connect Back-Channel Logout 1.0, which is the shortest
 reason to install it: an application that only wants to be told its user has signed out elsewhere
@@ -134,9 +134,9 @@ refused at wiring time rather than silently orphaning half the registrations.
 ## Delivery types
 
 The data shapes of both standard delivery methods, without their transports: the media type and
-error codes of push delivery ([RFC 8935](https://www.rfc-editor.org/rfc/rfc8935.html)), and the
+error codes of push delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935)), and the
 request and response models of poll delivery
-([RFC 8936](https://www.rfc-editor.org/rfc/rfc8936.html)). The HTTP side belongs to the consumer,
+([RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)). The HTTP side belongs to the consumer,
 or to a Shared Signals package above this one.
 
 ## Subject Identifiers

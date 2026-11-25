@@ -105,10 +105,17 @@ public record ClientIdMetadataDocumentOptions
     /// it tokens of its own. A document's grant types are narrowed to these, to those the server supports and to
     /// <see cref="NewClientOptions.AllowedGrantTypes"/>. Whatever this allows, a client authenticating with
     /// <c>none</c> is never given the client credentials, password or JWT bearer grant: RFC 6749 section 4.4 says
-    /// "The client credentials grant type MUST only be used by confidential clients". An empty list and a blank entry
-    /// are refused at startup.
+    /// "The client credentials grant type MUST only be used by confidential clients". A document's client given that
+    /// grant gets tokens whose <c>idp</c> is <c>client_credentials</c>, which marks them as the client's own (RFC 9700
+    /// section 4.15.1). An empty list and a blank entry are refused at startup.
     /// </remarks>
     public string[]? AllowedGrantTypes { get; set; }
+
+    /// <summary>
+    /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or those of an
+    /// interactive sign-in when it is unset.
+    /// </summary>
+    internal string[] GrantTypesAllowed => AllowedGrantTypes ?? NewClientOptions.InteractiveSignInGrantTypes;
 
     /// <summary>
     /// The longest a fetch of a document may take, its body included. Default: 5 seconds.
@@ -118,4 +125,15 @@ public record ClientIdMetadataDocumentOptions
     /// whose server answers slowly, so this is shorter than the server's other outbound fetches take.
     /// </remarks>
     public TimeSpan FetchTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Which addresses a document may be fetched from. Default: <see cref="ClientIdMetadataDocumentAddresses.PublicOnly"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ClientIdMetadataDocumentAddresses.AllowLoopback"/> lets a provider and a client running
+    /// on one development machine try the feature, by the exception section 10.7 of the draft makes. A value naming no
+    /// member is refused at startup.
+    /// </remarks>
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public ClientIdMetadataDocumentAddresses DocumentAddresses { get; set; } = ClientIdMetadataDocumentAddresses.PublicOnly;
 }

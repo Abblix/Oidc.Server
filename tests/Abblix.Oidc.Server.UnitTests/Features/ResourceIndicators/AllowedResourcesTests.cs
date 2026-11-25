@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -77,7 +78,7 @@ public class AllowedResourcesTests
                     RedirectUri = new Uri("https://client.example.com/callback"),
                     Scope = scope,
                     Resources = resources,
-                }) { ClientInfo = client }))?.Error,
+                }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client }))?.Error,
             "back-channel" => (await new BackChannelResourceValidator(manager).ValidateAsync(
                 tenant,
                 new BackChannelAuthenticationValidationContext(
@@ -160,6 +161,7 @@ public class AllowedResourcesTests
             },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -191,6 +193,7 @@ public class AllowedResourcesTests
             new TokenRequest { GrantType = GrantTypes.AuthorizationCode, Audiences = ["https://unrelated.example.com"] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -216,6 +219,7 @@ public class AllowedResourcesTests
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["orders-api"] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

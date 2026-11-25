@@ -154,6 +154,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [InlineData(OutboundAddressRule.Unrestricted)]
     [InlineData(OutboundAddressRule.NoPrivateOrReserved)]
     [InlineData(OutboundAddressRule.NoSpecialPurpose)]
+    [InlineData(OutboundAddressRule.NoSpecialPurposeButLoopback)]
     public void TheTransportItBuilds_FollowsNoRedirectAndCarriesNothingOfItsOwn(OutboundAddressRule rule)
     {
         using var handler = new Recording(RefusesToResolve);
@@ -465,6 +466,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [InlineData(OutboundAddressRule.Unrestricted)]
     [InlineData(OutboundAddressRule.NoPrivateOrReserved)]
     [InlineData(OutboundAddressRule.NoSpecialPurpose)]
+    [InlineData(OutboundAddressRule.NoSpecialPurposeButLoopback)]
     public async Task TheTlsOptionsItIsGiven_ValidateTheServersCertificate(OutboundAddressRule rule)
     {
         using var certificate = SelfSignedCertificate("tls.example.com");
@@ -713,6 +715,7 @@ public class AddressValidatingHttpMessageHandlerTests
     [Theory]
     [InlineData(OutboundAddressRule.NoPrivateOrReserved, typeof(OutboundAddressRefusedException))]
     [InlineData(OutboundAddressRule.NoSpecialPurpose, typeof(OutboundAddressRefusedException))]
+    [InlineData(OutboundAddressRule.NoSpecialPurposeButLoopback, typeof(OutboundAddressRefusedException))]
     [InlineData(OutboundAddressRule.Unrestricted, typeof(HttpRequestException))]
     public async Task ANameThatCannotBeResolved_IsRefused(OutboundAddressRule rule, Type thrown)
     {

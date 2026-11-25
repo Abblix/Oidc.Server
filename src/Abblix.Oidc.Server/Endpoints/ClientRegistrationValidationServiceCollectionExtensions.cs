@@ -29,10 +29,13 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
         // the checks of the request itself first, then those of the metadata it carries
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenContextValidator>(),
+            // Before every step that judges a proposed client_id, which then sees none unless the host accepts it
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProposedClientIdValidator>(),
             // Before the check that the client_id is free, which would fetch the document a URL names
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdentifierUrlRegistrationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
-            ..ClientRegistrationMetadataChecks.All,
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, UpdateClientSecretValidator>(),
+            ..ClientRegistrationMetadataChecks.Registration,
         ]);
         return services.Compose<IClientRegistrationContextValidator, ClientRegistrationContextValidatorComposite>();
     }

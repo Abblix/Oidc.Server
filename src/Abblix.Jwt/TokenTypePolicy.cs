@@ -44,13 +44,11 @@ public sealed record TokenTypePolicy
 	/// Accepts a token whose <c>typ</c> names one of <paramref name="types"/>, and refuses one without a type.
 	/// </summary>
 	/// <param name="types">The accepted values, at least one.</param>
-	public static TokenTypePolicy Exactly(params string[] types)
+	public static TokenTypePolicy Exactly(params string[] types) => types.Length switch
 	{
-		if (types.Length == 0)
-			throw new ArgumentException("At least one token type is required.", nameof(types));
-
-		return new TokenTypePolicy(TokenTypeRule.Exactly, types);
-	}
+		0 => throw new ArgumentException("At least one token type is required.", nameof(types)),
+		_ => new TokenTypePolicy(TokenTypeRule.Exactly, types),
+	};
 
 	/// <summary>
 	/// Accepts a token whose <c>typ</c> names one of <paramref name="types"/> or that carries no <c>typ</c>, for a

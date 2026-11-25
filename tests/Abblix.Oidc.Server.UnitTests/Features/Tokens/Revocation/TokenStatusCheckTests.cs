@@ -64,7 +64,8 @@ public class TokenStatusCheckTests
         _check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object));
+            new GrantRevocation(_registry.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
         _cutoffs
@@ -75,7 +76,7 @@ public class TokenStatusCheckTests
         // A public client is what every test but the pairwise one carries, and for it the subject in the
         // token is already the subject a host would revoke.
         _clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo(ClientId) { SubjectType = SubjectTypes.Public });
     }
 
@@ -283,7 +284,7 @@ public class TokenStatusCheckTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         var pseudonym = SubjectConverter.Convert(SingleIssuer.Tenant, Subject, pairwiseClient);
         Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
@@ -344,7 +345,7 @@ public class TokenStatusCheckTests
 
     private Task<Result<JsonWebToken, JwtValidationError>> CheckAsync(
         ValidationOptions options = ValidationOptions.Default)
-        => _check.CheckAsync(SingleIssuer.Tenant, Checked, options);
+        => _check.CheckAsync(SingleIssuer.Tenant, _clients.Object, Checked, options);
 
     private JsonWebToken Checked => _token ?? throw new InvalidOperationException("No token is being checked.");
 
@@ -357,7 +358,6 @@ public class TokenStatusCheckTests
         NullLogger<RevocationCutoffChecker>.Instance,
         _cutoffs.Object,
         Options.Create(new OidcOptions { ReplicaClockSkew = skew }),
-        _clients.Object,
         SubjectConverter);
 
     private static JsonWebToken RefreshToken(string? grantId) => new()
@@ -431,7 +431,7 @@ public class TokenStatusCheckTests
             SubjectType = SubjectTypes.Pairwise,
             SectorIdentifier = SectorIdentifier,
         };
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
         Checking(new JsonWebToken
         {
@@ -466,7 +466,7 @@ public class TokenStatusCheckTests
     [Fact]
     public async Task CheckAsync_TokenNamingAClientThatIsGone_IsRefused()
     {
-        _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync((ClientInfo?)null);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(ClientAbsence.Unknown);
 
         Checking(new JsonWebToken
         {
@@ -502,7 +502,8 @@ public class TokenStatusCheckTests
         var check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object));
+            new GrantRevocation(_registry.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         Checking(new JsonWebToken
         {
@@ -520,7 +521,7 @@ public class TokenStatusCheckTests
         // revoking instance looks like from here.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-30));
 
-        var result = await check.CheckAsync(SingleIssuer.Tenant, Checked, ValidationOptions.Default);
+        var result = await check.CheckAsync(SingleIssuer.Tenant, _clients.Object, Checked, ValidationOptions.Default);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);

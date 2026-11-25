@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -48,7 +49,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -74,7 +75,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = null! };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -100,7 +101,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -124,7 +125,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -146,8 +147,8 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var grant1));
@@ -173,7 +174,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -194,11 +195,13 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(GrantTypes.ClientCredentials, grant.AuthSession.IdentityProvider);
+        // The mark UserInfo and introspection read is the one this grant writes
+        Assert.True(ClientCredentialsSession.IsClientItself(grant.AuthSession.IdentityProvider));
     }
 
     /// <summary>
@@ -237,7 +240,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -259,8 +262,8 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = ["api.read"] };
 
         // Act
-        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo1, TestContext.Current.CancellationToken);
-        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo2, TestContext.Current.CancellationToken);
+        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo1, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo2, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var grant1));
@@ -294,7 +297,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -316,7 +319,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = ["api.read"] };
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));

@@ -89,41 +89,20 @@ partial class JwtAssertionAuthenticatorBase
     private partial void LogTimestampsOutsideTheClientsProfile(string ClientId, string Refusal);
 
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName,
-        Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries the audience {Audience}, which the assertion "
-                  + "audiences admitted to it, {Audiences}, do not include; the issuer identifier is "
-                  + "{IssuerIdentifier}")]
-    private partial void LogAudienceIsNotOneTheClientMayName(
-        string ClientId,
-        Sanitized Audience,
-        ClientAssertionAudiences Audiences,
-        string IssuerIdentifier);
-
-    [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TimestampUnreadable,
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} carries a timestamp that cannot be read: {WhyUnreadable}")]
     private partial void LogTimestampUnreadable(string ClientId, Sanitized WhyUnreadable);
 
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TokenEndpointAudienceAccepted,
-        Level = LogLevel.Debug,
-        Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
-                  + "the client's assertion audiences include it")]
-    private partial void LogTokenEndpointAudienceAccepted(string ClientId);
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.ClientIdentifiersMismatch,
+        Level = LogLevel.Warning,
+        Message = "The client assertion identifies the client {ClientId}, but the request names the client {Named}")]
+    private partial void LogClientIdentifiersMismatch(string ClientId, Sanitized Named);
 
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.BackChannelAuthenticationEndpointAudienceAccepted,
-        Level = LogLevel.Debug,
-        Message = "The client assertion for {ClientId} names the backchannel authentication endpoint URL as its "
-                  + "audience, accepted because the client's assertion audiences include it")]
-    private partial void LogBackChannelAuthenticationEndpointAudienceAccepted(string ClientId);
-
-    [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.PushedAuthorizationRequestEndpointAudienceAccepted,
-        Level = LogLevel.Debug,
-        Message = "The client assertion for {ClientId} names the pushed authorization request endpoint URL as its "
-                  + "audience, accepted because the client's assertion audiences include it")]
-    private partial void LogPushedAuthorizationRequestEndpointAudienceAccepted(string ClientId);
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.LifetimeTooLong,
+        Level = LogLevel.Warning,
+        Message = "The client assertion for {ClientId} is refused: {Reason}, beyond ClientAssertionMaxLifetime")]
+    private partial void LogLifetimeTooLong(string ClientId, string Reason);
 }

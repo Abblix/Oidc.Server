@@ -35,12 +35,9 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// </remarks>
 /// <param name="jwtValidator">Validates own-issued JWTs (signature against AS keys, claims).</param>
 /// <param name="subjectTypeConverter">Opens a pairwise subject_token's <c>sub</c> back to the real subject.</param>
-/// <param name="clientInfoProvider">Resolves the client the subject_token was issued to, whose sector opens its
-/// pairwise subject.</param>
 public sealed class JwtSubjectTokenResolver(
     IAuthServiceJwtValidator jwtValidator,
-    ISubjectTypeConverter subjectTypeConverter,
-    IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
+    ISubjectTypeConverter subjectTypeConverter) : ISubjectTokenResolver
 {
     /// <summary>
     /// The token types a subject token presented under <paramref name="tokenType"/> may carry, so a token issued
@@ -62,6 +59,7 @@ public sealed class JwtSubjectTokenResolver(
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         [Credential] string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken)
@@ -79,6 +77,7 @@ public sealed class JwtSubjectTokenResolver(
         var validation = await jwtValidator.ValidateAsync(
             tenant,
             client,
+            clients,
             subjectToken,
             accepted,
             ServiceTokenValidation.AnyAudience);
@@ -112,11 +111,11 @@ public sealed class JwtSubjectTokenResolver(
             return new OidcError(ErrorCodes.InvalidRequest, "The token is missing the required 'sub' claim.");
         }
 
-        // The client the subject_token names (client_id, else azp, else the sole audience): used both to open
-        // pairwise identifiers back to the real parties and as the confused-deputy origin below.
-        var originalClientId = jwt.Payload.NamedClientId();
+        // The client the subject_token belongs to: used both to open pairwise identifiers back to the real parties and
+        // as the confused-deputy origin below.
+        var originalClientId = jwt.OwnerOf();
 
-        var opened = await OpenSubjectsAsync(tenant, jwt.Payload, originalClientId);
+        var opened = await OpenSubjectsAsync(tenant, clients, jwt.Payload, originalClientId);
         if (opened.TryGetFailure(out var openError))
         {
             return openError;
@@ -150,6 +149,13 @@ public sealed class JwtSubjectTokenResolver(
             // stays null, i.e. its origin is genuinely undeterminable.
             OriginalClientId = originalClientId,
 
+            // Whom an access token is addressed to, which a client exchanging tokens issued for it as a resource
+            // server is matched by. An ID token names a client there and an untyped JWT says nothing of the kind, so
+            // neither is addressed to a resource server
+            Audiences = JwtTypeName.Matches(jwt.Header.Type, JsonWebTokenTypes.AccessToken)
+                ? [.. jwt.Payload.Audiences]
+                : null,
+
             // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
             GrantId = jwt.Payload.GrantId,
             ExpiresAt = jwt.Payload.ExpiresAt,
@@ -158,7 +164,7 @@ public sealed class JwtSubjectTokenResolver(
             IdentityProvider = jwt.Payload.IdentityProvider,
             AuthContextClassRef = jwt.Payload.AuthContextClassRef,
             AuthenticationMethodReferences = jwt.Payload.AuthenticationMethodReferences?.ToList(),
-        };
+        }.BoundAs(jwt.Payload);
     }
 
     /// <summary>
@@ -178,6 +184,7 @@ public sealed class JwtSubjectTokenResolver(
     /// </remarks>
     private async Task<Result<TokenSubjects, OidcError>> OpenSubjectsAsync(
         TenantDefinition tenant,
+        IClientInfoProvider clients,
         JsonWebTokenPayload payload,
         string? originalClientId)
     {
@@ -185,7 +192,7 @@ public sealed class JwtSubjectTokenResolver(
         if (originalClientId is null)
             return seen;
 
-        if (await clientInfoProvider.TryFindClientAsync(tenant, originalClientId) is not { } originalClient)
+        if (!(await clients.FindClientAsync(tenant, originalClientId)).TryGetSuccess(out var originalClient))
             return new OidcError(ErrorCodes.InvalidRequest, "The token's client is not known.");
 
         if (subjectTypeConverter.Open(tenant, seen, originalClient) is not { } real)

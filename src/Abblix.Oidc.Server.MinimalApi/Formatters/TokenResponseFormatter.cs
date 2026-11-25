@@ -50,8 +50,8 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
 
     private IResult FormatError(OidcError error)
     {
-        // The shared policy owns the status codes: invalid_client -> 401 with a Basic challenge (RFC 6749 section 5.2),
-        // everything else -> 400 with the JSON envelope.
+        // The shared policy owns the status codes: invalid_client -> 401 with a Basic challenge where one is owed
+        // (OAuth 2.1 section 3.2.4), everything else -> 400 with the JSON envelope.
         var result = error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().IssuerAsWritten());
 
         // RFC 9449 section 8: a use_dpop_nonce error MUST carry the fresh nonce on a DPoP-Nonce header. section 8.2 asks such

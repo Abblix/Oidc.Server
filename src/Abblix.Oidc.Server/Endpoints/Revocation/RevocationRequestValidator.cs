@@ -38,8 +38,8 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// revocation request is authenticated and authorized to revoke tokens.
 /// </param>
 /// <param name="jwtValidator">
-/// The JWT validator to be used for validating the token included in the revocation request. Ensures that
-/// the token is valid and that it belongs to the client requesting revocation.
+/// Reads the token the request names: first that it is authentic, then, once it is found to belong to the client
+/// asking, what is recorded about it.
 /// </param>
 /// <param name="rateLimiter">
 /// The budget of revocation requests one caller gets: a confidential client's own, and for a public client
@@ -50,10 +50,12 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation;
 /// </param>
 /// <param name="unnamedSource">Says, once, that a public client's request arrived from no address and so
 /// went uncharged.</param>
+/// <param name="clientInfoProvider">The client store, asked through a lookup made for each request.</param>
 public partial class RevocationRequestValidator(
 	ILogger<RevocationRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator,
+	IClientInfoProvider clientInfoProvider,
+	IAuthServiceJwtReader jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Revocation)]
 	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
 	IRequestInfoProvider requestInfoProvider,
@@ -100,7 +102,13 @@ public partial class RevocationRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		// One lookup of the clients for the whole request: the client authentication and the reading of the token find
+		// each client once. Only a failed authentication is answered as meeting a client that cannot be had for now: a
+		// token of the caller finds the answer the authentication received, and reading a token of another client may
+		// look that client up too, to hold the token to its profile, but such a token is answered alike whatever its
+		// client's document says
+		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
 			// RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -108,16 +116,17 @@ public partial class RevocationRequestValidator(
 			if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
 				return moreThanOneMethod;
 
-			return new OidcError(
-				ErrorCodes.InvalidClient,
-				"The client is not authorized");
+			// RFC 7009 section 2.2.1: "If the server responds with HTTP status code 503, the client must assume the
+			// token still exists and may retry after a reasonable delay", which is what a client is told whose
+			// document could not be had for now (draft-ietf-oauth-client-id-metadata-document-03 section 6.1)
+			return clients.RefusalOf(BasicChallenge.InvalidClient(clientRequest, "The client is not authorized"));
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read: reading it
 		// verifies a signature, which is what a looping client makes this server repeat. The budget is this
 		// endpoint's own, so a client flooding introspection can still revoke a token it believes is stolen.
-		if (BudgetFor(clientInfo) is not { } budgetKey)
-			return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
+		if (RevocationBudget.KeyFor(clientInfo, requestInfoProvider, unnamedSource) is not { } budgetKey)
+			return await ReadTokenAsync(tenant, clients, revocationRequest, clientInfo);
 
 		// The lease is held until this method returns, so a host that substitutes a limiter counting requests
 		// in flight bounds the token validation below rather than nothing at all.
@@ -136,46 +145,10 @@ public partial class RevocationRequestValidator(
 				LogCallerRateLimited(clientInfo.ClientId);
 			}
 
-			return new TooManyRequestsError(
-				"Too many revocation requests from this client",
-				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
-				CallerRateLimiters.Revocation);
+			return RevocationBudget.Spent(lease);
 		}
 
-		return await ReadTokenAsync(tenant, revocationRequest, clientInfo);
-	}
-
-	/// <summary>
-	/// Names the budget this caller's request is charged to, or null when it is charged to none.
-	/// </summary>
-	/// <remarks>
-	/// A request in a public client's name is charged to that name paired with the address it came from, so
-	/// that one sender's flood cannot reach the client's other users. With no address, nothing is charged:
-	/// the only key left is the name alone, which a stranger could spend to silence that client's logout.
-	/// <para>
-	/// The last arm cannot be entered while <see cref="ClientInfo.ClientType"/> derives its answer from the
-	/// authentication method and has only these two to give.
-	/// </para>
-	/// </remarks>
-	private (string ClientId, string? Source)? BudgetFor(ClientInfo clientInfo)
-		=> clientInfo.ClientType switch
-		{
-			ClientType.Confidential => (clientInfo.ClientId, (string?)null),
-			ClientType.Public => requestInfoProvider.SourceName() is { } source
-				? (clientInfo.ClientId, (string?)source)
-				: ChargedToNone(),
-			_ => throw new InvalidOperationException(
-				$"Unknown {nameof(ClientType)} {clientInfo.ClientType} for client {clientInfo.ClientId}"),
-		};
-
-	/// <summary>
-	/// A public client's request from no address this server can name, which no budget is charged for - and
-	/// which the operator is told about if the budget is on, since it then refuses none of them.
-	/// </summary>
-	private (string ClientId, string? Source)? ChargedToNone()
-	{
-		unnamedSource.Report(CallerRateLimiters.Revocation);
-		return null;
+		return await ReadTokenAsync(tenant, clients, revocationRequest, clientInfo);
 	}
 
 	/// <summary>
@@ -183,6 +156,7 @@ public partial class RevocationRequestValidator(
 	/// </summary>
 	private async Task<Result<ValidRevocationRequest, OidcError>> ReadTokenAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		RevocationRequest revocationRequest,
 		ClientInfo clientInfo)
 	{
@@ -190,28 +164,83 @@ public partial class RevocationRequestValidator(
 		// revoke a token it holds, and what settles the request is whether the token belongs to that client -
 		// the check below. A token minted for a resource indicator names that resource in its audience, and
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
-		var result = await jwtValidator.ValidateAsync(
-			tenant, clientInfo, revocationRequest.Token,
+		var authentic = await jwtValidator.ReadAuthenticAsync(
+			tenant,
+			clientInfo,
+			clients,
+			revocationRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 
-		return result.Match(
-			token =>
-			{
-				// If the token was issued to a different client, log a warning and return an invalid token result.
-				if (token is { Payload.ClientId: {} clientId } && clientId != clientInfo.ClientId)
-				{
-					LogTokenIssuedToAnotherClient(clientId);
-					return ValidRevocationRequest.InvalidToken(revocationRequest);
-				}
+		if (!authentic.TryGetSuccess(out var token))
+			return Refused(revocationRequest, authentic.GetFailure());
 
-				// If the token is valid and belongs to the authenticated client, return a valid revocation request.
-				return new ValidRevocationRequest(revocationRequest, token);
-			},
-			error =>
+		// RFC 7009 Section 2.1: the server "verifies whether the token was issued to the client making the revocation
+		// request". Decided before the token's records are read, because reading them is not free of effect: a
+		// superseded refresh token found there revokes its whole grant, and a client holding another client's token
+		// would otherwise end that client's grant by presenting it here. Section 2.1 has such a request refused; it is
+		// answered here as Section 2.2 answers an invalid token, with 200 and nothing revoked, which tells the caller
+		// nothing about a token that is not its own.
+		if (!token.BelongsTo(clientInfo.ClientId))
+		{
+			if (token.OwnerOf() is { } owner)
 			{
+				LogTokenIssuedToAnotherClient(owner);
+			}
+			else
+			{
+				LogTokenOfNoClient(clientInfo.ClientId);
+			}
+
+			return ValidRevocationRequest.InvalidToken(revocationRequest);
+		}
+
+		var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
+		if (!recorded.TryGetSuccess(out var valid))
+			return Refused(revocationRequest, recorded.GetFailure());
+
+		return new ValidRevocationRequest(revocationRequest, valid, clientInfo);
+	}
+
+	/// <summary>
+	/// The answer to a request naming a token that was not read: the request is served as one naming an invalid token,
+	/// which RFC 7009 Section 2.2 answers with success.
+	/// </summary>
+	private ValidRevocationRequest Refused(RevocationRequest revocationRequest, JwtValidationError error)
+	{
+		LogRefusal(error);
+		return ValidRevocationRequest.InvalidToken(revocationRequest);
+	}
+
+	/// <summary>
+	/// Records why the token was not read, at the level its reason calls for.
+	/// </summary>
+	/// <remarks>
+	/// A token a revocation already reached is the ordinary end of a sign-out: ending the session revokes its
+	/// tokens, and the client then revokes its refresh token here as RFC 7009 asks. Every other refusal is a warning:
+	/// a token that does not parse, verify or carry the expected type and header, one whose claims or lifetime this
+	/// server does not accept, or a superseded refresh token, whose replay is what revokes a grant.
+	/// </remarks>
+	private void LogRefusal(JwtValidationError error)
+	{
+		switch (error.Error)
+		{
+			case JwtError.TokenRevoked:
+				LogTokenAlreadyRevoked(Sanitized.Value(error));
+				break;
+
+			case JwtError.InvalidToken
+				or JwtError.TokenAlreadyUsed
+				or JwtError.MalformedToken
+				or JwtError.InvalidAlgorithm
+				or JwtError.InvalidTokenType
+				or JwtError.InvalidHeader
+				or JwtError.InvalidSignature:
 				LogTokenValidationFailed(Sanitized.Value(error));
-				return ValidRevocationRequest.InvalidToken(revocationRequest);
-			});
+				break;
+
+			default:
+				throw new ArgumentOutOfRangeException(nameof(error), error.Error, "A token refusal without a log level.");
+		}
 	}
 }

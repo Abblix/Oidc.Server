@@ -52,11 +52,11 @@ public class JwtSubjectTokenResolverTests
         // opening 'sub' leaves it as it is. Every named client is found as a public one; a converter with no pairwise
         // settings keeps these tests decoupled from licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((TenantDefinition _, string clientId) => new ClientInfo(clientId));
 
         _resolver = new JwtSubjectTokenResolver(
-            _jwtValidator.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clientInfoProvider.Object);
+            _jwtValidator.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()));
     }
 
     [Fact]
@@ -65,10 +65,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: "https://idp.example.com");
         jwt.Payload.Scope = [Scopes.OpenId, Scopes.Profile];
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Requester, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-1", ctx.Subject);
@@ -94,10 +94,10 @@ public class JwtSubjectTokenResolverTests
         if (carriesTheClaim)
             jwt.Payload.Scope = [];
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(carriesTheClaim, ctx.Scope is not null);
@@ -117,10 +117,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.GrantId = grantId;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(grantId, ctx.GrantId);
@@ -135,14 +135,71 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: "user-1", issuer: null);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(jwt.Payload.ExpiresAt);
         Assert.Equal(jwt.Payload.ExpiresAt, ctx.ExpiresAt);
+    }
+
+    /// <summary>
+    /// The audience of a presented access token reaches the context, where a client exchanging tokens addressed to it
+    /// as a resource server is matched by it; a token of any other type is addressed to no resource server and carries
+    /// none there.
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken, true)]
+    [InlineData(JsonWebTokenTypes.Jwt, false)]
+    [InlineData(null, false)]
+    public async Task AudienceOfThePresentedToken_ReachesTheContext_OnlyForAnAccessToken(string? type, bool carried)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        jwt.Header.Type = type;
+        jwt.Payload.Audiences = ["https://mcp.example.com/", "https://other.example.com/"];
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        if (carried)
+            Assert.Equal(["https://mcp.example.com/", "https://other.example.com/"], ctx.Audiences!);
+        else
+            Assert.Null(ctx.Audiences);
+    }
+
+    /// <summary>
+    /// The DPoP key and the certificate the presented token is bound to reach the context, so the exchange must prove
+    /// them as presenting the token anywhere must (RFC 9449 section 7, RFC 8705 section 3); an unbound token binds none.
+    /// </summary>
+    [Theory]
+    [InlineData("the-dpop-key-thumbprint", null)]
+    [InlineData(null, "the-certificate-thumbprint")]
+    [InlineData(null, null)]
+    public async Task TheBindingOfThePresentedToken_ReachesTheContext(string? jwkThumbprint, string? certificateThumbprint)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        if (jwkThumbprint is not null || certificateThumbprint is not null)
+        {
+            jwt.Payload.Confirmation = new JsonWebTokenConfirmation
+            {
+                JwkThumbprint = jwkThumbprint,
+                CertificateSha256Thumbprint = certificateThumbprint,
+            };
+        }
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(jwkThumbprint, ctx.ProofKeyThumbprint);
+        Assert.Equal(certificateThumbprint, ctx.CertificateSha256Thumbprint);
     }
 
     [Fact]
@@ -152,10 +209,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null);
         jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails] = (JsonArray)JsonNode.Parse(adWire)!;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(ctx.AuthorizationDetails);
@@ -168,10 +225,10 @@ public class JwtSubjectTokenResolverTests
     public async Task JwtValidationFailure_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -200,10 +257,10 @@ public class JwtSubjectTokenResolverTests
     public async Task ATokenOfAnotherType_IsRejected(string tokenType, TokenTypePolicy accepted)
     {
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, TokenTypesArg.Is(accepted), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, TokenTypesArg.Is(accepted), SubjectTokenValidation))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "another type"));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(tokenType), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(tokenType), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -219,7 +276,7 @@ public class JwtSubjectTokenResolverTests
         var result = await _resolver.ResolveAsync(
             SingleIssuer.Tenant,
             Requester,
-            TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -231,10 +288,10 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: null, issuer: null);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -249,10 +306,10 @@ public class JwtSubjectTokenResolverTests
         // fire. Otherwise any client could exchange any user id_token.
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -267,10 +324,10 @@ public class JwtSubjectTokenResolverTests
         jwt.Payload.ClientId = "client-A";
         jwt.Payload.AuthorizedParty = "client-Z";
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -284,10 +341,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A", "client-B"]);
         jwt.Payload.AuthorizedParty = "client-A";
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("client-A", ctx.OriginalClientId);
@@ -300,10 +357,10 @@ public class JwtSubjectTokenResolverTests
         // origin undetermined rather than guessing; the cross-client guard then cannot narrow it.
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["a", "b"]);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Null(ctx.OriginalClientId);
@@ -320,10 +377,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
         jwt.Payload.SessionId = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -339,10 +396,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: null, audiences: ["client-A"]);
         jwt.Payload.AuthenticationTime = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -360,10 +417,10 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com");
         jwt.Payload.IdentityProvider = identityProvider;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(identityProvider, ctx.IdentityProvider);
@@ -379,10 +436,10 @@ public class JwtSubjectTokenResolverTests
     {
         var jwt = NewJwt(subject: "user-1", issuer: "https://issuer.example.com", audiences: ["client-A"]);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.IdToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Null(ctx.IdentityProvider);
@@ -400,13 +457,13 @@ public class JwtSubjectTokenResolverTests
         var jwt = NewJwt(subject: "pseudonym-of-client-gone", issuer: null);
         jwt.Payload.ClientId = "client-gone";
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client-gone"))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "client-gone"))
+            .ReturnsAsync(ClientAbsence.Unknown);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.AccessToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

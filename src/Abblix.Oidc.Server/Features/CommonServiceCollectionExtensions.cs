@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -65,6 +66,10 @@ public static class CommonServiceCollectionExtensions
         // The one answer to which key a client-addressed JWT is encrypted to, asked where it is encrypted and where the
         // client is judged against its profile ahead of that
         services.TryAddSingleton<ClientEncryptionKeyResolver>();
+
+        // A client_secret_jwt client registered dynamically keeps its secret encrypted alone, and both the key its
+        // assertion is verified with and the key a JWT is encrypted to it with are read from there
+        services.TryAddSingleton<IClientSecretEncryptor, IssuerClientSecretEncryptor>();
         return services
             .AddJsonWebTokens()
             .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();

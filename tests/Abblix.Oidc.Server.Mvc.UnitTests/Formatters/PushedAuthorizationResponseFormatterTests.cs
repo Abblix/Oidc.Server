@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -52,11 +53,14 @@ public class PushedAuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and RFC 6749 section 5.2 gives a client
-    /// that authenticated through the Authorization header a 401 with a challenge for its scheme.
+    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and OAuth 2.1 section 3.2.4 gives a client
+    /// that used HTTP Basic, or is registered for it, a 401 with the Basic challenge, which the refusal carries; any
+    /// other is answered 400 without one.
     /// </summary>
-    [Fact]
-    public async Task FormatResponseAsync_InvalidClientError_Returns401WithABasicChallenge()
+    [Theory]
+    [InlineData(true, StatusCodes.Status401Unauthorized)]
+    [InlineData(false, StatusCodes.Status400BadRequest)]
+    public async Task FormatResponseAsync_InvalidClientError_ChallengesWithBasicOnlyWhereOwed(bool owed, int expected)
     {
         var request = new AuthorizationRequest();
         var error = new AuthorizationError(
@@ -64,12 +68,15 @@ public class PushedAuthorizationResponseFormatterTests
             ErrorCodes.InvalidClient,
             "Client authentication failed",
             ResponseMode: ResponseModes.Query,
-            RedirectUri: null);
+            RedirectUri: null)
+        {
+            Refusal = new OidcError(ErrorCodes.InvalidClient, "Client authentication failed") { BasicChallengeOwed = owed },
+        };
 
         var response = await ActionResultRunner.RunAsync(await _formatter.FormatResponseAsync(request, error));
 
-        Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
-        Assert.StartsWith(TokenTypes.Basic, response.Headers[HeaderNames.WWWAuthenticate].ToString());
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(owed, response.Headers[HeaderNames.WWWAuthenticate].ToString().StartsWith(TokenTypes.Basic));
         Assert.Contains(ErrorCodes.InvalidClient, response.Body);
     }
 

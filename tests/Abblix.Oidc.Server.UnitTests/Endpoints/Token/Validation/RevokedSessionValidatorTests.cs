@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -48,6 +49,7 @@ public class RevokedSessionValidatorTests
         new TokenRequest { GrantType = grantType },
         new ClientRequest { ClientId = TestConstants.DefaultClientId })
     {
+        Clients = Mock.Of<IClientInfoProvider>(),
         AuthorizedGrant = new AuthorizedGrant(
             new AuthSession("user_42", "session_7", AuthenticatedAt, "local"),
             new AuthorizationContext(TestConstants.DefaultClientId, [], null)),
@@ -161,7 +163,7 @@ public class RevokedSessionValidatorTests
     public async Task ARequestWithNoGrantType_IsNotAskedAbout()
     {
         var context = new TokenValidationContext(
-            new TokenRequest(), new ClientRequest { ClientId = TestConstants.DefaultClientId });
+            new TokenRequest(), new ClientRequest { ClientId = TestConstants.DefaultClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, CancellationToken.None);
 

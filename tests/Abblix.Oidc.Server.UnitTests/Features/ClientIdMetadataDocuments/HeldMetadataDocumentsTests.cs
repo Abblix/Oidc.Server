@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -33,7 +34,11 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
 
     public void Dispose() => _services.Dispose();
 
-    private Task<HeldMetadataDocument?> GetAsync() => _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+    private async Task<HeldMetadataDocument?> GetAsync()
+        => (await _services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose))
+            .TryGetSuccess(out var held)
+            ? held
+            : null;
 
     /// <summary>
     /// Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use IP
@@ -61,9 +66,9 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
             }));
         services.Origin.Serve(Url, Document);
 
-        var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url));
+        var held = await services.Get<HeldMetadataDocuments>().GetAsync(Url, new Uri(Url), OutboundAddressRule.NoSpecialPurpose);
 
-        Assert.Equal(fetched, held is not null);
+        Assert.Equal(fetched, held.TryGetSuccess(out _));
         Assert.Equal(fetched ? 1 : 0, services.Origin.RequestsTo(Url));
     }
 
@@ -134,7 +139,7 @@ public sealed class HeldMetadataDocumentsTests : IDisposable
         var third = await GetAsync();
 
         Assert.Equal(2, _services.Origin.RequestsTo(Url));
-        Assert.Equal("Two", third!.Metadata.ClientName);
+        Assert.Equal("Two", System.Text.Json.Nodes.JsonNode.Parse(third!.Content)!["client_name"]!.GetValue<string>());
     }
 
     [Fact]

@@ -11,6 +11,7 @@ using System.Text;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Jwt.EncryptionAlgorithms;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -95,20 +96,21 @@ internal static class ClientSecretEncryptionKey
     /// <summary>
     /// The client secret a key is derived from, or null where the client has none the server can read: a public client
     /// is refused outright (section 10.2: "Symmetric encryption MUST NOT be used by public (non-confidential)
-    /// Clients"), and a secret stored only as a hash, or expired, is passed over. Of several, the one expiring last (one
-    /// that never expires before any other), as a client rotating its secret holds the newer one.
+    /// Clients"), and a secret whose value the server does not read (<see cref="ClientSecretValues"/>), or expired, is
+    /// passed over. Of several, the one expiring last (one that never expires before any other), as a client rotating
+    /// its secret holds the newer one.
     /// </summary>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The client.</param>
     /// <param name="now">The current time, against which a secret's expiry is judged.</param>
-    public static string? SecretOf(ClientInfo client, DateTimeOffset now)
+    /// <param name="encryptor">Decrypts a secret kept encrypted.</param>
+    public static string? SecretOf(
+        TenantDefinition tenant, ClientInfo client, DateTimeOffset now, IClientSecretEncryptor encryptor)
     {
         if (client.ClientType == ClientType.Public)
             return null;
 
-        return client.ClientSecrets?
-            .Where(secret => !(secret.ExpiresAt < now) && !string.IsNullOrEmpty(secret.Value))
-            .MaxBy(secret => secret.ExpiresAt ?? DateTimeOffset.MaxValue)?
-            .Value;
+        return ClientSecretValues.Of(tenant, client, now, encryptor).FirstOrDefault();
     }
 
     /// <summary>

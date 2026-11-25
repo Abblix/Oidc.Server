@@ -364,6 +364,10 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         // The wire names read as one value, which the request must not carry more than once (RFC 6749 section 3.1).
         // A repeated parameter such as resource binds to an array without a wire-format marker and may repeat.
         private readonly List<string> _singleValuedWireNames = [];
+
+        // A wire name read from one part of the request alone, with the source reading that part: the request must not
+        // carry it more than once there, and a copy in the other part is never read, so it is not counted
+        private readonly List<(string WireName, string Source)> _singleSourceWireNames = [];
         private bool _readsWire;
         private readonly List<(string WireName, string Member)> _wireMembers = [];
 
@@ -494,8 +498,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
         /// <summary>
         /// Classifies a parameter that one source marker restricts to the query or the form. It is a wire parameter
-        /// all the same, malformed and repeated like the others, and the query-or-form <c>source</c> counts it, so a
-        /// model that splits one parameter by source refuses it sent in both, as it refused it before the split.
+        /// all the same, malformed and repeated like the others, and counted in its own part alone: a copy in the
+        /// other part is never read, so it is not counted either.
         /// </summary>
         private void ClassifySingleSourceWire(IPropertySymbol property, string wireName, string sourceExpression)
         {
@@ -512,8 +516,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             if (_wireMembers.All(member => member.WireName != wireName))
                 _wireMembers.Add((wireName, property.Name));
 
-            if (!_singleValuedWireNames.Contains(wireName))
-                _singleValuedWireNames.Add(wireName);
+            if (_singleSourceWireNames.All(name => name.WireName != wireName))
+                _singleSourceWireNames.Add((wireName, sourceExpression));
         }
 
         private void EmitParameterRefusals()
@@ -659,11 +663,18 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             foreach (var (name, expression) in _assignments)
                 _writer.AppendLine($"\t\t\t{name} = {expression},");
 
+            var repeated = new List<string>();
             if (_singleValuedWireNames.Count > 0)
             {
                 var names = string.Join(", ", _singleValuedWireNames.Select(Literal));
-                _writer.AppendLine($"\t\t\tRepeatedParameters = {known.FormValues}.Repeated(source, [{names}]),");
+                repeated.Add($"..{known.FormValues}.Repeated(source, [{names}])");
             }
+
+            repeated.AddRange(_singleSourceWireNames.Select(name =>
+                $"..{known.FormValues}.Repeated({name.Source}, [{Literal(name.WireName)}])"));
+
+            if (repeated.Count > 0)
+                _writer.AppendLine($"\t\t\tRepeatedParameters = [{string.Join(", ", repeated)}],");
 
             if (_readsWire)
             {

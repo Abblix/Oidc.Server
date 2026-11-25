@@ -101,6 +101,21 @@ public record BackChannelAuthenticationOptions
     public bool UserCodeParameterSupported { get; set; } = false;
 
     /// <summary>
+    /// The longest binding_message a backchannel authentication request may carry, in Unicode code points; a longer
+    /// one is refused with invalid_binding_message, as is one carrying a code point that is not plain visible text.
+    /// 128 by default. It must be positive, or the server does not start.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 section 7.1: "the binding_message value SHOULD be relatively short and use a limited set of plain
+    /// text characters", and section 13 answers a binding message that is "invalid or unacceptable for use in the
+    /// context of the given request" with invalid_binding_message. Counted in code points rather than text elements:
+    /// a text element has no bounded size, so a letter carrying any number of combining marks counts as one, while a
+    /// code point is at most four bytes, which bounds what the authentication device is asked to show. A short message
+    /// of emoji or of letters of any script stays well inside the default either way.
+    /// </remarks>
+    public int MaximumBindingMessageLength { get; set; } = 128;
+
+    /// <summary>
     /// Specifies the lifetime for HTTP client handlers used in ping mode notifications.
     /// This controls how long HttpClient instances are pooled before being recreated.
     /// </summary>

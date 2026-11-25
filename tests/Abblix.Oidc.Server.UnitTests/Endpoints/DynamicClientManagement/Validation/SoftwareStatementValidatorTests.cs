@@ -8,7 +8,11 @@
 
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
+using System.Buffers.Text;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -493,4 +497,242 @@ public class SoftwareStatementValidatorTests
 
         Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], captured!.AllowedSigningAlgorithms!.Order());
     }
+
+    /// <summary>
+    /// Trusts one issuer and has the JWT validator accept <c>eyJ.valid.jwt</c> as a statement carrying
+    /// <paramref name="claims"/>.
+    /// </summary>
+    private void AcceptStatement(JsonObject claims)
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = new Uri("https://trusted-issuer.example.com/jwks") },
+        ];
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(new JsonWebToken { Payload = new JsonWebTokenPayload(claims) });
+    }
+
+    /// <summary>
+    /// RFC 7591 section 3.1.1: "client metadata values conveyed in the software statement MUST take precedence over
+    /// those conveyed using plain JSON elements", so a member both carry is the statement's in what the pipeline
+    /// leaves, and a member only the body carries stays the body's.
+    /// </summary>
+    [Fact]
+    public async Task AMemberTheStatementCarries_OverridesTheBodys()
+    {
+        AcceptStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray("https://legit.example.com/cb"),
+            [ClientRegistrationRequest.Parameters.ClientName] = "Statement Name",
+        });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://attacker.example.net/cb")],
+            ClientName = "Body Name",
+            LogoUri = new Uri("https://body.example.com/logo.png"),
+            SoftwareStatement = "eyJ.valid.jwt",
+        });
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal([new Uri("https://legit.example.com/cb")], context.Request.RedirectUris!);
+        Assert.Equal("Statement Name", context.Request.ClientName);
+        Assert.Equal(new Uri("https://body.example.com/logo.png"), context.Request.LogoUri);
+        Assert.Equal("eyJ.valid.jwt", context.Request.SoftwareStatement);
+    }
+
+    /// <summary>
+    /// A member the statement names is the statement's whatever its value, so an explicit null clears what the body
+    /// gave for it.
+    /// </summary>
+    [Fact]
+    public async Task AnExplicitNullTheStatementCarries_ClearsTheBodysValue()
+    {
+        AcceptStatement(new JsonObject { [ClientRegistrationRequest.Parameters.LogoUri] = null });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            LogoUri = new Uri("https://body.example.com/logo.png"),
+            SoftwareStatement = "eyJ.valid.jwt",
+        });
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Null(context.Request.LogoUri);
+    }
+
+    /// <summary>
+    /// A member only the statement carries becomes the client's metadata, a stated <c>offline_access</c> among them,
+    /// whose absence the request tells apart from its default.
+    /// </summary>
+    [Fact]
+    public async Task AMemberOnlyTheStatementCarries_BecomesTheClientsMetadata()
+    {
+        AcceptStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.SoftwareId] = "statement-software",
+            [ClientRegistrationRequest.Parameters.Contacts] = new JsonArray("ops@example.com"),
+            [ClientRegistrationRequest.Parameters.OfflineAccess] = "allowed",
+        });
+        var context = CreateContext("eyJ.valid.jwt");
+        Assert.Null(context.Request.StatedOfflineAccess);
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal("statement-software", context.Request.SoftwareId);
+        Assert.Equal(["ops@example.com"], context.Request.Contacts!);
+        Assert.Equal(OfflineAccess.Allowed, context.Request.StatedOfflineAccess);
+        Assert.Equal([TestConstants.DefaultRedirectUri], context.Request.RedirectUris!);
+    }
+
+    /// <summary>
+    /// A statement carries client metadata, not the values the server issues or the request names: its
+    /// <c>client_id</c>, <c>client_secret</c> and <c>software_statement</c> claims leave the request's as they are,
+    /// and its JWT claims are not taken for metadata the server does not model.
+    /// </summary>
+    [Fact]
+    public async Task TheStatementsNonMetadataClaims_LeaveTheRequestAsItIs()
+    {
+        AcceptStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.ClientId] = "statement-client",
+            [ClientRegistrationRequest.Parameters.ClientSecret] = "statement-secret",
+            [ClientRegistrationRequest.Parameters.SoftwareStatement] = "another.statement",
+            [IanaClaimTypes.Iss] = "https://trusted-issuer.example.com",
+            [IanaClaimTypes.Iat] = 1_700_000_000,
+            [VendorTier] = "gold",
+        });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ClientId = "body-client",
+            SoftwareStatement = "eyJ.valid.jwt",
+        });
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal("body-client", context.Request.ClientId);
+        Assert.Null(context.Request.ClientSecret);
+        Assert.Equal("eyJ.valid.jwt", context.Request.SoftwareStatement);
+        Assert.Equal([VendorTier], context.Request.AdditionalMembers!.Keys);
+        Assert.Equal("gold", context.Request.AdditionalMembers[VendorTier].GetString());
+    }
+
+    /// <summary>
+    /// A metadata member the server does not model is the statement's too where both carry it, so an extension
+    /// reading it reads the value the statement gives.
+    /// </summary>
+    [Fact]
+    public async Task AnUnmodelledMemberTheStatementCarries_OverridesTheBodys()
+    {
+        AcceptStatement(new JsonObject { [VendorTier] = "gold" });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            SoftwareStatement = "eyJ.valid.jwt",
+            AdditionalMembers = new Dictionary<string, JsonElement>
+            {
+                [VendorTier] = JsonSerializer.SerializeToElement("platinum"),
+                [VendorRegion] = JsonSerializer.SerializeToElement("eu"),
+            },
+        });
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal("gold", context.Request.AdditionalMembers![VendorTier].GetString());
+        Assert.Equal("eu", context.Request.AdditionalMembers[VendorRegion].GetString());
+    }
+
+    /// <summary>
+    /// A claim whose value is not of its member's type is a statement that does not read as client metadata:
+    /// RFC 7591 section 3.2.2 names invalid_software_statement for "The software statement presented is invalid".
+    /// </summary>
+    [Fact]
+    public async Task AClaimOfTheWrongType_IsAnInvalidStatement()
+    {
+        AcceptStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.RedirectUris] = "https://legit.example.com/cb",
+        });
+        var context = CreateContext("eyJ.valid.jwt");
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result?.Error);
+        Assert.Equal([TestConstants.DefaultRedirectUri], context.Request.RedirectUris!);
+    }
+
+    /// <summary>
+    /// The values the statement a client registered with fixed stay its own through an RFC 7592 update: the statement
+    /// is laid over the update body last, over the metadata of a statement the update itself presents too, and a
+    /// member the registered statement does not name stays the update's.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnUpdate_KeepsTheValuesTheRegisteredStatementFixed(bool presentsAnother)
+    {
+        AcceptStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray("https://presented.example.org/cb"),
+            [ClientRegistrationRequest.Parameters.LogoUri] = "https://presented.example.org/logo.png",
+        });
+        var registered = CompactStatement(new JsonObject
+        {
+            [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray("https://legit.example.com/cb"),
+        });
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://attacker.example.net/cb")],
+            ClientName = "Updated Name",
+            SoftwareStatement = presentsAnother ? "eyJ.valid.jwt" : null,
+        })
+        {
+            Operation = DynamicClientOperation.Update,
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId) { SoftwareStatement = registered },
+        };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal([new Uri("https://legit.example.com/cb")], context.Request.RedirectUris!);
+        Assert.Equal("Updated Name", context.Request.ClientName);
+        Assert.Equal(
+            presentsAnother ? new Uri("https://presented.example.org/logo.png") : null,
+            context.Request.LogoUri);
+    }
+
+    /// <summary>
+    /// A new registration is not an update of anything stored, so no stored statement is laid over it.
+    /// </summary>
+    [Fact]
+    public async Task ARegistration_TakesNoStoredStatement()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://body.example.com/cb")],
+        })
+        {
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SoftwareStatement = CompactStatement(new JsonObject
+                {
+                    [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray("https://legit.example.com/cb"),
+                }),
+            },
+        };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+
+        Assert.Equal([new Uri("https://body.example.com/cb")], context.Request.RedirectUris!);
+    }
+
+    private static string CompactStatement(JsonObject claims)
+        => string.Join('.',
+            Base64Url.EncodeToString(Encoding.UTF8.GetBytes("""{"alg":"RS256"}""")),
+            Base64Url.EncodeToString(Encoding.UTF8.GetBytes(claims.ToJsonString())),
+            Base64Url.EncodeToString([1, 2, 3]));
+
+    private const string VendorTier = "vendor_tier";
+    private const string VendorRegion = "vendor_region";
 }

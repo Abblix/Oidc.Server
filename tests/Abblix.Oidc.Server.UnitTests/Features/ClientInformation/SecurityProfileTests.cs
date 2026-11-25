@@ -47,6 +47,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequirePushedAuthorizationRequests);
         Assert.False(requirements.RequireSenderConstrainedTokens);
         Assert.False(requirements.RequireCodeResponseTypeOnly);
+        Assert.False(requirements.RequireRedirectUriParameter);
         Assert.False(requirements.RequireStrictRequestObjectProcessing);
         Assert.Null(requirements.MaxRequestObjectLifetime);
     }
@@ -61,6 +62,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequirePushedAuthorizationRequests);
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireRedirectUriParameter);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
 
         // The request object rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile
@@ -96,21 +98,12 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequirePkceWithPushedRequests);
         Assert.True(requirements.RequireExactHttpsRedirectUris);
+        Assert.True(requirements.RequireRedirectUriParameter);
         Assert.True(requirements.ForbidRsa1_5KeyManagement);
-        Assert.True(requirements.RequireMatchingClientIdentifiers);
         Assert.True(requirements.RequireHttpsJwksUri);
         Assert.True(requirements.RequireCertificateBoundTokens);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
-
-    /// <summary>
-    /// FAPI 1.0 Part 1 section 6.2.1, which Part 2 builds on: the resource server "shall not accept access tokens in the
-    /// query parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage RFC6750".
-    /// </summary>
-    [Fact]
-    public void Resolve_Fapi1Advanced_RefusesTheAccessTokenInTheQuery()
-        => Assert.True(
-            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced).RequireAccessTokenOutsideQuery);
 
     /// <summary>
     /// And nothing the section does not ask for: it admits <c>code id_token</c>, makes PAR optional, asks PKCE only of

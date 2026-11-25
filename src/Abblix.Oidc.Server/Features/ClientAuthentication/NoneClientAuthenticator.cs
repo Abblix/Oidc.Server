@@ -28,10 +28,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// cannot securely maintain a secret, such as single-page applications or native mobile apps.
 /// </remarks>
 /// <param name="logger">The logger for logging authentication events.</param>
-/// <param name="clientInfoProvider">The provider for retrieving client information.</param>
 public partial class NoneClientAuthenticator(
-    ILogger<NoneClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider): IClientAuthenticator
+    ILogger<NoneClientAuthenticator> logger): IClientAuthenticator
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -48,6 +46,7 @@ public partial class NoneClientAuthenticator(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the client's ID.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <returns>A task that returns the authenticated <see cref="ClientInfo"/>, or
     /// <see cref="ClientAuthenticationFailures.NoCredential"/>: the method this authenticator serves presents none, so
     /// a request it does not authenticate presented none to it either.</returns>
@@ -56,30 +55,33 @@ public partial class NoneClientAuthenticator(
     /// It verifies the existence of the client and ensures it is marked as a public client in the configuration.
     /// Clients not meeting these criteria are not authenticated.
     /// </remarks>
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
     {
         var clientId = request.ClientId;
         if (!clientId.NotNullOrWhiteSpace())
             return ClientAuthenticationFailures.NoCredential;
 
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        switch (client)
+        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
         {
-            case null:
-                LogClientNotFound(clientId);
-                return ClientAuthenticationFailures.NoCredential;
-
-            case { TokenEndpointAuthMethod: ClientAuthenticationMethods.None }:
-                return client;
-
-            default:
-                return ClientAuthenticationFailures.NoCredential;
+            LogClientNotFound(clientId);
+            return ClientAuthenticationFailures.NoCredential;
         }
+
+        if (client is not { TokenEndpointAuthMethod: ClientAuthenticationMethods.None })
+            return ClientAuthenticationFailures.NoCredential;
+
+        return client;
     }
 
     /// <summary>
     /// None: the method this authenticator serves presents no credential, a client_id being an identifier.
     /// </summary>
-    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
         => Task.FromResult<IEnumerable<string>>([]);
 }

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -54,6 +55,33 @@ public static class ErrorFactory
 	/// the error relates to an invalid client.</returns>
 	public static AuthorizationRequestValidationError InvalidClient(string description)
 		=> ValidationError(ErrorCodes.InvalidClient, description);
+
+	/// <summary>
+	/// The refusal of a request whose client is absent, answered by why it is: an identifier no store holds names no
+	/// client and is an unauthorized one, and a client identifier URL whose metadata document was refused or could not be
+	/// had is an invalid client, as draft-ietf-oauth-client-id-metadata-document sections 5 and 6 abort the authorization
+	/// request "with invalid_client". It names no redirect URI: none is validated for an absent client, and section 6.1
+	/// has the server "MUST NOT redirect the user agent to the client", so the error is shown rather than sent.
+	/// </summary>
+	/// <param name="absence">Why the client the request names is absent.</param>
+	/// <returns>An <see cref="AuthorizationRequestValidationError"/> with no redirect URI.</returns>
+	public static AuthorizationRequestValidationError AbsentClient(ClientAbsence absence)
+	{
+		switch (absence.Reason)
+		{
+			case ClientAbsenceReason.Unknown:
+				return ValidationError(ErrorCodes.UnauthorizedClient, NotAuthorized);
+
+			case ClientAbsenceReason.Refused:
+			case ClientAbsenceReason.TemporarilyUnavailable:
+				return ValidationError(ErrorCodes.InvalidClient, NotAuthorized);
+
+			default:
+				throw new ArgumentOutOfRangeException(nameof(absence), absence.Reason, null);
+		}
+	}
+
+	private const string NotAuthorized = "The client is not authorized";
 
 	/// <summary>
 	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid request URI.

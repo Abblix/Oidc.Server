@@ -57,6 +57,9 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Justification = "Stand-in for an attacker-controlled target in the open-redirect test; not a deployment URL.")]
     private const string UnregisteredPostLogoutUri = "https://attacker.example.com/harvest";
 
+    /// <summary>The tenant's page asking the end user whether to log out, under its issuer.</summary>
+    private const string LogoutConfirmationPath = "/logout-confirmation";
+
     /// <summary>The client's own logout endpoint, which the OP's page loads in a frame.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test frontchannel_logout_uri for the dynamically registered client; not a deployment URL.")]
@@ -222,6 +225,49 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// With a confirmation page set for the tenant, a logout the end user has to confirm sends the browser to that
+    /// page rather than showing it an error body, and the page has what it needs: the request's own parameters and the
+    /// value that makes the answer an answer. Sending them back, as the page does once the end user agrees, ends the
+    /// session and returns to the client.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_to_confirm_is_sent_to_the_confirmation_page_whose_answer_ends_the_session()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.PostConfigure<TestTenantSettings>(tenant =>
+                tenant.LogoutConfirmationUri = new Uri(LogoutConfirmationPath, UriKind.Relative))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var state = Guid.NewGuid().ToString("N");
+        var asked = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+            [EndSessionParameters.State] = state,
+        });
+
+        Assert.Equal(HttpStatusCode.SeeOther, asked.StatusCode);
+        var page = asked.Headers.Location;
+        Assert.NotNull(page);
+        Assert.Equal(TestConstants.Issuer + LogoutConfirmationPath, page.GetLeftPart(UriPartial.Path));
+
+        var carried = System.Web.HttpUtility.ParseQueryString(page.Query);
+        Assert.Equal(clientId, carried[EndSessionParameters.ClientId]);
+        Assert.Equal(RegisteredPostLogoutUri, carried[EndSessionParameters.PostLogoutRedirectUri]);
+        Assert.Equal(state, carried[EndSessionParameters.State]);
+        Assert.False(string.IsNullOrEmpty(carried[EndSessionParameters.Confirmation]));
+
+        var answered = await EndSessionAsync(
+            client, discovery, carried.AllKeys.ToDictionary(name => name!, name => carried[name]!));
+
+        Assert.Equal(HttpStatusCode.Redirect, answered.StatusCode);
+        var location = AssertRedirectedTo(answered, RegisteredPostLogoutUri);
+        Assert.Equal(state, System.Web.HttpUtility.ParseQueryString(location.Query)[EndSessionParameters.State]);
+    }
+
     [Fact]
     public async Task The_end_session_endpoint_is_published_in_discovery()
     {
@@ -268,6 +314,10 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Contains("default-src 'none'", policy);
         Assert.Contains(FrontChannelLogoutUri.GetLeftPart(UriPartial.Authority), policy);
         Assert.DoesNotContain("frame-src *", policy);
+
+        // The page frames the clients and is framed by nobody (RFC 9700 section 4.16)
+        Assert.Contains("frame-ancestors 'none'", policy);
+        Assert.Equal("DENY", response.Headers.GetValues(HeaderNames.XFrameOptions).Single());
     }
 
     /// <summary>
@@ -392,15 +442,15 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A client that does not use the session at logout receives ID tokens naming no session, so its own hint cannot
-    /// be shown to belong to the session signed in now: RP-Initiated Logout 1.0 section 2 has the OP ask the end user
-    /// "if the supplied ID Token does not belong to the current OP session with the RP". The answer the server issued
-    /// then ends the session.
+    /// A client registered with neither front-channel nor back-channel logout receives ID tokens naming no session,
+    /// and its own hint still ends the session it signed in to without a question: RP-Initiated Logout 1.0 section 2
+    /// has the OP accept a hint when "the RP identified by the ID Token's aud claim and/or sid claim has a current
+    /// session", and the end user is asked only about a hint that does not belong to it.
     /// </summary>
     [Fact]
-    public async Task A_hint_naming_no_session_is_asked_about_and_the_answer_ends_the_session()
+    public async Task A_hint_of_a_client_without_logout_notifications_ends_its_session_unasked()
     {
-        // On its own host: the question is kept per session, and the shared host's session serves every test class
+        // On its own host: the session the client signs in to is kept per host
         await using var host = CreateOwnHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
@@ -409,12 +459,59 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
         Assert.Null(DecodeJwtPayload(idToken)[IanaClaimTypes.Sid]);
 
-        var hint = new Dictionary<string, string> { [EndSessionParameters.IdTokenHint] = idToken };
-        var confirmed = await EndSessionConfirmedAsync(client, discovery, hint);
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.IdTokenHint] = idToken,
+        });
 
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(
-            confirmed.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Redirect,
-            $"the confirmed logout should end the session, got {(int)confirmed.StatusCode}");
+            response.StatusCode is HttpStatusCode.NoContent,
+            $"the hint should end the session unasked, got {(int)response.StatusCode} {body}");
+    }
+
+    /// <summary>
+    /// A hint naming no session is held to the session signed in now by its end user, its authentication and its
+    /// client. Each of them changed alone leaves the hint unproven to belong to that session, and section 2 says the
+    /// OP "MUST ask the End-User this question ... if the supplied ID Token does not belong to the current OP session
+    /// with the RP and/or currently logged in End-User". The same hint with the session restored ends it unasked, so
+    /// each question below is owed to the one thing changed.
+    /// </summary>
+    [Fact]
+    public async Task A_hint_naming_no_session_that_does_not_match_the_current_one_is_asked_about()
+    {
+        // Whole seconds, as an ID token states the time of the authentication
+        var authenticatedAt = DateTimeOffset.FromUnixTimeSeconds(TimeProvider.System.GetUtcNow().ToUnixTimeSeconds());
+        var signedIn = new AuthSession("hint-subject", "hint-session", authenticatedAt, "e2e-test");
+
+        var sessions = new MutableAuthSessionService(TimeProvider.System);
+        sessions.SignedIn(signedIn);
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Replace(
+                ServiceDescriptor.Singleton<IAuthSessionService>(sessions))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var idToken = (await ObtainConfidentialOfflineTokensAsync(client, discovery))
+            [TokenResponse.Parameters.IdToken]!.GetValue<string>();
+        Assert.Null(DecodeJwtPayload(idToken)[IanaClaimTypes.Sid]);
+        var hint = new Dictionary<string, string> { [EndSessionParameters.IdTokenHint] = idToken };
+
+        // Another end user signed in to the session the client signed in to
+        sessions.SignedIn(signedIn with { Subject = "somebody-else" });
+        await AskedForConfirmationAsync(client, discovery, hint);
+
+        // The same end user, authenticated again
+        sessions.SignedIn(signedIn with { AuthenticationTime = authenticatedAt.AddSeconds(2) });
+        await AskedForConfirmationAsync(client, discovery, hint);
+
+        // The same end user and authentication, in a session the client never signed in to
+        sessions.SignedIn(signedIn with { SessionId = "another-session" });
+        await AskedForConfirmationAsync(client, discovery, hint);
+
+        sessions.SignedIn(signedIn);
+        var response = await EndSessionAsync(client, discovery, hint);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     /// <summary>

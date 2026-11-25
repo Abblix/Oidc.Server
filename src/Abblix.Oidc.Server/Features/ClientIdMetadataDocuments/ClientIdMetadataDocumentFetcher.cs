@@ -62,15 +62,8 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
         var settings = options.CurrentValue.ClientIdMetadataDocuments;
         var transport = fetchOptions.CurrentValue;
 
-        // Section 10.7: the server "MUST NOT fetch a Client ID Metadata Document URL ... that resolve[s] to special-use
-        // IP addresses". The handler judges the address the name resolves to again before the request is sent
-        if (uriValidator.Validate(url) is { } rejection)
-            return Refused(url, MetadataDocumentFailure.Terminal($"the URL is not one this server may reach: {rejection}"));
-
-        // A destination the host named reaches past those rules for its own services, chosen by the host or by a
-        // registered client; a client identifier is chosen by whoever sends a request, so it is never one of them
-        if (SecureUriValidator.IsAllowedDestination(url, transport.AllowedDestinations))
-            return Refused(url, MetadataDocumentFailure.Terminal("the URL is one the host allows for its own services"));
+        if (ClientIdentifierUrl.WhyNotReached(url, uriValidator, transport.AllowedDestinations) is { } refusal)
+            return Refused(url, MetadataDocumentFailure.Terminal(refusal));
 
         // The client's timeout ends only the wait for the headers, so the whole fetch, body included, has its own
         using var deadline = new CancellationTokenSource(settings.FetchTimeout);
@@ -133,19 +126,9 @@ internal sealed partial class ClientIdMetadataDocumentFetcher(
                 $"the document is longer than {settings.MaxDocumentSize} bytes"));
         }
 
-        JsonNode? document;
-        try
-        {
-            // A member repeated is refused here rather than met by the first reading of it, which would throw
-            document = JsonNode.Parse(content, documentOptions: new JsonDocumentOptions { AllowDuplicateProperties = false });
-        }
-        catch (JsonException exception)
-        {
-            return Refused(url, MetadataDocumentFailure.Terminal($"the document is not valid JSON: {exception.Message}"));
-        }
-
-        if (document is not JsonObject json)
-            return Refused(url, MetadataDocumentFailure.Terminal("the document is not a JSON object"));
+        var parsed = MetadataDocumentJson.Parse(content);
+        if (!parsed.TryGetSuccess(out var json))
+            return Refused(url, parsed.GetFailure());
 
         return new FetchedDocument(json, DocumentLifetime.Of(response, settings));
     }

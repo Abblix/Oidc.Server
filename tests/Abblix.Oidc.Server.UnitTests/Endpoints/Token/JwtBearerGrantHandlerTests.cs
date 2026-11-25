@@ -14,6 +14,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -67,7 +68,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -95,7 +96,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -119,7 +120,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -143,7 +144,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -169,7 +170,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -196,7 +197,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -223,7 +224,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -248,7 +249,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -274,7 +275,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -301,7 +302,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -330,7 +331,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -356,7 +357,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -382,8 +383,8 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result1.TryGetSuccess(out var grant1));
@@ -412,7 +413,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -442,7 +443,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.NotNull(capturedParams);
@@ -471,7 +472,7 @@ public partial class JwtBearerGrantHandlerTests
 			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
 		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
 
-		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 		var parameters = capturedParams.NotNull(nameof(capturedParams));
 
 		Assert.True(await parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer))(Issuer));
@@ -500,7 +501,7 @@ public partial class JwtBearerGrantHandlerTests
 		mocks.IssuerProvider.Setup(p => p.IsTrustedIssuerAsync(It.IsAny<Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition>(), It.IsAny<string>())).ReturnsAsync(true);
 		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
 
-		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 		var validateIssuer = capturedParams.NotNull(nameof(capturedParams)).ValidateIssuer.NotNull(nameof(ValidationParameters.ValidateIssuer));
 
 		Assert.False(await validateIssuer(SingleIssuer.Tenant.Issuer.OriginalString));
@@ -526,7 +527,7 @@ public partial class JwtBearerGrantHandlerTests
 		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
 
-		await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.Equal(
 			SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),
@@ -576,8 +577,8 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result1.TryGetSuccess(out var grant1));
@@ -608,7 +609,7 @@ public partial class JwtBearerGrantHandlerTests
 			SingleIssuer.Tenant,
 			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
 			new ClientInfo(ClientId),
-			TestContext.Current.CancellationToken);
+Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 		await captured!.ResolveIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
 		await captured.RefetchIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
 
@@ -785,7 +786,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -814,7 +815,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -836,7 +837,7 @@ public partial class JwtBearerGrantHandlerTests
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		mocks.ReplayCache
-			.Setup(c => c.TryReserveAsync("unique-jti-12345", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.Setup(c => c.TryReserveAsync(SingleUseTokenKey.JwtBearerGrant(Issuer, "unique-jti-12345"), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
 			.ReturnsAsync(false);
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
@@ -846,7 +847,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -875,7 +876,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -904,7 +905,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -929,7 +930,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -957,7 +958,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -984,7 +985,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1010,7 +1011,7 @@ public partial class JwtBearerGrantHandlerTests
 			SingleIssuer.Tenant,
 			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
 			new ClientInfo(ClientId),
-			TestContext.Current.CancellationToken);
+Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -1041,7 +1042,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -1073,7 +1074,7 @@ public partial class JwtBearerGrantHandlerTests
 		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
 
-		var result = await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		if (accepted)
 		{
@@ -1108,7 +1109,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1139,7 +1140,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -1170,7 +1171,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -1203,7 +1204,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1230,7 +1231,7 @@ public partial class JwtBearerGrantHandlerTests
 
 		var result = await handler.AuthorizeAsync(
 			SingleIssuer.Tenant,
-			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+			tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetSuccess(out _));
 	}
@@ -1259,7 +1260,7 @@ public partial class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1290,7 +1291,7 @@ public partial class JwtBearerGrantHandlerTests
 
 		var result = await handler.AuthorizeAsync(
 			SingleIssuer.Tenant,
-			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+			tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -1342,7 +1343,7 @@ public partial class JwtBearerGrantHandlerTests
 			Assertion = Assertion
 		};
 
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.Equal(accepted, result.TryGetSuccess(out _));
 	}

@@ -81,6 +81,23 @@ public record ClientRequest
 	public string? ClientId { get; set; }
 
 	/// <summary>
+	/// Whether <see cref="ClientId"/> names a client other than <paramref name="clientId"/>, the client a credential
+	/// carrying the client identifier itself identifies: a client assertion or the HTTP Basic scheme. A request naming
+	/// none names no other.
+	/// </summary>
+	/// <remarks>
+	/// RFC 7521 section 4.2 says of an assertion: "If present, the value of the "client_id" parameter MUST identify the
+	/// same client as is identified by the client assertion". FAPI 1.0 Part 1 section 5.2.2 has the server "return an
+	/// invalid_client error as defined in 5.2 of RFC6749 when mis-matched client identifiers were provided through the
+	/// client authentication methods that permits sending the client identifier in more than one way", which this
+	/// server applies to every client, the Basic scheme included. Compared exactly, as RFC 6749 section 2.2 issues a
+	/// client identifier as a string.
+	/// </remarks>
+	/// <param name="clientId">The client the credential identifies.</param>
+	internal bool NamesAnotherClientThan(string clientId)
+		=> ClientId is { Length: > 0 } named && !string.Equals(named, clientId, StringComparison.Ordinal);
+
+	/// <summary>
 	/// The OAuth 2.0 <c>client_secret</c> presented in the request body for the
 	/// <c>client_secret_post</c> authentication method (RFC 6749 section 2.3.1).
 	/// </summary>

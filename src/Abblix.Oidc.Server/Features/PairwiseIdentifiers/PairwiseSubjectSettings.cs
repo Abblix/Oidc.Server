@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Security.Cryptography;
+using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
@@ -17,12 +18,6 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 /// </summary>
 public record PairwiseSubjectSettings
 {
-    /// <summary>
-    /// The minimum decoded length of the salt. It is the sole key material of the pairwise seal, so it carries
-    /// 256 bits of secret entropy - anything shorter weakens every pairwise identifier the server issues.
-    /// </summary>
-    private const int MinSaltBytes = 32;
-
     /// <summary>
     /// A base64-encoded cryptographic key that keys the deterministic authenticated-encryption seal producing
     /// pairwise identifiers. This value MUST be kept secret, generated once, and never changed
@@ -40,12 +35,6 @@ public record PairwiseSubjectSettings
     public required string Salt { get; init; }
 
     /// <summary>
-    /// The hashes the HKDF key derivation of the pairwise seal can use.
-    /// </summary>
-    private static readonly HashAlgorithmName[] SupportedHashAlgorithms =
-        [HashAlgorithmName.SHA256, HashAlgorithmName.SHA384, HashAlgorithmName.SHA512];
-
-    /// <summary>
     /// The name of the hash the HKDF key derivation that keys the pairwise seal uses: SHA256, SHA384 or SHA512,
     /// SHA256 when the setting is absent, while a setting with no value is refused. A name rather than a
     /// <see cref="HashAlgorithmName"/>, because the configuration binder cannot convert a string into one.
@@ -60,26 +49,14 @@ public record PairwiseSubjectSettings
     /// <summary>The hash <paramref name="name"/> names, or null when it names none the seal can use.</summary>
     /// <param name="name">The name a deployment configured.</param>
     internal static HashAlgorithmName? HashAlgorithmNamed(string? name)
-        => SupportedHashAlgorithms
-            .Where(algorithm => algorithm.Name == name)
-            .Select(algorithm => (HashAlgorithmName?)algorithm)
-            .FirstOrDefault();
+        => DeterministicSealKey.HashAlgorithmNamed(name);
 
     /// <summary>Why this hash cannot key the seal, or null when it can.</summary>
     /// <param name="name">The name a deployment configured.</param>
     /// <remarks>Public for the reason <see cref="ValidateSalt"/> is: a caller holding settings it did not write asks
     /// here.</remarks>
     public static string? HashAlgorithmRefusal(string? name)
-    {
-        if (HashAlgorithmNamed(name) is not null)
-            return null;
-
-        var supported = string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name));
-        if (string.IsNullOrWhiteSpace(name))
-            return $"The pairwise {nameof(HashAlgorithm)} has no value: name one of {supported}.";
-
-        return $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: {supported}.";
-    }
+        => DeterministicSealKey.HashAlgorithmRefusal(name, $"pairwise {nameof(HashAlgorithm)}", "pairwise seal");
 
     /// <summary>Refuses a salt that cannot key the seal.</summary>
     /// <param name="salt">The base64 value a deployment configured.</param>
@@ -106,25 +83,5 @@ public record PairwiseSubjectSettings
     /// shapes of one rule cannot disagree; two rules would.
     /// </remarks>
     public static string? SaltRefusal(string? salt)
-    {
-        if (string.IsNullOrWhiteSpace(salt))
-        {
-            return "The pairwise salt is required: it is the key material of the pairwise subject seal.";
-        }
-
-        byte[] decoded;
-        try
-        {
-            decoded = Convert.FromBase64String(salt);
-        }
-        catch (FormatException)
-        {
-            return "The pairwise salt must be a base64-encoded value.";
-        }
-
-        return decoded.Length < MinSaltBytes
-            ? $"The pairwise salt must decode to at least {MinSaltBytes} bytes (256 bits) to key the "
-                + $"pairwise subject seal securely, but it decoded to {decoded.Length} bytes."
-            : null;
-    }
+        => DeterministicSealKey.KeyRefusal(salt, "pairwise salt", "pairwise subject seal");
 }

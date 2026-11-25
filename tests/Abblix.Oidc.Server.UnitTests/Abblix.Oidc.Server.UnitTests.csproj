@@ -52,6 +52,7 @@
         <!-- One statement of what a host is promised, compiled into every package's suite. -->
         <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
         <Compile Include="../Shared/EntityStorageMock.cs" Link="Shared/EntityStorageMock.cs" />
+        <Compile Include="../Shared/TestCertificateAuthority.cs" Link="Shared/TestCertificateAuthority.cs" />
         <Compile Include="..\Shared\FlakyOriginHandler.cs">
           <Link>Shared\FlakyOriginHandler.cs</Link>
         </Compile>

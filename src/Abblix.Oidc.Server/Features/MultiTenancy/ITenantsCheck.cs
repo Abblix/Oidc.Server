@@ -28,6 +28,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// the checks with the null mended so that it still claims its address and keys against the others; a check reads
 /// the definition as declared and guards against no such null.
 /// </para>
+/// <para>
+/// The checks are built while the server's settings are validated, so a check asking a service that takes those
+/// settings resolves it when it judges a list rather than holding it from construction.
+/// </para>
 /// </remarks>
 public interface ITenantsCheck
 {

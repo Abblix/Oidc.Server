@@ -19,6 +19,7 @@ using Abblix.Utils;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -65,11 +66,10 @@ public class ClientSecretJwtAuthenticatorTests
 
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
-            new ProfiledJwtValidator(_tokenValidator.Object),
-            _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(_tokenValidator.Object), _clock),
+            DefaultOidcOptions.Monitor());
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -108,7 +108,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -129,7 +129,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -150,7 +150,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -192,14 +192,14 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
-        });
+        }, _clientInfoProvider.Object);
 
         Assert.False(result.TryGetSuccess(out _));
     }
@@ -242,7 +242,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -256,17 +256,16 @@ public class ClientSecretJwtAuthenticatorTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            new ProfiledJwtValidator(_tokenValidator.Object),
-            _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,
-            services.BuildServiceProvider(validateScopes: true));
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(_tokenValidator.Object), _clock, services),
+            DefaultOidcOptions.Monitor());
 
         var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
-        });
+        }, _clientInfoProvider.Object);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -310,11 +309,11 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
-            .Setup(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TryReserveAsync(SingleUseTokenKey.ClientAssertion(ClientId, jwtId), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         var request = new ClientRequest
@@ -324,13 +323,13 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(ClientId, result.GetSuccess().ClientId);
 
-        _replayCache.Verify(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()), Times.Once);
+        _replayCache.Verify(r => r.TryReserveAsync(SingleUseTokenKey.ClientAssertion(ClientId, jwtId), It.IsAny<DateTimeOffset>()), Times.Once);
     }
 
     /// <summary>
@@ -366,7 +365,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -376,7 +375,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -417,11 +416,11 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
-            .Setup(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()))
+            .Setup(r => r.TryReserveAsync(SingleUseTokenKey.ClientAssertion(ClientId, jwtId), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
         var request = new ClientRequest
@@ -431,7 +430,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -459,7 +458,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -502,7 +501,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -512,7 +511,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -555,7 +554,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -565,7 +564,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -609,7 +608,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -619,7 +618,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request, _clientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));

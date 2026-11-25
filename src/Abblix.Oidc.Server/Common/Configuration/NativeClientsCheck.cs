@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
 /// Refuses a tenant declaring a native app that RFC 8252, OAuth 2.0 for Native Apps, has an authorization server
-/// refuse: one redirecting to a private-use scheme without a period or to http off the loopback host, or one
-/// authenticating at the token endpoint with any credential.
+/// refuse: one redirecting to a private-use scheme without a period or to http off the loopback host, one allowed a
+/// response type carrying no code (section 8.2), or one authenticating at the token endpoint with any credential.
 /// </summary>
 /// <remarks>
 /// A native app turning PKCE off is not refused here: the authorization endpoint holds it to PKCE whatever it states
@@ -42,13 +42,21 @@ internal sealed class NativeClientsCheck : ITenantsCheck
         // includes a fragment or uses a script scheme is RedirectUrisCheck's to refuse, for every client
         foreach (var (member, uri) in redirects)
         {
-            if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri))
+            if (!RedirectUrisCheck.Refuses(uri) && !RedirectUriSchemes.IsAllowed(uri, native: true))
             {
                 yield return $"The native client '{client.ClientId}' has the {member} " +
                              $"'{RedirectUrisCheck.Shown(uri)}': a native app redirects to a private-use scheme " +
                              $"based on a domain name in reverse order, such as " +
                              $"com.example.app (RFC 8252 section 7.1), to https, or to http on a loopback host.";
             }
+        }
+
+        foreach (var responseType in client.EffectiveResponseTypes.Where(responseType => !responseType.ServesNativeApps()))
+        {
+            yield return $"The native client '{client.ClientId}' is allowed the response type " +
+                         $"'{string.Join(' ', responseType)}': a native app uses a response type carrying a code, " +
+                         $"which PKCE protects, and gets its access token at the token endpoint, so not one carrying " +
+                         $"token (RFC 8252 section 8.2, RFC 9700 section 2.1.2).";
         }
 
         // RFC 8252 section 8.4 has native apps "classified as public clients" except "when using a mechanism like

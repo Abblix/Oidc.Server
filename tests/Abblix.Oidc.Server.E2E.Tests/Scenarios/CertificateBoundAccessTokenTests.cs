@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -39,6 +40,11 @@ public class CertificateBoundAccessTokenTests(TestFactory factory) : DPoPTestBas
     private const string SubjectDn = "CN=e2e-mutual-tls-client";
     private const string UnregisteredClientId = "e2e-mutual-tls-dpop";
     private const string RegisteredClientId = "e2e-mutual-tls-certificate-bound";
+
+    /// <summary>
+    /// The authority the tenant trusts for tls_client_auth, which issues the clients' certificate.
+    /// </summary>
+    private static readonly TestCertificateAuthority Authority = TestCertificateAuthority.Create();
 
     [Fact]
     public async Task Mutual_tls_client_not_registered_for_certificate_binding_gets_a_token_bound_to_its_proof_key_only()
@@ -95,12 +101,16 @@ public class CertificateBoundAccessTokenTests(TestFactory factory) : DPoPTestBas
     /// </summary>
     private WebApplicationFactory<Program> HostWithMutualTlsClients()
         => Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            services.PostConfigure<TestTenantSettings>(tenant => tenant.Clients =
-            [
-                ..tenant.Clients,
-                MutualTlsClient(UnregisteredClientId, certificateBoundAccessTokens: false),
-                MutualTlsClient(RegisteredClientId, certificateBoundAccessTokens: true),
-            ])));
+            services.PostConfigure<TestTenantSettings>(tenant =>
+            {
+                tenant.TlsClientAuthCertificateAuthorities = [Authority.RootEncoded];
+                tenant.Clients =
+                [
+                    ..tenant.Clients,
+                    MutualTlsClient(UnregisteredClientId, certificateBoundAccessTokens: false),
+                    MutualTlsClient(RegisteredClientId, certificateBoundAccessTokens: true),
+                ];
+            })));
 
     private static ClientInfo MutualTlsClient(string clientId, bool certificateBoundAccessTokens) => new(clientId)
     {
@@ -155,10 +165,5 @@ public class CertificateBoundAccessTokenTests(TestFactory factory) : DPoPTestBas
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
-    private static X509Certificate2 CreateCertificate()
-    {
-        using var key = RSA.Create(2048);
-        return new CertificateRequest(SubjectDn, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
-            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
-    }
+    private static X509Certificate2 CreateCertificate() => Authority.Issue(SubjectDn);
 }

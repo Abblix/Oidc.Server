@@ -305,7 +305,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         AllowedGrantTypes = [GrantTypes.TokenExchange],
         SubjectType = SubjectTypes.Pairwise,
         SectorIdentifier = OtherSector,
-        AllowCrossClientSubjectTokenExchange = true,
+        CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,
         AllowCrossClientIntrospection = true,
     };
 
@@ -403,7 +403,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             AllowCrossClientIntrospection = true,
 
             // Accepts an actor_token issued to another client in the delegation scenarios.
-            AllowCrossClientSubjectTokenExchange = true,
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,
         };
 
         return Factory.WithWebHostBuilder(builder =>

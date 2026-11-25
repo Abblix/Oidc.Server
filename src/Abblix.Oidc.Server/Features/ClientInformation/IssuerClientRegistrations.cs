@@ -22,7 +22,7 @@ internal sealed class IssuerClientRegistrations(
 {
     // Built once for each issuer, whatever its settings become
     private ConcurrentDictionary<string, RegisteredClient> Registered(TenantDefinition tenant)
-        => registered.GetOrCreate(tenant, null, () => new(StringComparer.OrdinalIgnoreCase));
+        => registered.GetOrCreate(tenant, null, () => new(ClientIdComparison.Held));
 
     public Task<RegisteredClient?> TryFindAsync(TenantDefinition tenant, string clientId)
         => Task.FromResult(Registered(tenant).GetValueOrDefault(clientId));

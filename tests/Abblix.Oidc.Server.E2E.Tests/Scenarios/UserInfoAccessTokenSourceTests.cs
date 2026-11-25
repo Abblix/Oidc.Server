@@ -16,9 +16,10 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// The userinfo request binds the access_token parameter of the query and of the form-encoded body each to its own
-/// member (RFC 6750 sections 2.3 and 2.2), so a security profile can refuse the query alone. Driven through both hosts:
-/// a source that also filled the other member would read as the token sent twice and be refused.
+/// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 5.1: "resource servers MUST ignore access tokens in a URI query
+/// parameter". The userinfo endpoint reads the access token from the Authorization header or the form-encoded body
+/// (sections 5.1.1 and 5.1.2) and never from the query, so a token there neither authenticates the request nor counts
+/// as a second method beside another. Driven through both hosts.
 /// </summary>
 public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(factory)
 {
@@ -36,35 +37,20 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
     private static FormUrlEncodedContent TokenInForm(string accessToken)
         => new(new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken });
 
-    [Fact]
-    public async Task A_token_in_the_query_alone_is_answered()
-    {
-        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
-
-        var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
     /// <summary>
-    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
-    /// header with the "private" option." The no-store every response of the endpoint carries stays beside it.
+    /// A token in the query alone is ignored, so the request carries no token, which RFC 6750 section 3.1 answers with
+    /// 401 and a bare Bearer challenge, no error code.
     /// </summary>
     [Fact]
-    public async Task A_success_to_a_token_in_the_query_is_private_to_the_client()
+    public async Task A_token_in_the_query_alone_is_answered_as_no_token()
     {
         var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
 
         var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        // Read as the server sent it, before the client merges repeated lines into one value
-        var sent = Assert.Single(response.Headers.NonValidated[Microsoft.Net.Http.Headers.HeaderNames.CacheControl]);
-        var cacheControl = CacheControlHeaderValue.Parse(sent);
-        Assert.True(cacheControl.Private);
-        Assert.True(cacheControl.NoStore);
-        Assert.True(cacheControl.NoCache);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var challenge = Assert.Single(response.Headers.WwwAuthenticate, value => value.Scheme == TokenTypes.Bearer);
+        Assert.DoesNotContain("error=", challenge.Parameter ?? string.Empty);
     }
 
     [Fact]
@@ -78,56 +64,46 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
     }
 
     /// <summary>
-    /// RFC 6750 section 3.1: a request that "uses more than one method for including an access token" is an
-    /// invalid_request.
-    /// </summary>
-    [Fact]
-    public async Task A_token_in_both_the_query_and_the_form_is_refused()
-    {
-        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
-
-        var response = await client.PostAsync(
-            WithTokenInQuery(endpoint, accessToken), TokenInForm(accessToken), TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
-    }
-
-    /// <summary>
-    /// RFC 6749 section 3.1: "Request and response parameters MUST NOT be included more than once." A copy in the
-    /// query counts against the copy in the body even when it is empty, which no member reading one source sees.
-    /// </summary>
-    [Fact]
-    public async Task An_empty_query_copy_beside_a_token_in_the_form_is_refused_as_a_repetition()
-    {
-        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
-
-        var response = await client.PostAsync(
-            new Uri($"{endpoint}?{UserInfoRequest.Parameters.AccessToken}="),
-            TokenInForm(accessToken),
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
-    }
-
-    /// <summary>
-    /// RFC 6750 section 3.1: the token in the Authorization header and again as a parameter "uses more than one
-    /// method for including an access token", which is an invalid_request answered with 400, whichever part of the
-    /// request carries the parameter.
+    /// A token in the query beside one in the body or the header is ignored, so the request presents one token and is
+    /// answered, whatever the query copy holds, an empty one included.
     /// </summary>
     [Theory]
-    [InlineData(TokenTypes.Bearer, true)]
-    [InlineData(TokenTypes.Bearer, false)]
-    [InlineData(TokenTypes.Basic, true)]
-    [InlineData(TokenTypes.Basic, false)]
-    public async Task A_token_in_the_header_and_as_a_parameter_is_an_invalid_request(string scheme, bool parameterInForm)
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task A_token_in_the_query_beside_another_source_is_ignored(bool otherSourceIsForm, bool queryCopyEmpty)
+    {
+        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
+        var inQuery = queryCopyEmpty
+            ? new Uri($"{endpoint}?{UserInfoRequest.Parameters.AccessToken}=")
+            : WithTokenInQuery(endpoint, accessToken);
+
+        using var request = otherSourceIsForm
+            ? new HttpRequestMessage(HttpMethod.Post, inQuery) { Content = TokenInForm(accessToken) }
+            : new HttpRequestMessage(HttpMethod.Get, inQuery)
+            {
+                Headers = { Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken) },
+            };
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: the token in the Authorization header and again in the body "uses more than one method
+    /// for including an access token", which is an invalid_request answered with 400, whichever scheme the header
+    /// names.
+    /// </summary>
+    [Theory]
+    [InlineData(TokenTypes.Bearer)]
+    [InlineData(TokenTypes.Basic)]
+    public async Task A_token_in_the_header_and_in_the_form_is_an_invalid_request(string scheme)
     {
         var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
 
-        using var request = parameterInForm
-            ? new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = TokenInForm(accessToken) }
-            : new HttpRequestMessage(HttpMethod.Get, WithTokenInQuery(endpoint, accessToken));
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = TokenInForm(accessToken) };
         request.Headers.Authorization = new AuthenticationHeaderValue(scheme, accessToken);
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

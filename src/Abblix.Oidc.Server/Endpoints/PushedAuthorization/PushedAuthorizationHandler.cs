@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -28,7 +29,10 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// pushed authorization requests.</param>
 /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
 /// validated authorization requests.</param>
+/// <param name="clientInfoProvider">The client store, asked once per request through one
+/// <see cref="RequestScopedClientInfoProvider"/> that client authentication and every later step share.</param>
 public class PushedAuthorizationHandler(
+    IClientInfoProvider clientInfoProvider,
     IClientAuthenticator clientAuthenticator,
     IAuthorizationRequestFetcher fetcher,
     IPushedAuthorizationRequestValidator validator,
@@ -68,7 +72,11 @@ public class PushedAuthorizationHandler(
                 authorizationRequest,
                 ErrorFactory.InvalidRequest(Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader.ErrorDescription));
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        // One lookup of the client for the whole request: authentication finds it, and every later step asking for the
+        // client the request names gets the one authentication found, without asking the store again
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -76,10 +84,26 @@ public class PushedAuthorizationHandler(
             if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
                 return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidRequest(moreThanOneMethod.ErrorDescription));
 
-            return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
+            // draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "for a transient failure, an HTTP 503"
+            if (clients.RefusalOf(authenticated.GetFailure()) is ClientTemporarilyUnavailableError unavailable)
+            {
+                return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient(unavailable.ErrorDescription))
+                {
+                    Refusal = unavailable,
+                };
+            }
+
+            // The refusal travels as an OidcError too, which carries whether the Basic challenge is owed (RFC 9126
+            // section 2.3 answers as the token endpoint does)
+            const string notAuthorized = "The client is not authorized";
+            return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient(notAuthorized))
+            {
+                Refusal = BasicChallenge.InvalidClient(clientRequest, notAuthorized),
+            };
         }
 
-        // The object is read for the client the request names, which has to be the one that authenticated
+        // The object is read for the client the request names, which has to be the one that authenticated. The library's
+        // authenticators already refuse a client_id naming another client; this holds it for one a host registers
         if (authorizationRequest.ClientId is { } named && named != clientInfo.ClientId)
         {
             return new AuthorizationError(
@@ -96,7 +120,8 @@ public class PushedAuthorizationHandler(
             tenant,
             authorizationRequest is { Request: not null, ClientId: null }
                 ? authorizationRequest with { ClientId = clientInfo.ClientId }
-                : authorizationRequest);
+                : authorizationRequest,
+            clients);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);
@@ -106,7 +131,7 @@ public class PushedAuthorizationHandler(
         var fetched = fetchResult.GetSuccess();
         authorizationRequest = fetched with { RequestUri = fetched.RequestUri ?? authorizationRequest.RequestUri };
 
-        var validationResult = await validator.ValidateAsync(tenant, clientInfo, authorizationRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, clientInfo, authorizationRequest, clientRequest, clients);
 
         return await validationResult.MatchAsync(
             onSuccess: valid => processor.ProcessAsync(tenant, valid),

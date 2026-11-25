@@ -7,9 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -17,6 +21,8 @@ using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -44,7 +50,8 @@ public class RegisterClientHandlerIntegrationTests
 {
     private static IServiceProvider BuildProvider(
         Action<IServiceCollection>? configure = null,
-        Action<OidcOptions>? configureOptions = null)
+        Action<OidcOptions>? configureOptions = null,
+        Action<IServiceCollection>? afterServer = null)
     {
         var services = new ServiceCollection();
 
@@ -78,7 +85,17 @@ public class RegisterClientHandlerIntegrationTests
             {
                 Id = TestIssuer.TenantId,
                 Issuer = TestConstants.DefaultIssuer,
+                ClientSecretEncryption = new ClientSecretEncryptionSettings
+                {
+                    Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
+
+                // Pairwise subjects, whose sector identifier document a registration may name for the server to fetch
+                PairwiseSubject = new PairwiseSubjectSettings
+                {
+                    Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
             });
 
             // Anonymous registration: opt out of RFC 7591 section 3 initial access token gating so
@@ -92,8 +109,18 @@ public class RegisterClientHandlerIntegrationTests
             configureOptions?.Invoke(opts);
         });
 
+        // Registrations that have to win over the server's own, which a typed HTTP client adds unconditionally
+        afterServer?.Invoke(services);
+
         return services.ResolveToTheDeclaredTenant().BuildServiceProvider();
     }
+
+    /// <summary>
+    /// Names the grant types new clients may request, which a client registering without an initial access token
+    /// needs for any grant beyond those of an interactive sign-in, so a test reaches the gate it is about.
+    /// </summary>
+    private static Action<OidcOptions> Granting(params string[] grantTypes)
+        => opts => opts.NewClientOptions = opts.NewClientOptions with { AllowedGrantTypes = grantTypes };
 
     private static ClientRegistrationRequest CreateRequest(
         string[][]? responseTypes = null,
@@ -168,7 +195,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_TokenResponseType_WithoutEnableImplicitFlow_RejectsAtRegistration()
     {
-        var provider = BuildProvider();
+        var provider = BuildProvider(configureOptions: Granting(GrantTypes.Implicit));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -191,7 +218,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_TokenResponseType_WithEnableImplicitFlow_Succeeds()
     {
-        var provider = BuildProvider(s => s.EnableImplicitFlow());
+        var provider = BuildProvider(s => s.EnableImplicitFlow(), Granting(GrantTypes.Implicit));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -214,7 +241,7 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_PasswordGrant_WithoutEnablePasswordGrant_RejectsAtRegistration()
     {
-        var provider = BuildProvider();
+        var provider = BuildProvider(configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.Password));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -235,7 +262,9 @@ public class RegisterClientHandlerIntegrationTests
     [Fact]
     public async Task HandleAsync_PasswordGrant_WithEnablePasswordGrant_Succeeds()
     {
-        var provider = BuildProvider(s => s.EnablePasswordGrant());
+        var provider = BuildProvider(
+            s => s.EnablePasswordGrant(),
+            Granting(GrantTypes.AuthorizationCode, GrantTypes.Password));
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
 
         var request = CreateRequest(
@@ -268,8 +297,8 @@ public class RegisterClientHandlerIntegrationTests
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
         Assert.True(success.Metadata.DpopBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
-        Assert.NotNull(stored);
+        var stored = (await clientInfoProvider.FindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId))
+            .GetSuccess();
         Assert.True(stored.RequireDPoP);
     }
 
@@ -289,8 +318,8 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True(result.TryGetSuccess(out var success));
         Assert.False(success.Metadata.DpopBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
-        Assert.NotNull(stored);
+        var stored = (await clientInfoProvider.FindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId))
+            .GetSuccess();
         Assert.False(stored.RequireDPoP);
     }
 
@@ -313,8 +342,8 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out var success));
 
-        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
-        Assert.NotNull(stored);
+        var stored = (await clientInfoProvider.FindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId))
+            .GetSuccess();
         Assert.True(stored.PkceRequired is null or true);
     }
 
@@ -338,8 +367,8 @@ public class RegisterClientHandlerIntegrationTests
 
         Assert.True(result.TryGetSuccess(out var success));
 
-        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
-        Assert.NotNull(stored);
+        var stored = (await clientInfoProvider.FindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId))
+            .GetSuccess();
         Assert.False(stored.PkceRequired);
     }
 
@@ -412,8 +441,8 @@ public class RegisterClientHandlerIntegrationTests
         Assert.True(success.Metadata.RequireSignedRequestObject);
         Assert.True(success.Metadata.TlsClientCertificateBoundAccessTokens);
 
-        var stored = await clientInfoProvider.TryFindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId);
-        Assert.NotNull(stored);
+        var stored = (await clientInfoProvider.FindClientAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), success.ClientId))
+            .GetSuccess();
         Assert.True(stored.RequirePushedAuthorizationRequests);
         Assert.True(stored.RequireSignedRequestObject);
         Assert.True(stored.TlsClientCertificateBoundAccessTokens);
@@ -446,6 +475,148 @@ public class RegisterClientHandlerIntegrationTests
         };
 
         var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.True(result.TryGetSuccess(out _),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    private static ClientRegistrationRequest MachineClientRequest() => CreateRequest(
+        responseTypes: [],
+        grantTypes: [GrantTypes.ClientCredentials]);
+
+    /// <summary>
+    /// A registration the defaults of open registration refuse costs the server no fetch of what it names: the
+    /// sector identifier document a pairwise client points at is not requested.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationTheOpenDefaultsRefuse_MakesNoOutboundRequest()
+    {
+        var fetches = new CountingFetcher();
+        var provider = BuildProvider(afterServer: services => services.AddSingleton<ISecureHttpFetcher>(fetches));
+        var request = MachineClientRequest() with
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifierUri = new Uri("https://sector.example.com/redirect_uris.json"),
+        };
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+        Assert.Equal(0, fetches.Count);
+    }
+
+    /// <summary>
+    /// The same registration within the host's grant types reaches the sector identifier fetch, so the test above
+    /// counts the fetch a refusal saves.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationWithinTheHostsGrantTypes_FetchesItsSectorIdentifier()
+    {
+        var fetches = new CountingFetcher();
+        var provider = BuildProvider(
+            configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials),
+            afterServer: services => services.AddSingleton<ISecureHttpFetcher>(fetches));
+        var request = MachineClientRequest() with
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            SectorIdentifierUri = new Uri("https://sector.example.com/redirect_uris.json"),
+        };
+
+        await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
+
+        Assert.Equal(1, fetches.Count);
+    }
+
+    /// <summary>
+    /// Counts the fetches asked of it and answers each with a refusal.
+    /// </summary>
+    private sealed class CountingFetcher : ISecureHttpFetcher
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
+        {
+            Interlocked.Increment(ref _count);
+            return Task.FromResult<Result<T, OidcError>>(
+                new OidcError(ErrorCodes.InvalidClientMetadata, "The document is not served"));
+        }
+    }
+
+    /// <summary>
+    /// While anybody may register and the host names no grant types, a client asking for a grant no end user takes
+    /// part in is refused by the pipeline a host invokes.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringOpenlyWithoutAHostSet_IsRefused()
+    {
+        var provider = BuildProvider();
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var result = await handler.HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), MachineClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+    }
+
+    /// <summary>
+    /// While anybody may register and the host names no resources, a registered client may get an access token for no
+    /// resource, and the response says so.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringOpenlyWithoutAHostSet_IsAllowedNoResource()
+    {
+        var provider = BuildProvider();
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.Equal([], success.Metadata.AllowedResources!);
+        var stored = await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(tenant, success.ClientId);
+        Assert.True(stored.TryGetSuccess(out var client));
+        Assert.False(client.MayGetTokenFor(new Uri("https://orders.example.com")));
+    }
+
+    /// <summary>
+    /// A host naming the grant types decides them under open registration too.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringOpenlyWithinTheHostsSet_IsRegistered()
+    {
+        var provider = BuildProvider(
+            configureOptions: Granting(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials));
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+
+        var result = await handler.HandleAsync(
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), MachineClientRequest());
+
+        Assert.True(result.TryGetSuccess(out _),
+            $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    /// <summary>
+    /// A client presenting an initial access token was let in by whoever issued the token, so without a host set it
+    /// may request every grant type the server supports.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringWithAnInitialAccessTokenWithoutAHostSet_IsRegistered()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var token = await provider.GetRequiredService<IInitialAccessTokenService>().IssueTokenAsync(
+            tenant, "registration-portal", provider.GetRequiredService<TimeProvider>().GetUtcNow(), TimeSpan.FromHours(1));
+        var request = MachineClientRequest() with
+        {
+            AuthorizationHeaderLines = [new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt).ToString()],
+        };
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");

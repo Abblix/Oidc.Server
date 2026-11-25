@@ -56,6 +56,7 @@ public class NonceValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             ResponseMode = ResponseModes.Query,
         };

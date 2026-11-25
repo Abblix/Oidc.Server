@@ -8,10 +8,13 @@
 
 using System;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -30,7 +33,16 @@ public class ClientIdMetadataDocumentReaderTests
 {
     private const string ClientId = "https://client.example.com/metadata.json";
 
-    private static ClientIdMetadataDocumentReader CreateReader(
+    /// <summary>
+    /// A reader together with the client authentication methods it is handed as supported.
+    /// </summary>
+    private sealed record ReaderOver(ClientIdMetadataDocumentReader Reader, string[] Supported)
+    {
+        public Abblix.Utils.Result<ClientRegistrationRequest, MetadataDocumentFailure> ReadDocument(string clientId, JsonObject document)
+            => Reader.Read(clientId, document, Supported);
+    }
+
+    private static ReaderOver CreateReader(
         string[]? authenticationMethods = null,
         string[]? grantTypes = null,
         string[]? responseTypeParts = null,
@@ -38,13 +50,12 @@ public class ClientIdMetadataDocumentReaderTests
         Uri[]? allowedDestinations = null,
         string[]? documentGrantTypes = null)
     {
-        var authenticator = new Mock<IClientAuthenticator>();
-        authenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(authenticationMethods ??
+        string[] supported = authenticationMethods ??
         [
             ClientAuthenticationMethods.None,
             ClientAuthenticationMethods.PrivateKeyJwt,
             ClientAuthenticationMethods.ClientSecretBasic,
-        ]);
+        ];
 
         var grants = new Mock<IGrantTypeInformer>();
         grants.Setup(g => g.GrantTypesSupported).Returns(grantTypes ??
@@ -69,15 +80,14 @@ public class ClientIdMetadataDocumentReaderTests
             NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
             ClientIdMetadataDocuments = { AllowedGrantTypes = documentGrantTypes },
         };
-        return new ClientIdMetadataDocumentReader(
-            authenticator.Object,
+        return new ReaderOver(new ClientIdMetadataDocumentReader(
             [grants.Object],
             builders,
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options),
             Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor => monitor.CurrentValue == new SecureHttpFetchOptions
             {
                 AllowedDestinations = allowedDestinations,
-            }));
+            })), supported);
     }
 
     private static JsonObject Document(string json = "{}")
@@ -88,16 +98,16 @@ public class ClientIdMetadataDocumentReaderTests
         return document;
     }
 
-    private static ClientRegistrationRequest Read(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
+    private static ClientRegistrationRequest Read(JsonObject document, ReaderOver? reader = null)
     {
-        var result = (reader ?? CreateReader()).Read(ClientId, document);
+        var result = (reader ?? CreateReader()).ReadDocument(ClientId, document);
         Assert.True(result.TryGetSuccess(out var metadata), result.TryGetFailure(out var failure) ? failure.Reason : null);
         return metadata;
     }
 
-    private static void AssertRefused(JsonObject document, ClientIdMetadataDocumentReader? reader = null)
+    private static void AssertRefused(JsonObject document, ReaderOver? reader = null)
     {
-        var result = (reader ?? CreateReader()).Read(ClientId, document);
+        var result = (reader ?? CreateReader()).ReadDocument(ClientId, document);
         Assert.True(result.TryGetFailure(out var failure), "the document was expected to be refused");
         Assert.False(failure.MayPass);
     }
@@ -464,9 +474,68 @@ public class ClientIdMetadataDocumentReaderTests
                 """),
             CreateReader(grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba], documentGrantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Ciba]));
 
+    /// <summary>
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at the endpoints of the flow, so a client
+    /// authenticating with none loses the backchannel grant in poll mode as well, and the mode with it, whether it
+    /// declares the grant or not, so the registration checks the document is judged by serve it without the flow
+    /// rather than refuse it. A client proving itself keeps the mode as written, also when the host does not serve it
+    /// the grant or it declares none: the mode may be what its pairwise sector is taken from.
+    /// </summary>
+    [Theory]
+    [InlineData(null, true, true, false, false)]
+    [InlineData(null, false, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, true, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false, true, false)]
+    public async Task ADocumentPollingForBackchannelTokens_KeepsTheModeOnlyForAClientProvingItself(
+        string? authenticationMethod,
+        bool declaresGrant,
+        bool hostServesGrant,
+        bool modeKept,
+        bool grantKept)
+    {
+        var authentication = authenticationMethod is null
+            ? string.Empty
+            : $$""","token_endpoint_auth_method":"{{authenticationMethod}}","jwks_uri":"https://client.example.com/jwks" """;
+        var grantTypes = declaresGrant
+            ? $"\"authorization_code\",\"{GrantTypes.Ciba}\""
+            : "\"authorization_code\"";
+        string[] served = hostServesGrant
+            ? [GrantTypes.AuthorizationCode, GrantTypes.Ciba]
+            : [GrantTypes.AuthorizationCode];
+        var metadata = Read(
+            Document($$"""
+                {"grant_types":[{{grantTypes}}],"backchannel_token_delivery_mode":"poll"{{authentication}}}
+                """),
+            CreateReader(grantTypes: served, documentGrantTypes: served));
+
+        Assert.Equal(grantKept, metadata.GrantTypes.Contains(GrantTypes.Ciba));
+        Assert.Contains(GrantTypes.AuthorizationCode, metadata.GrantTypes);
+        Assert.Equal(modeKept ? BackchannelTokenDeliveryModes.Poll : null, metadata.BackChannelTokenDeliveryMode);
+
+        var backChannelCheck = new BackChannelAuthenticationValidator(Mock.Of<IJsonWebTokenValidator>());
+        Assert.Null(await backChannelCheck.ValidateAsync(
+            SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
+    }
+
+    /// <summary>
+    /// A client authenticating with none loses the notification endpoint along with the poll mode, so a document
+    /// naming both is served without either rather than refused for an endpoint poll mode does not take.
+    /// </summary>
     [Fact]
-    public void ADocumentPollingForBackchannelTokens_IsKept()
-        => Assert.Equal("poll", Read(Document("""{"backchannel_token_delivery_mode":"poll"}""")).BackChannelTokenDeliveryMode);
+    public async Task APublicDocumentPollingWithANotificationEndpoint_LosesBoth()
+    {
+        var metadata = Read(Document("""
+            {"backchannel_token_delivery_mode":"poll","backchannel_client_notification_endpoint":"https://client.example.com/notify"}
+            """));
+
+        Assert.Null(metadata.BackChannelTokenDeliveryMode);
+        Assert.Null(metadata.BackChannelClientNotificationEndpoint);
+
+        var backChannelCheck = new BackChannelAuthenticationValidator(Mock.Of<IJsonWebTokenValidator>());
+        Assert.Null(await backChannelCheck.ValidateAsync(
+            SingleIssuer.Tenant, new ClientRegistrationValidationContext(metadata)));
+    }
 
     [Fact]
     public void ANamedApplicationType_IsKept()

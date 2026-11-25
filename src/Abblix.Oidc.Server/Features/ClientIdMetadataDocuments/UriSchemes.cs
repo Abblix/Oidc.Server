@@ -51,9 +51,11 @@ internal static class UriSchemes
         var redirects = (metadata.RedirectUris ?? []).Select(uri => (Parameters.RedirectUris, uri))
             .Concat(metadata.PostLogoutRedirectUris.Select(uri => (Parameters.PostLogoutRedirectUris, uri)));
 
+        // The schemes some client may use: which kind of client may use which is the registration checks' answer, which
+        // the document meets next
         foreach (var (member, uri) in redirects)
         {
-            if (uri is not { IsAbsoluteUri: true } || !RedirectUriSchemes.IsAllowed(uri))
+            if (uri is not { IsAbsoluteUri: true } || !RedirectUriSchemes.IsAllowed(uri, native: true))
                 return $"its {member} holds a URI of a scheme it may not use";
         }
 
