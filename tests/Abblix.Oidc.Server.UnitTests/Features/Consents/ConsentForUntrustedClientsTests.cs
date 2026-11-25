@@ -91,7 +91,7 @@ public class ConsentForUntrustedClientsTests
         services.Configure<OidcOptions>(options =>
         {
             if (!open)
-                options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://apps.example.com/"];
+                options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = ["https://apps.example.com/"] };
 
             options.RequireInitialAccessToken = !open;
         });

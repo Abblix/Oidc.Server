@@ -99,7 +99,7 @@ public class ClientIdMetadataDocumentTransportTests
         origin.Serve(first, $$"""{"client_id":"{{first}}"}""", "max-age=60");
         origin.Serve(second, $$"""{"client_id":"{{second}}"}""", "max-age=60");
         var services = ReaderServices(origin);
-        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.MaxHeldDocuments = 1);
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { MaxHeldDocuments = 1 });
 
         await using var provider = services.BuildServiceProvider();
         var documents = provider.GetRequiredService<HeldMetadataDocuments>();

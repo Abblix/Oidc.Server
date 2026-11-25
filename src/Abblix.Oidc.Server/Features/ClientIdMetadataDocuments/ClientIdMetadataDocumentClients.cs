@@ -92,8 +92,8 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     /// <remarks>
     /// The lookup whose client is held records it, so a document is recorded once per tenant generation however many
     /// requests read the client it holds; a document fetched again once its copy expires holds, and records, its
-    /// client anew. A scope left unset is recorded as absent, which leaves the client any scope. Internal rather than private so a test can play the lookup that loses the race, which no request can be
-    /// made to lose on demand.
+    /// client anew. A scope left unset is recorded as absent, which leaves the client any scope. Internal rather than
+    /// private so a test can play the lookup that loses the race, which no request can be made to lose on demand.
     /// </remarks>
     internal ClientInfo Keep(TenantDefinition tenant, HeldMetadataDocument document, ClientInfo client)
     {

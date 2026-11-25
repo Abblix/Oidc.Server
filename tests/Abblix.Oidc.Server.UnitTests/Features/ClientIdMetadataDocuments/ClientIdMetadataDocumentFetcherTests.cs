@@ -34,7 +34,7 @@ public class ClientIdMetadataDocumentFetcherTests
     private const string Document = """{"client_id":"https://client.example.com/metadata.json"}""";
 
     private readonly MetadataDocumentOrigin _origin = new();
-    private readonly ClientIdMetadataDocumentOptions _settings = new();
+    private ClientIdMetadataDocumentOptions _settings = new();
     private readonly SecureHttpFetchOptions _transport = new();
 
     private ClientIdMetadataDocumentFetcher CreateFetcher()
@@ -175,7 +175,7 @@ public class ClientIdMetadataDocumentFetcherTests
     {
         // A valid document padded with whitespace, so only its length can refuse it: one byte fewer allowed than it has
         var body = Document + new string(' ', 256);
-        _settings.MaxDocumentSize = Encoding.UTF8.GetByteCount(body) - 1;
+        _settings = _settings with { MaxDocumentSize = Encoding.UTF8.GetByteCount(body) - 1 };
         _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(body, declaresLength) });
 
         Assert.False((await FailedAsync()).MayPass);
@@ -187,7 +187,7 @@ public class ClientIdMetadataDocumentFetcherTests
     public async Task ADocumentOfExactlyTheLimit_IsRead(bool declaresLength)
     {
         var body = Document + new string(' ', 256);
-        _settings.MaxDocumentSize = Encoding.UTF8.GetByteCount(body);
+        _settings = _settings with { MaxDocumentSize = Encoding.UTF8.GetByteCount(body) };
         _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(body, declaresLength) });
 
         Assert.NotNull((await FetchedAsync()).Content);
@@ -242,7 +242,7 @@ public class ClientIdMetadataDocumentFetcherTests
     [Fact]
     public async Task ABodyThatNeverArrives_EndsAtTheDeadline_AsAFailureThatMayPass()
     {
-        _settings.FetchTimeout = TimeSpan.FromMilliseconds(200);
+        _settings = _settings with { FetchTimeout = TimeSpan.FromMilliseconds(200) };
         _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StalledContent() });
 
         Assert.True((await FailedAsync()).MayPass);

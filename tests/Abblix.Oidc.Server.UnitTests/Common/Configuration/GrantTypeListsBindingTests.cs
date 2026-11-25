@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// <summary>
 /// The grant types of new clients and of document clients bound from configuration are taken as written: the binder
 /// adds to a list already there, so both are unset until a host names them, and a host may name fewer than the grants
-/// of a sign-in.
+/// of a sign-in. Both are records of init members, which the binder fills as it fills settable ones.
 /// </summary>
 public class GrantTypeListsBindingTests
 {
@@ -28,6 +28,7 @@ public class GrantTypeListsBindingTests
             {
                 ["Oidc:NewClientOptions:AllowedGrantTypes:0"] = GrantTypes.AuthorizationCode,
                 ["Oidc:ClientIdMetadataDocuments:AllowedGrantTypes:0"] = GrantTypes.AuthorizationCode,
+                ["Oidc:ClientIdMetadataDocuments:MaxHeldDocuments"] = "7",
             })
             .Build();
         var options = new OidcOptions();
@@ -36,5 +37,6 @@ public class GrantTypeListsBindingTests
 
         Assert.Equal([GrantTypes.AuthorizationCode], options.NewClientOptions.AllowedGrantTypes!);
         Assert.Equal([GrantTypes.AuthorizationCode], options.ClientIdMetadataDocuments.AllowedGrantTypes!);
+        Assert.Equal(7, options.ClientIdMetadataDocuments.MaxHeldDocuments);
     }
 }

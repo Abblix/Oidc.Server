@@ -34,7 +34,7 @@ public sealed class NewClientGrantTypesValidator : IValidateOptions<OidcOptions>
 
         if (allowed.Length == 0)
             return ValidateOptionsResult.Fail(
-                $"{setting} is empty, which refuses every client registration and every client metadata document: " +
+                $"{setting} is empty, which refuses every client built by it, registered or resolved from a metadata document: " +
                 "name the grant types new clients may request, or leave it unset for the authorization code and the " +
                 "refresh token.");
 

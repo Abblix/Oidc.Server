@@ -129,7 +129,7 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
     {
         Serve(PublicClientDocument());
         await using var host = CreateHost(
-            listed ? options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://client.example.com/"] : null,
+            listed ? options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = ["https://client.example.com/"] } : null,
             services => services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>()));
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
@@ -186,7 +186,7 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         var (allowedPrefixes, fetched) = Arrange(why);
         await using var host = CreateHost(allowedPrefixes is null
             ? null
-            : options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = allowedPrefixes);
+            : options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = allowedPrefixes });
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 

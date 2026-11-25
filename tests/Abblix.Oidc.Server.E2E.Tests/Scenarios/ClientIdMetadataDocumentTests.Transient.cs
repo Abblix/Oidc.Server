@@ -106,7 +106,7 @@ public partial class ClientIdMetadataDocumentTests
         var resolutions = 0;
         await using var host = CreateHost(
             // A copy is fresh for a moment, then fetched again by the next request
-            options => options.ClientIdMetadataDocuments.MinimumCacheDuration = CopyLifetime,
+            options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { MinimumCacheDuration = CopyLifetime },
             configureServices: services => services
             .PostConfigure<HttpClientFactoryOptions>(ClientIdMetadataDocumentTransport.HttpClientName, factory =>
                 factory.HttpMessageHandlerBuilderActions.Add(builder =>

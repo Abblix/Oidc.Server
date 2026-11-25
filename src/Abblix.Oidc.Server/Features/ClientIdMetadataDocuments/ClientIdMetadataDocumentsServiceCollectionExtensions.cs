@@ -42,8 +42,8 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
     /// fetch takes the outbound HTTP client named <see cref="ClientIdMetadataDocumentTransport.HttpClientName"/>, whose
     /// SSRF validation follows <see cref="SecureHttpFetchOptions"/>.
     /// <para>
-    /// Every such client is an untrusted one, so the consent screen is the end user's only protection. A host that
-    /// grants every client everything it asks for (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>)
+    /// Nobody vets what such a client's document says, so the consent screen is the end user's only protection. A
+    /// host that grants every client everything it asks for (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>)
     /// and sets no <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/> would let any URL obtain the
     /// end user's tokens unseen, so it does not start.
     /// </para>
@@ -57,7 +57,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
         if (services.Any(descriptor => descriptor.ServiceType == typeof(HeldMetadataDocuments)))
             return builder;
 
-        services.PostConfigure<OidcOptions>(options => options.ClientIdMetadataDocuments.Enabled = true);
+        services.PostConfigure<OidcOptions>(options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { Enabled = true });
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClientIdMetadataDocumentOptionsValidator>());
         // A document client's grant types are narrowed to those of new clients, so a list refusing every registration

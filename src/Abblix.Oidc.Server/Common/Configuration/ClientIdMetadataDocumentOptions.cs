@@ -33,7 +33,7 @@ public record ClientIdMetadataDocumentOptions
     /// Set by <c>AddClientIdMetadataDocuments()</c> alone, never from configuration: the setter is not public, so a
     /// configuration file cannot advertise the feature in discovery while nothing resolves such a client.
     /// </remarks>
-    public bool Enabled { get; internal set; }
+    public bool Enabled { get; internal init; }
 
     /// <summary>
     /// The prefixes a client identifier URL must start with to be fetched, or null (the default) to fetch any URL the
@@ -49,7 +49,7 @@ public record ClientIdMetadataDocumentOptions
     /// <c>https://example.com.attacker.test/</c>; an entry without one, an empty list, an entry with a query, a
     /// fragment or user information, and one of any other scheme are refused at startup.
     /// </remarks>
-    public string[]? AllowedClientIdPrefixes { get; set; }
+    public string[]? AllowedClientIdPrefixes { get; init; }
 
     /// <summary>
     /// The most of a metadata document the server reads, in bytes; a longer one is refused. Default: 5 KB.
@@ -58,7 +58,7 @@ public record ClientIdMetadataDocumentOptions
     /// Section 10.11 of the draft: authorization servers "SHOULD limit the amount of data they read and process when
     /// fetching a Client ID Metadata Document", and "the recommended maximum size to read is 5 kilobytes".
     /// </remarks>
-    public int MaxDocumentSize { get; set; } = 5 * 1024;
+    public int MaxDocumentSize { get; init; } = 5 * 1024;
 
     /// <summary>
     /// How long a document is held when its response states no lifetime of its own. Default: 5 minutes.
@@ -69,7 +69,7 @@ public record ClientIdMetadataDocumentOptions
     /// held for that long, one carrying <c>no-store</c> or <c>no-cache</c> is not held at all, and this applies only
     /// to a response saying nothing about it.
     /// </remarks>
-    public TimeSpan MinimumCacheDuration { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan MinimumCacheDuration { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The longest a document is held, whatever its response asks for. Default: 1 hour.
@@ -82,7 +82,7 @@ public record ClientIdMetadataDocumentOptions
     /// served until this much time has passed since it was fetched: section 6.1 has the server not "discard previously
     /// cached valid client metadata on transient failures".
     /// </remarks>
-    public TimeSpan MaximumCacheDuration { get; set; } = TimeSpan.FromHours(1);
+    public TimeSpan MaximumCacheDuration { get; init; } = TimeSpan.FromHours(1);
 
     /// <summary>
     /// The most documents held at once. Default: 10000. Read once, when the server starts.
@@ -94,7 +94,7 @@ public record ClientIdMetadataDocumentOptions
     /// again on its next use, which section 6.2 of the draft allows a server doing "to avoid repeatedly fetching" no
     /// less than it allows holding.
     /// </remarks>
-    public int MaxHeldDocuments { get; set; } = 10_000;
+    public int MaxHeldDocuments { get; init; } = 10_000;
 
     /// <summary>
     /// The grant types a client resolved from its document may use. Unset, those an end user takes part in,
@@ -110,7 +110,7 @@ public record ClientIdMetadataDocumentOptions
     /// section 4.15.1). An empty list and a blank entry are refused at startup. Unset rather than holding the default,
     /// so a list bound from configuration is taken as written: the configuration binder adds to a list already there.
     /// </remarks>
-    public string[]? AllowedGrantTypes { get; set; }
+    public string[]? AllowedGrantTypes { get; init; }
 
     /// <summary>
     /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or
@@ -125,7 +125,7 @@ public record ClientIdMetadataDocumentOptions
     /// The fetch runs while the authorization or token request naming the client waits, and anybody can name a URL
     /// whose server answers slowly, so this is shorter than the server's other outbound fetches take.
     /// </remarks>
-    public TimeSpan FetchTimeout { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan FetchTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Which addresses a document may be fetched from. Default: <see cref="ClientIdMetadataDocumentAddresses.PublicOnly"/>.
@@ -136,5 +136,5 @@ public record ClientIdMetadataDocumentOptions
     /// member is refused at startup.
     /// </remarks>
     [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
-    public ClientIdMetadataDocumentAddresses DocumentAddresses { get; set; } = ClientIdMetadataDocumentAddresses.PublicOnly;
+    public ClientIdMetadataDocumentAddresses DocumentAddresses { get; init; } = ClientIdMetadataDocumentAddresses.PublicOnly;
 }
