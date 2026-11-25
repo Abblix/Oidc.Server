@@ -11,11 +11,11 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// <summary>
 /// Whether every client is granted everything it asks for, by the provider
 /// <see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/> registers and the container
-/// resolves undecorated, while somebody nobody reviewed may become a client, by either way the server lets one in. The
+/// resolves undecorated, while an untrusted client may get in, by either way the server lets one in. The
 /// server refuses to start so: the consent screen is the end user's only check on such a client (RFC 9700 section
 /// 4.11.2).
 /// </summary>
-internal sealed class ConsentForUnreviewedClients
+internal sealed class ConsentForUntrustedClients
 {
     /// <summary>
     /// What a host is told when it grants every client everything and accepts a document from any URL.

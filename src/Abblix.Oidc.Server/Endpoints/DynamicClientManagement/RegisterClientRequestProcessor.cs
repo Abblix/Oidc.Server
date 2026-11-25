@@ -138,7 +138,7 @@ public partial class RegisterClientRequestProcessor(
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(ToClientSecrets(tenant, credentials))
-            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(settings) ? ClientTrust.Unreviewed : ClientTrust.Reviewed)
+            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(settings) ? ClientTrust.Untrusted : ClientTrust.Trusted)
             .Build();
     }
 

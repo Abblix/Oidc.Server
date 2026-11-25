@@ -104,7 +104,7 @@ public sealed class ClientRegistrationsLogTests
 
         var record = Assert.Single(Recorded(LogEvents.ClientInformation.ClientRegistrationsLog.ClientRegistered));
         AssertWhatTheClientMayDo(record);
-        Assert.Equal(ClientTrust.Reviewed, record.Value("Trust"));
+        Assert.Equal(ClientTrust.Trusted, record.Value("Trust"));
         AssertNoSecretIn(record);
     }
 
@@ -141,7 +141,7 @@ public sealed class ClientRegistrationsLogTests
     private static ValidUpdateClientRequest Update()
     {
         var metadata = Metadata();
-        var existing = new RegisteredClient(new ClientInfo(ClientId) { Trust = ClientTrust.Reviewed }, "jti");
+        var existing = new RegisteredClient(new ClientInfo(ClientId) { Trust = ClientTrust.Trusted }, "jti");
         return new ValidUpdateClientRequest(new UpdateClientRequest(new ClientRequest(), metadata), existing, metadata);
     }
 
@@ -153,7 +153,7 @@ public sealed class ClientRegistrationsLogTests
 
         var record = Assert.Single(Recorded(LogEvents.ClientInformation.ClientRegistrationsLog.ClientUpdated));
         AssertWhatTheClientMayDo(record);
-        Assert.Equal(ClientTrust.Reviewed, record.Value("Trust"));
+        Assert.Equal(ClientTrust.Trusted, record.Value("Trust"));
         AssertNoSecretIn(record);
     }
 

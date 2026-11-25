@@ -89,17 +89,17 @@ public class RegisterClientRequestProcessorTests
         SectorIdentifier: null);
 
     /// <summary>
-    /// A client registered while anybody may register one is unreviewed, and one registered while registration asks
-    /// an initial access token, or a software statement from an issuer the host trusts, is reviewed. Decided as the
+    /// A client registered while anybody may register one is untrusted, and one registered while registration asks
+    /// an initial access token, or a software statement from an issuer the host trusts, is trusted. Decided as the
     /// client registers and kept in its record: a later change of the settings leaves the stored client as it was.
     /// </summary>
     [Theory]
-    [InlineData(false, false, false, ClientTrust.Unreviewed)]
-    [InlineData(true, false, false, ClientTrust.Reviewed)]
-    [InlineData(false, true, true, ClientTrust.Reviewed)]
-    [InlineData(false, true, false, ClientTrust.Unreviewed)]
-    [InlineData(false, false, true, ClientTrust.Unreviewed)]
-    public async Task ARegistration_IsReviewedOnlyWhileRegistrationIsClosed(
+    [InlineData(false, false, false, ClientTrust.Untrusted)]
+    [InlineData(true, false, false, ClientTrust.Trusted)]
+    [InlineData(false, true, true, ClientTrust.Trusted)]
+    [InlineData(false, true, false, ClientTrust.Untrusted)]
+    [InlineData(false, false, true, ClientTrust.Untrusted)]
+    public async Task ARegistration_IsTrustedOnlyWhileRegistrationIsClosed(
         bool requireInitialAccessToken, bool requireSoftwareStatement, bool trustedIssuer, ClientTrust expected)
     {
         RegisteredClient? stored = null;
@@ -347,7 +347,7 @@ public class RegisterClientRequestProcessorTests
         settings.RequireInitialAccessToken = true;
 
         Assert.True((await store.FindClientAsync(SingleIssuer.Tenant, "client-1")).TryGetSuccess(out var client));
-        Assert.Equal(ClientTrust.Unreviewed, client.Trust);
+        Assert.Equal(ClientTrust.Untrusted, client.Trust);
     }
 
     /// <summary>

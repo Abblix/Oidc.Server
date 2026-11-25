@@ -223,11 +223,11 @@ public partial class ClientManagementTests
     /// <summary>
     /// A server open to registration without an initial access token that requires a statement from a trusted issuer
     /// admits only what such an issuer vouches for: the stored client has the statement's redirect URI alone and is
-    /// reviewed, so the server's own trust policy sends its authorization error to that address, while one naming the
+    /// trusted, so the server's own trust policy sends its authorization error to that address, while one naming the
     /// body's address is not redirected.
     /// </summary>
     [Fact]
-    public async Task A_registration_requiring_a_trusted_statement_stores_a_reviewed_client_with_its_values()
+    public async Task A_registration_requiring_a_trusted_statement_stores_a_trusted_client_with_its_values()
     {
         await using var host = CreateStatementHost(requireStatement: true, services =>
             services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>()));
@@ -245,7 +245,7 @@ public partial class ClientManagementTests
 
         var stored = await FindStoredClientAsync(host, clientId);
         Assert.Equal([new Uri(LegitRedirectUri)], stored.RedirectUris);
-        Assert.Equal(ClientTrust.Reviewed, stored.Trust);
+        Assert.Equal(ClientTrust.Trusted, stored.Trust);
 
         var toAttacker = await AuthorizeAsync(client, discovery, clientId, AttackerRedirectUri, UnsupportedChallengeMethod);
         Assert.Equal(HttpStatusCode.BadRequest, toAttacker.StatusCode);
@@ -299,7 +299,7 @@ public partial class ClientManagementTests
         var stored = await FindStoredClientAsync(host, registered[ResponseMembers.ClientId]!.GetValue<string>());
         Assert.Equal([GrantTypes.AuthorizationCode], stored.EffectiveGrantTypes);
         Assert.Equal([], stored.AllowedResources!);
-        Assert.Equal(ClientTrust.Unreviewed, stored.Trust);
+        Assert.Equal(ClientTrust.Untrusted, stored.Trust);
     }
 
     /// <summary>

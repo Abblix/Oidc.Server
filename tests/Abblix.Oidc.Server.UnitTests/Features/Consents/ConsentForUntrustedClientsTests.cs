@@ -25,11 +25,11 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Consents;
 
 /// <summary>
-/// A host granting every client everything it asks for does not start while somebody nobody reviewed may become a
-/// client: a metadata document accepted from any URL, or a dynamic registration asking no initial access token. Any
-/// such client could obtain an end user's tokens without the end user being asked (RFC 9700 section 4.11.2).
+/// A host granting every client everything it asks for does not start while an untrusted client may get in: a metadata
+/// document accepted from any URL, or a dynamic registration asking no initial access token. Any such client could
+/// obtain an end user's tokens without the end user being asked (RFC 9700 section 4.11.2).
 /// </summary>
-public class ConsentForUnreviewedClientsTests
+public class ConsentForUntrustedClientsTests
 {
     public enum Consent
     {
@@ -53,7 +53,7 @@ public class ConsentForUnreviewedClientsTests
     }
 
     /// <summary>
-    /// The way a client nobody reviewed gets in.
+    /// The way an untrusted client gets in.
     /// </summary>
     public enum Way
     {
@@ -77,7 +77,7 @@ public class ConsentForUnreviewedClientsTests
     [InlineData(Way.DynamicRegistration, Consent.HostsBeforeGranted, true, true)]
     [InlineData(Way.DynamicRegistration, Consent.None, true, true)]
     [InlineData(Way.DynamicRegistration, Consent.GrantedDecorated, true, true)]
-    public async Task AHostGrantingEveryClientEverything_StartsOnlyWhenNobodyUnreviewedGetsIn(
+    public async Task AHostGrantingEveryClientEverything_StartsOnlyWhenNoUntrustedClientGetsIn(
         Way way,
         Consent consent,
         bool open,
@@ -183,8 +183,8 @@ public class ConsentForUnreviewedClientsTests
 
     private static string MessageOf(Way way) => way switch
     {
-        Way.MetadataDocument => ConsentForUnreviewedClients.AnyUrlMessage,
-        Way.DynamicRegistration => ConsentForUnreviewedClients.AnyRegistrantMessage,
+        Way.MetadataDocument => ConsentForUntrustedClients.AnyUrlMessage,
+        Way.DynamicRegistration => ConsentForUntrustedClients.AnyRegistrantMessage,
         _ => throw new ArgumentOutOfRangeException(nameof(way), way, null),
     };
 

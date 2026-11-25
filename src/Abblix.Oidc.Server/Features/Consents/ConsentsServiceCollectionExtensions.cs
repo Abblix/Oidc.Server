@@ -54,15 +54,15 @@ public static class ConsentsServiceCollectionExtensions
 
 	/// <summary>
 	/// Arms the startup check that a host granting every client everything (<see cref="AddConsentGrantedForEveryClient"/>)
-	/// lets no client in that nobody reviewed: a metadata document from any URL, or a registration nobody authorized.
+	/// lets no untrusted client in: a metadata document from any URL, or a registration nobody authorized.
 	/// </summary>
-	internal static IServiceCollection AddConsentForUnreviewedClientsCheck(this IServiceCollection services)
+	internal static IServiceCollection AddConsentForUntrustedClientsCheck(this IServiceCollection services)
 	{
-		// Armed by each way a client nobody reviewed gets in, once whichever comes first
-		if (services.Any(descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsentForUnreviewedClients>)))
+		// Armed by each way an untrusted client gets in, once whichever comes first
+		if (services.Any(descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsentForUntrustedClients>)))
 			return services;
 
-		services.AddOptions<ConsentForUnreviewedClients>()
+		services.AddOptions<ConsentForUntrustedClients>()
 			.Configure<IOptions<OidcOptions>>((check, options) =>
 			{
 				var settings = options.Value;
@@ -74,8 +74,8 @@ public static class ConsentsServiceCollectionExtensions
 					settings.EnabledEndpoints.HasFlag(OidcEndpoints.RegisterClient) &&
 					OpenRegistration.AdmitsAnyRegistrant(settings);
 			})
-			.Validate(check => !check.GrantedToAnyUrl, ConsentForUnreviewedClients.AnyUrlMessage)
-			.Validate(check => !check.GrantedToAnyRegistrant, ConsentForUnreviewedClients.AnyRegistrantMessage)
+			.Validate(check => !check.GrantedToAnyUrl, ConsentForUntrustedClients.AnyUrlMessage)
+			.Validate(check => !check.GrantedToAnyRegistrant, ConsentForUntrustedClients.AnyRegistrantMessage)
 			.ValidateOnStart();
 		return services;
 	}

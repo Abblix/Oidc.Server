@@ -117,15 +117,15 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
     }
 
     /// <summary>
-    /// A client resolved from its document is unreviewed while any URL may name itself a client, so its authorization
+    /// A client resolved from its document is untrusted while any URL may name itself a client, so its authorization
     /// error is answered by the server; under a list of prefixes, the host's own assessment of the URLs it serves, it is
-    /// reviewed and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
+    /// trusted and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
     /// own policy reads only it.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AClientFromItsDocument_IsReviewedOnlyUnderAPrefixList(bool listed)
+    public async Task AClientFromItsDocument_IsTrustedOnlyUnderAPrefixList(bool listed)
     {
         Serve(PublicClientDocument());
         await using var host = CreateHost(

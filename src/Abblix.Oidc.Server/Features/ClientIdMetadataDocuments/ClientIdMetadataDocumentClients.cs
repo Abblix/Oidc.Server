@@ -229,7 +229,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
 
         // Decided as the client is resolved and held with it: a list of prefixes is the host's own assessment of the URLs
         // it serves, and without one any URL may name itself a client
-        client.Trust = OpenRegistration.AdmitsAnyDocument(settings) ? ClientTrust.Unreviewed : ClientTrust.Reviewed;
+        client.Trust = OpenRegistration.AdmitsAnyDocument(settings) ? ClientTrust.Untrusted : ClientTrust.Trusted;
         return client;
     }
 }

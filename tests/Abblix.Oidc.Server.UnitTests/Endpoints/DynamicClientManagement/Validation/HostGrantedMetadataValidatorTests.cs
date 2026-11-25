@@ -40,8 +40,8 @@ public class HostGrantedMetadataValidatorTests
         OpenRegistration,
         RegistrationWithAnInitialAccessToken,
         RegistrationWithATrustedStatement,
-        UpdateOfAnUnreviewedClient,
-        UpdateOfAReviewedClient,
+        UpdateOfAnUntrustedClient,
+        UpdateOfATrustedClient,
     }
 
     public static TheoryData<Arrival> Arrivals => new()
@@ -49,8 +49,8 @@ public class HostGrantedMetadataValidatorTests
         Arrival.OpenRegistration,
         Arrival.RegistrationWithAnInitialAccessToken,
         Arrival.RegistrationWithATrustedStatement,
-        Arrival.UpdateOfAnUnreviewedClient,
-        Arrival.UpdateOfAReviewedClient,
+        Arrival.UpdateOfAnUntrustedClient,
+        Arrival.UpdateOfATrustedClient,
     };
 
     private static OidcOptions SettingsFor(Arrival arrival, NewClientOptions granted) => arrival switch
@@ -76,7 +76,7 @@ public class HostGrantedMetadataValidatorTests
             },
             NewClientOptions = granted,
         },
-        Arrival.OpenRegistration or Arrival.UpdateOfAnUnreviewedClient or Arrival.UpdateOfAReviewedClient
+        Arrival.OpenRegistration or Arrival.UpdateOfAnUntrustedClient or Arrival.UpdateOfATrustedClient
             => new OidcOptions { NewClientOptions = granted },
         _ => throw new ArgumentOutOfRangeException(nameof(arrival), arrival, null),
     };
@@ -87,8 +87,8 @@ public class HostGrantedMetadataValidatorTests
             Arrival.OpenRegistration or
                 Arrival.RegistrationWithAnInitialAccessToken or
                 Arrival.RegistrationWithATrustedStatement => new ClientRegistrationValidationContext(request),
-            Arrival.UpdateOfAnUnreviewedClient => UpdateOf(request, ClientTrust.Unreviewed),
-            Arrival.UpdateOfAReviewedClient => UpdateOf(request, ClientTrust.Reviewed),
+            Arrival.UpdateOfAnUntrustedClient => UpdateOf(request, ClientTrust.Untrusted),
+            Arrival.UpdateOfATrustedClient => UpdateOf(request, ClientTrust.Trusted),
             _ => throw new ArgumentOutOfRangeException(nameof(arrival), arrival, null),
         };
 
@@ -185,7 +185,7 @@ public class HostGrantedMetadataValidatorTests
 
     /// <summary>
     /// The host's grant types are the authorization code and the refresh token by default, so a client asking for
-    /// the client credentials grant is refused in every mode, a closed registration and an update of a reviewed
+    /// the client credentials grant is refused in every mode, a closed registration and an update of a trusted
     /// client included, while the default grants are served.
     /// </summary>
     [Theory]

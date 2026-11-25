@@ -42,7 +42,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
     /// fetch takes the outbound HTTP client named <see cref="ClientIdMetadataDocumentTransport.HttpClientName"/>, whose
     /// SSRF validation follows <see cref="SecureHttpFetchOptions"/>.
     /// <para>
-    /// Every such client is one nobody reviewed, so the consent screen is the end user's only protection. A host that
+    /// Every such client is an untrusted one, so the consent screen is the end user's only protection. A host that
     /// grants every client everything it asks for (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>)
     /// and sets no <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/> would let any URL obtain the
     /// end user's tokens unseen, so it does not start.
@@ -113,7 +113,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             .Validate(wiring => !wiring.LoopbackThroughProxy, ClientIdMetadataDocumentsWiring.LoopbackThroughProxyMessage)
             .ValidateOnStart();
 
-        services.AddConsentForUnreviewedClientsCheck();
+        services.AddConsentForUntrustedClientsCheck();
         return builder;
     }
 }

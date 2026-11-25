@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <para>
 /// A registration is kept whole, <see cref="ClientInformation.ClientInfo.Trust"/> included: the server decides it once,
 /// when the client registers, and answers the trust in the client's redirect URIs from it alone, so a store dropping it
-/// serves the client as reviewed.
+/// serves the client as trusted.
 /// </para>
 /// <para>
 /// The clients a tenant's definition configures stay in the definition, and the server keeps them apart from what

@@ -68,8 +68,8 @@ public class UpdateClientRequestProcessorTests
     /// The trust a client was registered with is no registration metadata, so an update keeps it, whichever it is.
     /// </summary>
     [Theory]
-    [InlineData(ClientTrust.Reviewed)]
-    [InlineData(ClientTrust.Unreviewed)]
+    [InlineData(ClientTrust.Trusted)]
+    [InlineData(ClientTrust.Untrusted)]
     public async Task AnUpdate_KeepsTheTrustTheClientWasRegisteredWith(ClientTrust trust)
     {
         ClientInfo? saved = null;

@@ -75,7 +75,7 @@ public static class OptionalEndpointsServiceCollectionExtensions
         services.AddDynamicClientEndpoints();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.RegisterClient);
         services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.RegisterClient);
-        services.AddConsentForUnreviewedClientsCheck();
+        services.AddConsentForUntrustedClientsCheck();
         return services;
     }
 }

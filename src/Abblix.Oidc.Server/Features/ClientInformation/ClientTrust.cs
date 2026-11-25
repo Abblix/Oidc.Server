@@ -11,18 +11,20 @@ using System.Text.Json.Serialization;
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// Whether somebody answering for the deployment let a client in, which decides whether the server redirects the user
-/// agent to its redirect URIs with an authorization error (RFC 9700 section 4.11.2).
+/// Whether the server trusts a client's redirect URIs, which decides whether it redirects the user agent there with an
+/// authorization error. The vocabulary is that of <see href="https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2">RFC 9700 section 4.11.2</see>: the authorization server "needs to decide whether or not it
+/// can trust the redirection URI", and "SHOULD only automatically redirect the user agent if it trusts the
+/// redirection URI".
 /// </summary>
 /// <remarks>
 /// Decided once, when the client is created, and kept in its record, so every replica reading the client from a shared
 /// store gives the same answer whatever settings it runs with. A client declared in the tenant settings is
-/// <see cref="Reviewed"/> unless the host says otherwise; one registered dynamically while registration is open is
-/// <see cref="Unreviewed"/>, and one registered while it is closed <see cref="Reviewed"/>. A client resolved from its
-/// metadata document is <see cref="Unreviewed"/> unless the host lists the URLs it accepts documents from. A registrant
+/// <see cref="Trusted"/> unless the host says otherwise; one registered dynamically while registration is open is
+/// <see cref="Untrusted"/>, and one registered while it is closed <see cref="Trusted"/>. A client resolved from its
+/// metadata document is <see cref="Untrusted"/> unless the host lists the URLs it accepts documents from. A registrant
 /// neither sets nor changes it: it is no registration metadata, and an RFC 7592 update keeps it.
 /// <para>
-/// A stored record naming no value is <see cref="Reviewed"/>, as every client of a record written before the member
+/// A stored record naming no value is <see cref="Trusted"/>, as every client of a record written before the member
 /// existed was treated; a record naming one is read as named, by its member's
 /// <see cref="JsonStringEnumMemberNameAttribute"/>.
 /// </para>
@@ -31,15 +33,19 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 public enum ClientTrust
 {
     /// <summary>
-    /// Somebody answering for the deployment let the client in, so its redirect URIs are trusted.
+    /// Somebody answering for the deployment let the client in, so the server trusts its redirect URIs and redirects
+    /// an authorization error there: <see href="https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2">RFC 9700 section 4.11.2</see> has the server "only automatically redirect the user agent if it trusts the
+    /// redirection URI".
     /// </summary>
-    [JsonStringEnumMemberName("reviewed")]
-    Reviewed,
+    [JsonStringEnumMemberName("trusted")]
+    Trusted,
 
     /// <summary>
-    /// The client let itself in, so the server answers its authorization errors itself rather than at its redirect
-    /// URIs.
+    /// The client let itself in, such as one that registered itself while registration is open, so the server does not
+    /// trust its redirect URIs and answers its authorization errors itself: <see href="https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2">RFC 9700 section 4.11.2</see> names an attacker who could
+    /// "register a client via dynamic client registration" and send an erroneous request, "thus instructing the
+    /// authorization server to redirect the user agent to its phishing site".
     /// </summary>
-    [JsonStringEnumMemberName("unreviewed")]
-    Unreviewed,
+    [JsonStringEnumMemberName("untrusted")]
+    Untrusted,
 }
