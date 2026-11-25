@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
 /// A host limiting the grant types of dynamically registered clients keeps registration, and the RFC 7592 update of a
-/// registration, to that set, while a client within it registers as before; a host setting no limit admits every grant
-/// type the server supports.
+/// registration, to that set, while a client within it registers as before; registration open to anybody with no limit
+/// set admits only the grant types of an interactive sign-in.
 /// </summary>
 public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(factory)
 {
@@ -65,7 +65,7 @@ public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(facto
         });
 
     [Fact]
-    public async Task Without_a_limit_a_client_credentials_client_registers()
+    public async Task Within_the_limit_a_client_credentials_client_registers()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -75,6 +75,29 @@ public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(facto
         Assert.Equal(
             GrantTypes.ClientCredentials,
             Assert.Single(registered[RequestMembers.GrantTypes]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Registration open to anybody, with no limit set, gives a client only the grants of an interactive sign-in, so a
+    /// machine client is refused while a sign-in client registers.
+    /// </summary>
+    [Fact]
+    public async Task Open_registration_without_a_limit_refuses_a_client_credentials_client()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.PostConfigure<OidcOptions>(options => options.NewClientOptions =
+                options.NewClientOptions with { AllowedGrantTypes = null })));
+        var client = ClientOf(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var refused = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!,
+            MachineClientMetadata("machine-open"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, await ReadErrorAsync(refused));
+
+        await RegisterClientAsync(client, discovery, SignInClientMetadata("sign-in-open"));
     }
 
     [Fact]

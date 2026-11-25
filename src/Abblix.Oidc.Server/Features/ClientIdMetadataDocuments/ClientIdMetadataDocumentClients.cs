@@ -187,9 +187,10 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         // secret: section 4.1 leaves a document none
         var client = new ClientInfoBuilder(clientId, context.Request)
             .WithSectorIdentifier(context.SectorIdentifier)
+            .WithHostSettingsOf(newClientOptions)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
-            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultAllowedResources(newClientOptions.UnreviewedClientResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(

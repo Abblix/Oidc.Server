@@ -21,8 +21,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <remarks>
 /// An unset set does not mean the same for each member: unset resources or audiences let a client name none, while
-/// unset grant types set no limit, so a client may request every grant type the server supports. Read the grant types
-/// as the resources are and every registration is refused, since a request always carries a grant type.
+/// unset grant types set no limit here, so a client may request every grant type the server supports unless anybody
+/// may register, when <see cref="OpenRegistrationDefaultsValidator"/> holds it.
+/// Read the grant types as the resources are and every registration is refused, since a request always carries a
+/// grant type.
 /// </remarks>
 /// <param name="options">The server options carrying the host's sets.</param>
 public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) : SyncClientRegistrationContextValidator
@@ -51,7 +53,7 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
     /// was not given one from the refusal, while a replaced list would register it without the grant it means to use,
     /// and without the <c>authorization_code</c> or <c>implicit</c> grant its response types need.
     /// </remarks>
-    private static OidcError? WithinAllowedGrantTypes(string[] requested, string[]? allowed)
+    internal static OidcError? WithinAllowedGrantTypes(string[] requested, string[]? allowed)
     {
         if (allowed is null)
             return null;

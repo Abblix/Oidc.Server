@@ -8,12 +8,14 @@ Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.m
 
 🚀 Features
 - Client ID Metadata Documents, experimental ([draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)), see [below](#client-id-metadata-documents)
-- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`
+- The grant types a dynamically registered client may take, limited by `NewClientOptions.AllowedGrantTypes`, and while registration needs neither an initial access token nor a software statement from a trusted issuer, only the authorization code and refresh token grants unless that setting names others
+- While registration needs neither of them, a registered client gets access tokens for no resource unless `NewClientOptions.AllowedResources` names some, and so does a client resolved from its metadata document
 
 ✏️ Improvements
 - Outbound requests to client-supplied addresses connect only to the addresses checked for them, and a forward proxy is named in `SecureHttpFetchOptions.OutboundProxy`
 - Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
 - The offline access of dynamically registered clients set by `NewClientOptions.OfflineAccess`
+- The access token lifetime, refresh token policy and single-resource access tokens of dynamically registered clients and clients from metadata documents, set by `NewClientOptions`
 - TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
 
 🛠 Fixes
@@ -94,7 +96,7 @@ builder.Services
 ```
 
 - A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
-- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients.
+- `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients. Unless `NewClientOptions.AllowedResources` names resources, the client gets access tokens for none.
 - Such a client gets only the authorization code and refresh token grants unless you name others in `ClientIdMetadataDocuments.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
 - A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
 - The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services. A host that sets `BlockPrivateNetworks` to false does not start with this feature on.

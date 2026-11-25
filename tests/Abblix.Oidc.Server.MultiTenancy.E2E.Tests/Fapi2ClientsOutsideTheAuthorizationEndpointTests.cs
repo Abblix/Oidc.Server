@@ -141,6 +141,8 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
         {
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient | OidcEndpoints.Introspection;
             options.RequireInitialAccessToken = false;
+            // A client registering without a token is given only the sign-in grants unless the host names others
+            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Implicit, GrantTypes.ClientCredentials] };
             options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
