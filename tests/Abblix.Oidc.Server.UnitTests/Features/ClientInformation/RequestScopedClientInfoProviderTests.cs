@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
@@ -85,5 +87,41 @@ public sealed class RequestScopedClientInfoProviderTests
         await clients.FindClientAsync(Tenant, ClientId);
 
         Assert.Equal(index == 3, clients.UnavailableClientRefusal() is not null);
+    }
+
+    /// <summary>
+    /// A refusal of a request that met a client it could not have for now is answered as that, except a request using
+    /// more than one authentication method, which RFC 6749 section 5.2 names an invalid_request whatever else it met.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Answers))]
+    public async Task ARefusal_IsTheUnavailableClientRefusal_OnlyAfterATemporarilyUnavailableAnswer(int index)
+    {
+        Answer(AnswerAt(index));
+        var clients = new RequestScopedClientInfoProvider(_store.Object);
+        await clients.FindClientAsync(Tenant, ClientId);
+        var refusal = new OidcError(ErrorCodes.InvalidGrant, "refused");
+        var moreThanOneMethod = new MoreThanOneClientAuthenticationMethodError("two methods");
+
+        Assert.Equal(index == 3, clients.RefusalOf(refusal) is ClientTemporarilyUnavailableError);
+        Assert.Same(moreThanOneMethod, clients.RefusalOf(moreThanOneMethod));
+    }
+
+    /// <summary>
+    /// A refusal answered with success - a token reported inactive - is answered as the refusal of a client that could
+    /// not be had for now, as a refusal is.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Answers))]
+    public async Task ASuccessShapedRefusal_IsTheUnavailableClientRefusal_OnlyAfterATemporarilyUnavailableAnswer(int index)
+    {
+        Answer(AnswerAt(index));
+        var clients = new RequestScopedClientInfoProvider(_store.Object);
+        await clients.FindClientAsync(Tenant, ClientId);
+
+        var answer = clients.AnswerOf("inactive");
+
+        Assert.Equal(index == 3, answer.TryGetFailure(out var instead) && instead is ClientTemporarilyUnavailableError);
+        Assert.Equal(index != 3, answer.TryGetSuccess(out var kept) && kept == "inactive");
     }
 }

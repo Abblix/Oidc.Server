@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Options;
@@ -27,9 +28,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// </summary>
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
 /// <param name="options">OIDC configuration options.</param>
+/// <param name="clientInfoProvider">Finds a client the token names.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
-    IOptionsMonitor<OidcOptions> options) : IInitialAccessTokenValidator
+    IOptionsMonitor<OidcOptions> options,
+    IClientInfoProvider clientInfoProvider) : IInitialAccessTokenValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, IReadOnlyList<string>? authorizationHeaderLines)
@@ -71,6 +74,7 @@ public class InitialAccessTokenValidator(
         var result = await jwtValidator.ValidateAsync(
             tenant,
             client: null,
+            clientInfoProvider,
             header.Parameter,
             TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken),
             // A token that never expires could not be revoked for good: its revocation is kept until it expires

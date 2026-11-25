@@ -72,10 +72,17 @@ public partial class IntrospectionRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
-			tenant, clientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
+		// One lookup of the clients for the whole request: the client authentication, the reading of the token and the
+		// client it was issued to find each client once.
+		//
+		// A request whose client, or the client of the token it reports on, could not be had for now is answered 503, as
+		// the token and pushed authorization request endpoints answer it (draft-ietf-oauth-client-id-metadata-document-03
+		// section 6.1), rather than reporting active=false about a token nothing was found to refuse. RFC 7662 names no
+		// such answer, so this is the server's choice
+		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
-			return RefusalOf(authenticated.GetFailure());
+			return clients.RefusalOf(RefusalOf(authenticated.GetFailure()));
 
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
@@ -114,7 +121,7 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var authentic = await jwtValidator.ReadAuthenticAsync(
-			tenant, clientInfo, introspectionRequest.Token,
+			tenant, clientInfo, clients, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 
@@ -130,11 +137,31 @@ public partial class IntrospectionRequestValidator(
 		if (!clientInfo.AllowCrossClientIntrospection && !token.BelongsTo(clientInfo.ClientId))
 			return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 
-		var recorded = await jwtValidator.ReadRecordsAsync(tenant, token, ServiceTokenValidation.AnyAudience);
+		// The records of a token are judged by its client - a cutoff on its subject opens the subject against it - so a
+		// token they refuse where that client could not be had for now is answered as such. Before here the client
+		// decides nothing: a token that is not authentic, or not the caller's to introspect, is inactive whatever its
+		// client's document says
+		var recorded = await jwtValidator.ReadRecordsAsync(tenant, clients, token, ServiceTokenValidation.AnyAudience);
 		if (!recorded.TryGetSuccess(out var valid))
-			return Inactive(introspectionRequest, clientInfo, recorded.GetFailure());
+			return clients.AnswerOf(Inactive(introspectionRequest, clientInfo, recorded.GetFailure()));
 
-		return new ValidIntrospectionRequest(introspectionRequest, clientInfo, valid);
+		return new ValidIntrospectionRequest(
+			introspectionRequest, clientInfo, valid, await TokenClientAsync(tenant, clients, valid, clientInfo));
+	}
+
+	/// <summary>
+	/// The client <paramref name="token"/> was issued to, where it is not the caller and is found; null otherwise.
+	/// </summary>
+	private static async Task<ClientInfo?> TokenClientAsync(
+		TenantDefinition tenant,
+		IClientInfoProvider clients,
+		JsonWebToken token,
+		ClientInfo caller)
+	{
+		if (token.Payload.ClientId is not { } clientId || clientId == caller.ClientId)
+			return null;
+
+		return (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) ? client : null;
 	}
 
 	/// <summary>

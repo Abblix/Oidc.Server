@@ -50,8 +50,10 @@ public class PasswordGrantHandler(
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
+    /// <param name="clients">The clients of the request being served, where a client a presented token names
+    /// is looked up.</param>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.

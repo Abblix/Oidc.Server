@@ -133,7 +133,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     tokenIds,
                     serviceFormatter.Object,
                     Mock.Of<ITokenRegistry>(),
-                    new GrantRevocation(Mock.Of<ITokenRegistry>(), Mock.Of<IClientInfoProvider>()),
+                    new GrantRevocation(Mock.Of<ITokenRegistry>()),
                     new FixedSubjectTypeConverter(new SubjectTypeConverter()),
                     options,
                     SingleIssuer.LicensedCatalog);

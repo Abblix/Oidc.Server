@@ -84,11 +84,14 @@ public partial class JwtBearerGrantHandler(
 	/// A task that completes with either an authorized grant containing the user session and context,
 	/// or an error indicating why the JWT assertion was rejected.
 	/// </returns>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names
+	/// is looked up.</param>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
 		TenantDefinition tenant,
 		TokenRequest request,
 		ClientInfo clientInfo,
+		IClientInfoProvider clients,
 		CancellationToken cancellationToken)
 	{
 		return ValidateAssertionParameter(request, clientInfo)

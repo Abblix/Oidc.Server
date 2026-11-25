@@ -87,7 +87,7 @@ public class UserInfoRequestValidator(
 		// No client presents a bearer token, so the validator holds it to the profile of the client it names (FAPI 2.0
 		// section 5.4.1, "when creating or processing JWTs"), each JWE layer included.
 		var result = await jwtValidator.ValidateAsync(
-			tenant, client: null, jwtAccessToken,
+			tenant, client: null, clientInfoProvider, jwtAccessToken,
 			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
 			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 

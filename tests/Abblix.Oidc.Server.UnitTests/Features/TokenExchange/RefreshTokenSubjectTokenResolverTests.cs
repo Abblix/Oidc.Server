@@ -63,11 +63,11 @@ public class RefreshTokenSubjectTokenResolverTests
             .ReturnsAsync(false);
 
         _jwtValidator
-            .Setup(v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync((TenantDefinition _, JsonWebToken token, ValidationOptions _) => token);
+            .Setup(v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync((TenantDefinition _, IClientInfoProvider _, JsonWebToken token, ValidationOptions _) => token);
 
         _resolver = new RefreshTokenSubjectTokenResolver(
-            _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object, _cutoffChecker.Object);
+            _jwtValidator.Object, _refreshTokenService.Object, _cutoffChecker.Object);
     }
 
     /// <summary>
@@ -80,16 +80,16 @@ public class RefreshTokenSubjectTokenResolverTests
         var presenter = new ClientInfo("requester");
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         var result = await _resolver.ResolveAsync(
-            SingleIssuer.Tenant, presenter, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            SingleIssuer.Tenant, presenter, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         _jwtValidator.Verify(
-            v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()),
+            v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()),
             Times.Never);
     }
 
@@ -110,16 +110,16 @@ public class RefreshTokenSubjectTokenResolverTests
         var jwt = NewRefreshJwt();
         jwt.Payload.Audiences = [location];
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, presenter, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         var result = await _resolver.ResolveAsync(
-            SingleIssuer.Tenant, presenter, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            SingleIssuer.Tenant, presenter, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         _jwtValidator.Verify(
-            v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()),
+            v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()),
             Times.Never);
     }
 
@@ -132,14 +132,14 @@ public class RefreshTokenSubjectTokenResolverTests
         var owner = new ClientInfo(OriginalClientId);
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, owner, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, owner, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
         _jwtValidator
-            .Setup(v => v.ReadRecordsAsync(TestTenant.Matched, jwt, ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadRecordsAsync(TestTenant.Matched, It.IsAny<IClientInfoProvider>(), jwt, ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used"));
 
         var result = await _resolver.ResolveAsync(
-            SingleIssuer.Tenant, owner, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            SingleIssuer.Tenant, owner, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -170,7 +170,7 @@ public class RefreshTokenSubjectTokenResolverTests
         if (boundToADPoPKey)
             jwt.Payload.Confirmation = new JsonWebTokenConfirmation { JwkThumbprint = "the-dpop-key-thumbprint" };
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
         _refreshTokenService
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
@@ -179,7 +179,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 new AuthorizationContext(OriginalClientId, [Scopes.OpenId], null)));
 
         var result = await _resolver.ResolveAsync(
-            SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.Equal(exchanged, result.TryGetSuccess(out var context));
         if (!exchanged)
@@ -195,7 +195,7 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         var signedInAt = _timeProvider.GetUtcNow().AddHours(-2);
@@ -211,7 +211,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
@@ -237,7 +237,7 @@ public class RefreshTokenSubjectTokenResolverTests
         var jwt = NewRefreshJwt();
         jwt.Payload.GrantId = grantId;
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         _refreshTokenService
@@ -246,7 +246,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
                 new AuthorizationContext("client-1", [Scopes.OpenId], null)));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(grantId, ctx.GrantId);
@@ -261,7 +261,7 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         _refreshTokenService
@@ -270,7 +270,7 @@ public class RefreshTokenSubjectTokenResolverTests
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
                 new AuthorizationContext("client-1", [Scopes.OpenId], null)));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(jwt.Payload.ExpiresAt);
@@ -282,7 +282,7 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         const string adWire = """[{"type":"payment_initiation"}]""";
@@ -295,7 +295,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
@@ -310,13 +310,13 @@ public class RefreshTokenSubjectTokenResolverTests
     public async Task ClientNotAllowedOfflineAccess_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(NewRefreshJwt());
         _clientInfoProvider
             .Setup(p => p.FindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Disabled });
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -327,10 +327,10 @@ public class RefreshTokenSubjectTokenResolverTests
     public async Task JwtValidationFailure_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -346,10 +346,10 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         _jwtValidator
             .Setup(v => v.ReadAuthenticAsync(
-                TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)), ServiceTokenValidation.AnyAudience))
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -360,14 +360,14 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         _refreshTokenService
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "token revoked"));
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -391,16 +391,14 @@ public class RefreshTokenSubjectTokenResolverTests
                 SingleIssuer.LicensedCatalog,
                 Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
                 NothingRecorded.StatusCheck,
-                TestOidcOptions.Defaults(),
-            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>()),
+                TestOidcOptions.Defaults()),
             _refreshTokenService.Object,
-            _clientInfoProvider.Object,
             _cutoffChecker.Object);
 
         var result = await resolver.ResolveAsync(
             SingleIssuer.Tenant,
             Requester,
-            TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -415,7 +413,7 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, Requester, It.IsAny<IClientInfoProvider>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
         var session = new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self");
         _refreshTokenService
@@ -426,7 +424,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .ReturnsAsync(true);
 
         var result = await _resolver.ResolveAsync(
-            SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+            SingleIssuer.Tenant, Requester, _clientInfoProvider.Object, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

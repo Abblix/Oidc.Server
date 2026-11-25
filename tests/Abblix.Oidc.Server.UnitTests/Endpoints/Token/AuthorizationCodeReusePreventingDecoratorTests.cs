@@ -55,7 +55,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
             _inner.Object,
             _tokenRegistry.Object,
             _codeService.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>(MockBehavior.Strict)),
+            new GrantRevocation(_tokenRegistry.Object),
             new FakeTimeProvider(Now));
 
     private static ValidTokenRequest CreateRequest(AuthorizedGrant grant)

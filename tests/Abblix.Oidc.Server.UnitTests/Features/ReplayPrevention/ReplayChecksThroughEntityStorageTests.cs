@@ -265,8 +265,8 @@ public class ReplayChecksThroughEntityStorageTests
         var client = new ClientInfo(ClientId);
         var ct = TestContext.Current.CancellationToken;
 
-        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetSuccess(out _));
-        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetFailure(out var error));
+        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetSuccess(out _));
+        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
         var key = Prefix + SingleUseTokenKey.JwtBearerGrant("https://idp.example.com", "bearer-jti");
         Assert.Equal([key, key], _storage.Claimed);

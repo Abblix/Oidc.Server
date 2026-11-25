@@ -163,6 +163,7 @@ public class DPoPBindingValidatorTests
         var authSession = new AuthSession("user-1", "session-1", IssuedAt, "local");
         return new TokenValidationContext(new TokenRequest(), clientRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
             {
                 TokenEndpointAuthMethod = tokenEndpointAuthMethod!,

@@ -161,6 +161,7 @@ public class AllowedResourcesTests
             },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -192,6 +193,7 @@ public class AllowedResourcesTests
             new TokenRequest { GrantType = GrantTypes.AuthorizationCode, Audiences = ["https://unrelated.example.com"] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -217,6 +219,7 @@ public class AllowedResourcesTests
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["orders-api"] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

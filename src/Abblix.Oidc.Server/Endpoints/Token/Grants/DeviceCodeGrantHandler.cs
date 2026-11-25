@@ -60,7 +60,8 @@ public partial class DeviceCodeGrantHandler(
         TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
-    CancellationToken cancellationToken)
+        IClientInfoProvider clients,
+        CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.

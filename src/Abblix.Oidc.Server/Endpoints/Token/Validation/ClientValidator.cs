@@ -50,20 +50,20 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
+        // One lookup of the clients for the whole request, handed on to the steps that read a token it presents
         var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        context.Clients = clients;
+
         var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
-            // client" an invalid_request, not a failed authentication
-            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
-                return moreThanOneMethod;
-
-            // draft-ietf-oauth-client-id-metadata-document-03 section 6.1: "for a transient failure, an HTTP 503"
-            if (clients.UnavailableClientRefusal() is { } unavailable)
-                return unavailable;
-
-            return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+            // client" an invalid_request, not a failed authentication. draft-ietf-oauth-client-id-metadata-document-03
+            // section 6.1: "for a transient failure, an HTTP 503". A later step reading a token of another client may
+            // meet that client's outage too, but the answer to such a token does not depend on it, so only a failed
+            // authentication is answered as one
+            return clients.RefusalOf(authenticated.GetFailure() as MoreThanOneClientAuthenticationMethodError
+                                     ?? new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"));
         }
 
         context.ClientInfo = clientInfo;

@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -34,10 +35,10 @@ public class RegistrationAccessTokenValidatorTests
     {
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        return new RegistrationAccessTokenValidator(jwtValidator.Object);
+        return new RegistrationAccessTokenValidator(jwtValidator.Object, Mock.Of<IClientInfoProvider>());
     }
 
     private static JsonWebToken CreateToken(string? jti, string? subject = null, string? audience = null) => new()
@@ -94,7 +95,7 @@ public class RegistrationAccessTokenValidatorTests
     [InlineData(TokenTypes.Basic, null)]
     public async Task ARequestLackingAuthentication_IsAnsweredWithTheMarker(string? scheme, string? credentials)
     {
-        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object, Mock.Of<IClientInfoProvider>());
         var header = scheme is null ? null : new AuthenticationHeaderValue(scheme, credentials);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
@@ -110,7 +111,7 @@ public class RegistrationAccessTokenValidatorTests
     [Fact]
     public async Task TheBearerSchemeWithoutAToken_IsAnInvalidRequest()
     {
-        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object, Mock.Of<IClientInfoProvider>());
 
         var result = await validator.ValidateAsync(
             SingleIssuer.Tenant, new AuthenticationHeaderValue(TokenTypes.Bearer), ClientId);
@@ -159,12 +160,12 @@ public class RegistrationAccessTokenValidatorTests
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, null, It.IsAny<string>(),
+                TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(),
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object).ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
+        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object, Mock.Of<IClientInfoProvider>()).ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

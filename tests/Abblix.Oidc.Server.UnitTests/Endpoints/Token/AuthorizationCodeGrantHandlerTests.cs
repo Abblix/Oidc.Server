@@ -45,7 +45,7 @@ public class AuthorizationCodeGrantHandlerTests
 	[Fact]
 	public async Task AuthorizeAsync_MissingCode_ReturnsInvalidRequest()
 	{
-		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo("client1"), TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo("client1"), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -69,7 +69,7 @@ public class AuthorizationCodeGrantHandlerTests
 					new AuthSession("123", "session1", authenticationTime, "ip"),
 					Context: new AuthorizationContext("original-client", [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo("another-client"), TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo("another-client"), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -132,7 +132,7 @@ public class AuthorizationCodeGrantHandlerTests
 					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -155,7 +155,7 @@ public class AuthorizationCodeGrantHandlerTests
 					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.NotNull(grant);
@@ -223,7 +223,7 @@ public class AuthorizationCodeGrantHandlerTests
 						RedirectUri = authorizedRedirectUri is null ? null : new Uri(authorizedRedirectUri),
 					}));
 
-		return await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		return await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 	}
 
 	private async Task<Result<AuthorizedGrant, OidcError>> PkceTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
@@ -244,7 +244,7 @@ public class AuthorizationCodeGrantHandlerTests
 					}));
 
 		// act
-		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 		return result;
 	}
 }

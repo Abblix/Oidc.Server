@@ -110,6 +110,7 @@ public class SingleResourceAccessTokensTests
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = audiences },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource: true),
             // The exchange handler carries the audiences its request names into the grant
             AuthorizedGrant = new AuthorizedGrant(
@@ -144,6 +145,7 @@ public class SingleResourceAccessTokensTests
             },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource: true),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -178,6 +180,7 @@ public class SingleResourceAccessTokensTests
             new TokenRequest { GrantType = GrantTypes.AuthorizationCode, Resources = granted[..named] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

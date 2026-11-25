@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 
 
@@ -21,10 +22,14 @@ public record ValidRevocationRequest
 	/// <summary>
 	/// Initializes a valid revocation request with the provided model and token.
 	/// </summary>
-	public ValidRevocationRequest(RevocationRequest model, JsonWebToken token)
+	/// <param name="model">The revocation request model.</param>
+	/// <param name="token">The token to revoke.</param>
+	/// <param name="clientInfo">The authenticated client, the one the token was issued to.</param>
+	public ValidRevocationRequest(RevocationRequest model, JsonWebToken token, ClientInfo clientInfo)
 	{
 		Model = model;
 		Token = token;
+		ClientInfo = clientInfo;
 	}
 
 	/// <summary>
@@ -53,4 +58,9 @@ public record ValidRevocationRequest
 	/// The associated token, if available.
 	/// </summary>
 	public JsonWebToken? Token { get; }
+
+	/// <summary>
+	/// The client <see cref="Token"/> was issued to, which made the request; null where no token is to be revoked.
+	/// </summary>
+	public ClientInfo? ClientInfo { get; }
 }

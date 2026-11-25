@@ -90,7 +90,7 @@ public class DeviceCodeGrantHandlerTests
     [Fact]
     public async Task AuthorizeAsync_MissingDeviceCode_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -135,7 +135,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -177,7 +177,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -219,7 +219,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(UserId, grant.AuthSession.Subject);
@@ -258,7 +258,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -307,7 +307,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -342,7 +342,7 @@ public class DeviceCodeGrantHandlerTests
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
 
@@ -389,7 +389,7 @@ public class DeviceCodeGrantHandlerTests
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
@@ -423,7 +423,7 @@ public class DeviceCodeGrantHandlerTests
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
-            new CancellationToken(canceled: true));
+            Mock.Of<IClientInfoProvider>(), new CancellationToken(canceled: true));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
@@ -495,7 +495,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -519,7 +519,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -543,7 +543,7 @@ public class DeviceCodeGrantHandlerTests
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = deviceCode },
             new ClientInfo(ClientId),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(expectedError, error.Error);
@@ -586,7 +586,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
@@ -630,7 +630,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
@@ -656,7 +656,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, wrongClientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -689,7 +689,7 @@ public class DeviceCodeGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(pollKey, nextPollAt, TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -725,7 +725,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -762,7 +762,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -785,7 +785,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert: the missing required device_code is rejected by the parameter validator.
         Assert.True(result.TryGetFailure(out _));
@@ -811,7 +811,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         _storage.Verify(s => s.RemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
@@ -847,7 +847,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -882,7 +882,7 @@ public class DeviceCodeGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime, TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -912,7 +912,7 @@ public class DeviceCodeGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -940,7 +940,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -980,7 +980,7 @@ public class DeviceCodeGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
 
         // Act: asked early, so the instant is pushed - one interval past where it stands is past expiry.
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -1022,7 +1022,7 @@ public class DeviceCodeGrantHandlerTests
         _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(pending);
 
         // Act
-        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -1081,7 +1081,7 @@ public class DeviceCodeGrantHandlerTests
             }));
 
         // Act
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         // Assert: the entry lives for the 3-minute remainder, not the 15-minute lifetime - so polling
         // cannot keep the schedule, or anything keyed beside it, alive past the code's fixed expiry.
@@ -1131,7 +1131,7 @@ public class DeviceCodeGrantHandlerTests
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
-            tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+            tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
