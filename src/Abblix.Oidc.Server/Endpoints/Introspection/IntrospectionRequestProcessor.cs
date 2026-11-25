@@ -29,12 +29,8 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// It follows the OAuth 2.0 Token Introspection specification (RFC 7662).
 /// The processor examines the token's status and provides an appropriate response as per the specification.
 /// </remarks>
-/// <param name="clientInfoProvider">Resolves the client a token was issued to, so its subject can be opened
-/// before being re-sealed for a different caller.</param>
 /// <param name="subjectTypeConverter">Opens and re-seals the end-user identifier per client sector.</param>
-public class IntrospectionRequestProcessor(
-	IClientInfoProvider clientInfoProvider,
-	ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
+public class IntrospectionRequestProcessor(ISubjectTypeConverter subjectTypeConverter) : IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
@@ -45,10 +41,10 @@ public class IntrospectionRequestProcessor(
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionSuccess"/>
 	/// or an <see cref="OidcError"/>. The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public async Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
-		=> await ProcessInternalAsync(tenant, request);
+	public Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
+		=> Task.FromResult<Result<IntrospectionSuccess, OidcError>>(Process(tenant, request));
 
-	private async Task<IntrospectionSuccess> ProcessInternalAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
+	private IntrospectionSuccess Process(TenantDefinition tenant, ValidIntrospectionRequest request)
 	{
 		if (request.Token == null)
 		{
@@ -83,7 +79,7 @@ public class IntrospectionRequestProcessor(
 				payload[OidcClaimTypes.IdentityProvider] = ClientCredentialsSession.IdentityProvider;
 			}
 
-			var forCaller = await SubjectsForCallerAsync(tenant, request);
+			var forCaller = SubjectsForCaller(tenant, request);
 			if (forCaller != null)
 			{
 				payload[IanaClaimTypes.Sub] = forCaller.Subject;
@@ -121,18 +117,16 @@ public class IntrospectionRequestProcessor(
 	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not
 	/// open, leaves the response as it would have been without this.
 	/// </remarks>
-	private async Task<TokenSubjects?> SubjectsForCallerAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
+	private TokenSubjects? SubjectsForCaller(TenantDefinition tenant, ValidIntrospectionRequest request)
 	{
 		if (request.ClientInfo.SubjectType != SubjectTypes.Pairwise)
 			return null;
 
 		var token = request.Token.NotNull(nameof(request.Token));
-		if (token.Payload.Subject is null || token.Payload.ClientId is not { } ownerId)
-			return null;
 
 		// The parties in the token are what its own client sees, so they have to be opened against that client
 		// before they can be re-sealed for anybody else.
-		if (!(await clientInfoProvider.FindClientAsync(tenant, ownerId)).TryGetSuccess(out var owner))
+		if (token.Payload.Subject is null || request.TokenClient is not { } owner)
 			return null;
 
 		var real = subjectTypeConverter.Open(tenant, TokenSubjects.Of(token.Payload), owner);

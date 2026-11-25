@@ -40,6 +40,8 @@ public interface ISubjectTokenResolver
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="client">The client requesting the exchange, whose security profile the token is held to.</param>
+    /// <param name="clients">The clients of the request being served, where the client the token was issued to is
+    /// looked up.</param>
     /// <param name="subjectToken">The exact <c>subject_token</c> string from the wire.</param>
     /// <param name="tokenType">The token type URI the token was presented under (RFC 8693 section 3), which
     /// decides the token types the resolver accepts, since one resolver may serve several URIs.</param>
@@ -50,6 +52,7 @@ public interface ISubjectTokenResolver
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
         TenantDefinition tenant,
         ClientInfo client,
+        IClientInfoProvider clients,
         string subjectToken,
         Uri tokenType,
         CancellationToken cancellationToken);

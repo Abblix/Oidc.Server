@@ -129,12 +129,11 @@ public class TokenStatusCoverageTests
                 NullLogger<RevocationCutoffChecker>.Instance,
                 cutoffs.Object,
                 Options.Create(new OidcOptions()),
-                clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter())),
-            new GrantRevocation(registry.Object, clients.Object),
+            new GrantRevocation(registry.Object),
             new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
-        var result = await check.CheckAsync(SingleIssuer.Tenant, token, ValidationOptions.Default);
+        var result = await check.CheckAsync(SingleIssuer.Tenant, clients.Object, token, ValidationOptions.Default);
 
         if (expected is null)
         {

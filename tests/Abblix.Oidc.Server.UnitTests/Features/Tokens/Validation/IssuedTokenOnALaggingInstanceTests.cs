@@ -10,6 +10,7 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -79,7 +80,7 @@ public class IssuedTokenOnALaggingInstanceTests
             .FormatAsync(tenant, token, client: null, ServiceJwtEncryption.ForAccessToken(options));
 
         return await provider.GetRequiredService<IAuthServiceJwtValidator>()
-            .ValidateAsync(tenant, null, jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
+            .ValidateAsync(tenant, null, provider.GetRequiredService<IClientInfoProvider>(), jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
     }
 
     [Fact]

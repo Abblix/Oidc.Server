@@ -72,7 +72,7 @@ public class RefreshTokenService(
 		if (await tokenRegistry.TrySetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Used, expiresAt))
 			return true;
 
-		await grantRevocation.RevokeAsync(tenant, payload);
+		await grantRevocation.RevokeAsync(tenant, payload, clientInfo);
 		return false;
 	}
 

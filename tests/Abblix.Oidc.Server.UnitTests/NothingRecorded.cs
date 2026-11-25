@@ -41,7 +41,7 @@ internal static class NothingRecorded
 
             var cutoffs = new Mock<IRevocationCutoffChecker>();
             cutoffs
-                .Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebTokenPayload>()))
+                .Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebTokenPayload>()))
                 .ReturnsAsync((JwtValidationError?)null);
 
             var registrations = new Mock<IClientInfoManager>();
@@ -53,7 +53,7 @@ internal static class NothingRecorded
             return new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()),
+                new GrantRevocation(registry.Object),
                 new RegistrationAccessTokenBinding(registrations.Object));
         }
     }

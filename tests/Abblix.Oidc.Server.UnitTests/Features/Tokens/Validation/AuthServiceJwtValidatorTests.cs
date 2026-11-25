@@ -59,8 +59,7 @@ public class AuthServiceJwtValidatorTests
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
-            TestOidcOptions.Defaults(),
-            _clientInfoProvider.Object);
+            TestOidcOptions.Defaults());
     }
 
     /// <summary>
@@ -82,7 +81,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -109,7 +108,7 @@ public class AuthServiceJwtValidatorTests
 
         SetupKeyProviders();
 
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, accepted);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, accepted);
 
         Assert.NotNull(capturedParams);
         Assert.Same(accepted, capturedParams.TokenTypes);
@@ -134,7 +133,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -163,7 +162,7 @@ public class AuthServiceJwtValidatorTests
 
         SetupKeyProviders();
 
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.NotNull(capturedParams);
         Assert.False(await capturedParams.ValidateIssuer!(spelledOtherwise));
@@ -187,7 +186,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -214,7 +213,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -242,7 +241,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -268,7 +267,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // The validation itself asks the store for the client the token names; only the audience check is under test
         _clientInfoProvider.Invocations.Clear();
@@ -299,7 +298,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -326,7 +325,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -350,7 +349,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -377,7 +376,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -403,7 +402,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller, customOptions);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller, customOptions);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -429,7 +428,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller, noOptions);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller, noOptions);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -463,7 +462,7 @@ public class AuthServiceJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -498,7 +497,7 @@ public class AuthServiceJwtValidatorTests
             .Returns(encryptionKeys.ToAsyncEnumerable());
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -532,7 +531,7 @@ public class AuthServiceJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -562,7 +561,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validToken));
@@ -586,7 +585,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -609,7 +608,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -634,7 +633,7 @@ public class AuthServiceJwtValidatorTests
         SetupKeyProviders();
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
@@ -684,7 +683,7 @@ public class AuthServiceJwtValidatorTests
 
         _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -711,8 +710,7 @@ public class AuthServiceJwtValidatorTests
             SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
-            TestOidcOptions.Defaults(),
-            _clientInfoProvider.Object);
+            TestOidcOptions.Defaults());
 
         var token = CreateValidToken();
         token.Header.Type = type;
@@ -721,7 +719,7 @@ public class AuthServiceJwtValidatorTests
 
         _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
 
-        var result = await validator.ValidateAsync(served, null, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+        var result = await validator.ValidateAsync(served, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -742,10 +740,9 @@ public class AuthServiceJwtValidatorTests
             new TokenStatusCheck(
                 registry.Object,
                 new Mock<IRevocationCutoffChecker>(MockBehavior.Strict).Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()),
+                new GrantRevocation(registry.Object),
                 new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>())),
-            TestOidcOptions.Defaults(),
-            _clientInfoProvider.Object);
+            TestOidcOptions.Defaults());
 
         var token = CreateValidToken();
         token.Header.Type = JwtTypes.RefreshToken;
@@ -754,7 +751,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, "another~g1");
         _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
 
-        var result = await validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
@@ -771,7 +768,7 @@ public class AuthServiceJwtValidatorTests
         token.Payload.JwtId = NothingRecorded.RegistrationAccessTokenId;
         _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -818,7 +815,7 @@ public class AuthServiceJwtValidatorTests
             });
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
-        await _validator.ValidateAsync(tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm?.Invoke(keyManagement) ?? true);
     }
@@ -846,7 +843,7 @@ public class AuthServiceJwtValidatorTests
             });
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
-        await _validator.ValidateAsync(tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        await _validator.ValidateAsync(tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         if (bounded)
             Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], parameters!.AllowedSigningAlgorithms!.Order());
@@ -877,7 +874,7 @@ public class AuthServiceJwtValidatorTests
         var client = new ClientInfo(ValidClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
 
         await _validator.ValidateAsync(
-            SingleIssuer.Tenant, clientKnown ? client : null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, clientKnown ? client : null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         if (clientKnown)
         {
@@ -915,7 +912,7 @@ public class AuthServiceJwtValidatorTests
         var presenter = new ClientInfo(ValidClientId) { SecurityProfile = presenterProfile };
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, presenter, ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, presenter, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -943,7 +940,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, client: null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, client: null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -969,7 +966,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
@@ -998,7 +995,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, null, _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -1023,7 +1020,7 @@ public class AuthServiceJwtValidatorTests
             .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, new ClientInfo(ValidClientId), ValidJwt, TokenTypePolicy.CheckedByCaller);
+            SingleIssuer.Tenant, new ClientInfo(ValidClientId), _clientInfoProvider.Object, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }

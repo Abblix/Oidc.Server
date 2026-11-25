@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -122,4 +123,30 @@ public sealed record SubjectTokenContext(
     /// subject_token states none.
     /// </summary>
     public ICollection<string>? AuthenticationMethodReferences { get; init; }
+
+    /// <summary>
+    /// The <c>act</c> claim of a token exchanged from this subject_token, with <paramref name="actor"/> acting where an
+    /// actor_token was presented.
+    /// </summary>
+    /// <remarks>
+    /// Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's act object names
+    /// the actor's subject; any prior act chain inherited from the subject_token becomes the new actor's nested
+    /// act.act, preserving the full delegation path. Without an actor_token the subject_token's own chain is kept as it
+    /// is: a delegated token exchanged again still acts for somebody else, and only a subject_token carrying no act
+    /// yields a token without one.
+    /// </remarks>
+    /// <param name="actor">The resolved actor_token, or null where none was presented.</param>
+    public JsonObject? ActorChainWith(SubjectTokenContext? actor)
+    {
+        if (actor is null)
+            return (JsonObject?)Act?.DeepClone();
+
+        var actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
+        if (Act is not null)
+        {
+            actorClaim[IanaClaimTypes.Act] = Act.DeepClone();
+        }
+
+        return actorClaim;
+    }
 }

@@ -52,7 +52,7 @@ public class IntrospectionHandlerTests
     private static ValidIntrospectionRequest CreateValidIntrospectionRequest(IntrospectionRequest request)
     {
         var token = new Jwt.JsonWebToken();
-        return new ValidIntrospectionRequest(request, new ClientInfo(TestConstants.DefaultClientId), token);
+        return new ValidIntrospectionRequest(request, new ClientInfo(TestConstants.DefaultClientId), token, tokenClient: null);
     }
 
     private static IntrospectionSuccess CreateIntrospectionSuccess(bool active)

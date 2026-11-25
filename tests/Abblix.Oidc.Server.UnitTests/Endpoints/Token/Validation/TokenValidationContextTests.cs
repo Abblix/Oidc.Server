@@ -8,7 +8,9 @@
 
 using System;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
@@ -18,7 +20,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// </summary>
 public class TokenValidationContextTests
 {
-    private static TokenValidationContext Unfilled() => new(new TokenRequest(), new ClientRequest());
+    private static TokenValidationContext Unfilled() => new(new TokenRequest(), new ClientRequest()) { Clients = Mock.Of<IClientInfoProvider>() };
 
     /// <summary>
     /// Reading a grant that the pipeline has not established yet is a loud failure naming the property,

@@ -63,18 +63,18 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="logger">Records a refusal, so a revoked token is distinguishable from an expired one.</param>
 /// <param name="cutoffRegistry">The registry of subject- and session-level revocation cutoffs.</param>
 /// <param name="options">Carries the tolerance the comparison allows for clock differences.</param>
-/// <param name="clientInfoProvider">Resolves the client a token names, so a pairwise pseudonym can be opened
-/// back into the subject a host would revoke.</param>
 /// <param name="subjectTypeConverter">Opens that pseudonym.</param>
 public partial class RevocationCutoffChecker(
     ILogger<RevocationCutoffChecker> logger,
     IRevocationCutoffRegistry cutoffRegistry,
     IOptions<OidcOptions> options,
-    IClientInfoProvider clientInfoProvider,
     ISubjectTypeConverter subjectTypeConverter) : IRevocationCutoffChecker
 {
     /// <inheritdoc />
-    public async Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, JsonWebTokenPayload payload)
+    public async Task<JwtValidationError?> CheckAsync(
+        TenantDefinition tenant,
+        IClientInfoProvider clients,
+        JsonWebTokenPayload payload)
     {
         if (payload.IssuedAt is not { } issuedAt || !IsOurOwnToken(tenant, payload))
             return null;
@@ -87,7 +87,7 @@ public partial class RevocationCutoffChecker(
             return RevokedByCutoff;
         }
 
-        var (resolved, subject) = await TryResolveSubjectAsync(tenant, payload);
+        var (resolved, subject) = await TryResolveSubjectAsync(tenant, clients, payload);
         if (!resolved)
         {
             // The subject could not be recovered, so whether a cutoff covers this token is unknown - and a
@@ -192,7 +192,10 @@ public partial class RevocationCutoffChecker(
     /// deployment that chose the stricter privacy setting.
     /// </para>
     /// </remarks>
-    private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(TenantDefinition tenant, JsonWebTokenPayload payload)
+    private async Task<(bool Resolved, string? Subject)> TryResolveSubjectAsync(
+        TenantDefinition tenant,
+        IClientInfoProvider clients,
+        JsonWebTokenPayload payload)
     {
         // The client whose sector sealed the subject, which the payload names, rather than the client the token belongs
         // to: a registration access token belongs to the client its subject names, and that subject is a client
@@ -203,7 +206,7 @@ public partial class RevocationCutoffChecker(
         // A client_id names a client, so a token whose client is gone is refused. An azp or an audience is a client
         // on an ID token but may be a resource or this server's own address on another token, so one that names no
         // existing client leaves the subject as it is.
-        if (!(await clientInfoProvider.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
+        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var clientInfo))
             return payload.ClientId is { Length: > 0 } ? (false, null) : (true, subject);
 
         if (clientInfo.SubjectType != SubjectTypes.Pairwise)

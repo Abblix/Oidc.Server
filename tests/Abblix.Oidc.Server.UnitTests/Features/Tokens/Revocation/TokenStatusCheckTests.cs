@@ -64,7 +64,7 @@ public class TokenStatusCheckTests
         _check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object),
+            new GrantRevocation(_registry.Object),
             new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
@@ -345,7 +345,7 @@ public class TokenStatusCheckTests
 
     private Task<Result<JsonWebToken, JwtValidationError>> CheckAsync(
         ValidationOptions options = ValidationOptions.Default)
-        => _check.CheckAsync(SingleIssuer.Tenant, Checked, options);
+        => _check.CheckAsync(SingleIssuer.Tenant, _clients.Object, Checked, options);
 
     private JsonWebToken Checked => _token ?? throw new InvalidOperationException("No token is being checked.");
 
@@ -358,7 +358,6 @@ public class TokenStatusCheckTests
         NullLogger<RevocationCutoffChecker>.Instance,
         _cutoffs.Object,
         Options.Create(new OidcOptions { ReplicaClockSkew = skew }),
-        _clients.Object,
         SubjectConverter);
 
     private static JsonWebToken RefreshToken(string? grantId) => new()
@@ -503,7 +502,7 @@ public class TokenStatusCheckTests
         var check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object),
+            new GrantRevocation(_registry.Object),
             new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
         Checking(new JsonWebToken
@@ -522,7 +521,7 @@ public class TokenStatusCheckTests
         // revoking instance looks like from here.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-30));
 
-        var result = await check.CheckAsync(SingleIssuer.Tenant, Checked, ValidationOptions.Default);
+        var result = await check.CheckAsync(SingleIssuer.Tenant, _clients.Object, Checked, ValidationOptions.Default);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);

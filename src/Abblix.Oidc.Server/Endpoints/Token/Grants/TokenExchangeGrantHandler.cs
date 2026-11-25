@@ -63,9 +63,10 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
+        IClientInfoProvider clients,
         CancellationToken cancellationToken)
     {
-        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
+        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo, clients);
 
         return initial
             .Bind(ValidateRequiredParameters)
@@ -90,6 +91,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     private sealed record ValidationContext(
         TokenRequest Request,
         ClientInfo ClientInfo,
+        IClientInfoProvider Clients,
         SubjectTokenContext? Subject = null,
         SubjectTokenContext? Actor = null);
 
@@ -222,7 +224,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
         var result = await ResolveTokenAsync(
             tenant,
-            ctx.ClientInfo,
+            ctx,
             TokenRequest.Parameters.SubjectToken,
             ctx.Request.SubjectTokenType,
             subjectToken,
@@ -303,7 +305,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
         var result = await ResolveTokenAsync(
             tenant,
-            ctx.ClientInfo,
+            ctx,
             TokenRequest.Parameters.ActorToken,
             ctx.Request.ActorTokenType,
             actorToken,
@@ -393,13 +395,13 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
     /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
         TenantDefinition tenant,
-        ClientInfo clientInfo,
+        ValidationContext ctx,
         string parameterName,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
     {
-        var result = await ResolveByTypeAsync(tenant, clientInfo, tokenType, tokenValue, cancellationToken);
+        var result = await ResolveByTypeAsync(tenant, ctx, tokenType, tokenValue, cancellationToken);
         return result.MapFailure(
             failure => new OidcError(WireErrorOf(failure.Error), $"{parameterName}: {failure.ErrorDescription}"));
     }
@@ -416,7 +418,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
         TenantDefinition tenant,
-        ClientInfo clientInfo,
+        ValidationContext ctx,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
@@ -429,7 +431,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
+        return await resolver.ResolveAsync(tenant, ctx.ClientInfo, ctx.Clients, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
@@ -465,25 +467,7 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
             scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
         }
 
-        // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
-        // act object names the actor's subject; any prior act chain inherited from the
-        // subject_token becomes the new actor's nested act.act, preserving the full delegation
-        // path. Without an actor_token the subject_token's own chain is kept as it is: a delegated
-        // token exchanged again still acts for somebody else, and only a subject_token carrying no
-        // act yields a token without one.
-        JsonObject? actorClaim;
-        if (actor is not null)
-        {
-            actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
-            if (subject.Act is not null)
-            {
-                actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
-            }
-        }
-        else
-        {
-            actorClaim = (JsonObject?)subject.Act?.DeepClone();
-        }
+        var actorClaim = subject.ActorChainWith(actor);
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
         // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than

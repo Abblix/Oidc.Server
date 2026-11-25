@@ -66,8 +66,10 @@ public class ClientCredentialsGrantHandler(
 	/// <param name="request">The token request containing the requested scope and other parameters.</param>
 	/// <param name="clientInfo">Information about the authenticated client making the request.</param>
 	/// <returns>A task that completes with an authorized grant containing the client session and context.</returns>
+	/// <param name="clients">The clients of the request being served, where a client a presented token names
+	/// is looked up.</param>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
 	{
 		// Extract the requested scope from the request (may be null/empty)
 		var scope = request.Scope;

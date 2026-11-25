@@ -59,7 +59,6 @@ public class RevocationCutoffCheckerClientSubjectTests
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
             Options.Create(new OidcOptions()),
-            _clients.Object,
             new FixedSubjectTypeConverter(converter ?? new SubjectTypeConverter()));
     }
 
@@ -84,7 +83,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     {
         SetupCutoff(ClientId, IssuedAt.AddMinutes(10));
 
-        var error = await Checker().CheckAsync(SingleIssuer.Tenant, Token(ClientId));
+        var error = await Checker().CheckAsync(SingleIssuer.Tenant, _clients.Object, Token(ClientId));
 
         Assert.Equal(JwtError.TokenRevoked, error?.Error);
     }
@@ -94,7 +93,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     {
         SetupCutoff(ClientId, IssuedAt.AddMinutes(-10));
 
-        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, Token(ClientId)));
+        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, _clients.Object, Token(ClientId)));
     }
 
     [Fact]
@@ -102,7 +101,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     {
         SetupCutoff("another_client", IssuedAt.AddMinutes(10));
 
-        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, Token(ClientId)));
+        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, _clients.Object, Token(ClientId)));
     }
 
     /// <summary>
@@ -115,7 +114,7 @@ public class RevocationCutoffCheckerClientSubjectTests
         var idToken = Token(clientId: null);
         idToken.Audiences = [ClientId];
 
-        var error = await Checker().CheckAsync(SingleIssuer.Tenant, idToken);
+        var error = await Checker().CheckAsync(SingleIssuer.Tenant, _clients.Object, idToken);
 
         Assert.Equal(JwtError.TokenRevoked, error?.Error);
     }
@@ -139,7 +138,7 @@ public class RevocationCutoffCheckerClientSubjectTests
         token.Subject = converter.Convert(Subject, pairwiseClient);
         Assert.NotEqual(Subject, token.Subject);
 
-        var error = await Checker(converter).CheckAsync(SingleIssuer.Tenant, token);
+        var error = await Checker(converter).CheckAsync(SingleIssuer.Tenant, _clients.Object, token);
 
         Assert.Equal(JwtError.TokenRevoked, error?.Error);
     }
@@ -172,7 +171,7 @@ public class RevocationCutoffCheckerClientSubjectTests
     [Fact]
     public async Task ATokenNamingNoClient_IsNotMeasuredAgainstAClientCutoff()
     {
-        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, Token(clientId: null)));
+        Assert.Null(await Checker().CheckAsync(SingleIssuer.Tenant, _clients.Object, Token(clientId: null)));
 
         _cutoffs.Verify(
             c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.ClientSubject, It.IsAny<string>(), It.IsAny<CancellationToken>()),

@@ -242,6 +242,33 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
     }
 
     /// <summary>
+    /// A superseded refresh token presented by a client it was not issued to is refused for not being that client's
+    /// (RFC 6749 section 6), and the grant of the client it was issued to stays: only its own client's replay is the
+    /// theft signal that ends the family, as the revocation endpoint holds for such a token too.
+    /// </summary>
+    [Fact]
+    public async Task Another_clients_superseded_refresh_token_is_refused_and_leaves_the_family()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var rt2 = await RotateAsync(client, discovery, rt1);
+
+        var presentedByAnother = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = rt1,
+            [ClientRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        await AssertInvalidGrantAsync(presentedByAnother);
+
+        await RotateAsync(client, discovery, rt2);
+    }
+
+    /// <summary>
     /// Refreshes with <paramref name="refreshToken"/>, asserts the rotation succeeded, and returns the newly
     /// issued refresh token - the next member of the same grant family.
     /// </summary>

@@ -104,7 +104,7 @@ public class LostUpdateTests
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode },
             new ClientInfo("a-client"),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("a-client", grant.Context.ClientId);
