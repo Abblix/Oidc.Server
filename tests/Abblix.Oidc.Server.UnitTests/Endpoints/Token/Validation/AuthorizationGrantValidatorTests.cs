@@ -37,7 +37,41 @@ public class AuthorizationGrantValidatorTests
     public AuthorizationGrantValidatorTests()
     {
         _grantHandler = new Mock<IAuthorizationGrantHandler>(MockBehavior.Strict);
+        _grantHandler.Setup(h => h.GrantTypesSupported).Returns(SupportedGrantTypes);
         _validator = new AuthorizationGrantValidator(_grantHandler.Object);
+    }
+
+    private static readonly string[] SupportedGrantTypes =
+    [
+        GrantTypes.AuthorizationCode,
+        GrantTypes.RefreshToken,
+        GrantTypes.ClientCredentials,
+        GrantTypes.Password,
+        GrantTypes.JwtBearer,
+        GrantTypes.Ciba,
+        GrantTypes.TokenExchange,
+    ];
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: unsupported_grant_type is "The authorization grant type is
+    /// not supported by the authorization server", so a type no handler serves is answered with it, even for a client
+    /// not allowed it, and before the handler is reached. A type differing in case only is another type.
+    /// </summary>
+    [Theory]
+    [InlineData("urn:example:unknown", true)]
+    [InlineData("urn:example:unknown", false)]
+    [InlineData("Authorization_Code", false)]
+    public async Task AGrantTypeNoHandlerServes_IsUnsupportedWhateverTheClientMayUse(string grantType, bool clientMayUseIt)
+    {
+        var context = CreateContext(
+            grantType,
+            allowedGrantTypes: clientMayUseIt ? [grantType] : [GrantTypes.AuthorizationCode]);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.UnsupportedGrantType, error?.Error);
+        _grantHandler.VerifyGet(h => h.GrantTypesSupported);
+        _grantHandler.VerifyNoOtherCalls();
     }
 
     private static TokenValidationContext CreateContext(
@@ -154,6 +188,7 @@ public class AuthorizationGrantValidatorTests
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
         Assert.Contains("grant type is not allowed", error.ErrorDescription);
+        _grantHandler.VerifyGet(h => h.GrantTypesSupported);
         _grantHandler.VerifyNoOtherCalls();
     }
 
@@ -176,6 +211,7 @@ public class AuthorizationGrantValidatorTests
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        _grantHandler.VerifyGet(h => h.GrantTypesSupported);
         _grantHandler.VerifyNoOtherCalls();
     }
 
@@ -239,6 +275,7 @@ public class AuthorizationGrantValidatorTests
         await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
+        _grantHandler.VerifyGet(h => h.GrantTypesSupported);
         _grantHandler.VerifyNoOtherCalls();
     }
 

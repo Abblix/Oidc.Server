@@ -76,8 +76,14 @@ internal static class AuthorizationValidationContextScopeExtensions
 	/// token it asks for (<see cref="ClientInfo.MayReceiveRefreshToken"/>), so the end user is not asked to consent to
 	/// what the client cannot get.
 	/// </summary>
+	/// <remarks>
+	/// Whether an authorization code is returned is read off the response type rather than the flow type, which is
+	/// the same answer for every response type the server accepts (the code and hybrid flows are those whose response
+	/// type names code), and is known before the flow type is settled, so a validator running earlier asks the same
+	/// question the same way.
+	/// </remarks>
 	public static bool OfflineAccessReceived(this AuthorizationValidationContext context)
-		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
+		=> context.Request.ResponseType.HasFlag(ResponseTypes.Code)
 		   && AccessTokenAdmitsOfflineAccess(context)
 		   && ConsentConditionsHold(context)
 		   && context.ClientInfo.MayReceiveRefreshToken();

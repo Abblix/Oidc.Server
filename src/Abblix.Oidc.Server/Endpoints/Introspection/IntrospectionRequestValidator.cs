@@ -82,7 +82,7 @@ public partial class IntrospectionRequestValidator(
 		var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
 		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest, clients);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
-			return clients.RefusalOf(RefusalOf(authenticated.GetFailure()));
+			return clients.RefusalOf(RefusalOf(clientRequest, authenticated.GetFailure()));
 
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
@@ -179,7 +179,7 @@ public partial class IntrospectionRequestValidator(
 	/// <summary>
 	/// The answer to a caller the authenticator did not authenticate, by why it did not.
 	/// </summary>
-	private static OidcError RefusalOf(OidcError failure) => failure switch
+	private static OidcError RefusalOf(ClientRequest clientRequest, OidcError failure) => failure switch
 	{
 		// RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the client"
 		// an invalid_request, not a failed authentication
@@ -191,6 +191,6 @@ public partial class IntrospectionRequestValidator(
 		UnauthenticatedCallerError => failure,
 
 		// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
-		_ => new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"),
+		_ => BasicChallenge.InvalidClient(clientRequest, "The client is not authorized"),
 	};
 }

@@ -54,4 +54,8 @@ message AuthorizationContext {
   // Whether the client named no scope at the authorization step and the scope began as its default; a grant
   // stored before the field existed reads false, as a scope the client named
   bool client_named_no_scope = 13;
+
+  // Whether the authorization request named no redirect URI and the code was issued at the client's single
+  // registered one; a grant stored before the field existed reads false, as a redirect URI the client named
+  bool client_named_no_redirect_uri = 14;
 }

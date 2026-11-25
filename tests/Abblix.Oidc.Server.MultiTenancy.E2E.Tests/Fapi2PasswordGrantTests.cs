@@ -171,7 +171,8 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     /// </summary>
     [Theory]
     [InlineData(Globex, HttpStatusCode.OK, null)]
-    [InlineData(Acme, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
+    // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+    [InlineData(Acme, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
     public async Task ThePasswordGrant_IsRefusedAtTheFapi2Tenant(
         string tenant, HttpStatusCode expected, string? expectedError)
     {

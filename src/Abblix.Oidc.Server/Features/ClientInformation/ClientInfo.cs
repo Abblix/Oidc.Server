@@ -104,6 +104,17 @@ public record ClientInfo(string ClientId)
     /// enhancing security for public clients. A native app and a public client use PKCE whatever this states, as
     /// <see cref="EffectivePkceRequired"/> answers.
     /// </summary>
+    /// <remarks>
+    /// False marks the client as an OAuth 2.0 client in the sense of OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 1.8,
+    /// where "Which rules apply to a given client is determined by the authorization server's configuration for that
+    /// client". Section 7.5.1.1 has the server enforce code_challenge and code_verifier "unless both of the following
+    /// criteria are met: The client is a confidential client" and "there is reasonable assurance by the authorization
+    /// server that the client implements the OpenID Connect nonce mechanism properly". Such a client may then send an
+    /// authorization request without a code_challenge, including one carrying no nonce, which OpenID Connect Core 1.0
+    /// section 3.1.2.1 leaves optional in the code flow, so the server cannot have that assurance of every request it
+    /// admits: setting this to false is the deployment's statement that the client is held to OAuth 2.0 rather than to
+    /// OAuth 2.1.
+    /// </remarks>
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>

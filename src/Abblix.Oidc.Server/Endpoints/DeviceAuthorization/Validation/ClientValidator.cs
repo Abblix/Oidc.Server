@@ -32,8 +32,8 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
         if (context.ClientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenant, context.ClientRequest, new RequestScopedClientInfoProvider(clientInfoProvider));
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, context.ClientRequest, clients);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
@@ -43,9 +43,7 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, IClientIn
 
             // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
             // a failed client authentication invalid_client.
-            return new OidcError(
-                ErrorCodes.InvalidClient,
-                "The client is not authorized");
+            return BasicChallenge.InvalidClient(context.ClientRequest, "The client is not authorized");
         }
 
         if (!clientInfo.MayUseGrantType(GrantTypes.DeviceAuthorization))

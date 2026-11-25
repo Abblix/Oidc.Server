@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -37,7 +38,10 @@ internal static class BackChannelEndpoints
         {
             oidcGroup
                 .MapPost(routes.PushedAuthorizationRequest, PushedAuthorizationAsync)
-                .WithName(EndpointNames.PushedAuthorizationRequest);
+                .WithName(EndpointNames.PushedAuthorizationRequest)
+                // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2: a browser-based application posts its pushed
+                // request to this endpoint itself, which the section has "send the CORS header fields to allow access"
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
 
         if (options.EnabledEndpoints.HasFlag(OidcEndpoints.BackChannelAuthentication))

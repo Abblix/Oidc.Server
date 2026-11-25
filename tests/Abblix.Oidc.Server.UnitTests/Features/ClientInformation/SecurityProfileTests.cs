@@ -47,6 +47,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequirePushedAuthorizationRequests);
         Assert.False(requirements.RequireSenderConstrainedTokens);
         Assert.False(requirements.RequireCodeResponseTypeOnly);
+        Assert.False(requirements.RequireRedirectUriParameter);
         Assert.False(requirements.RequireStrictRequestObjectProcessing);
         Assert.Null(requirements.MaxRequestObjectLifetime);
     }
@@ -61,6 +62,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequirePushedAuthorizationRequests);
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireRedirectUriParameter);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
 
         // The request object rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile
@@ -96,6 +98,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequirePkceWithPushedRequests);
         Assert.True(requirements.RequireExactHttpsRedirectUris);
+        Assert.True(requirements.RequireRedirectUriParameter);
         Assert.True(requirements.ForbidRsa1_5KeyManagement);
         Assert.True(requirements.RequireHttpsJwksUri);
         Assert.True(requirements.RequireCertificateBoundTokens);

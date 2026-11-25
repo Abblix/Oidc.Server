@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers;
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
@@ -42,4 +43,19 @@ public static class CodeChallenge
         // Throws an exception if an unsupported method is encountered.
         _ => throw new ArgumentOutOfRangeException(nameof(method), $"Unknown code challenge method: {method}"),
     };
+
+    /// <summary>
+    /// Whether <paramref name="value"/> has the syntax both a code verifier and a code challenge share: OAuth 2.1
+    /// (draft-ietf-oauth-v2-1-17) section 4.1.1 and RFC 7636 sections 4.1 and 4.2, "code-verifier = 43*128unreserved"
+    /// and "code-challenge = 43*128unreserved", where "unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"".
+    /// </summary>
+    /// <param name="value">A code verifier or a code challenge as sent.</param>
+    public static bool IsWellFormed(string value)
+        => value.Length is >= MinLength and <= MaxLength && !value.AsSpan().ContainsAnyExcept(Unreserved);
+
+    private const int MinLength = 43;
+    private const int MaxLength = 128;
+
+    private static readonly SearchValues<char> Unreserved =
+        SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~");
 }

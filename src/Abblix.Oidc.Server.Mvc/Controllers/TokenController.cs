@@ -135,6 +135,9 @@ public class TokenController : ControllerBase
     [HttpPost]
     [ActionName(nameof(IntrospectionAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2 names introspection among the endpoints that "MUST also send
+    // the CORS header fields to allow access"
+    [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter<ActionResult> formatter,

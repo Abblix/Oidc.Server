@@ -23,7 +23,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// belongs to - the refresh token grant, the revocation and introspection endpoints and refresh token exchange - decides
 /// that between the halves, so a client holding another client's token cannot end that client's grant by presenting it.
 /// <para>
-/// Those read tokens through this interface alone, so a host replacing or decorating
+/// Those, and the token endpoint naming the client a refresh token presented without client_id belongs to, read
+/// tokens through this interface alone, so a host replacing or decorating
 /// <see cref="IAuthServiceJwtValidator"/> replaces or decorates this one as well, or they read tokens without it.
 /// </para>
 /// </remarks>

@@ -74,6 +74,44 @@ public class RedirectUrisCheckTests
     }
 
     /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3: "The query string component MUST NOT include any parameters
+    /// defined for use in the authorization response". A tenant declaring a client whose redirect URI does so does not
+    /// start, and the refusal names the client and the parameter; a post-logout redirect URI carries no authorization
+    /// response and starts.
+    /// </summary>
+    [Theory]
+    [InlineData("https://app.example.com/cb?code=1", ApplicationTypes.Web, "code")]
+    [InlineData("https://app.example.com/cb?tenant=a&iss=x", ApplicationTypes.Web, "iss")]
+    [InlineData("com.example.app:/cb?state", ApplicationTypes.Native, "state")]
+    public void AClient_RedirectingToAUriNamingAResponseParameter_IsRefused(
+        string uri, string applicationType, string parameter)
+    {
+        var refusal = Assert.Single(AllChecks(Bound(uri, applicationType, postLogout: false))).Message;
+
+        Assert.Contains($"'{ClientId}'", refusal);
+        Assert.Contains($"'{parameter}'", refusal);
+    }
+
+    [Fact]
+    public void AClient_SignedOutToAUriNamingAResponseParameter_Starts()
+        => Assert.Empty(AllChecks(Bound("https://app.example.com/signed-out?state=1", ApplicationTypes.Web, postLogout: true)));
+
+    /// <summary>
+    /// Dynamic registration refuses the same redirect URI, so a client the host declares and one that registers are
+    /// held to one rule.
+    /// </summary>
+    [Theory]
+    [InlineData("https://app.example.com/cb?code=1", ApplicationTypes.Web)]
+    [InlineData("com.example.app:/cb?error=x", ApplicationTypes.Native)]
+    public async Task Registration_OfAUriNamingAResponseParameter_IsRefused(string uri, string applicationType)
+    {
+        var error = await new RedirectUrisValidator().ValidateAsync(
+            SingleIssuer.Tenant, RegistrationOf(uri, applicationType, postLogout: false));
+
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, Assert.IsType<OidcError>(error).Error);
+    }
+
+    /// <summary>
     /// The same URIs serve a native app, and a web client may still redirect to https on a loopback host while it is
     /// developed: dynamic registration refuses that one, the settings do not.
     /// </summary>

@@ -31,8 +31,8 @@ public partial class ClientIdMetadataDocumentTests
     [InlineData(Arrival.RequestObject, true, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
     [InlineData(Arrival.RequestUri, false, HttpStatusCode.BadRequest, ErrorCodes.UnauthorizedClient)]
     [InlineData(Arrival.RequestUri, true, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
-    [InlineData(Arrival.Pushed, false, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
-    [InlineData(Arrival.Pushed, true, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
+    [InlineData(Arrival.Pushed, false, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
+    [InlineData(Arrival.Pushed, true, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
     public async Task AnAbsentClient_IsRefusedWithoutARedirect(
         Arrival arrival,
         bool namedByUrl,

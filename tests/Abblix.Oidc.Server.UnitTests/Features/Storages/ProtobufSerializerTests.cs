@@ -372,6 +372,7 @@ public class ProtobufSerializerTests
             CodeChallenge = "challenge-xyz",
             CodeChallengeMethod = CodeChallengeMethods.S256,
             Resources = [new Uri("https://api.example.com")],
+            ClientNamedNoRedirectUri = true,
         };
 
         // Act
@@ -390,6 +391,7 @@ public class ProtobufSerializerTests
         Assert.NotNull(result.Resources);
         Assert.Single(result.Resources);
         Assert.Equal(context.Resources[0], result.Resources[0]);
+        Assert.True(result.ClientNamedNoRedirectUri);
     }
 
     [Fact]
@@ -450,6 +452,7 @@ public class ProtobufSerializerTests
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
             },
+            ClientNamedNoRedirectUri = true,
         };
 
         // Act
@@ -482,6 +485,7 @@ public class ProtobufSerializerTests
         Assert.NotNull(result.Resources);
         Assert.Single(result.Resources);
         Assert.NotNull(result.Claims);
+        Assert.True(result.ClientNamedNoRedirectUri);
     }
 
     /// <summary>Absent, empty and carrying values: the three answers the field gives.</summary>

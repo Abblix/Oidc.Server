@@ -93,7 +93,13 @@ public class PushedAuthorizationHandler(
                 };
             }
 
-            return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
+            // The refusal travels as an OidcError too, which carries whether the Basic challenge is owed (RFC 9126
+            // section 2.3 answers as the token endpoint does)
+            const string notAuthorized = "The client is not authorized";
+            return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient(notAuthorized))
+            {
+                Refusal = BasicChallenge.InvalidClient(clientRequest, notAuthorized),
+            };
         }
 
         // The object is read for the client the request names, which has to be the one that authenticated. The library's

@@ -105,8 +105,7 @@ internal sealed class WireFieldDescriber(IModelMetadataProvider metadataProvider
     /// </summary>
     private static Type? WireTypeOf(Type binderType) => binderType switch
     {
-        _ when binderType == typeof(RequestParameterBinder)
-               || binderType == typeof(SplitSourceParameterBinder) => null,
+        _ when binderType == typeof(RequestParameterBinder) => null,
 
         _ when binderType == typeof(CustomParameterBinder<SecondsToTimeSpanModelBinder>) => typeof(int),
 

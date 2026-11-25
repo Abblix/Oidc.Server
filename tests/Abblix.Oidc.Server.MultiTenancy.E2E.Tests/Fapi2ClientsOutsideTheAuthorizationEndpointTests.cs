@@ -204,7 +204,8 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
     /// mtls_endpoint_aliases (RFC 8705 section 5), and is answered invalid_client; any other client lacks the proof.
     /// </summary>
     [Theory]
-    [InlineData(CertificateBoundMachineId, ErrorCodes.InvalidClient, HttpStatusCode.Unauthorized)]
+    // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+    [InlineData(CertificateBoundMachineId, ErrorCodes.InvalidClient, HttpStatusCode.BadRequest)]
     [InlineData(MachineId, ErrorCodes.InvalidDPoPProof, HttpStatusCode.BadRequest)]
     public async Task ATokenRequestWithoutASenderConstraint_IsRefusedForWhatItLacks(
         string clientId, string expectedError, HttpStatusCode expectedStatus)

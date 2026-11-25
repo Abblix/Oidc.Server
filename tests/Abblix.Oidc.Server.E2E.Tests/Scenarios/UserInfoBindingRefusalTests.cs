@@ -34,8 +34,6 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
 
     public static TheoryData<string> Refusals() =>
     [
-        nameof(TokenTwiceInTheQuery),
-        nameof(EmptyTokenInTheQueryBesideTheBody),
         nameof(TokenTwiceInTheBody),
     ];
 
@@ -55,8 +53,6 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
 
         using var request = refusal switch
         {
-            nameof(TokenTwiceInTheQuery) => TokenTwiceInTheQuery(endpoint),
-            nameof(EmptyTokenInTheQueryBesideTheBody) => EmptyTokenInTheQueryBesideTheBody(endpoint),
             nameof(TokenTwiceInTheBody) => TokenTwiceInTheBody(endpoint),
             _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, null),
         };
@@ -65,15 +61,6 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
         Assert.Equal(expected, actual);
     }
 
-    private static HttpRequestMessage TokenTwiceInTheQuery(Uri endpoint)
-        => new(HttpMethod.Get, WithQuery(endpoint, $"{Parameter}={AccessToken}&{Parameter}={AccessToken}"));
-
-    private static HttpRequestMessage EmptyTokenInTheQueryBesideTheBody(Uri endpoint)
-        => new(HttpMethod.Post, WithQuery(endpoint, $"{Parameter}="))
-        {
-            Content = new FormUrlEncodedContent([new(Parameter, AccessToken)]),
-        };
-
     private static HttpRequestMessage TokenTwiceInTheBody(Uri endpoint)
         => new(HttpMethod.Post, endpoint)
         {
@@ -81,8 +68,6 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
         };
 
     private const string Parameter = UserInfoRequest.Parameters.AccessToken;
-
-    private static Uri WithQuery(Uri endpoint, string query) => new UriBuilder(endpoint) { Query = query }.Uri;
 
     /// <summary>
     /// What a client acts on in the refusal: the status, the error code, and each challenge's scheme with the attributes

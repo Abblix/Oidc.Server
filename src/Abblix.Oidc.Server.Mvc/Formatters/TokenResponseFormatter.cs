@@ -61,8 +61,8 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
 
     private ActionResult FormatError(OidcError error)
     {
-        // The shared formatter owns the status-code policy: invalid_client comes back as a 401
-        // with a Basic challenge (RFC 6749 section 5.2), everything else as 400 with the JSON envelope.
+        // The shared formatter owns the status-code policy: invalid_client comes back as a 401 with a Basic challenge
+        // where one is owed (OAuth 2.1 section 3.2.4), everything else as 400 with the JSON envelope.
         var result = error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().IssuerAsWritten());
 
         // Per RFC 9449 section 8 a use_dpop_nonce error MUST carry the fresh nonce on a

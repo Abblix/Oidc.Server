@@ -52,17 +52,41 @@ internal sealed partial class ThrottledClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A source past its budget is refused here too: a caller asks this before reading anything the request
+    /// presents, as the token endpoint reads the client a refresh token names, and that read is a signature check.
+    /// </remarks>
     public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
         TenantDefinition tenant,
         ClientRequest request,
         IClientInfoProvider clients)
-        => inner.FindPresentedCredentialsAsync(tenant, request, clients);
+    {
+        RefuseIfSpent();
+        return inner.FindPresentedCredentialsAsync(tenant, request, clients);
+    }
 
     /// <inheritdoc />
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
         TenantDefinition tenant,
         ClientRequest request,
         IClientInfoProvider clients)
+    {
+        var (budget, source) = RefuseIfSpent();
+
+        // A request using more than one method is refused before any credential is looked at, as a repeated
+        // Authorization header is refused before the authenticator, so it spent nothing the budget prices
+        var result = await inner.TryAuthenticateClientAsync(tenant, request, clients);
+        if (!result.TryGetSuccess(out _) && result.GetFailure() is not MoreThanOneClientAuthenticationMethodError)
+            budget.RecordFailure(source);
+
+        return result;
+    }
+
+    /// <summary>
+    /// The budget and the source it is charged to, after refusing a source that has spent it.
+    /// </summary>
+    /// <exception cref="TooManyAuthenticationFailuresException">The source has spent its budget.</exception>
+    private (AuthenticationFailureBudget Budget, string? Source) RefuseIfSpent()
     {
         var budget = _budget.Value;
         var source = budget.Source;
@@ -75,12 +99,6 @@ internal sealed partial class ThrottledClientAuthenticator(
             throw new TooManyAuthenticationFailuresException(refusal);
         }
 
-        // A request using more than one method is refused before any credential is looked at, as a repeated
-        // Authorization header is refused before the authenticator, so it spent nothing the budget prices
-        var result = await inner.TryAuthenticateClientAsync(tenant, request, clients);
-        if (!result.TryGetSuccess(out _) && result.GetFailure() is not MoreThanOneClientAuthenticationMethodError)
-            budget.RecordFailure(source);
-
-        return result;
+        return (budget, source);
     }
 }

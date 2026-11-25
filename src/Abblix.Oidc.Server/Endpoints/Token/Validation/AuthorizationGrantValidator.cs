@@ -40,6 +40,17 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: unsupported_grant_type is "The authorization grant type is
+        // not supported by the authorization server", unauthorized_client "The authenticated client is not authorized to
+        // use this authorization grant type". A type no handler serves is no client's to use, so it is answered for
+        // what it is before the client's permission is asked. The handler answering it is the one dispatching the grant
+        if (!grantHandler.GrantTypesSupported.Contains(context.Request.GrantType, StringComparer.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.UnsupportedGrantType,
+                "The grant type is not supported");
+        }
+
         // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.MayUseGrantType(context.Request.GrantType))
         {

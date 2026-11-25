@@ -117,7 +117,8 @@ public static class ActionResultExtensions
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
-	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
+	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge where one is
+	/// owed (OAuth 2.1 section 3.2.4), and the fallback status without one otherwise,
 	/// and the JSON error body per RFC 6749 Section 5.2.
 	/// <c>invalid_request</c> returns HTTP 400 with the JSON body whatever the fallback (RFC 6749 Section 5.2,
 	/// RFC 6750 Section 3.1), and a <see cref="BearerRequestError"/> adds a Bearer challenge carrying it. All other
@@ -143,12 +144,12 @@ public static class ActionResultExtensions
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
 				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
-			// RFC 6749 section 5.2: a 401 is REQUIRED when the client authenticated via the Authorization
-			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
-			// only Authorization-header scheme the client-authenticating endpoints support, hence the
-			// Basic challenge; the error itself stays
-			// in the JSON body because RFC 7617 defines no error attributes for the Basic scheme.
-			(ErrorCodes.InvalidClient, _)
+			// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: a 401 with a Basic challenge for a request that
+			// authenticated with HTTP Basic, Basic being the only Authorization-header scheme the
+			// client-authenticating endpoints support; the error itself stays in the JSON body because RFC 7617
+			// defines no error attributes for the Basic scheme. Any other refusal of client authentication takes the
+			// endpoint's status
+			(ErrorCodes.InvalidClient, _) when error.BasicChallengeOwed
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
 					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 

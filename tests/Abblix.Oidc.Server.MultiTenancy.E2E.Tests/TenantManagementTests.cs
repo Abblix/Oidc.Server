@@ -182,7 +182,8 @@ public sealed class TenantManagementTests : IAsyncLifetime
             TestContext.Current.CancellationToken));
 
         var dropped = await RequestTokenAsync(Acme, AcmeClient);
-        Assert.Equal(HttpStatusCode.Unauthorized, dropped.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+        Assert.Equal(HttpStatusCode.BadRequest, dropped.StatusCode);
         Assert.Equal(
             ErrorCodes.InvalidClient,
             (await ReadJsonAsync(dropped))[ErrorResponse.Parameters.Error]?.GetValue<string>());

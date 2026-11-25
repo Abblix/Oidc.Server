@@ -65,7 +65,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
             .ToArray();
         Assert.Contains(tokenRequests, tags => Equals(tags[TelemetryTags.Outcome], TelemetryOutcomes.Success));
         Assert.Contains(tokenRequests, tags => Equals(tags[TelemetryTags.Outcome], TelemetryOutcomes.Refused) &&
-                                               Equals(tags[TelemetryTags.Error], ErrorCodes.UnauthorizedClient));
+                                               Equals(tags[TelemetryTags.Error], ErrorCodes.UnsupportedGrantType));
 
         Assert.Equal(
             new[] { TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken, TelemetryTokenTypes.RefreshToken },

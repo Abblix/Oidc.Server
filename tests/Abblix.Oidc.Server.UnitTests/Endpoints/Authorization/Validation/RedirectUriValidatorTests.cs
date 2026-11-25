@@ -757,4 +757,172 @@ public class RedirectUriValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.1: redirect_uri is "OPTIONAL if only one redirect URI is
+    /// registered for this client". A request without the openid scope from a client with one registered URI is served
+    /// at that URI, which the request goes on carrying, and remembers that the client named none.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_OAuthRequestWithoutRedirectUri_OneRegistered_IsServedAtIt()
+    {
+        var registered = new Uri(RegisteredUri);
+        var context = CreateContext(null, registered);
+        context.Request = context.Request with { Scope = ["api"] };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(registered, context.ValidRedirectUri);
+        Assert.Equal(registered, context.Request.RedirectUri);
+        Assert.True(context.Request.ClientNamedNoRedirectUri);
+    }
+
+    /// <summary>
+    /// offline_access beside the scope, or in the client's default, is judged here before the flow type is settled, by
+    /// the scope the request is served with: an OAuth request carrying it is served at the sole URI, an OpenID Connect
+    /// one is refused. offline_access alone is served as named when it is received (OpenID Connect Core 1.0 section 11:
+    /// prompt=consent for a client that may receive refresh tokens), a plain OAuth request, and is ignored otherwise,
+    /// the request then served the client's default.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { Scopes.Profile, Scopes.OfflineAccess }, null, false, true)]
+    [InlineData(new[] { Scopes.OpenId, Scopes.OfflineAccess }, null, false, false)]
+    [InlineData(new string[0], new[] { Scopes.Profile, Scopes.OfflineAccess }, false, true)]
+    [InlineData(new string[0], new[] { Scopes.OpenId, Scopes.OfflineAccess }, false, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, false, false)]
+    [InlineData(new[] { Scopes.OfflineAccess }, new[] { Scopes.OpenId }, true, true)]
+    public async Task ValidateAsync_RequestWithoutRedirectUri_AndOfflineAccess_IsJudgedByTheOpenIdScope(
+        string[] named, string[]? defaultScope, bool promptConsent, bool served)
+    {
+        var registered = new Uri(RegisteredUri);
+        var context = CreateContext(null, registered);
+        context.Request = context.Request with
+        {
+            Scope = named,
+            Prompt = promptConsent ? [Prompts.Consent] : null,
+        };
+        context.ClientInfo.DefaultScope = defaultScope;
+        context.ClientInfo.AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+        context.ClientInfo.OfflineAccess = OfflineAccess.ConsentRequired;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(served, result == null);
+        Assert.Equal(served ? registered : null, context.ValidRedirectUri);
+    }
+
+    /// <summary>
+    /// A request naming its redirect URI is not marked as one that named none.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_RequestNamingItsRedirectUri_IsNotMarkedAsNamingNone()
+    {
+        var registered = new Uri(RegisteredUri);
+        var context = CreateContext(registered, registered);
+        context.Request = context.Request with { Scope = ["api"] };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.False(context.Request.ClientNamedNoRedirectUri);
+    }
+
+    /// <summary>
+    /// A request coming back from a page carries the URI it was served at, and keeps the mark that its client named
+    /// none, so the token endpoint still knows it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_RequestComingBack_KeepsTheMarkThatItsClientNamedNone()
+    {
+        var registered = new Uri(RegisteredUri);
+        var context = CreateContext(registered, registered);
+        context.Request = context.Request with { Scope = ["api"], ClientNamedNoRedirectUri = true };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.True(context.Request.ClientNamedNoRedirectUri);
+    }
+
+    /// <summary>
+    /// OAuth 2.1 section 2.3.2: "If multiple redirect URIs have been registered for a client, the client MUST include a
+    /// redirect URI with the authorization request". An OpenID Connect request keeps redirect_uri required (OpenID
+    /// Connect Core 1.0 section 3.1.2.1), whether it names openid or is served a default scope carrying it.
+    /// </summary>
+    [Theory]
+    [InlineData("api", null, 2)]
+    [InlineData(Scopes.OpenId, null, 1)]
+    [InlineData(null, Scopes.OpenId, 1)]
+    public async Task ValidateAsync_RequestWithoutRedirectUri_IsRefusedUnlessOAuthWithOneRegistered(
+        string? named, string? defaultScope, int registeredCount)
+    {
+        Uri[] registered = registeredCount == 1
+            ? [new Uri(RegisteredUri)]
+            : [new Uri(RegisteredUri), new Uri(RegisteredUri2)];
+        var context = CreateContext(null, registered);
+        context.Request = context.Request with { Scope = named is null ? [] : [named] };
+        context.ClientInfo.DefaultScope = defaultScope is null ? null : [defaultScope];
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Null(context.ValidRedirectUri);
+        Assert.Null(context.Request.RedirectUri);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2 clause 9: the server "shall require the redirect_uri in the authorization request",
+    /// and FAPI 2.0 Security Profile section 5.3.2.2 clause 6 "shall require the redirect_uri parameter in pushed
+    /// authorization requests", so a client held to either names it even with one URI registered.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    public async Task ValidateAsync_FapiClientWithoutRedirectUri_IsRefused(ClientSecurityProfile profile)
+    {
+        var context = CreateContextFor(ApplicationTypes.Web, null, new Uri(RegisteredUri));
+        context.Request = context.Request with { Scope = ["api"] };
+        context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Null(context.ValidRedirectUri);
+    }
+
+    /// <summary>
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 2.3: "The query string component MUST NOT include any parameters
+    /// defined for use in the authorization response". A client the host's own store supplies never met the check of
+    /// the settings, so the endpoint refuses such a registered redirect URI too, and keeps one whose query names
+    /// another parameter.
+    /// </summary>
+    [Theory]
+    [InlineData("https://client.example.com/callback?code=1", false)]
+    [InlineData("https://client.example.com/callback?iss=x", false)]
+    [InlineData("https://client.example.com/callback?tenant=a", true)]
+    public async Task ValidateAsync_ARegisteredRedirectUriNamingAResponseParameter_IsRefused(string uri, bool accepted)
+    {
+        var context = CreateContextFor(ApplicationTypes.Web, new Uri(uri), new Uri(uri));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
+    /// The URI a request naming none is served at answers to the schemes of its client like a named one: a web client
+    /// is not served at an http URI it registered.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_RequestWithoutRedirectUri_TheRegisteredUriIsHeldToTheSchemesOfItsClientType()
+    {
+        var context = CreateContextFor(ApplicationTypes.Web, null, new Uri("http://client.example.com/callback"));
+        context.Request = context.Request with { Scope = ["api"] };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Null(context.ValidRedirectUri);
+    }
 }

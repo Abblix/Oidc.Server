@@ -83,7 +83,9 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
                 [ClientRequest.Parameters.ClientSecret] = "wrong-secret",
             });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client authenticating in the body is owed no Basic challenge, so the token
+        // endpoint answers it 400
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }

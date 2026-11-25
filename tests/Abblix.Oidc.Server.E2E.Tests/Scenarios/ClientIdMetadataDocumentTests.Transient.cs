@@ -84,7 +84,9 @@ public partial class ClientIdMetadataDocumentTests
 
         var (status, body) = await SendAuthenticatedAsync(endpoint, credential);
 
-        Assert.Equal(StatusCodes.Status401Unauthorized, status);
+        // OAuth 2.1 section 3.2.4: a client authenticating without HTTP Basic, and not registered for it, is owed no
+        // challenge, so the endpoint answers invalid_client with its own status
+        Assert.Equal(StatusCodes.Status400BadRequest, status);
         Assert.Contains(ErrorCodes.InvalidClient, body);
     }
 

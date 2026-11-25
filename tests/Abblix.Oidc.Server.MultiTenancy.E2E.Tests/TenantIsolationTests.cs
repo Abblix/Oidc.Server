@@ -237,7 +237,8 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, atAcme.StatusCode);
 
         var atGlobex = await PostAsync(Globex, PushPath, AcmeOnlyClientId, Push());
-        Assert.Equal(HttpStatusCode.Unauthorized, atGlobex.StatusCode);
+        // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+        Assert.Equal(HttpStatusCode.BadRequest, atGlobex.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
