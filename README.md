@@ -51,7 +51,7 @@ Abblix OIDC Server turns your ASP.NET Core application into an OpenID Connect pr
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: a large automated test suite, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
 - Modern .NET, minimal friction: requires .NET 11 and the .NET 11 SDK, with drop-in adapters for both MVC and Minimal API. A host on .NET 8, 9 or 10 uses 2.x, which still receives security fixes (see the [Security Policy](SECURITY.md)).
-- Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
+- Observable through OpenTelemetry: each endpoint request gets its own span and metrics, the span names the client it served, and the structured logs carry the trace of the request they belong to and record each token issued and each client registered, changed or removed.
 
 Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
 
