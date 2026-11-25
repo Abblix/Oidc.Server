@@ -56,21 +56,23 @@ public record NewClientOptions
     /// <summary>
     /// The resources a dynamically registered client may get an access token for: the list a client registering
     /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
-    /// client registering without the member may get a token for any registered resource, and a client nobody vetted
-    /// for none: one registered while anybody may register, that is while
-    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software statement from a trusted
-    /// issuer is required, and one resolved from its metadata document. One sending a resource is refused, since which
-    /// resources a client reaches is the server's policy rather than the client's choice.
+    /// client registering without the member may get a token for any registered resource, and for none a client
+    /// registered while anybody may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is
+    /// <c>false</c> and no software statement from a trusted issuer is required, and every client resolved from its
+    /// metadata document. One sending a resource is refused, since which resources a client reaches is the server's
+    /// policy rather than the client's choice.
     /// </summary>
     /// <remarks>
     /// Applied on registration, on every RFC 7592 update and to every client resolved from its metadata document, since
-    /// an update replaces the metadata whole; a stored client keeps its list until its next RFC 7592 update.
+    /// an update replaces the metadata whole. An update of a client stored as <see cref="ClientTrust.Unreviewed"/> is
+    /// held to these defaults; a record that names no trust, as every record stored by 3.0, is
+    /// <see cref="ClientTrust.Reviewed"/> until the host writes its trust.
     /// </remarks>
     public Uri[]? AllowedResources { get; init; }
 
     /// <summary>
-    /// The resources a client nobody vetted is given when it names none: <see cref="AllowedResources"/>, or none when
-    /// it is unset.
+    /// The resources a client registered while anybody may register, or resolved from its metadata document, is given
+    /// when it names none: <see cref="AllowedResources"/>, or none when it is unset.
     /// </summary>
     internal Uri[] UnreviewedClientResources => AllowedResources ?? [];
 

@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -32,16 +34,23 @@ public class OpenRegistrationDefaultsValidatorTests
     /// <summary>
     /// Where the request comes from: a registration under the settings, or an update of a client stored with a trust.
     /// </summary>
-    private sealed record Arrival(DynamicClientOperation Operation, ClientTrust? StoredTrust = null)
+    private sealed record Arrival(DynamicClientOperation Operation, ClientInfo? StoredClient = null)
     {
         public static readonly Arrival Registration = new(DynamicClientOperation.Register);
 
-        public static Arrival UpdateOf(ClientTrust trust) => new(DynamicClientOperation.Update, trust);
+        public static Arrival UpdateOf(ClientTrust trust)
+            => new(DynamicClientOperation.Update, new ClientInfo("client-1") { Trust = trust });
+
+        /// <summary>
+        /// An update of the client a stored record describes, as the server reads that record back.
+        /// </summary>
+        public static Arrival UpdateOfRecord(JsonObject record)
+            => new(DynamicClientOperation.Update, JsonSerializer.Deserialize<ClientInfo>(record.ToJsonString()));
 
         public ClientRegistrationValidationContext ContextFor(ClientRegistrationRequest request) => new(request)
         {
             Operation = Operation,
-            StoredClient = StoredTrust is { } trust ? new ClientInfo("client-1") { Trust = trust } : null,
+            StoredClient = StoredClient,
         };
     }
 
@@ -180,6 +189,28 @@ public class OpenRegistrationDefaultsValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, await ErrorFor(closed, [GrantTypes.ClientCredentials], update));
         Assert.Equal((Uri[]?)[], await ResourcesAfter(closed, arrival: update));
+    }
+
+    /// <summary>
+    /// A record naming no trust, as every record stored before the member existed, is a reviewed client's, so its
+    /// update keeps what it asks for while registration is open; the same record once the host writes its trust as
+    /// unreviewed is held to the defaults.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateOfARecordNamingNoTrust_IsReviewedUntilTheHostWritesItsTrust()
+    {
+        var open = Settings(false);
+        var record = new JsonObject { [nameof(ClientInfo.ClientId)] = "client-1" };
+
+        Assert.Null(await ErrorFor(open, [GrantTypes.ClientCredentials], Arrival.UpdateOfRecord(record)));
+        Assert.Null(await ResourcesAfter(open, arrival: Arrival.UpdateOfRecord(record)));
+
+        record[nameof(ClientInfo.Trust)] = "unreviewed";
+
+        Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ErrorFor(open, [GrantTypes.ClientCredentials], Arrival.UpdateOfRecord(record)));
+        Assert.Equal((Uri[]?)[], await ResourcesAfter(open, arrival: Arrival.UpdateOfRecord(record)));
     }
 
     /// <summary>
