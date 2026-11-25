@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -69,6 +70,85 @@ public partial class ClientIdMetadataDocumentTests
         Assert.True(client.TryGetSuccess(out var found), client.ToString());
         Assert.Equal(ClientAuthenticationMethods.None, found.TokenEndpointAuthMethod);
         Assert.DoesNotContain(GrantTypes.ClientCredentials, found.EffectiveGrantTypes);
+    }
+
+    /// <summary>
+    /// A document client is held to the grant types <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>
+    /// names, whether or not anybody may register a client, and takes the token settings the host gives new clients.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentClient_UnderOpenRegistration_KeepsTheGrantsItsOptionsName_AndTakesTheNewClientTokenSettings()
+    {
+        var document = DocumentDeclaring([ClientAuthenticationMethods.PrivateKeyJwt]);
+        document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials);
+        Serve(document);
+        var refreshToken = new RefreshTokenOptions { AbsoluteExpiresIn = TimeSpan.FromHours(2), SlidingExpiresIn = null };
+        await using var host = CreateHost(options =>
+        {
+            options.RequireInitialAccessToken = false;
+            options.ClientIdMetadataDocuments.AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials];
+            options.NewClientOptions = options.NewClientOptions with
+            {
+                AllowedGrantTypes = null,
+                AccessTokenExpiresIn = TimeSpan.FromSeconds(41),
+                SingleResourceAccessTokens = true,
+                RefreshToken = refreshToken,
+            };
+        });
+
+        var client = await FindAsync(host, TenantListing("acme", authority: null));
+
+        Assert.True(client.TryGetSuccess(out var found), client.ToString());
+        Assert.Contains(GrantTypes.ClientCredentials, found.EffectiveGrantTypes);
+        Assert.Equal(TimeSpan.FromSeconds(41), found.AccessTokenExpiresIn);
+        Assert.True(found.SingleResourceAccessTokens);
+        Assert.Equal(refreshToken, found.RefreshToken);
+    }
+
+    /// <summary>
+    /// With no grant types named for documents, a client authenticating itself still gets only the grants of an
+    /// interactive sign-in, the default a client registering without an initial access token gets too.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentClient_WithoutGrantTypesNamedForDocuments_GetsOnlyTheSignInGrants()
+    {
+        var document = DocumentDeclaring([ClientAuthenticationMethods.PrivateKeyJwt]);
+        document[RegistrationMembers.GrantTypes] = new JsonArray(
+            GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.ClientCredentials);
+        Serve(document);
+        await using var host = CreateHost(options =>
+        {
+            options.ClientIdMetadataDocuments.AllowedGrantTypes = null;
+            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = null };
+        });
+
+        var client = await FindAsync(host, TenantListing("acme", authority: null));
+
+        Assert.True(client.TryGetSuccess(out var found), client.ToString());
+        Assert.Equal([GrantTypes.AuthorizationCode, GrantTypes.RefreshToken], found.EffectiveGrantTypes);
+    }
+
+    /// <summary>
+    /// A document client naming no resources gets the host's list for new clients, and none when the host names none,
+    /// as a client registering while anybody may register does.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADocumentClientNamingNoResource_GetsTheHostsListOrNone(bool hostNamesOne)
+    {
+        var resource = new Uri("https://orders.example.com");
+        Serve(DocumentDeclaring([ClientAuthenticationMethods.PrivateKeyJwt]));
+        await using var host = CreateHost(options => options.NewClientOptions = options.NewClientOptions with
+        {
+            AllowedResources = hostNamesOne ? [resource] : null,
+        });
+
+        var client = await FindAsync(host, TenantListing("acme", authority: null));
+
+        Assert.True(client.TryGetSuccess(out var found), client.ToString());
+        Assert.Equal(hostNamesOne ? [resource] : [], found.AllowedResources!);
+        Assert.Equal(hostNamesOne, found.MayGetTokenFor(resource));
     }
 
     /// <summary>

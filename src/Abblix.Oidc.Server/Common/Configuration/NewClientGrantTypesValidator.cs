@@ -32,8 +32,8 @@ public sealed class NewClientGrantTypesValidator : IValidateOptions<OidcOptions>
 
         if (allowed.Length == 0)
             return ValidateOptionsResult.Fail(
-                $"{setting} is empty, which refuses every client registration: leave it unset to allow every " +
-                "supported grant type, or name the grant types new clients may request.");
+                $"{setting} is empty, which refuses every client registration: leave it unset for the default, or " +
+                "name the grant types new clients may request.");
 
         if (allowed.Any(string.IsNullOrWhiteSpace))
             return ValidateOptionsResult.Fail($"{setting} holds a blank grant type.");

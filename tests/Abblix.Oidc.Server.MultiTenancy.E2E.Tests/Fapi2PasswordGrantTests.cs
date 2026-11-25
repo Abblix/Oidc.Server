@@ -109,6 +109,8 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
         {
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
             options.RequireInitialAccessToken = false;
+            // A client registering without a token is given only the sign-in grants unless the host names others
+            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Password] };
             options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;

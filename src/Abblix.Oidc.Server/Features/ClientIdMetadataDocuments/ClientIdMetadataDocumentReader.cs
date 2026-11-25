@@ -266,11 +266,6 @@ internal sealed class ClientIdMetadataDocumentReader(
     }
 
     /// <summary>
-    /// The grant types an end user takes part in, which a document client gets unless the host names others.
-    /// </summary>
-    private static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
-
-    /// <summary>
     /// The grant types of <paramref name="declared"/> this server supports and the host allows a document client.
     /// </summary>
     /// <remarks>
@@ -288,7 +283,7 @@ internal sealed class ClientIdMetadataDocumentReader(
             .ToHashSet(StringComparer.Ordinal);
 
         var settings = options.CurrentValue;
-        supported.IntersectWith(settings.ClientIdMetadataDocuments.AllowedGrantTypes ?? UserGrantTypes);
+        supported.IntersectWith(settings.ClientIdMetadataDocuments.GrantTypesAllowed);
 
         if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
             supported.IntersectWith(allowed);
