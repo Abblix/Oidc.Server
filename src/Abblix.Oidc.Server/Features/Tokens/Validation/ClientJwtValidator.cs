@@ -60,14 +60,11 @@ public partial class ClientJwtValidator(
         TokenTypePolicy tokenTypes,
         ValidationOptions options)
         => ValidateAsync(
-            tenant,
-            client: null,
-            clients,
+            new ValidationContext(clients, tenant, named: null, (client, _) => _keys.FromSecret(tenant, client)),
             jwt,
             tokenTypes,
             ClientSigningKeys.SecretAlgorithms,
-            options,
-            (client, _) => _keys.FromSecret(tenant, client));
+            options);
 
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
@@ -96,24 +93,25 @@ public partial class ClientJwtValidator(
         IReadOnlySet<string>? signingAlgorithms,
         ValidationOptions options = ValidationOptions.Default)
         => ValidateAsync(
-            tenant, client, clients, jwt, tokenTypes, signingAlgorithms, options,
-            (tokenClient, refetch) => _keys.Published(tenant, tokenClient, refetch));
+            new ValidationContext(
+                clients, tenant, client, (tokenClient, refetch) => _keys.Published(tenant, tokenClient, refetch)),
+            jwt,
+            tokenTypes,
+            signingAlgorithms,
+            options);
 
     /// <summary>
     /// Validates the JWT as the public members describe, its signature checked against the keys
-    /// <paramref name="signingKeys"/> gives for the client its issuer names.
+    /// <paramref name="context"/> resolves for the client its issuer names.
     /// </summary>
     private async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
-        TenantDefinition tenant,
-        ClientInfo? client,
-        IClientInfoProvider clients,
+        ValidationContext context,
         string jwt,
         TokenTypePolicy tokenTypes,
         IReadOnlySet<string>? signingAlgorithms,
-        ValidationOptions options,
-        Func<ClientInfo, bool, IAsyncEnumerable<JsonWebKey>> signingKeys)
+        ValidationOptions options)
     {
-        var context = new ValidationContext(clients, tenant, client, signingKeys);
+        var (tenant, client, clients) = (context.Tenant, context.Named, context.Clients);
 
         // The token is validated under the profile of the client the request names outside it, or what the
         // deployment demands of every client where it names none, the guard holding its signature and each JWE layer
@@ -322,6 +320,21 @@ public partial class ClientJwtValidator(
         ClientInfo? named,
         Func<ClientInfo, bool, IAsyncEnumerable<JsonWebKey>> signingKeys)
     {
+        /// <summary>
+        /// The clients of the request being served.
+        /// </summary>
+        public IClientInfoProvider Clients => clients;
+
+        /// <summary>
+        /// The tenant the token is for.
+        /// </summary>
+        public TenantDefinition Tenant => tenant;
+
+        /// <summary>
+        /// The client the request names outside the token, or null.
+        /// </summary>
+        public ClientInfo? Named => named;
+
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
         /// </summary>
