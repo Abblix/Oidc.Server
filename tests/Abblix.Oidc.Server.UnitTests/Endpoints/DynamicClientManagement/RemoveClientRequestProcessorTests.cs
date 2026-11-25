@@ -33,6 +33,7 @@ public class RemoveClientRequestProcessorTests
         var clients = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clients.Setup(c => c.TryRemoveClientAsync(TestTenant.Matched, Client)).ReturnsAsync(registrationHeld);
         return new RemoveClientRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveClientRequestProcessor>.Instance,
             clients.Object,
             TimeProvider.System,
             SingleIssuer.LicensedCatalog);

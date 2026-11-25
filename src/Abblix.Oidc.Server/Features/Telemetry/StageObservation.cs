@@ -30,10 +30,13 @@ internal static class StageObservation
     /// <param name="stage">The stage, one of <see cref="TelemetryStages"/>.</param>
     /// <param name="handle">The stage's work.</param>
     /// <param name="refused">Whether the outcome refuses the request.</param>
+    /// <param name="clientOf">The client a successful outcome authenticated or found, named on the endpoint's span
+    /// (<see cref="TelemetryTags.ClientId"/>); null for a stage that names none.</param>
     public static async Task<TResult> RunAsync<TResult>(
         string stage,
         Func<Task<TResult>> handle,
-        Func<TResult, bool> refused)
+        Func<TResult, bool> refused,
+        Func<TResult, string?>? clientOf = null)
     {
         using var span = WithinServerSpan() ? OidcTelemetry.Source.StartActivity(stage) : null;
         if (span is null)
@@ -44,6 +47,9 @@ internal static class StageObservation
         {
             var result = await handle();
             span.SetStatus(refused(result) ? ActivityStatusCode.Error : ActivityStatusCode.Ok);
+            if (clientOf?.Invoke(result) is { } clientId)
+                EndpointObservation.NameClient(clientId);
+
             return result;
         }
         catch (TooManyAuthenticationFailuresException)
@@ -94,4 +100,10 @@ internal static class StageObservation
     /// An outcome that never refuses.
     /// </summary>
     public static bool NeverRefused<TResult>(TResult _) => false;
+
+    /// <summary>
+    /// The client_id of the client a successful result carries, or null for a refusal.
+    /// </summary>
+    public static string? ClientOf<TSuccess, TFailure>(Result<TSuccess, TFailure> result, Func<TSuccess, string> clientId)
+        => result.TryGetSuccess(out var success) ? clientId(success) : null;
 }

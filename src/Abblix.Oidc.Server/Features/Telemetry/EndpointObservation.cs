@@ -96,6 +96,22 @@ internal static class EndpointObservation
     }
 
     /// <summary>
+    /// Names <paramref name="clientId"/> on the span of the endpoint whose handling is under way, however many stage
+    /// spans and activities of the host's own sit between; nothing when no such span is recorded.
+    /// </summary>
+    public static void NameClient(string clientId)
+    {
+        for (var activity = Activity.Current; activity != null; activity = activity.Parent)
+        {
+            if (activity.Source == OidcTelemetry.Source && activity.GetTagItem(TelemetryTags.Endpoint) is not null)
+            {
+                activity.SetTag(TelemetryTags.ClientId, clientId);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
     /// Closes the span with the status <paramref name="error"/> tells, counts a refusal for a spent budget, and
     /// returns how the request ended with the error code a measurement may name.
     /// </summary>

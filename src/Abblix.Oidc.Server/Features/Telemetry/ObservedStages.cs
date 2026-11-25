@@ -24,15 +24,15 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Telemetry;
 
-[assembly: ObservedStage(typeof(IAuthorizationRequestValidator), TelemetryStages.Validation)]
+[assembly: ObservedStage(typeof(IAuthorizationRequestValidator), TelemetryStages.Validation, NamesClient = true)]
 [assembly: ObservedStage(typeof(IAuthorizationRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IPushedAuthorizationRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IPushedAuthorizationRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(ITokenRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(ITokenRequestProcessor), TelemetryStages.Issuance)]
-[assembly: ObservedStage(typeof(IUserInfoRequestValidator), TelemetryStages.Validation)]
+[assembly: ObservedStage(typeof(IUserInfoRequestValidator), TelemetryStages.Validation, NamesClient = true)]
 [assembly: ObservedStage(typeof(IUserInfoRequestProcessor), TelemetryStages.Processing)]
-[assembly: ObservedStage(typeof(IEndSessionRequestValidator), TelemetryStages.Validation)]
+[assembly: ObservedStage(typeof(IEndSessionRequestValidator), TelemetryStages.Validation, NamesClient = true)]
 [assembly: ObservedStage(typeof(IEndSessionRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRevocationRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IRevocationRequestProcessor), TelemetryStages.Processing)]
@@ -43,13 +43,14 @@ using Abblix.Oidc.Server.Features.Telemetry;
 [assembly: ObservedStage(typeof(IDeviceAuthorizationRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IDeviceAuthorizationRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRegisterClientRequestValidator), TelemetryStages.Validation)]
-[assembly: ObservedStage(typeof(IRegisterClientRequestProcessor), TelemetryStages.Processing)]
-[assembly: ObservedStage(typeof(IClientRequestValidator), TelemetryStages.Validation)]
+[assembly: ObservedStage(typeof(IRegisterClientRequestProcessor), TelemetryStages.Processing, NamesClient = true)]
+[assembly: ObservedStage(typeof(IClientRequestValidator), TelemetryStages.Validation, NamesClient = true)]
 [assembly: ObservedStage(typeof(IReadClientRequestProcessor), TelemetryStages.Processing)]
-[assembly: ObservedStage(typeof(IUpdateClientRequestValidator), TelemetryStages.Validation)]
+[assembly: ObservedStage(typeof(IUpdateClientRequestValidator), TelemetryStages.Validation, NamesClient = true)]
 [assembly: ObservedStage(typeof(IUpdateClientRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRemoveClientRequestProcessor), TelemetryStages.Processing)]
 // NeverRefuses speaks only for the member naming where credentials are presented, which answers a list rather than a
 // refusal; authentication itself returns a Result, whose refusal the span reads as before
-[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication, NeverRefuses = true)]
+[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication, NeverRefuses = true,
+    NamesClient = true)]
 [assembly: ObservedStage(typeof(IAuthorizationGrantHandler), TelemetryStages.Grant)]

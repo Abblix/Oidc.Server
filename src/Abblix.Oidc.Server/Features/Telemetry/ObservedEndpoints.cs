@@ -22,10 +22,13 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.Telemetry;
+using Microsoft.Extensions.Logging;
 
 [assembly: ObservedEndpoint(typeof(IAuthorizationHandler), TelemetryEndpoints.Authorize,
-    TagsRequest = true, ObservesResult = true)]
+    TagsRequest = true, ObservesResult = true,
+    Dependencies = [typeof(ILoggerFactory), typeof(CredentialFingerprints)])]
 [assembly: ObservedEndpoint(typeof(IPushedAuthorizationHandler), TelemetryEndpoints.PushedAuthorization,
     TagsRequest = true)]
 [assembly: ObservedEndpoint(typeof(ITokenHandler), TelemetryEndpoints.Token,

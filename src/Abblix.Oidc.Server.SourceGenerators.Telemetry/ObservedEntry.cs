@@ -22,6 +22,7 @@ namespace Abblix.Oidc.Server.SourceGenerators.Telemetry;
 /// <param name="ObservesResult">Whether the decorator looks at what the handler returned.</param>
 /// <param name="RefusesWithNull">Whether the service answers a refusal with null.</param>
 /// <param name="NeverRefuses">Whether the service never refuses, whatever it returns.</param>
+/// <param name="NamesClient">Whether a successful result of a stage names the client of the request.</param>
 /// <param name="Dependencies">The services the hooks need.</param>
 /// <param name="Members">Every member of the interface, those it inherits included.</param>
 /// <param name="Methods">The ordinary methods among the members.</param>
@@ -35,6 +36,7 @@ internal sealed record ObservedEntry(
 	bool ObservesResult,
 	bool RefusesWithNull,
 	bool NeverRefuses,
+	bool NamesClient,
 	INamedTypeSymbol[] Dependencies,
 	ISymbol[] Members,
 	IMethodSymbol[] Methods,

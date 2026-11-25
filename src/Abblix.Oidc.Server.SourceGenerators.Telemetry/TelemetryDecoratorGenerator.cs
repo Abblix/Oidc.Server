@@ -42,6 +42,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	private const string ObservesResultProperty = "ObservesResult";
 	private const string RefusesWithNullProperty = "RefusesWithNull";
 	private const string NeverRefusesProperty = "NeverRefuses";
+	private const string NamesClientProperty = "NamesClient";
 	private const string DependenciesProperty = "Dependencies";
 
 	private const string DecoratorPrefix = "Observed";
@@ -192,6 +193,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			NamedFlag(attribute, ObservesResultProperty),
 			NamedFlag(attribute, RefusesWithNullProperty),
 			NamedFlag(attribute, NeverRefusesProperty),
+			NamedFlag(attribute, NamesClientProperty),
 			attribute.NamedArguments
 				.Where(argument => argument.Key == DependenciesProperty)
 				.SelectMany(argument => argument.Value.Values)
@@ -431,7 +433,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				run
 					.Append($"global::{TelemetryNamespace}.StageObservation.RunAsync(")
 					.Append($"{name}, () => _inner.{Escape(method.Name)}({arguments}), ")
-					.Append($"global::{TelemetryNamespace}.StageObservation.{reader}");
+					.Append($"global::{TelemetryNamespace}.StageObservation.{reader}")
+					.Append(NamesClient(entry, result) ? ", ClientOf" : string.Empty);
 				break;
 
 			default:
@@ -468,6 +471,8 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source.AppendLine($"\t\t=> {run};");
 		}
+
+		AppendClientOf(source, entry, result);
 
 		if (tagsRequest)
 		{
@@ -526,6 +531,29 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			default:
 				throw new ArgumentOutOfRangeException(nameof(kind), kind, UnknownKindMessage);
 		}
+	}
+
+	/// <summary>
+	/// Whether the stage's method returning <paramref name="result"/> names the client of the request on the endpoint's
+	/// span: only a method returning a Result does, since only its success carries a client.
+	/// </summary>
+	private static bool NamesClient(ObservedEntry entry, ITypeSymbol result)
+		=> entry is { Kind: ObservationKind.Stage, NamesClient: true } && IsResult(result);
+
+	/// <summary>
+	/// Declares the hook that reads the client out of <paramref name="result"/>, for a method that names one.
+	/// </summary>
+	private static void AppendClientOf(StringBuilder source, ObservedEntry entry, ITypeSymbol result)
+	{
+		if (!NamesClient(entry, result))
+			return;
+
+		source
+			.AppendLine()
+			.AppendLine("\t/// <summary>")
+			.AppendLine("\t/// The client_id of the client a successful result authenticated or found, or null for a refusal.")
+			.AppendLine("\t/// </summary>")
+			.AppendLine($"\tprivate partial string? ClientOf({result.ToDisplayString(FullyQualifiedWithNullability)} result);");
 	}
 
 	/// <summary>

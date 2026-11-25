@@ -209,6 +209,7 @@ public class AuthorizationRequestProcessor(
 		{
 			GrantedScopes = authContext.Scope,
 			SessionPersistence = authSession.Persistence,
+			Subject = authSession.Subject,
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext) { AuthorizedAt = clock.GetUtcNow() };

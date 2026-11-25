@@ -87,6 +87,11 @@ public sealed class EndpointSpanRegistrationTests
 
         // The token span reads only the grant types supported, so the grants composed above are not built
         services.Replace(ServiceDescriptor.Singleton(Mock.Of<IAuthorizationGrantHandler>()));
+
+        // The authorization span's decorator records the tokens handed out, through the host's logging and the
+        // fingerprints of the server's options, which this collection configures neither of
+        services.AddLogging();
+        services.Replace(ServiceDescriptor.Singleton(TestInfrastructure.TestFingerprints.Instance));
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 

@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
@@ -23,4 +24,24 @@ internal sealed record HeldMetadataDocument(string Content, DateTimeOffset Fresh
     /// The client found at each tenant, by the tenant's id and generation, so a changed definition judges anew.
     /// </summary>
     public ConcurrentDictionary<(string Id, string Generation), ClientInfo> Clients { get; } = new();
+
+    /// <summary>
+    /// The client held for <paramref name="tenant"/> as it is now defined, or null when none is.
+    /// </summary>
+    public ClientInfo? ClientAt(TenantDefinition tenant)
+        => Clients.TryGetValue((tenant.Id, tenant.Generation), out var client) ? client : null;
+
+    /// <summary>
+    /// Holds <paramref name="client"/> for <paramref name="tenant"/> as it is now defined, unless another client is
+    /// held for it already.
+    /// </summary>
+    /// <param name="tenant">The tenant the client was judged at.</param>
+    /// <param name="client">The client judged.</param>
+    /// <param name="held">The client held: <paramref name="client"/>, or the one held before it.</param>
+    /// <returns>Whether <paramref name="client"/> is the one held.</returns>
+    public bool TryHold(TenantDefinition tenant, ClientInfo client, out ClientInfo held)
+    {
+        held = Clients.GetOrAdd((tenant.Id, tenant.Generation), client);
+        return ReferenceEquals(held, client);
+    }
 }

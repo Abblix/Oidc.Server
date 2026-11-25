@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-/// <param name="logger">Records a registration the client store did not keep.</param>
+/// <param name="logger">Records a registration the client store kept, and one it did not.</param>
 /// <param name="credentialFactory">Generates the client id and secret.</param>
 /// <param name="clientInfoManager">Stores the registration with its registration access token id.</param>
 /// <param name="clock">Provides the issue time.</param>
@@ -47,6 +47,8 @@ public partial class RegisterClientRequestProcessor(
     IClientSecretEncryptor clientSecretEncryptor,
     IOptionsMonitor<OidcOptions> options) : IRegisterClientRequestProcessor
 {
+    private readonly ClientRegistrationsLog _registrations = new(logger);
+
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
@@ -95,6 +97,8 @@ public partial class RegisterClientRequestProcessor(
             return Validation.ErrorFactory.InvalidClientMetadata(
                 $"The client with id={credentials.ClientId} is already registered");
         }
+
+        _registrations.Registered(tenant, clientInfo);
 
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,

@@ -45,4 +45,16 @@ partial class ClientIdMetadataDocumentClients
                   "itself on a loopback address, and never in the Production environment; the issuer of tenant " +
                   "{TenantId} is {Issuer}")]
     private partial void LogLoopbackWithheld(Sanitized ClientId, string TenantId, Uri Issuer);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientInformation.ClientIdMetadataDocuments.ClientResolved,
+        Level = LogLevel.Information,
+        Message = "Tenant {TenantId} resolved client {ClientId} from its metadata document, for grant types " +
+                  "{GrantTypes}, scope {Scope} and resources {Resources}")]
+    private partial void LogClientResolved(
+        string TenantId,
+        Sanitized ClientId,
+        Sanitized[] GrantTypes,
+        Sanitized[]? Scope,
+        Uri[]? Resources);
 }

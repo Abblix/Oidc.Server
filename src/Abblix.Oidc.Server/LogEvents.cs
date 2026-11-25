@@ -994,7 +994,8 @@ internal static class LogEvents
     // id here must not repeat one there.
 
     /// <summary>
-    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own.
+    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own, and the clients
+    /// registered, replaced or removed at the registration endpoints.
     /// </summary>
     public static class ClientInformation
     {
@@ -1025,6 +1026,7 @@ internal static class LogEvents
             public const int HeldCopyServed = Base + 5;
             public const int ClientRefused = Base + 6;
             public const int LoopbackWithheld = Base + 7;
+            public const int ClientResolved = Base + 8;
         }
 
         /// <summary>
@@ -1036,6 +1038,19 @@ internal static class LogEvents
             private const int Base = 10660;
 
             public const int SecretNotDecrypted = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientInformation/ClientRegistrationsLog.cs</c> - a client registered, replaced or removed at
+        /// the registration endpoints (sub-range 10680-10699).
+        /// </summary>
+        public static class ClientRegistrationsLog
+        {
+            private const int Base = 10680;
+
+            public const int ClientRegistered = Base;
+            public const int ClientUpdated = Base + 1;
+            public const int ClientRemoved = Base + 2;
         }
     }
 
@@ -1151,6 +1166,18 @@ internal static class LogEvents
 
             public const int JwtNotIssued = Base;
             public const int SigningKeyBelowTheFloor = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/IssuedTokensLog.cs</c> - the tokens the server hands out, at the token endpoint and
+        /// through the front channel of the authorization endpoint (sub-range 11120-11129).
+        /// </summary>
+        public static class IssuedTokensLog
+        {
+            private const int Base = 11120;
+
+            public const int TokensIssued = Base;
+            public const int FrontChannelTokensIssued = Base + 1;
         }
     }
 
