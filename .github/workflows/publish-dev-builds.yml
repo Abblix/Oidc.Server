@@ -361,8 +361,11 @@ jobs:
                   echo "Build and Pack did not take the identifier the step \"Choose the pre-release identifier\" chose; published, it could land on a version the other branch already holds and publish nothing." >&2
                   exit 1
                   ;;
+                *)
+                  # What is left is a height of digits alone, the one shape this branch publishes
+                  echo "$LINE $VERSION - publishing."
+                  ;;
               esac
-              echo "$LINE $VERSION - publishing."
               ;;
             "$EXPECTED".*)
               echo "Refusing to publish $VERSION: it carries no pre-release identifier, so a release tag is on this commit." >&2
