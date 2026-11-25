@@ -63,8 +63,21 @@ public class RegisterClientRequestProcessorTests
         return new RegisterClientRequestProcessor(
             _logger,
             credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
-            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>(),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == (settings ?? new OidcOptions())));
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == WithNewClients(settings, newClients)));
+    }
+
+    /// <summary>
+    /// <paramref name="settings"/>, or the defaults, with <paramref name="newClients"/> as the settings for new clients
+    /// where a test names them.
+    /// </summary>
+    private static OidcOptions WithNewClients(OidcOptions? settings, NewClientOptions? newClients)
+    {
+        var options = settings ?? new OidcOptions();
+        if (newClients is not null)
+            options.NewClientOptions = newClients;
+
+        return options;
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -76,17 +89,17 @@ public class RegisterClientRequestProcessorTests
         SectorIdentifier: null);
 
     /// <summary>
-    /// A client registered while anybody may register one is unreviewed, and one registered while registration asks
-    /// an initial access token, or a software statement from an issuer the host trusts, is reviewed. Decided as the
+    /// A client registered while anybody may register one is untrusted, and one registered while registration asks
+    /// an initial access token, or a software statement from an issuer the host trusts, is trusted. Decided as the
     /// client registers and kept in its record: a later change of the settings leaves the stored client as it was.
     /// </summary>
     [Theory]
-    [InlineData(false, false, false, ClientTrust.Unreviewed)]
-    [InlineData(true, false, false, ClientTrust.Reviewed)]
-    [InlineData(false, true, true, ClientTrust.Reviewed)]
-    [InlineData(false, true, false, ClientTrust.Unreviewed)]
-    [InlineData(false, false, true, ClientTrust.Unreviewed)]
-    public async Task ARegistration_IsReviewedOnlyWhileRegistrationIsClosed(
+    [InlineData(false, false, false, ClientTrust.Untrusted)]
+    [InlineData(true, false, false, ClientTrust.Trusted)]
+    [InlineData(false, true, true, ClientTrust.Trusted)]
+    [InlineData(false, true, false, ClientTrust.Untrusted)]
+    [InlineData(false, false, true, ClientTrust.Untrusted)]
+    public async Task ARegistration_IsTrustedOnlyWhileRegistrationIsClosed(
         bool requireInitialAccessToken, bool requireSoftwareStatement, bool trustedIssuer, ClientTrust expected)
     {
         RegisteredClient? stored = null;
@@ -156,6 +169,27 @@ public class RegisterClientRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Equal((string[])[allowed], stored!.ClientInfo.AllowedScopes);
         Assert.Equal((string[])[allowed], response.Metadata.Scope);
+    }
+
+    /// <summary>
+    /// The settings for new clients are read as a client registers, so settings changed after the processor was built,
+    /// as a configuration reload changes them, decide the next registration.
+    /// </summary>
+    [Fact]
+    public async Task ARegistration_TakesTheSettingsInForceWhenItIsMade()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { Scope = ["read"] } };
+        var processor = Processor(_clients.Object, settings: settings);
+
+        settings.NewClientOptions = new NewClientOptions { Scope = ["write"] };
+        await processor.ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.Equal((string[])["write"], stored!.ClientInfo.AllowedScopes);
     }
 
     /// <summary>
@@ -334,7 +368,7 @@ public class RegisterClientRequestProcessorTests
         settings.RequireInitialAccessToken = true;
 
         Assert.True((await store.FindClientAsync(SingleIssuer.Tenant, "client-1")).TryGetSuccess(out var client));
-        Assert.Equal(ClientTrust.Unreviewed, client.Trust);
+        Assert.Equal(ClientTrust.Untrusted, client.Trust);
     }
 
     /// <summary>

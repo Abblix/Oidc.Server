@@ -114,7 +114,7 @@ public sealed class ClientIdMetadataDocumentClientsTests : IDisposable
     [Fact]
     public async Task AUrlOutsideTheAllowList_IsRefused_WithoutAFetch()
     {
-        _services.Options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://trusted.example.com/"];
+        _services.Options.ClientIdMetadataDocuments = _services.Options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = ["https://trusted.example.com/"] };
         _services.Origin.Serve(ClientId, Document);
 
         Assert.Equal(ClientAbsenceReason.Refused, await AbsenceOf(ClientId));

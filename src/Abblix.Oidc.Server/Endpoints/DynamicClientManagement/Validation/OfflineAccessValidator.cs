@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -26,33 +27,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// never the client's own. An update (RFC 7592 section 2.2) sends back the metadata the server returned, so a client
 /// the host already gave more than it grants new clients keeps it there, while one it did not cannot raise itself.
 /// </remarks>
-public class OfflineAccessValidator : IClientRegistrationContextValidator
+/// <param name="options">The server's settings, whose <see cref="NewClientOptions.OfflineAccess"/> is the offline
+/// access the host grants new clients, read at each request.</param>
+public class OfflineAccessValidator(IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
 {
-    /// <summary>
-    /// Creates the validator holding a client to <see cref="OfflineAccess.ConsentRequired"/>, the default of
-    /// <see cref="NewClientOptions.OfflineAccess"/>.
-    /// </summary>
-    /// <param name="clientInfoProvider">Not consulted: an update is judged against the client it replaces, which
-    /// <see cref="ClientRegistrationValidationContext.StoredClient"/> carries.</param>
-    public OfflineAccessValidator(IClientInfoProvider clientInfoProvider)
-        : this(clientInfoProvider, new NewClientOptions())
-    {
-    }
-
-    /// <summary>
-    /// Creates the validator holding a client to the offline access the host grants new clients.
-    /// </summary>
-    /// <param name="clientInfoProvider">Not consulted, as in the constructor without the options: it keeps this one
-    /// the longer of the two, so a container activating the validator by its type picks it whenever the options are
-    /// registered.</param>
-    /// <param name="newClientOptions">The options carrying the offline access the host grants new clients.</param>
-    public OfflineAccessValidator(IClientInfoProvider clientInfoProvider, NewClientOptions newClientOptions)
-    {
-        _newClientOptions = newClientOptions;
-    }
-
-    private readonly NewClientOptions _newClientOptions;
-
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error when the client asks for more offline access than the host
     /// grants new clients and it does not already have, or states a value the enumeration does not define;
@@ -71,7 +49,7 @@ public class OfflineAccessValidator : IClientRegistrationContextValidator
         if (!Enum.IsDefined(asked))
             return ErrorFactory.InvalidClientMetadata($"The {Parameters.OfflineAccess} value is not recognized");
 
-        if (_newClientOptions.OfflineAccess.Covers(asked) || AlreadyHas(context, asked))
+        if (options.CurrentValue.NewClientOptions.OfflineAccess.Covers(asked) || AlreadyHas(context, asked))
             return null;
 
         return ErrorFactory.InvalidClientMetadata(

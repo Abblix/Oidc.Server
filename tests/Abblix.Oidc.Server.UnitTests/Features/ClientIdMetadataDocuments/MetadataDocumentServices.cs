@@ -71,7 +71,7 @@ internal sealed class MetadataDocumentServices : IDisposable
 
     public FakeTimeProvider Clock { get; } = new(TimeProvider.System.GetUtcNow());
 
-    public OidcOptions Options { get; } = new() { ClientIdMetadataDocuments = { Enabled = true } };
+    public OidcOptions Options { get; } = new() { ClientIdMetadataDocuments = new ClientIdMetadataDocumentOptions { Enabled = true } };
 
     public IServiceProvider Provider => _provider;
 

@@ -18,15 +18,11 @@ internal static class ClientRegistrationMetadataChecks
     /// <summary>
     /// The metadata checks of a dynamic registration, in the order the pipeline runs them: the software statement
     /// step first, since the metadata a trusted statement carries replaces the request's (RFC 7591 section 3.1.1) and
-    /// every check after it judges the values the client is registered with, then the defaults of open registration,
-    /// then <see cref="MetadataDocument"/>.
+    /// every check after it judges the values the client is registered with, then <see cref="MetadataDocument"/>.
     /// </summary>
     public static ServiceDescriptor[] Registration =>
     [
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
-        // On the values the client is registered with, the statement's included, and before every check that fetches
-        // what the request names, so a client nobody vetted asking for a grant it is not given costs no fetch
-        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OpenRegistrationDefaultsValidator>(),
         ..MetadataDocument,
     ];
 
@@ -38,6 +34,10 @@ internal static class ClientRegistrationMetadataChecks
     /// </summary>
     public static readonly ServiceDescriptor[] MetadataDocument =
     [
+        // On the values the client is registered with, a trusted statement's included, and before every check that
+        // fetches what the request names, so a client asking for a grant or a resource the host does not list costs
+        // no fetch
+        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, HostGrantedMetadataValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, PostLogoutRedirectUrisValidator>(),
         // Server-level support gates run before the consistency check so the rejection message
@@ -54,7 +54,6 @@ internal static class ClientRegistrationMetadataChecks
         // profile-specific rejection.
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ScopeValidator>(),
-        ServiceDescriptor.Singleton<IClientRegistrationContextValidator, HostGrantedMetadataValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
         ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(),

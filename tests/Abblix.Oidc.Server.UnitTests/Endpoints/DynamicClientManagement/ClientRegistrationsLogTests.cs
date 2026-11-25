@@ -87,11 +87,12 @@ public sealed class ClientRegistrationsLogTests
                 It.IsAny<string>()))
             .ReturnsAsync(RegistrationAccessToken);
 
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { AllowedResources = [Resource] } };
         return new RegisterClientRequestProcessor(
             new Logger<RegisterClientRequestProcessor>(_logs),
             credentials.Object, clients.Object, TimeProvider.System, Mock.Of<ITokenIdGenerator>(), tokens.Object,
-            new NewClientOptions { AllowedResources = [Resource] }, Mock.Of<IClientSecretEncryptor>(),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()));
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == settings));
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class ClientRegistrationsLogTests
 
         var record = Assert.Single(Recorded(LogEvents.ClientInformation.ClientRegistrationsLog.ClientRegistered));
         AssertWhatTheClientMayDo(record);
-        Assert.Equal(ClientTrust.Reviewed, record.Value("Trust"));
+        Assert.Equal(ClientTrust.Trusted, record.Value("Trust"));
         AssertNoSecretIn(record);
     }
 
@@ -133,13 +134,14 @@ public sealed class ClientRegistrationsLogTests
         return new UpdateClientRequestProcessor(
             new Logger<UpdateClientRequestProcessor>(_logs),
             clients.Object, tokens.Object, Mock.Of<ITokenIdGenerator>(), TimeProvider.System,
-            new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()));
     }
 
     private static ValidUpdateClientRequest Update()
     {
         var metadata = Metadata();
-        var existing = new RegisteredClient(new ClientInfo(ClientId) { Trust = ClientTrust.Reviewed }, "jti");
+        var existing = new RegisteredClient(new ClientInfo(ClientId) { Trust = ClientTrust.Trusted }, "jti");
         return new ValidUpdateClientRequest(new UpdateClientRequest(new ClientRequest(), metadata), existing, metadata);
     }
 
@@ -151,7 +153,7 @@ public sealed class ClientRegistrationsLogTests
 
         var record = Assert.Single(Recorded(LogEvents.ClientInformation.ClientRegistrationsLog.ClientUpdated));
         AssertWhatTheClientMayDo(record);
-        Assert.Equal(ClientTrust.Reviewed, record.Value("Trust"));
+        Assert.Equal(ClientTrust.Trusted, record.Value("Trust"));
         AssertNoSecretIn(record);
     }
 

@@ -34,7 +34,10 @@ internal static class ClientIdMetadataDocumentsSample
             .AddOidcServices(options =>
             {
                 // Optional: fetch documents only from URLs starting with these prefixes
-                options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://apps.example.com/"];
+                options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+                {
+                    AllowedClientIdPrefixes = ["https://apps.example.com/"],
+                };
             })
             .AddClientIdMetadataDocuments();
         // </sample>

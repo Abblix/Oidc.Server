@@ -93,7 +93,7 @@ public static class ConformanceHost
         services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
 
         // The suite registers its clients openly and checks the error responses they are sent (RFC 9700 section 4.11.2
-        // has the server keep those at the server for a client nobody reviewed)
+        // has the server keep those at the server for an untrusted client)
         EveryRedirectUriTrusted.Register(services);
         services.Decorate<IAuthServiceKeysProvider, RotatingSigningKeys>();
         services.Decorate<IUserConsentsProvider, RefusedAuthorizations>();

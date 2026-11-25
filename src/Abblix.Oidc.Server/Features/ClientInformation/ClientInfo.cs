@@ -45,8 +45,8 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Whether somebody answering for the deployment let the client in, decided when the client was created and kept
-    /// with it: <see cref="ClientTrust.Reviewed"/>, the default, for a client the host declares, and the value the
-    /// server set for one it registered or resolved. A record naming none is reviewed.
+    /// with it: <see cref="ClientTrust.Trusted"/>, the default, for a client the host declares, and the value the
+    /// server set for one it registered or resolved. A record naming none is trusted.
     /// </summary>
     /// <remarks>
     /// A host changing it writes the client's record, and every replica answers from that record once it reads it

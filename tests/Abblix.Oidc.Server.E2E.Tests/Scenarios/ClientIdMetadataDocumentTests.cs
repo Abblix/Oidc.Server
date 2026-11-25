@@ -117,19 +117,19 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
     }
 
     /// <summary>
-    /// A client resolved from its document is unreviewed while any URL may name itself a client, so its authorization
+    /// A client resolved from its document is untrusted while any URL may name itself a client, so its authorization
     /// error is answered by the server; under a list of prefixes, the host's own assessment of the URLs it serves, it is
-    /// reviewed and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
+    /// trusted and the error reaches its redirect URI. The trust is decided as the client is resolved, and the server's
     /// own policy reads only it.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AClientFromItsDocument_IsReviewedOnlyUnderAPrefixList(bool listed)
+    public async Task AClientFromItsDocument_IsTrustedOnlyUnderAPrefixList(bool listed)
     {
         Serve(PublicClientDocument());
         await using var host = CreateHost(
-            listed ? options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = ["https://client.example.com/"] : null,
+            listed ? options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = ["https://client.example.com/"] } : null,
             services => services.Replace(ServiceDescriptor.Singleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>()));
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
@@ -186,7 +186,7 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         var (allowedPrefixes, fetched) = Arrange(why);
         await using var host = CreateHost(allowedPrefixes is null
             ? null
-            : options => options.ClientIdMetadataDocuments.AllowedClientIdPrefixes = allowedPrefixes);
+            : options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { AllowedClientIdPrefixes = allowedPrefixes });
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
@@ -323,8 +323,11 @@ public partial class ClientIdMetadataDocumentTests(TestFactory factory) : TestBa
         document[RegistrationMembers.ResponseTypes] = new JsonArray();
         document.Remove(RegistrationMembers.RedirectUris);
         Serve(document);
-        await using var host = CreateHost(options => options.ClientIdMetadataDocuments.AllowedGrantTypes =
-            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]);
+        await using var host = CreateHost(options => options.ClientIdMetadataDocuments =
+            options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            });
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 

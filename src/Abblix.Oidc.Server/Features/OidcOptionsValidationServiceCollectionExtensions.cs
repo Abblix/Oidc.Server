@@ -66,8 +66,6 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientAssertionAudiencesValidator>());
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientGrantTypesValidator>());
-        services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientTokenLifetimesValidator>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, FingerprintKeyValidator>());

@@ -66,6 +66,20 @@ public class ClientIdMetadataDocumentsWiringTests
     }
 
     /// <summary>
+    /// The settings a document client takes have one place, <see cref="OidcOptions.NewClientOptions"/>: the feature
+    /// registers no service of their own a host could set without effect.
+    /// </summary>
+    [Fact]
+    public void TheSettingsForNewClients_AreNoServiceOfTheirOwn()
+    {
+        var services = Hosting();
+        Register(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Null(provider.GetService<NewClientOptions>());
+    }
+
+    /// <summary>
     /// A client store registered after the feature replaces the one resolving documents, while discovery would still
     /// advertise them.
     /// </summary>
@@ -127,7 +141,7 @@ public class ClientIdMetadataDocumentsWiringTests
         var services = Hosting();
         if (environment is not null)
             services.AddSingleton(Mock.Of<IHostEnvironment>(host => host.EnvironmentName == environment));
-        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { DocumentAddresses = addresses });
         Register(services);
 
         Assert.Equal(
@@ -151,7 +165,7 @@ public class ClientIdMetadataDocumentsWiringTests
         var services = Hosting();
         if (proxied)
             services.Configure<SecureHttpFetchOptions>(options => options.OutboundProxy = new Uri("http://proxy.example.com:3128"));
-        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { DocumentAddresses = addresses });
         Register(services);
 
         Assert.Equal(

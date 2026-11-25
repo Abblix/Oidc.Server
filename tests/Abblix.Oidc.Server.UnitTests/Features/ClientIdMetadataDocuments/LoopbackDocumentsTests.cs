@@ -139,7 +139,7 @@ public sealed class LoopbackDocumentsTests
         services.AddSingleton(Mock.Of<IHostEnvironment>(host => host.EnvironmentName == Environments.Production));
         var reloaded = new OidcOptions
         {
-            ClientIdMetadataDocuments = { Enabled = true, DocumentAddresses = Loopback },
+            ClientIdMetadataDocuments = new ClientIdMetadataDocumentOptions { Enabled = true, DocumentAddresses = Loopback },
         };
         services.AddSingleton(Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == reloaded));
         _origin.Serve(clientId, """{"client_id":"https://another.example.com/client.json"}""");
@@ -302,7 +302,7 @@ public sealed class LoopbackDocumentsTests
         services.AddSecureHttpFetch();
         services.AddSingleton(Mock.Of<IClientInfoProvider>());
         new Registered(services).AddClientIdMetadataDocuments();
-        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments.DocumentAddresses = addresses);
+        services.Configure<OidcOptions>(options => options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with { DocumentAddresses = addresses });
 
         services.AddSingleton(Mock.Of<IClientAuthenticator>(authenticator =>
             authenticator.ClientAuthenticationMethodsSupported == new[] { ClientAuthenticationMethods.None }));

@@ -284,9 +284,7 @@ internal sealed class ClientIdMetadataDocumentReader(
 
         var settings = options.CurrentValue;
         supported.IntersectWith(settings.ClientIdMetadataDocuments.GrantTypesAllowed);
-
-        if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
-            supported.IntersectWith(allowed);
+        supported.IntersectWith(settings.NewClientOptions.GrantTypesAllowed);
 
         supported.ExceptWith(ConfidentialGrantTypes.RefusedTo(authenticationMethod, supported));
 

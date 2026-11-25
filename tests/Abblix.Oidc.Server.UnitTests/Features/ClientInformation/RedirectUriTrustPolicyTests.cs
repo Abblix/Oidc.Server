@@ -23,8 +23,8 @@ public sealed class RedirectUriTrustPolicyTests
     /// and no store, so every replica gives the same answer for the same record.
     /// </summary>
     [Theory]
-    [InlineData(ClientTrust.Reviewed, true)]
-    [InlineData(ClientTrust.Unreviewed, false)]
+    [InlineData(ClientTrust.Trusted, true)]
+    [InlineData(ClientTrust.Untrusted, false)]
     public async Task TheAnswer_IsTheClientsRecordedTrust(ClientTrust trust, bool trusted)
     {
         var client = new ClientInfo("client-1") { Trust = trust };

@@ -11,13 +11,15 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses, while the host is still starting, grant types for new clients that are an empty set or hold a blank or
-/// null value.
+/// Refuses, while a host serving dynamic client registration or client ID metadata documents is still starting, grant
+/// types for new clients that are an empty set or hold a blank or null value.
 /// </summary>
 /// <remarks>
 /// Every registration is held to the set, so an empty one refuses each of them, and a blank or null value names no
 /// grant type a client can request. Only those two are checked here: a misspelled value, or one padded with spaces,
-/// still starts the host, and a client requesting that grant type is refused.
+/// still starts the host, and a client requesting that grant type is refused. Registered with dynamic client
+/// registration and with client ID metadata documents, the two ways a client is built by the set: a document client's
+/// grant types are narrowed to it, so an empty set leaves every document refused.
 /// </remarks>
 public sealed class NewClientGrantTypesValidator : IValidateOptions<OidcOptions>
 {
@@ -32,8 +34,9 @@ public sealed class NewClientGrantTypesValidator : IValidateOptions<OidcOptions>
 
         if (allowed.Length == 0)
             return ValidateOptionsResult.Fail(
-                $"{setting} is empty, which refuses every client registration: leave it unset for the default, or " +
-                "name the grant types new clients may request.");
+                $"{setting} is empty, which refuses every client built by it, registered or resolved from a metadata document: " +
+                "name the grant types new clients may request, or leave it unset for the authorization code and the " +
+                "refresh token.");
 
         if (allowed.Any(string.IsNullOrWhiteSpace))
             return ValidateOptionsResult.Fail($"{setting} holds a blank grant type.");

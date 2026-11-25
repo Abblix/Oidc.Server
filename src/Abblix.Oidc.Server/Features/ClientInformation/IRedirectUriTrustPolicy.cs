@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// the body, rather than at the client's redirect URI; a successful authorization still reaches the client, since it
 /// follows the end user's own consent to that client.
 /// <para>
-/// The default, <see cref="RedirectUriTrustPolicy"/>, trusts every client but one nobody reviewed. A host registering
+/// The default, <see cref="RedirectUriTrustPolicy"/>, trusts every client but an untrusted one. A host registering
 /// its own implementation decides by its own assessment, the source of the client or what is known of its URIs.
 /// </para>
 /// </remarks>

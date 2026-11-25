@@ -26,8 +26,8 @@ public sealed class RedirectUriTrustPolicy : IRedirectUriTrustPolicy
     /// <inheritdoc />
     public Task<bool> IsTrustedAsync(TenantDefinition tenant, ClientInfo client) => Task.FromResult(client.Trust switch
     {
-        ClientTrust.Reviewed => true,
-        ClientTrust.Unreviewed => false,
+        ClientTrust.Trusted => true,
+        ClientTrust.Untrusted => false,
         _ => throw new ArgumentOutOfRangeException(nameof(client), client.Trust, "The client's trust is not one known"),
     });
 }

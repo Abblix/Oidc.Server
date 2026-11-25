@@ -21,7 +21,7 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
 {
     private static bool Valid(ClientIdMetadataDocumentOptions settings, bool enabled = true)
     {
-        settings.Enabled = enabled;
+        settings = settings with { Enabled = enabled };
         return new ClientIdMetadataDocumentOptionsValidator()
             .Validate(null, new OidcOptions { ClientIdMetadataDocuments = settings })
             .Succeeded;
@@ -122,7 +122,7 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
                     = value,
             })
             .Build();
-        var options = new OidcOptions { ClientIdMetadataDocuments = { Enabled = true } };
+        var options = new OidcOptions { ClientIdMetadataDocuments = new ClientIdMetadataDocumentOptions { Enabled = true } };
         configuration.Bind(options);
 
         Assert.Equal(accepted, new ClientIdMetadataDocumentOptionsValidator().Validate(null, options).Succeeded);

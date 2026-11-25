@@ -62,8 +62,11 @@ public partial class ClientIdMetadataDocumentTests
         var document = DocumentDeclaring([ClientAuthenticationMethods.TlsClientAuth, ClientAuthenticationMethods.None]);
         document[RegistrationMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials);
         Serve(document);
-        await using var host = CreateHost(options => options.ClientIdMetadataDocuments.AllowedGrantTypes =
-            [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]);
+        await using var host = CreateHost(options => options.ClientIdMetadataDocuments =
+            options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            });
 
         var client = await FindAsync(host, TenantListing("acme", authority: null));
 
@@ -86,10 +89,13 @@ public partial class ClientIdMetadataDocumentTests
         await using var host = CreateHost(options =>
         {
             options.RequireInitialAccessToken = false;
-            options.ClientIdMetadataDocuments.AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials];
+            options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
+            };
             options.NewClientOptions = options.NewClientOptions with
             {
-                AllowedGrantTypes = null,
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
                 AccessTokenExpiresIn = TimeSpan.FromSeconds(41),
                 SingleResourceAccessTokens = true,
                 RefreshToken = refreshToken,
@@ -106,8 +112,8 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// With no grant types named for documents, a client authenticating itself still gets only the grants of an
-    /// interactive sign-in, the default a client registering without an initial access token gets too.
+    /// With the default grant types for documents and for new clients, a client authenticating itself gets only the
+    /// grants of an interactive sign-in.
     /// </summary>
     [Fact]
     public async Task ADocumentClient_WithoutGrantTypesNamedForDocuments_GetsOnlyTheSignInGrants()
@@ -118,8 +124,14 @@ public partial class ClientIdMetadataDocumentTests
         Serve(document);
         await using var host = CreateHost(options =>
         {
-            options.ClientIdMetadataDocuments.AllowedGrantTypes = null;
-            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = null };
+            options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+            {
+                AllowedGrantTypes = new ClientIdMetadataDocumentOptions().AllowedGrantTypes,
+            };
+            options.NewClientOptions = options.NewClientOptions with
+            {
+                AllowedGrantTypes = new NewClientOptions().AllowedGrantTypes,
+            };
         });
 
         var client = await FindAsync(host, TenantListing("acme", authority: null));
@@ -129,8 +141,8 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// A document client naming no resources gets the host's list for new clients, and none when the host names none,
-    /// as a client registering while anybody may register does.
+    /// A document client naming no resources gets the host's list for new clients, and none under the default empty
+    /// list, as a registered client does.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -141,7 +153,7 @@ public partial class ClientIdMetadataDocumentTests
         Serve(DocumentDeclaring([ClientAuthenticationMethods.PrivateKeyJwt]));
         await using var host = CreateHost(options => options.NewClientOptions = options.NewClientOptions with
         {
-            AllowedResources = hostNamesOne ? [resource] : null,
+            AllowedResources = hostNamesOne ? [resource] : [],
         });
 
         var client = await FindAsync(host, TenantListing("acme", authority: null));

@@ -17,22 +17,22 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
 /// <summary>
 /// The trust a client record carries, as a host's store keeps it in JSON and as the host declares it in its settings.
-/// A record naming none is reviewed, as every client of a record written before the member existed was; one naming a
+/// A record naming none is trusted, as every client of a record written before the member existed was; one naming a
 /// value is read as named; a null in its place is refused.
 /// </summary>
 public class ClientTrustJsonTests
 {
     [Fact]
-    public void ARecordNamingNoTrust_IsReviewed()
+    public void ARecordNamingNoTrust_IsTrusted()
     {
         var json = new JsonObject { [nameof(ClientInfo.ClientId)] = "client-1" };
 
-        Assert.Equal(ClientTrust.Reviewed, JsonSerializer.Deserialize<ClientInfo>(json.ToJsonString())!.Trust);
+        Assert.Equal(ClientTrust.Trusted, JsonSerializer.Deserialize<ClientInfo>(json.ToJsonString())!.Trust);
     }
 
     [Theory]
-    [InlineData("reviewed", ClientTrust.Reviewed)]
-    [InlineData("unreviewed", ClientTrust.Unreviewed)]
+    [InlineData("trusted", ClientTrust.Trusted)]
+    [InlineData("untrusted", ClientTrust.Untrusted)]
     public void ARecordNamingATrust_IsReadAsNamed(string written, ClientTrust trust)
     {
         var json = new JsonObject
@@ -57,8 +57,8 @@ public class ClientTrustJsonTests
     }
 
     [Theory]
-    [InlineData(ClientTrust.Reviewed)]
-    [InlineData(ClientTrust.Unreviewed)]
+    [InlineData(ClientTrust.Trusted)]
+    [InlineData(ClientTrust.Untrusted)]
     public void TheTrust_SurvivesTheRoundTripAsAString(ClientTrust trust)
     {
         var written = JsonSerializer.Serialize(new ClientInfo("client-1") { Trust = trust });
@@ -68,12 +68,12 @@ public class ClientTrustJsonTests
     }
 
     /// <summary>
-    /// A client the host declares in its settings is reviewed unless the host says otherwise there.
+    /// A client the host declares in its settings is trusted unless the host says otherwise there.
     /// </summary>
     [Theory]
-    [InlineData(null, ClientTrust.Reviewed)]
-    [InlineData("Unreviewed", ClientTrust.Unreviewed)]
-    public void AClientTheSettingsDeclare_IsReviewedUnlessTheySayOtherwise(string? written, ClientTrust trust)
+    [InlineData(null, ClientTrust.Trusted)]
+    [InlineData("Untrusted", ClientTrust.Untrusted)]
+    public void AClientTheSettingsDeclare_IsTrustedUnlessTheySayOtherwise(string? written, ClientTrust trust)
     {
         var values = new Dictionary<string, string?> { [nameof(ClientInfo.ClientId)] = "client-1" };
         if (written != null)

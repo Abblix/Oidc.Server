@@ -74,7 +74,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             return ClientAbsence.Refused;
         }
 
-        var client = await JudgeAsync(tenant, clientId, metadata, settings.NewClientOptions);
+        var client = await JudgeAsync(tenant, clientId, metadata, settings);
 
         // A refusal is not kept: section 6.2 has the server "MUST NOT cache documents which are invalid", and one is so
         // at this tenant
@@ -92,9 +92,8 @@ internal sealed partial class ClientIdMetadataDocumentClients(
     /// <remarks>
     /// The lookup whose client is held records it, so a document is recorded once per tenant generation however many
     /// requests read the client it holds; a document fetched again once its copy expires holds, and records, its
-    /// client anew. A scope or a list of resources left unset is recorded as absent, which leaves the client any of
-    /// them. Internal rather than private so a test can play the lookup that loses the race, which no request can be
-    /// made to lose on demand.
+    /// client anew. A scope left unset is recorded as absent, which leaves the client any scope. Internal rather than
+    /// private so a test can play the lookup that loses the race, which no request can be made to lose on demand.
     /// </remarks>
     internal ClientInfo Keep(TenantDefinition tenant, HeldMetadataDocument document, ClientInfo client)
     {
@@ -194,8 +193,9 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         TenantDefinition tenant,
         string clientId,
         ClientRegistrationRequest metadata,
-        NewClientOptions newClientOptions)
+        OidcOptions settings)
     {
+        var newClientOptions = settings.NewClientOptions;
         await using var scope = scopes.CreateAsyncScope();
         var validator = ActivatorUtilities.CreateInstance<ClientIdMetadataDocumentValidator>(scope.ServiceProvider);
 
@@ -216,7 +216,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             .WithHostSettingsOf(newClientOptions)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
-            .WithDefaultAllowedResources(newClientOptions.UnreviewedClientResources)
+            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
@@ -228,7 +228,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
 
         // Decided as the client is resolved and held with it: a list of prefixes is the host's own assessment of the URLs
         // it serves, and without one any URL may name itself a client
-        client.Trust = OpenRegistration.AdmitsAnyDocument(options.CurrentValue) ? ClientTrust.Unreviewed : ClientTrust.Reviewed;
+        client.Trust = OpenRegistration.AdmitsAnyDocument(settings) ? ClientTrust.Untrusted : ClientTrust.Trusted;
         return client;
     }
 }

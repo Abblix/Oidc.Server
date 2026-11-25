@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -28,17 +29,17 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
 /// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
 /// <param name="clock">Provides the issue time.</param>
-/// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
-/// </param>
 /// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
+/// <param name="options">The server's settings, whose <see cref="OidcOptions.NewClientOptions"/> hold the defaults a
+/// client takes when its metadata omits them, its scope among them, read as the update is built.</param>
 public class UpdateClientRequestProcessor(
     ILogger<UpdateClientRequestProcessor> logger,
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock,
-    NewClientOptions newClientOptions,
-    IClientSecretEncryptor clientSecretEncryptor) : IUpdateClientRequestProcessor
+    IClientSecretEncryptor clientSecretEncryptor,
+    IOptionsMonitor<OidcOptions> options) : IUpdateClientRequestProcessor
 {
     private readonly ClientRegistrationsLog _registrations = new(logger);
 
@@ -58,6 +59,7 @@ public class UpdateClientRequestProcessor(
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
         var existingClient = request.Client.ClientInfo;
+        var newClientOptions = options.CurrentValue.NewClientOptions;
 
         // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
         // rather than updated here; the sector identifier the pairwise subjects hang on is kept too, and so is what
