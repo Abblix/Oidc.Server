@@ -66,7 +66,7 @@ public class ClientValidator(
         // attempt without it would be charged to the source as a failed one, which a working client must never be.
         // Asking what is presented first refuses a source past its failure budget before the token's signature is checked
         if (!(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, clientRequest, clients)).Any() &&
-            await NamedByTheRefreshTokenAsync(tenant, context.Request, clientRequest) is { } named)
+            await NamedByTheRefreshTokenAsync(tenant, context.Request, clientRequest, clients) is { } named)
         {
             clientRequest = named;
         }
@@ -105,7 +105,8 @@ public class ClientValidator(
     private async Task<ClientRequest?> NamedByTheRefreshTokenAsync(
         TenantDefinition tenant,
         TokenRequest request,
-        ClientRequest clientRequest)
+        ClientRequest clientRequest,
+        IClientInfoProvider clients)
     {
         if (request is not { GrantType: GrantTypes.RefreshToken, RefreshToken: { Length: > 0 } refreshToken } ||
             clientRequest.ClientId.HasValue())
@@ -116,6 +117,7 @@ public class ClientValidator(
         var token = await jwtReader.ReadAuthenticAsync(
             tenant,
             client: null,
+            clients,
             refreshToken,
             TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
             ServiceTokenValidation.AnyAudience & ~ValidationOptions.ValidateLifetime);

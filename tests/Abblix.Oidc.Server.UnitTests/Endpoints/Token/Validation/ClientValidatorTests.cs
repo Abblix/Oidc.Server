@@ -69,6 +69,7 @@ public class ClientValidatorTests
             .Setup(r => r.ReadAuthenticAsync(
                 It.IsAny<TenantDefinition>(),
                 null,
+                It.IsAny<IClientInfoProvider>(),
                 RefreshToken,
                 It.IsAny<TokenTypePolicy>(),
                 It.Is<ValidationOptions>(options => (options & ValidationOptions.ValidateLifetime) == 0)))
@@ -145,7 +146,7 @@ public class ClientValidatorTests
         {
             _jwtReader
                 .Setup(r => r.ReadAuthenticAsync(
-                    It.IsAny<TenantDefinition>(), null, RefreshToken, It.IsAny<TokenTypePolicy>(),
+                    It.IsAny<TenantDefinition>(), null, It.IsAny<IClientInfoProvider>(), RefreshToken, It.IsAny<TokenTypePolicy>(),
                     It.IsAny<ValidationOptions>()))
                 .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "unreadable"));
         }
