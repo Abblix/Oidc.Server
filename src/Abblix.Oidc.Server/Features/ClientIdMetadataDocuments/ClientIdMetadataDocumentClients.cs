@@ -190,7 +190,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             .WithHostSettingsOf(newClientOptions)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
-            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultAllowedResources(newClientOptions.UnreviewedClientResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(

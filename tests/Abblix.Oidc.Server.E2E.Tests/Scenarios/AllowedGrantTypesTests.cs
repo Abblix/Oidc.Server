@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <summary>
 /// A host limiting the grant types of dynamically registered clients keeps registration, and the RFC 7592 update of a
 /// registration, to that set, while a client within it registers as before; registration open to anybody with no limit
-/// set admits only the grant types an end user takes part in.
+/// set admits only the grant types of an interactive sign-in.
 /// </summary>
 public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(factory)
 {
@@ -78,7 +78,7 @@ public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
-    /// Registration open to anybody, with no limit set, gives a client only the grants an end user takes part in, so a
+    /// Registration open to anybody, with no limit set, gives a client only the grants of an interactive sign-in, so a
     /// machine client is refused while a sign-in client registers.
     /// </summary>
     [Fact]

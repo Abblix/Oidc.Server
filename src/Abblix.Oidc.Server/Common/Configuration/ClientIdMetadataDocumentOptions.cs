@@ -112,10 +112,10 @@ public record ClientIdMetadataDocumentOptions
     public string[]? AllowedGrantTypes { get; set; }
 
     /// <summary>
-    /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or those an end
-    /// user takes part in when it is unset.
+    /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or those of an
+    /// interactive sign-in when it is unset.
     /// </summary>
-    internal string[] GrantTypesAllowed => AllowedGrantTypes ?? NewClientOptions.UserGrantTypes;
+    internal string[] GrantTypesAllowed => AllowedGrantTypes ?? NewClientOptions.InteractiveSignInGrantTypes;
 
     /// <summary>
     /// The longest a fetch of a document may take, its body included. Default: 5 seconds.

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -19,36 +20,73 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// While anybody may register and the host names no grant types, a client gets only those an end user takes part in,
-/// and while the host names no resources, none; a host requiring an initial access token, or naming the set itself,
-/// leaves the request to the other checks.
+/// A client nobody vetted, one registering while anybody may register or updating a registration made so, gets only
+/// the grant types of an interactive sign-in while the host names none, and the resources the host names, none while
+/// it names none; any other client is left to the other checks. An update is judged by the trust of the client it
+/// replaces, not by the settings.
 /// </summary>
 public class OpenRegistrationDefaultsValidatorTests
 {
-    private static async Task<string?> ValidateAsync(
-        bool requireInitialAccessToken,
-        string[]? allowedGrantTypes,
-        string[] grantTypes,
-        DynamicClientOperation operation = DynamicClientOperation.Register,
-        SoftwareStatementOptions? softwareStatement = null)
-    {
-        var options = new Mock<IOptionsMonitor<OidcOptions>>();
-        options.Setup(monitor => monitor.CurrentValue).Returns(new OidcOptions
-        {
-            RequireInitialAccessToken = requireInitialAccessToken,
-            SoftwareStatement = softwareStatement ?? new SoftwareStatementOptions(),
-            NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
-        });
-        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest { GrantTypes = grantTypes })
-        {
-            Operation = operation,
-        };
+    private static readonly Uri Orders = new("https://orders.example.com");
 
-        return (await new OpenRegistrationDefaultsValidator(options.Object).ValidateAsync(SingleIssuer.Tenant, context))
-            ?.Error;
+    /// <summary>
+    /// Where the request comes from: a registration under the settings, or an update of a client stored with a trust.
+    /// </summary>
+    private sealed record Arrival(DynamicClientOperation Operation, ClientTrust? StoredTrust = null)
+    {
+        public static readonly Arrival Registration = new(DynamicClientOperation.Register);
+
+        public static Arrival UpdateOf(ClientTrust trust) => new(DynamicClientOperation.Update, trust);
+
+        public ClientRegistrationValidationContext ContextFor(ClientRegistrationRequest request) => new(request)
+        {
+            Operation = Operation,
+            StoredClient = StoredTrust is { } trust ? new ClientInfo("client-1") { Trust = trust } : null,
+        };
     }
 
-    private static readonly Uri Orders = new("https://orders.example.com");
+    private static OidcOptions Settings(
+        bool requireInitialAccessToken,
+        NewClientOptions? newClients = null,
+        SoftwareStatementOptions? softwareStatement = null) => new()
+    {
+        RequireInitialAccessToken = requireInitialAccessToken,
+        SoftwareStatement = softwareStatement ?? new SoftwareStatementOptions(),
+        NewClientOptions = newClients ?? new NewClientOptions(),
+    };
+
+    /// <summary>
+    /// The error the step answers <paramref name="request"/> with, and the request it leaves.
+    /// </summary>
+    private static async Task<(string? Error, ClientRegistrationRequest Request)> JudgeAsync(
+        OidcOptions settings,
+        ClientRegistrationRequest request,
+        Arrival? arrival = null)
+    {
+        var options = new Mock<IOptionsMonitor<OidcOptions>>();
+        options.Setup(monitor => monitor.CurrentValue).Returns(settings);
+        var context = (arrival ?? Arrival.Registration).ContextFor(request);
+
+        var validator = new OpenRegistrationDefaultsValidator(options.Object);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+        return (error?.Error, context.Request);
+    }
+
+    private static async Task<string?> ErrorFor(OidcOptions settings, string[] grantTypes, Arrival? arrival = null)
+        => (await JudgeAsync(settings, new ClientRegistrationRequest { GrantTypes = grantTypes }, arrival)).Error;
+
+    private static async Task<Uri[]?> ResourcesAfter(
+        OidcOptions settings,
+        Uri[]? requested = null,
+        Arrival? arrival = null)
+    {
+        var (error, request) = await JudgeAsync(
+            settings,
+            new ClientRegistrationRequest { GrantTypes = [GrantTypes.AuthorizationCode], AllowedResources = requested },
+            arrival);
+        Assert.Null(error);
+        return request.AllowedResources;
+    }
 
     /// <summary>
     /// A registration admitting only clients a software statement from a trusted issuer vouches for.
@@ -61,6 +99,51 @@ public class OpenRegistrationDefaultsValidatorTests
             : [],
     };
 
+    [Fact]
+    public async Task AGrantOutsideAnInteractiveSignIn_UnderOpenRegistrationWithoutAHostSet_IsRefused()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ErrorFor(Settings(false), [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]));
+
+    [Fact]
+    public async Task TheGrantsOfAnInteractiveSignIn_UnderOpenRegistrationWithoutAHostSet_AreServed()
+        => Assert.Null(await ErrorFor(Settings(false), [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken]));
+
+    [Fact]
+    public async Task AnyGrant_WhenAnInitialAccessTokenIsRequired_IsLeftToTheOtherChecks()
+        => Assert.Null(await ErrorFor(Settings(true), [GrantTypes.ClientCredentials]));
+
+    [Fact]
+    public async Task AnyGrant_WhenTheHostNamesTheGrantTypes_IsLeftToTheOtherChecks()
+        => Assert.Null(await ErrorFor(
+            Settings(false, new NewClientOptions { AllowedGrantTypes = [GrantTypes.AuthorizationCode] }),
+            [GrantTypes.ClientCredentials]));
+
+    [Fact]
+    public async Task AClientNamingNoResource_UnderOpenRegistrationWithoutAHostSet_IsGivenNone()
+        => Assert.Equal((Uri[]?)[], await ResourcesAfter(Settings(false)));
+
+    [Fact]
+    public async Task TheResources_WhenAnInitialAccessTokenIsRequired_AreLeftAsTheyAre()
+        => Assert.Null(await ResourcesAfter(Settings(true)));
+
+    /// <summary>
+    /// The host's list is written into the request here, so the options the client is later built from never decide
+    /// it.
+    /// </summary>
+    [Fact]
+    public async Task AClientNamingNoResource_UnderOpenRegistration_IsGivenTheHostsList()
+        => Assert.Equal(
+            (Uri[]?)[Orders],
+            await ResourcesAfter(Settings(false, new NewClientOptions { AllowedResources = [Orders] })));
+
+    /// <summary>
+    /// A client naming resources is left to the check of the host's set, which refuses them, rather than given none.
+    /// </summary>
+    [Fact]
+    public async Task ResourcesAClientNames_AreLeftToTheHostsSetCheck()
+        => Assert.Equal((Uri[]?)[Orders], await ResourcesAfter(Settings(false), [Orders]));
+
     /// <summary>
     /// A registration requiring a software statement from a trusted issuer is not open, whatever the initial access
     /// token setting says, so the request keeps the grant types and resources it names.
@@ -68,9 +151,10 @@ public class OpenRegistrationDefaultsValidatorTests
     [Fact]
     public async Task ARegistrationRequiringATrustedSoftwareStatement_IsNotHeldToTheOpenDefaults()
     {
-        Assert.Null(await ValidateAsync(
-            false, null, [GrantTypes.ClientCredentials], softwareStatement: StatementRequired(withTrustedIssuer: true)));
-        Assert.Null(await ResourcesAfterAsync(false, null, softwareStatement: StatementRequired(withTrustedIssuer: true)));
+        var settings = Settings(false, softwareStatement: StatementRequired(withTrustedIssuer: true));
+
+        Assert.Null(await ErrorFor(settings, [GrantTypes.ClientCredentials]));
+        Assert.Null(await ResourcesAfter(settings));
     }
 
     /// <summary>
@@ -80,88 +164,35 @@ public class OpenRegistrationDefaultsValidatorTests
     public async Task ARegistrationRequiringAStatementNoIssuerIsTrustedFor_IsHeldToTheOpenDefaults()
         => Assert.Equal(
             ErrorCodes.InvalidClientMetadata,
-            await ValidateAsync(
-                false, null, [GrantTypes.ClientCredentials], softwareStatement: StatementRequired(withTrustedIssuer: false)));
+            await ErrorFor(
+                Settings(false, softwareStatement: StatementRequired(withTrustedIssuer: false)),
+                [GrantTypes.ClientCredentials]));
 
     /// <summary>
-    /// The resources the request leaves the step with.
+    /// A client registered while registration was open stays one nobody vetted: once registration closes, its update
+    /// still cannot ask for a grant outside an interactive sign-in, and it is still given no resource.
     /// </summary>
-    private static async Task<Uri[]?> ResourcesAfterAsync(
-        bool requireInitialAccessToken,
-        Uri[]? hostResources,
-        Uri[]? requested = null,
-        DynamicClientOperation operation = DynamicClientOperation.Register,
-        SoftwareStatementOptions? softwareStatement = null)
+    [Fact]
+    public async Task AnUpdateOfAnUnreviewedClient_AfterRegistrationCloses_IsHeldToTheOpenDefaults()
     {
-        var options = new Mock<IOptionsMonitor<OidcOptions>>();
-        options.Setup(monitor => monitor.CurrentValue).Returns(new OidcOptions
-        {
-            RequireInitialAccessToken = requireInitialAccessToken,
-            SoftwareStatement = softwareStatement ?? new SoftwareStatementOptions(),
-            NewClientOptions = new NewClientOptions { AllowedResources = hostResources },
-        });
-        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
-        {
-            GrantTypes = [GrantTypes.AuthorizationCode],
-            AllowedResources = requested,
-        })
-        {
-            Operation = operation,
-        };
+        var closed = Settings(true);
+        var update = Arrival.UpdateOf(ClientTrust.Unreviewed);
 
-        Assert.Null(
-            await new OpenRegistrationDefaultsValidator(options.Object).ValidateAsync(SingleIssuer.Tenant, context));
-        return context.Request.AllowedResources;
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, await ErrorFor(closed, [GrantTypes.ClientCredentials], update));
+        Assert.Equal((Uri[]?)[], await ResourcesAfter(closed, arrival: update));
     }
 
-    [Fact]
-    public async Task AClientNamingNoResource_UnderOpenRegistrationWithoutAHostSet_IsGivenNone()
-        => Assert.Equal((Uri[]?)[], await ResourcesAfterAsync(false, null));
-
-    [Fact]
-    public async Task AnUpdateNamingNoResource_UnderOpenRegistrationWithoutAHostSet_IsGivenNone()
-        => Assert.Equal((Uri[]?)[], await ResourcesAfterAsync(false, null, operation: DynamicClientOperation.Update));
-
-    [Fact]
-    public async Task TheResources_WhenAnInitialAccessTokenIsRequired_AreLeftAsTheyAre()
-        => Assert.Null(await ResourcesAfterAsync(true, null));
-
-    [Fact]
-    public async Task TheResources_WhenTheHostNamesThem_AreLeftToTheHostsDefault()
-        => Assert.Null(await ResourcesAfterAsync(false, [Orders]));
-
     /// <summary>
-    /// A client naming resources is left to the check of the host's set, which refuses them, rather than given none.
+    /// A client somebody let in keeps what it was given once registration opens: its update is left to the other
+    /// checks.
     /// </summary>
     [Fact]
-    public async Task ResourcesAClientNames_AreLeftToTheHostsSetCheck()
-        => Assert.Equal((Uri[]?)[Orders], await ResourcesAfterAsync(false, null, [Orders]));
+    public async Task AnUpdateOfAReviewedClient_AfterRegistrationOpens_IsLeftToTheOtherChecks()
+    {
+        var open = Settings(false);
+        var update = Arrival.UpdateOf(ClientTrust.Reviewed);
 
-    [Fact]
-    public async Task AGrantNoUserTakesPartIn_UnderOpenRegistrationWithoutAHostSet_IsRefused()
-        => Assert.Equal(
-            ErrorCodes.InvalidClientMetadata,
-            await ValidateAsync(false, null, [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]));
-
-    [Fact]
-    public async Task TheGrantsAUserTakesPartIn_UnderOpenRegistrationWithoutAHostSet_AreServed()
-        => Assert.Null(await ValidateAsync(false, null, [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken]));
-
-    /// <summary>
-    /// An update replaces the metadata whole, so a client registered with the code grant cannot widen itself to a grant
-    /// it would have been refused at registration.
-    /// </summary>
-    [Fact]
-    public async Task AnUpdateToAGrantNoUserTakesPartIn_UnderOpenRegistration_IsRefused()
-        => Assert.Equal(
-            ErrorCodes.InvalidClientMetadata,
-            await ValidateAsync(false, null, [GrantTypes.ClientCredentials], DynamicClientOperation.Update));
-
-    [Fact]
-    public async Task AnyGrant_WhenAnInitialAccessTokenIsRequired_IsLeftToTheOtherChecks()
-        => Assert.Null(await ValidateAsync(true, null, [GrantTypes.ClientCredentials]));
-
-    [Fact]
-    public async Task AnyGrant_WhenTheHostNamesTheGrantTypes_IsLeftToTheOtherChecks()
-        => Assert.Null(await ValidateAsync(false, [GrantTypes.AuthorizationCode], [GrantTypes.ClientCredentials]));
+        Assert.Null(await ErrorFor(open, [GrantTypes.ClientCredentials], update));
+        Assert.Null(await ResourcesAfter(open, arrival: update));
+    }
 }

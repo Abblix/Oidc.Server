@@ -106,8 +106,8 @@ public partial class ClientIdMetadataDocumentTests
     }
 
     /// <summary>
-    /// With no grant types named for documents, a client authenticating itself still gets only the grants an end user
-    /// takes part in, the default a client registering without an initial access token gets too.
+    /// With no grant types named for documents, a client authenticating itself still gets only the grants of an
+    /// interactive sign-in, the default a client registering without an initial access token gets too.
     /// </summary>
     [Fact]
     public async Task ADocumentClient_WithoutGrantTypesNamedForDocuments_GetsOnlyTheSignInGrants()
@@ -126,6 +126,29 @@ public partial class ClientIdMetadataDocumentTests
 
         Assert.True(client.TryGetSuccess(out var found), client.ToString());
         Assert.Equal([GrantTypes.AuthorizationCode, GrantTypes.RefreshToken], found.EffectiveGrantTypes);
+    }
+
+    /// <summary>
+    /// A document client naming no resources gets the host's list for new clients, and none when the host names none,
+    /// as a client registering while anybody may register does.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADocumentClientNamingNoResource_GetsTheHostsListOrNone(bool hostNamesOne)
+    {
+        var resource = new Uri("https://orders.example.com");
+        Serve(DocumentDeclaring([ClientAuthenticationMethods.PrivateKeyJwt]));
+        await using var host = CreateHost(options => options.NewClientOptions = options.NewClientOptions with
+        {
+            AllowedResources = hostNamesOne ? [resource] : null,
+        });
+
+        var client = await FindAsync(host, TenantListing("acme", authority: null));
+
+        Assert.True(client.TryGetSuccess(out var found), client.ToString());
+        Assert.Equal(hostNamesOne ? [resource] : [], found.AllowedResources!);
+        Assert.Equal(hostNamesOne, found.MayGetTokenFor(resource));
     }
 
     /// <summary>

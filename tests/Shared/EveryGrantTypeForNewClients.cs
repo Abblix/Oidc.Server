@@ -11,7 +11,7 @@ namespace Abblix.Tests.Shared;
 
 /// <summary>
 /// Names every grant type for new clients, for a test host that registers its clients openly and drives every flow
-/// through them: without a set, open registration gives a client only the grants an end user takes part in.
+/// through them: without a set, open registration gives a client only the grants of an interactive sign-in.
 /// </summary>
 public static class EveryGrantTypeForNewClients
 {

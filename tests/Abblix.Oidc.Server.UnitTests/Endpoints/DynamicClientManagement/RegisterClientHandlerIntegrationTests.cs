@@ -117,7 +117,7 @@ public class RegisterClientHandlerIntegrationTests
 
     /// <summary>
     /// Names the grant types new clients may request, which a client registering without an initial access token
-    /// needs for any grant beyond those an end user takes part in, so a test reaches the gate it is about.
+    /// needs for any grant beyond those of an interactive sign-in, so a test reaches the gate it is about.
     /// </summary>
     private static Action<OidcOptions> Granting(params string[] grantTypes)
         => opts => opts.NewClientOptions = opts.NewClientOptions with { AllowedGrantTypes = grantTypes };

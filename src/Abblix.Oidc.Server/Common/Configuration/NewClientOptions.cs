@@ -56,16 +56,23 @@ public record NewClientOptions
     /// <summary>
     /// The resources a dynamically registered client may get an access token for: the list a client registering
     /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
-    /// client registering without the member may get a token for any registered resource, and for none while anybody
-    /// may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software
-    /// statement from a trusted issuer is required; one sending a resource is refused, since which resources a client
-    /// reaches is the server's policy rather than the client's choice.
+    /// client registering without the member may get a token for any registered resource, and a client nobody vetted
+    /// for none: one registered while anybody may register, that is while
+    /// <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software statement from a trusted
+    /// issuer is required, and one resolved from its metadata document. One sending a resource is refused, since which
+    /// resources a client reaches is the server's policy rather than the client's choice.
     /// </summary>
     /// <remarks>
-    /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client
-    /// registered openly before this default keeps every resource until its next update.
+    /// Applied on registration, on every RFC 7592 update and to every client resolved from its metadata document, since
+    /// an update replaces the metadata whole; a stored client keeps its list until its next RFC 7592 update.
     /// </remarks>
     public Uri[]? AllowedResources { get; init; }
+
+    /// <summary>
+    /// The resources a client nobody vetted is given when it names none: <see cref="AllowedResources"/>, or none when
+    /// it is unset.
+    /// </summary>
+    internal Uri[] UnreviewedClientResources => AllowedResources ?? [];
 
     /// <summary>
     /// The token exchange audiences a dynamically registered client may name: the list a client registering without
@@ -81,13 +88,13 @@ public record NewClientOptions
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
     /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
-    /// server supports, and only <c>authorization_code</c> and <c>refresh_token</c> while anybody may register, that is
-    /// while <see cref="OidcOptions.RequireInitialAccessToken"/> is <c>false</c> and no software statement from a
-    /// trusted issuer is required.
+    /// server supports, and a client nobody vetted only <c>authorization_code</c> and <c>refresh_token</c>: one
+    /// registered while anybody may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is
+    /// <c>false</c> and no software statement from a trusted issuer is required.
     /// </summary>
     /// <remarks>
-    /// A grant no end user takes part in, such as <c>client_credentials</c>, gets tokens with no user present, so a
-    /// client nobody vetted gets only the grants that sign users in unless the host names others here. Clients the host
+    /// A grant outside an interactive sign-in, such as <c>client_credentials</c>, gets tokens with no user present, so
+    /// a client nobody vetted gets only the grants of one unless the host names others here. Clients the host
     /// defines itself are not bound by it, and the discovery document still lists every grant type the server supports.
     /// Applied on
     /// registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client registered
@@ -97,10 +104,12 @@ public record NewClientOptions
     public string[]? AllowedGrantTypes { get; init; }
 
     /// <summary>
-    /// The grant types an end user takes part in, which a client nobody vetted gets unless the host names others: one
-    /// registering without an initial access token and one resolved from its metadata document.
+    /// The grant types OAuth 2.1 leaves to an interactive sign-in, the authorization code and the refresh token,
+    /// which a client nobody vetted gets unless the host names others: one registered while anybody may register and
+    /// one resolved from its metadata document.
     /// </summary>
-    internal static readonly string[] UserGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    internal static readonly string[] InteractiveSignInGrantTypes =
+        [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
     /// What a dynamically registered client's authentication assertions may name as their audience, and in which

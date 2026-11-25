@@ -35,6 +35,28 @@ public class NewClientTokenLifetimesValidatorTests
     public void TheDefaults_StartTheHost()
         => Assert.True(Validate(new NewClientOptions()).Succeeded);
 
+    /// <summary>
+    /// Ten years is the longest lifetime accepted, a day more is refused, for every lifetime the setting holds.
+    /// </summary>
+    [Theory]
+    [InlineData(3650, true)]
+    [InlineData(3651, false)]
+    public void TheLongestLifetime_IsTenYears(int days, bool starts)
+    {
+        var lifetime = TimeSpan.FromDays(days);
+
+        Assert.Equal(starts, Validate(new NewClientOptions { AccessTokenExpiresIn = lifetime }).Succeeded);
+        Assert.Equal(
+            starts,
+            Validate(new NewClientOptions { RefreshToken = new() { AbsoluteExpiresIn = lifetime } }).Succeeded);
+        Assert.Equal(
+            starts,
+            Validate(new NewClientOptions
+            {
+                RefreshToken = new() { AbsoluteExpiresIn = TimeSpan.FromDays(1), SlidingExpiresIn = lifetime },
+            }).Succeeded);
+    }
+
     [Fact]
     public void NoSlidingWindow_StartsTheHost()
         => Assert.True(Validate(new NewClientOptions { RefreshToken = new() { SlidingExpiresIn = null } }).Succeeded);

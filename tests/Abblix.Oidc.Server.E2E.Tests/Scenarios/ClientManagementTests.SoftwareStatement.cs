@@ -257,7 +257,7 @@ public partial class ClientManagementTests
 
     /// <summary>
     /// Registration open to anybody holds a client to its defaults on the values it is registered with, a trusted
-    /// statement's included: a statement adding a grant no end user takes part in is refused as the body would be.
+    /// statement's included: a statement adding a grant outside an interactive sign-in is refused as the body would be.
     /// </summary>
     [Fact]
     public async Task Under_open_registration_a_statement_adding_client_credentials_is_refused()
