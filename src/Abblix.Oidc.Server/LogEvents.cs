@@ -994,7 +994,8 @@ internal static class LogEvents
     // id here must not repeat one there.
 
     /// <summary>
-    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own.
+    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own, and the clients
+    /// registered, replaced or removed at the registration endpoints.
     /// </summary>
     public static class ClientInformation
     {

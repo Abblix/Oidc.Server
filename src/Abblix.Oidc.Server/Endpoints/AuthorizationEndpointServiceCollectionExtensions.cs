@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -72,6 +73,9 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
         services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
+
+        // The decorator records the tokens the endpoint hands out, naming the end user by a fingerprint
+        services.TryAddSingleton<CredentialFingerprints>();
         return services.AddTelemetryDecorator<IAuthorizationHandler, ObservedAuthorizationHandler>();
     }
 

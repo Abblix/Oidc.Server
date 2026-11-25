@@ -22,7 +22,6 @@ using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInteraction;
 using Abblix.Utils;
-using Microsoft.Extensions.Logging;
 using AuthorizationResponse = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -36,8 +35,6 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
 	Justification = "Every dependency is used: the session store, the record of which clients a session has, the host's interaction step, the consent provider and its backstop, the revocation check, the subject converter, the clock and the response builders each decide a different part of one authorization.")]
 public class AuthorizationRequestProcessor(
-	ILogger<AuthorizationRequestProcessor> logger,
-	CredentialFingerprints fingerprints,
 	IAuthSessionService authSessionService,
 	ISessionClientRegistry sessionClients,
 	IUserInteractionRequirement interactionRequirement,
@@ -52,8 +49,13 @@ public class AuthorizationRequestProcessor(
 	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
 	private readonly UserConsentsReader _consentsReader = new(consentsProvider, clock);
 
-	private readonly AuthorizationResponseIssuer _responseIssuer =
-		new(sessionClients, clock, responseProcessors, logger, fingerprints);
+	// The ID token hashes the code and the access token issued beside it (OpenID Connect Core 1.0 sections 3.3.2.11
+	// and 3.2.2.10), so its builder runs after the others. Ordered here rather than left to registration order, which
+	// puts it ahead of the code builder for a host that enables the Implicit Flow before the core registration.
+	private readonly IAuthorizationResponseBuilder[] _responseBuilders =
+	[
+		..responseProcessors.OrderBy(builder => builder.ResponseType == ResponseTypes.IdToken),
+	];
 
 	private readonly UserInteractionStep _interactionStep = new(interactionRequirement);
 
@@ -160,7 +162,7 @@ public class AuthorizationRequestProcessor(
 				model.RedirectUri);
 		}
 
-		return await _responseIssuer.IssueAsync(tenant, request, authSession, authContext.GetSuccess(), responseType);
+		return await IssueAsync(tenant, request, authSession, authContext.GetSuccess(), responseType);
 	}
 
 	/// <summary>
@@ -180,5 +182,51 @@ public class AuthorizationRequestProcessor(
 		return askedFor &&
 		       consents is { GivenAt: not null, Granted: { Scopes.Length: 0, Resources.Length: 0 } } &&
 		       (!askedForDetails || consents.Granted.AuthorizationDetails is null or { Count: 0 });
+	}
+
+	/// <summary>
+	/// Records the client for the session and issues what each requested response type asks for.
+	/// </summary>
+	private async Task<AuthorizationResponse> IssueAsync(
+		TenantDefinition tenant,
+		ValidAuthorizationRequest request,
+		AuthSession authSession,
+		AuthorizationContext authContext,
+		string[]? responseType)
+	{
+		// Recorded before anything is issued, so a store that refuses the record fails the authorization
+		// rather than following a code or a token already handed out.
+		await sessionClients.AddClientAsync(tenant, authSession.SessionId, request.ClientInfo.ClientId);
+
+		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
+		// scope set (identical to what the issued token carries) so the response encoder advertises the
+		// granted scope on the front-channel scope parameter, not the broader requested set (RFC 6749 section 3.3)
+		var result = new SuccessfullyAuthenticated(
+			request.Model,
+			request.ResponseMode,
+			authSession.SessionId,
+			[..await sessionClients.GetClientsAsync(tenant, authSession.SessionId)])
+		{
+			GrantedScopes = authContext.Scope,
+			SessionPersistence = authSession.Persistence,
+			Subject = authSession.Subject,
+		};
+
+		var authorizedGrant = new AuthorizedGrant(authSession, authContext) { AuthorizedAt = clock.GetUtcNow() };
+
+		// Dispatch each requested response-type part to its registered builder. Parts whose builders are not
+		// registered (e.g. token / id_token when Implicit Flow is not enabled) cannot reach this point:
+		// FlowTypeValidator rejects the request earlier with unsupported_response_type.
+		foreach (var builder in _responseBuilders)
+		{
+			if (!responseType.HasFlag(builder.ResponseType))
+				continue;
+
+			if (await builder.BuildResponseAsync(tenant, request, authorizedGrant, result) is { } refusal)
+				return refusal;
+		}
+
+		// Return the final authorization result containing codes and tokens as needed.
+		return result;
 	}
 }

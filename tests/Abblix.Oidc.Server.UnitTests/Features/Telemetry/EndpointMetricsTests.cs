@@ -334,7 +334,8 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(TestTenant.Matched, request))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
-        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var observed = new ObservedAuthorizationHandler(
+            inner.Object, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, TestFingerprints.Instance, _instruments);
 
         await observed.HandleAsync(SingleIssuer.Tenant, request);
 
@@ -356,7 +357,8 @@ public sealed class EndpointMetricsTests : IDisposable
                 AccessToken = AToken,
                 IdToken = AToken,
             });
-        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var traced = new ObservedAuthorizationHandler(
+            inner.Object, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, TestFingerprints.Instance, _instruments);
 
         await traced.HandleAsync(SingleIssuer.Tenant, request);
 

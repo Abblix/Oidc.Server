@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Telemetry;
-using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -28,7 +27,13 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// rather than by a pairwise pseudonym a token may carry instead, so one user's tokens are found together; no token
 /// value is written. The fingerprint is keyed by <see cref="Common.Configuration.OidcOptions.FingerprintKey"/>, and
 /// without it by a key of the process, so fingerprints match across nodes and restarts only where the deployment sets
-/// one.
+/// one. Under client_credentials the grant's subject is the client itself, so the fingerprint there stands for the
+/// client_id the record already names.
+/// <para>
+/// Tokens are recorded when they are minted, as <see cref="Telemetry.OidcMetrics.TokensIssued"/> counts them, so the
+/// tokens of a CIBA push delivery are recorded whether or not the delivery then brings them to the client; a delivery
+/// that fails is logged on its own by the push completion.
+/// </para>
 /// </remarks>
 /// <param name="logger">The logger of the processor whose response is recorded.</param>
 /// <param name="fingerprints">Stands for the subject in the record.</param>
@@ -65,14 +70,8 @@ internal sealed partial class IssuedTokensLog(ILogger logger, CredentialFingerpr
     /// code is redeemed, and recorded, at the token endpoint.
     /// </summary>
     /// <param name="tenant">The tenant the tokens are issued at.</param>
-    /// <param name="request">The request answered.</param>
-    /// <param name="authSession">The end user's session the tokens are issued for.</param>
-    /// <param name="response">The response carrying the tokens.</param>
-    public void ThroughFrontChannel(
-        TenantDefinition tenant,
-        ValidAuthorizationRequest request,
-        AuthSession authSession,
-        SuccessfullyAuthenticated response)
+    /// <param name="response">The response carrying the tokens, as it is delivered.</param>
+    public void ThroughFrontChannel(TenantDefinition tenant, SuccessfullyAuthenticated response)
     {
         if (response is { AccessToken: null, IdToken: null })
             return;
@@ -83,8 +82,8 @@ internal sealed partial class IssuedTokensLog(ILogger logger, CredentialFingerpr
                 ..response.AccessToken is not null ? [TelemetryTokenTypes.AccessToken] : Array.Empty<string>(),
                 ..response.IdToken is not null ? [TelemetryTokenTypes.IdToken] : Array.Empty<string>(),
             ],
-            request.ClientInfo.ClientId,
-            fingerprints.Of(authSession.Subject),
+            response.Model.ClientId,
+            fingerprints.Of(response.Subject),
             GrantTypes.Implicit,
             Sanitized.Values(response.GrantedScopes),
             Sanitized.Values(AudiencesOf(response.AccessToken)));

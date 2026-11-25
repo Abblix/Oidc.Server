@@ -77,4 +77,10 @@ public record SuccessfullyAuthenticated(
 	/// <see cref="AuthorizationRequest.Scope"/> when the host consent provider narrows the grant (RFC 6749 section 3.3).
 	/// </summary>
 	public string[] GrantedScopes { get; init; } = [];
+
+	/// <summary>
+	/// The end user's own identifier the response is issued for, never a pairwise pseudonym and never written to the
+	/// response: the record of the tokens it hands out names the end user by its fingerprint.
+	/// </summary>
+	internal string? Subject { get; init; }
 }
