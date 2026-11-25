@@ -74,6 +74,29 @@ public sealed class ClientResolvedLogTests : IDisposable
     }
 
     /// <summary>
+    /// Two lookups of one document that both judged its client before either held it: the first to hold its client
+    /// records the resolution, the one that lost the race is handed the client held and records nothing.
+    /// </summary>
+    [Fact]
+    public void OfTwoLookupsHoldingAClientForOneDocument_OnlyTheFirstRecordsIt()
+    {
+        var document = new HeldMetadataDocument(Document, DateTimeOffset.UnixEpoch);
+        var clients = CreateClients();
+        var first = new ClientInfo(ClientId);
+
+        Assert.Same(first, clients.Keep(Tenant, document, first));
+        Assert.Same(first, clients.Keep(Tenant, document, new ClientInfo(ClientId)));
+
+        var record = Assert.Single(Resolved);
+        Assert.Equal(LogLevel.Information, record.Level);
+        Assert.Equal(Tenant.Id, record.Value("TenantId"));
+        Assert.Equal(ClientId, record.Value("ClientId")?.ToString());
+        Assert.Equal(
+            first.EffectiveGrantTypes,
+            Assert.IsType<Sanitized[]>(record.Value("GrantTypes")).Select(value => value.ToString()));
+    }
+
+    /// <summary>
     /// Two lookups racing to hold a client for one tenant: the one holding it first is told so, the other is handed
     /// the client held and told it is not its own, so only the first records it.
     /// </summary>

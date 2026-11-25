@@ -74,7 +74,9 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
         services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
 
-        // The decorator records the tokens the endpoint hands out, naming the end user by a fingerprint
+        // The decorator records the tokens the endpoint hands out, naming the end user by a fingerprint. The common
+        // services register the same singleton; added here too, idempotently, because this method is public and a
+        // host may call it on its own
         services.TryAddSingleton<CredentialFingerprints>();
         return services.AddTelemetryDecorator<IAuthorizationHandler, ObservedAuthorizationHandler>();
     }

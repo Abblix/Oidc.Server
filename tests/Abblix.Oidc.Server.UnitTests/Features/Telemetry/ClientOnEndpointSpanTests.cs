@@ -67,18 +67,30 @@ public sealed class ClientOnEndpointSpanTests : IDisposable
     }
 
     /// <summary>
+    /// Runs <paramref name="act"/> under a trace of its own, and returns the server's spans of that trace: the source is
+    /// shared by every test in the process, so what this test produced is told apart by its trace.
+    /// </summary>
+    private async Task<Activity[]> SpansOf(Func<Task> act)
+    {
+        var trace = ActivityTraceId.CreateRandom();
+        using (new Activity("test").SetParentId(trace, ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded).Start())
+            await act();
+
+        return _stopped.Where(span => span.TraceId == trace).ToArray();
+    }
+
+    /// <summary>
     /// Runs <paramref name="stage"/> inside the handling of an endpoint, and returns the endpoint's span and the spans
     /// of its stages.
     /// </summary>
     private async Task<(Activity Endpoint, Activity[] Stages)> UnderAnEndpoint<TResult>(Func<Task<TResult>> stage)
     {
-        await EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, null, stage, EndpointObservation.NoError);
+        var spans = await SpansOf(() => EndpointObservation.RunAsync(
+            TelemetryEndpoints.Token, _instruments, null, stage, EndpointObservation.NoError));
 
         var endpoint = Assert.Single(
-            _stopped, span => Equals(span.GetTagItem(TelemetryTags.Endpoint), TelemetryEndpoints.Token));
-        var stages = _stopped.Where(span => span.TraceId == endpoint.TraceId && span != endpoint).ToArray();
-        return (endpoint, stages);
+            spans, span => Equals(span.GetTagItem(TelemetryTags.Endpoint), TelemetryEndpoints.Token));
+        return (endpoint, spans.Where(span => span != endpoint).ToArray());
     }
 
     private static ObservedClientAuthenticator Authenticator(Result<ClientInfo, OidcError> outcome)
@@ -127,9 +139,9 @@ public sealed class ClientOnEndpointSpanTests : IDisposable
     [Fact]
     public async Task AStageOutsideAnEndpoint_NamesTheClientNowhere()
     {
-        await Authenticate(Authenticator(new ClientInfo(ClientId)));
+        var spans = await SpansOf(() => Authenticate(Authenticator(new ClientInfo(ClientId))));
 
-        Assert.DoesNotContain(_stopped, span => span.GetTagItem(TelemetryTags.ClientId) is not null);
+        Assert.DoesNotContain(spans, span => span.GetTagItem(TelemetryTags.ClientId) is not null);
     }
 
     [Theory]
