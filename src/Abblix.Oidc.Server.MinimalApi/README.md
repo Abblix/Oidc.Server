@@ -4,11 +4,16 @@ Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Cor
 
 ## What's New in Version 3.1
 
-Read [Upgrading to 3.1](https://github.com/Abblix/Oidc.Server/blob/v3.1/README.md#%EF%B8%8F-upgrading-to-31) before moving a 3.0 host.
+Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before moving a 3.0 host. Every change of the release is in [What's new in 3.1](https://www.abblix.com/en/docs/whats-new-in-3.1).
 
 ✏️ Improvements
 - Discovery publishes every endpoint on the issuer's scheme, host and port, and the registration responses return `registration_client_uri` on it
+- Dynamic client registration, pushed authorization requests and introspection apply the server's CORS policy, as the other endpoints browser clients call do ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2)
+- The end session endpoint sends the end user to the logout confirmation page a tenant names, with a 303 redirect and `Referrer-Policy: no-referrer`
 - A host with no cache of its own starts on in-process caches
+
+🛠 Fixes
+- A failed client authentication answered with 401 and a `Basic` challenge only when the request used HTTP Basic, otherwise with the endpoint's own status ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2.4)
 
 The server's own changes are listed in the [Abblix.OIDC.Server README](https://www.nuget.org/packages/Abblix.OIDC.Server).
 
@@ -19,7 +24,7 @@ The server's own changes are listed in the [Abblix.OIDC.Server README](https://w
 - Single Route Group: `MapOidcEndpoints()` returns the `RouteGroupBuilder`, so cross-cutting conventions (rate limiting, auth, filters) apply to all OIDC endpoints at once
 - Endpoint Enablement: each endpoint is mapped only when its flag is set in `OidcOptions.EnabledEndpoints`; a disabled endpoint is never registered and returns 404
 - Configurable Routes & Prefix: route templates default to `/connect/*` and `/.well-known/*`, overridable via `OidcRouteOptions`, with an optional path prefix
-- CORS-aware: cross-origin endpoints (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
+- CORS-aware: cross-origin endpoints (discovery, jwks, checksession, token, revoke, introspect, userinfo, endsession, pushed authorization and client registration) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
 - Discovery Endpoint: auto-configured `/.well-known/openid-configuration` metadata
 - Dynamic Client Registration: REST API for client management per RFC 7591/7592
 
@@ -79,7 +84,7 @@ An optional prefix mounts every endpoint under a sub-path:
 app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-known/jwks
 ```
 
-Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so the host calls `app.UseCors()`. The server registers a policy named `OidcConstants.CorsPolicyName` that allows any origin without credentials; a host narrows it through `OidcCorsOptions.AllowedOrigins`, or replaces it by registering its own policy of that name.
+Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, introspect, userinfo, endsession, pushed authorization and client registration) carry CORS metadata, so the host calls `app.UseCors()`. The server registers a policy named `OidcConstants.CorsPolicyName` that allows any origin without credentials; a host narrows it through `OidcCorsOptions.AllowedOrigins`, or replaces it by registering its own policy of that name.
 
 ## Migrating from the MVC integration
 
