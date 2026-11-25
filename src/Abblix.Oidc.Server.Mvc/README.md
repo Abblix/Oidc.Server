@@ -8,7 +8,7 @@ Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before 
 
 ✏️ Improvements
 - Discovery publishes every endpoint on the issuer's scheme, host and port, and the registration responses return `registration_client_uri` on it
-- Dynamic client registration, pushed authorization requests and introspection apply the server's CORS policy, as the other endpoints browser clients call do ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2)
+- Dynamic client registration, pushed authorization requests and introspection apply the server's CORS policy, as the token, revocation, UserInfo and discovery endpoints do ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2)
 - The end session endpoint sends the end user to the logout confirmation page a tenant names, with a 303 redirect and `Referrer-Policy: no-referrer`
 - A host with no cache of its own starts on in-process caches
 
