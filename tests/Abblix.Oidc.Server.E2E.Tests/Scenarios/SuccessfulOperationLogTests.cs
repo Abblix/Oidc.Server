@@ -51,7 +51,23 @@ public sealed class SuccessfulOperationLogTests(TestFactory factory) : TestBase(
         public const int ClientRemoved = 10682;
     }
 
-    private const string Subject = "e2e-subject";
+    /// <summary>
+    /// The names of the structured fields the records carry, as the server publishes them: a log consumer queries
+    /// by them, so they are the contract as much as the event ids are.
+    /// </summary>
+    private static class Fields
+    {
+        public const string ClientId = "ClientId";
+        public const string GrantId = "GrantId";
+        public const string GrantType = "GrantType";
+        public const string GrantTypes = "GrantTypes";
+        public const string Scope = "Scope";
+        public const string Subject = "Subject";
+        public const string TenantId = "TenantId";
+        public const string Tokens = "Tokens";
+    }
+
+    private const string SubjectId = "e2e-subject";
 
     private readonly ActivityTraceId _trace = ActivityTraceId.CreateRandom();
 
@@ -104,27 +120,27 @@ public sealed class SuccessfulOperationLogTests(TestFactory factory) : TestBase(
         var issued = events.Of(EventIds.TokensIssued);
         Assert.Equal(
             new[] { GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials, GrantTypes.RefreshToken },
-            issued.Select(record => record.Attributes["GrantType"]).Order());
+            issued.Select(record => record.Attributes[Fields.GrantType]).Order());
         Assert.All(issued, record => Assert.Equal(LogLevel.Information, record.Level));
 
-        var code = Assert.Single(issued, record => record.Attributes["GrantType"] == GrantTypes.AuthorizationCode);
-        Assert.Equal(TestTenantSettings.TenantId, code.Attributes["TenantId"]);
-        Assert.Equal(TestConstants.ConfidentialClientId, code.Attributes["ClientId"]);
-        Assert.Equal(Fingerprint(host, Subject), code.Attributes["Subject"]);
+        var code = Assert.Single(issued, record => record.Attributes[Fields.GrantType] == GrantTypes.AuthorizationCode);
+        Assert.Equal(TestTenantSettings.TenantId, code.Attributes[Fields.TenantId]);
+        Assert.Equal(TestConstants.ConfidentialClientId, code.Attributes[Fields.ClientId]);
+        Assert.Equal(Fingerprint(host, SubjectId), code.Attributes[Fields.Subject]);
         Assert.Equal(
             new[] { TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken, TelemetryTokenTypes.RefreshToken },
-            code.Attributes["Tokens"]!.Split(' ').Order());
-        Assert.Contains(Scopes.OpenId, code.Attributes["Scope"]!.Split(' '));
+            code.Attributes[Fields.Tokens]!.Split(' ').Order());
+        Assert.Contains(Scopes.OpenId, code.Attributes[Fields.Scope]!.Split(' '));
 
         // The refresh continues the family the code founded, and the record says which
-        var refresh = Assert.Single(issued, record => record.Attributes["GrantType"] == GrantTypes.RefreshToken);
-        Assert.False(string.IsNullOrEmpty(code.Attributes["GrantId"]));
-        Assert.Equal(code.Attributes["GrantId"], refresh.Attributes["GrantId"]);
+        var refresh = Assert.Single(issued, record => record.Attributes[Fields.GrantType] == GrantTypes.RefreshToken);
+        Assert.False(string.IsNullOrEmpty(code.Attributes[Fields.GrantId]));
+        Assert.Equal(code.Attributes[Fields.GrantId], refresh.Attributes[Fields.GrantId]);
 
-        var credentials = Assert.Single(issued, record => record.Attributes["GrantType"] == GrantTypes.ClientCredentials);
-        Assert.Equal(TestConstants.ClientCredentialsClientId, credentials.Attributes["ClientId"]);
+        var credentials = Assert.Single(issued, record => record.Attributes[Fields.GrantType] == GrantTypes.ClientCredentials);
+        Assert.Equal(TestConstants.ClientCredentialsClientId, credentials.Attributes[Fields.ClientId]);
 
-        AssertNoSecretReached(events, Subject, tokens, refreshed, machine);
+        AssertNoSecretReached(events, SubjectId, tokens, refreshed, machine);
 
         // The token endpoint's span names the client the request authenticated
         Assert.Contains(
@@ -160,10 +176,10 @@ public sealed class SuccessfulOperationLogTests(TestFactory factory) : TestBase(
 
         var issued = Assert.Single(events.Of(EventIds.FrontChannelTokensIssued));
         Assert.Equal(LogLevel.Information, issued.Level);
-        Assert.Equal(clientId, issued.Attributes["ClientId"]);
-        Assert.Equal(TelemetryTokenTypes.IdToken, issued.Attributes["Tokens"]);
-        Assert.Equal(GrantTypes.Implicit, issued.Attributes["GrantType"]);
-        Assert.Equal(Fingerprint(host, Subject), issued.Attributes["Subject"]);
+        Assert.Equal(clientId, issued.Attributes[Fields.ClientId]);
+        Assert.Equal(TelemetryTokenTypes.IdToken, issued.Attributes[Fields.Tokens]);
+        Assert.Equal(GrantTypes.Implicit, issued.Attributes[Fields.GrantType]);
+        Assert.Equal(Fingerprint(host, SubjectId), issued.Attributes[Fields.Subject]);
         Assert.DoesNotContain(events.Events.SelectMany(record => record.Attributes.Values), value => value == idToken);
 
         // A code is recorded where it is redeemed, never where it is handed out
@@ -193,16 +209,16 @@ public sealed class SuccessfulOperationLogTests(TestFactory factory) : TestBase(
 
         var recorded = Assert.Single(events.Of(EventIds.ClientRegistered));
         Assert.Equal(LogLevel.Information, recorded.Level);
-        Assert.Equal(TestTenantSettings.TenantId, recorded.Attributes["TenantId"]);
-        Assert.Equal(clientId, recorded.Attributes["ClientId"]);
-        Assert.Equal(GrantTypes.AuthorizationCode, recorded.Attributes["GrantTypes"]);
+        Assert.Equal(TestTenantSettings.TenantId, recorded.Attributes[Fields.TenantId]);
+        Assert.Equal(clientId, recorded.Attributes[Fields.ClientId]);
+        Assert.Equal(GrantTypes.AuthorizationCode, recorded.Attributes[Fields.GrantTypes]);
 
         metadata[RegistrationRequest.ClientId] = clientId;
         using var update = Authorized(HttpMethod.Put, configuration, registered);
         update.Content = JsonContent.Create(metadata);
         var updated = await ReadJsonAsync(await client.SendAsync(update, TestContext.Current.CancellationToken));
 
-        Assert.Equal(clientId, Assert.Single(events.Of(EventIds.ClientUpdated)).Attributes["ClientId"]);
+        Assert.Equal(clientId, Assert.Single(events.Of(EventIds.ClientUpdated)).Attributes[Fields.ClientId]);
 
         using var removal = new HttpRequestMessage(HttpMethod.Delete, configuration);
         removal.Headers.Authorization = new AuthenticationHeaderValue(
@@ -210,7 +226,7 @@ public sealed class SuccessfulOperationLogTests(TestFactory factory) : TestBase(
         var removed = await client.SendAsync(removal, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
 
-        Assert.Equal(clientId, Assert.Single(events.Of(EventIds.ClientRemoved)).Attributes["ClientId"]);
+        Assert.Equal(clientId, Assert.Single(events.Of(EventIds.ClientRemoved)).Attributes[Fields.ClientId]);
 
         // Neither the secret nor a registration access token reaches a record
         AssertNoSecretReached(events, null, registered, updated);
