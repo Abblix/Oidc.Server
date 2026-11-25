@@ -42,4 +42,11 @@ internal sealed class ObservedStageAttribute(Type service, string stage) : Attri
     /// the nullable hides the Result's refusal.
     /// </summary>
     public bool NeverRefuses { get; set; }
+
+    /// <summary>
+    /// Whether a successful result of the service names the client of the request, as an authenticated client or a
+    /// validated request does, so the decorator names it on the endpoint's span (<see cref="TelemetryTags.ClientId"/>).
+    /// The decorator's hand-written part answers it with a <c>ClientOf</c> method per method returning a Result.
+    /// </summary>
+    public bool NamesClient { get; set; }
 }

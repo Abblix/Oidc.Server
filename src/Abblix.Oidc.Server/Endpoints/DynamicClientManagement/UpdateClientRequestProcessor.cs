@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -22,6 +23,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Processes requests to update existing client configurations per RFC 7592 Section 2.2.
 /// Updates client metadata while preserving credentials and system-managed fields.
 /// </summary>
+/// <param name="logger">Records the replaced registration.</param>
 /// <param name="clientInfoManager">Stores the updated client.</param>
 /// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
 /// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
@@ -30,6 +32,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </param>
 /// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
 public class UpdateClientRequestProcessor(
+    ILogger<UpdateClientRequestProcessor> logger,
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
@@ -37,6 +40,8 @@ public class UpdateClientRequestProcessor(
     NewClientOptions newClientOptions,
     IClientSecretEncryptor clientSecretEncryptor) : IUpdateClientRequestProcessor
 {
+    private readonly ClientRegistrationsLog _registrations = new(logger);
+
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
     /// </summary>
@@ -97,6 +102,8 @@ public class UpdateClientRequestProcessor(
         {
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
         }
+
+        _registrations.Updated(tenant, updatedClient);
 
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {

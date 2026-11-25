@@ -52,6 +52,7 @@ public class UpdateClientRequestProcessorTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
             clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
             newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
 

@@ -32,7 +32,7 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// each tenant, since the tenant's scopes, resources and security profile judge it.
 /// </remarks>
 /// <param name="inner">The client store.</param>
-/// <param name="logger">Records why an identifier was not resolved.</param>
+/// <param name="logger">Records a client resolved from its document, and why an identifier was not resolved.</param>
 /// <param name="documents">The documents fetched and held.</param>
 /// <param name="scopes">Opens the container a document is judged in, since the checks it passes are scoped services.
 /// </param>
@@ -64,9 +64,8 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         if (!held.TryGetSuccess(out var document))
             return held.GetFailure().MayPass ? ClientAbsence.TemporarilyUnavailable : ClientAbsence.Refused;
 
-        var generation = (tenant.Id, tenant.Generation);
-        if (document.Clients.TryGetValue(generation, out var client))
-            return client;
+        if (document.ClientAt(tenant) is { } heldClient)
+            return heldClient;
 
         var read = await documents.ReadAtAsync(tenant, clientId, document);
         if (!read.TryGetSuccess(out var metadata))
@@ -75,14 +74,40 @@ internal sealed partial class ClientIdMetadataDocumentClients(
             return ClientAbsence.Refused;
         }
 
-        client = await JudgeAsync(tenant, clientId, metadata, settings.NewClientOptions);
+        var client = await JudgeAsync(tenant, clientId, metadata, settings.NewClientOptions);
 
         // A refusal is not kept: section 6.2 has the server "MUST NOT cache documents which are invalid", and one is so
         // at this tenant
         if (client is null)
             return ClientAbsence.Refused;
 
-        return document.Clients.GetOrAdd(generation, client);
+        return Keep(tenant, document, client);
+    }
+
+    /// <summary>
+    /// Holds <paramref name="client"/>, the client <paramref name="document"/> describes at <paramref name="tenant"/>,
+    /// with the document for the tenant's generation, unless a lookup racing this one held its own first, and answers
+    /// with the client held.
+    /// </summary>
+    /// <remarks>
+    /// The lookup whose client is held records it, so a document is recorded once per tenant generation however many
+    /// requests read the client it holds; a document fetched again once its copy expires holds, and records, its
+    /// client anew. A scope or a list of resources left unset is recorded as absent, which leaves the client any of
+    /// them.
+    /// </remarks>
+    private ClientInfo Keep(TenantDefinition tenant, HeldMetadataDocument document, ClientInfo client)
+    {
+        if (!document.TryHold(tenant, client, out var held))
+            return held;
+
+        LogClientResolved(
+            tenant.Id,
+            client.ClientId,
+            Sanitized.Values(client.EffectiveGrantTypes),
+            Sanitized.Values(client.AllowedScopes),
+            client.AllowedResources);
+
+        return client;
     }
 
     /// <summary>

@@ -56,7 +56,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         var client = CreateClient();
         client.DefaultRequestHeaders.Add("traceparent", $"00-{trace}-{ActivitySpanId.CreateRandom()}-01");
 
-        await DriveFlowAsync(client);
+        var deviceClientId = await DriveFlowAsync(client);
 
         var spans = _stopped.Where(span => span.Source.Name == OidcTelemetry.SourceName && span.TraceId == trace).ToArray();
         var endpointSpans = spans.Where(span => span.GetTagItem(TelemetryTags.Endpoint) is not null).ToArray();
@@ -77,13 +77,17 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         Assert.Empty(endpointSpans.Where(span => span.Parent?.Source.Name != HostingSource).Select(span => span.DisplayName));
         Assert.NotEmpty(stageSpans);
         Assert.Empty(stageSpans.Where(span => span.Parent?.Source.Name != OidcTelemetry.SourceName).Select(span => span.DisplayName));
-        AssertOnlyAdmittedAttributes(spans);
+        AssertOnlyAdmittedAttributes(spans, [TestConstants.ConfidentialClientId, deviceClientId]);
 
         var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnsupportedGrantType));
         Assert.Equal(ActivityStatusCode.Error, refused.Status);
         Assert.Null(refused.GetTagItem(TelemetryTags.GrantType));
         var token = Assert.Single(spans, span => span.Status == ActivityStatusCode.Ok &&
                                                  Equals(span.GetTagItem(TelemetryTags.GrantType), GrantTypes.AuthorizationCode));
+
+        // The endpoint's span names the client the request authenticated, and no stage span repeats it
+        Assert.Equal(TestConstants.ConfidentialClientId, token.GetTagItem(TelemetryTags.ClientId));
+        Assert.DoesNotContain(stageSpans, span => span.GetTagItem(TelemetryTags.ClientId) is not null);
 
         // The stages of the token request start in the order the pipeline runs them, each under the token span
         var firstStarts = spans
@@ -125,11 +129,11 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
 
     /// <summary>
     /// Every attribute is one of the server's, and every value one of its key's set: the endpoints, the stages, the grant types
-    /// the host serves, the response types and the library's error codes, so no span of this flow, which runs no handler
-    /// of the host's, names an error code as unknown. No span of a server without tenants
-    /// names one, and none of this flow fails with an exception.
+    /// the host serves, the response types, the library's error codes and the <paramref name="clients"/> the flow drives,
+    /// so no span of this flow, which runs no handler of the host's, names an error code as unknown, and none names the
+    /// end user. No span of a server without tenants names one, and none of this flow fails with an exception.
     /// </summary>
-    private void AssertOnlyAdmittedAttributes(Activity[] spans)
+    private void AssertOnlyAdmittedAttributes(Activity[] spans, string[] clients)
     {
         var endpoints = ConstantsOf(typeof(TelemetryEndpoints));
         var stages = ConstantsOf(typeof(TelemetryStages));
@@ -151,6 +155,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
                                               parts.All(responseTypes.Contains) &&
                                               value == string.Join(' ', parts.Distinct().Order(StringComparer.Ordinal)),
                 TelemetryTags.Error => errors.Contains(value),
+                TelemetryTags.ClientId => clients.Contains(value),
                 _ => false,
             };
             Assert.True(admitted, $"{key} = {value} is not admitted");
@@ -163,7 +168,8 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         .Select(field => (string)field.GetRawConstantValue()!)
         .ToHashSet(StringComparer.Ordinal);
 
-    private static async Task DriveFlowAsync(HttpClient client)
+    /// <returns>The client_id of the client the flow registers.</returns>
+    private static async Task<string> DriveFlowAsync(HttpClient client)
     {
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
@@ -222,6 +228,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
         // Answered whatever they say: the span is what this test is after
         await client.GetAsync(discovery.EndSessionEndpoint, TestContext.Current.CancellationToken);
         await client.GetAsync(discovery.CheckSessionIframe, TestContext.Current.CancellationToken);
+        return device[RegistrationResponse.ClientId]!.GetValue<string>();
     }
 
     private static Dictionary<string, string> Confidential(params (string Key, string Value)[] parameters)

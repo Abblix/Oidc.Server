@@ -51,6 +51,7 @@ public partial class AuthorizationRequestProcessorTests
     private readonly Mock<IIdentityTokenService> _identityTokenService;
     private readonly Mock<IAuthorizationDetailsPolicy> _authorizationDetailsPolicy;
     private readonly FakeTimeProvider _timeProvider;
+    private readonly RecordingLoggerFactory _logs = new();
     private readonly AuthorizationRequestProcessor _processor;
 
     public AuthorizationRequestProcessorTests()
@@ -111,6 +112,8 @@ public partial class AuthorizationRequestProcessorTests
         IAuthorizationResponseBuilder[] responseBuilders)
     {
         return new AuthorizationRequestProcessor(
+            new Microsoft.Extensions.Logging.Logger<AuthorizationRequestProcessor>(_logs),
+            TestFingerprints.Instance,
             _authSessionService.Object,
             _sessionClients.Object,
             _interactionRequirement.Object,
