@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,8 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 
 internal sealed partial class IssuedTokensLog
 {
+    [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+        Justification = "Each parameter is a structured field of the record, one per placeholder of the message: grouped into an object, the fields would reach the log as one formatted string.")]
     [LoggerMessage(
         EventId = LogEvents.TokenIssuance.IssuedTokensLog.TokensIssued,
         Level = LogLevel.Information,

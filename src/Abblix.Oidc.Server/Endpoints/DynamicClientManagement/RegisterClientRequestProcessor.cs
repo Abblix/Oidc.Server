@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -36,6 +37,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// registration is given its secret back (RFC 7592 section 3).</param>
 /// <param name="options">The server's settings, which decide whether registration is open when a client registers:
 /// the trust it is created with (<see cref="ClientInfo.Trust"/>) is decided then and kept.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency decides a different part of one registration: the record of it, the credentials, the store, the issue time, the registration access token id and the token, the defaults of a new client, the encryption of its secret and the trust it is created with.")]
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
