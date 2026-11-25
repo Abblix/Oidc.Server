@@ -116,8 +116,8 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// Names the grant types new clients may request, which a client registering without an initial access token
-    /// needs for any grant beyond those of an interactive sign-in, so a test reaches the gate it is about.
+    /// Names the grant types new clients may request, which a client needs for any grant beyond the authorization
+    /// code and the refresh token of the default list, so a test reaches the gate it is about.
     /// </summary>
     private static Action<OidcOptions> Granting(params string[] grantTypes)
         => opts => opts.NewClientOptions = opts.NewClientOptions with { AllowedGrantTypes = grantTypes };
@@ -485,11 +485,11 @@ public class RegisterClientHandlerIntegrationTests
         grantTypes: [GrantTypes.ClientCredentials]);
 
     /// <summary>
-    /// A registration the defaults of open registration refuse costs the server no fetch of what it names: the
-    /// sector identifier document a pairwise client points at is not requested.
+    /// A registration the host's grant types refuse costs the server no fetch of what it names: the sector identifier
+    /// document a pairwise client points at is not requested.
     /// </summary>
     [Fact]
-    public async Task ARegistrationTheOpenDefaultsRefuse_MakesNoOutboundRequest()
+    public async Task ARegistrationTheHostsGrantTypesRefuse_MakesNoOutboundRequest()
     {
         var fetches = new CountingFetcher();
         var provider = BuildProvider(afterServer: services => services.AddSingleton<ISecureHttpFetcher>(fetches));
@@ -548,11 +548,11 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// While anybody may register and the host names no grant types, a client asking for a grant no end user takes
-    /// part in is refused by the pipeline a host invokes.
+    /// While anybody may register and the host lists no grant types of its own, a client asking for a grant no end
+    /// user takes part in is refused by the pipeline a host invokes.
     /// </summary>
     [Fact]
-    public async Task AMachineClient_RegisteringOpenlyWithoutAHostSet_IsRefused()
+    public async Task AMachineClient_RegisteringOpenlyUnderTheDefaultGrantTypes_IsRefused()
     {
         var provider = BuildProvider();
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
@@ -565,11 +565,11 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// While anybody may register and the host names no resources, a registered client may get an access token for no
-    /// resource, and the response says so.
+    /// While the host lists no resources, a registered client may get an access token for no resource, and the
+    /// response says so.
     /// </summary>
     [Fact]
-    public async Task AClientRegisteringOpenlyWithoutAHostSet_IsAllowedNoResource()
+    public async Task AClientRegisteringOpenlyUnderTheDefaultResources_IsAllowedNoResource()
     {
         var provider = BuildProvider();
         var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
@@ -601,25 +601,86 @@ public class RegisterClientHandlerIntegrationTests
     }
 
     /// <summary>
-    /// A client presenting an initial access token was let in by whoever issued the token, so without a host set it
-    /// may request every grant type the server supports.
+    /// <paramref name="request"/> carrying an initial access token the tenant of <paramref name="provider"/> issued.
     /// </summary>
-    [Fact]
-    public async Task AMachineClient_RegisteringWithAnInitialAccessTokenWithoutAHostSet_IsRegistered()
+    private static async Task<ClientRegistrationRequest> WithInitialAccessToken(
+        IServiceProvider provider,
+        ClientRegistrationRequest request)
     {
-        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
-        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
         var token = await provider.GetRequiredService<IInitialAccessTokenService>().IssueTokenAsync(
-            tenant, "registration-portal", provider.GetRequiredService<TimeProvider>().GetUtcNow(), TimeSpan.FromHours(1));
-        var request = MachineClientRequest() with
+            provider.GetRequiredService<ITenantAccessor>().CurrentTenant(),
+            "registration-portal",
+            provider.GetRequiredService<TimeProvider>().GetUtcNow(),
+            TimeSpan.FromHours(1));
+        return request with
         {
             AuthorizationHeaderLines = [new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt).ToString()],
         };
+    }
+
+    /// <summary>
+    /// The settings for new clients have one place, <see cref="OidcOptions.NewClientOptions"/>: the server registers no
+    /// service of their own a host could set without effect.
+    /// </summary>
+    [Fact]
+    public void TheSettingsForNewClients_AreNoServiceOfTheirOwn()
+        => Assert.Null(BuildProvider().GetService<NewClientOptions>());
+
+    /// <summary>
+    /// A client presenting an initial access token is held to the host's grant types as any other: under the default
+    /// list, the authorization code and the refresh token, a machine client is refused.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringWithAnInitialAccessTokenUnderTheDefaultGrantTypes_IsRefused()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var request = await WithInitialAccessToken(provider, MachineClientRequest());
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+    }
+
+    /// <summary>
+    /// The same client registers with an initial access token once the host lists its grant.
+    /// </summary>
+    [Fact]
+    public async Task AMachineClient_RegisteringWithAnInitialAccessTokenWithinTheHostsSet_IsRegistered()
+    {
+        var provider = BuildProvider(configureOptions: opts =>
+        {
+            opts.RequireInitialAccessToken = true;
+            Granting(GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials)(opts);
+        });
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var request = await WithInitialAccessToken(provider, MachineClientRequest());
 
         var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, request);
 
         Assert.True(result.TryGetSuccess(out _),
             $"Expected success but got error: {(result.TryGetFailure(out var err) ? err.ErrorDescription : "<unknown>")}");
+    }
+
+    /// <summary>
+    /// A client registering with an initial access token and naming no resource is given the host's list, empty by
+    /// default, so it may get an access token for no resource.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringWithAnInitialAccessTokenUnderTheDefaultResources_IsAllowedNoResource()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var request = await WithInitialAccessToken(provider, CreateRequest());
+
+        var result = await provider.GetRequiredService<IRegisterClientHandler>().HandleAsync(tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var success));
+        Assert.Equal([], success.Metadata.AllowedResources!);
+        var stored = await provider.GetRequiredService<IClientInfoProvider>().FindClientAsync(tenant, success.ClientId);
+        Assert.True(stored.TryGetSuccess(out var client));
+        Assert.False(client.MayGetTokenFor(new Uri("https://orders.example.com")));
     }
 
     /// <summary>

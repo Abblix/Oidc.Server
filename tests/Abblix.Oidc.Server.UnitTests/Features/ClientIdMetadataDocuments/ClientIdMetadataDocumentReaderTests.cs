@@ -75,10 +75,13 @@ public class ClientIdMetadataDocumentReaderTests
             return builder.Object;
         });
 
+        // Unless a test names them, the host gives new clients what it gives documents, so a test of the document list
+        // is not cut by the default list for new clients
+        var forDocuments = documentGrantTypes ?? new ClientIdMetadataDocumentOptions().AllowedGrantTypes;
         var options = new OidcOptions
         {
-            NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes },
-            ClientIdMetadataDocuments = { AllowedGrantTypes = documentGrantTypes },
+            NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes ?? forDocuments },
+            ClientIdMetadataDocuments = { AllowedGrantTypes = forDocuments },
         };
         return new ReaderOver(new ClientIdMetadataDocumentReader(
             [grants.Object],

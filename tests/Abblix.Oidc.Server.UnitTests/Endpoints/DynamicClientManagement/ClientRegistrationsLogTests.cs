@@ -87,11 +87,12 @@ public sealed class ClientRegistrationsLogTests
                 It.IsAny<string>()))
             .ReturnsAsync(RegistrationAccessToken);
 
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { AllowedResources = [Resource] } };
         return new RegisterClientRequestProcessor(
             new Logger<RegisterClientRequestProcessor>(_logs),
             credentials.Object, clients.Object, TimeProvider.System, Mock.Of<ITokenIdGenerator>(), tokens.Object,
-            new NewClientOptions { AllowedResources = [Resource] }, Mock.Of<IClientSecretEncryptor>(),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()));
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == settings));
     }
 
     [Fact]
@@ -133,7 +134,8 @@ public sealed class ClientRegistrationsLogTests
         return new UpdateClientRequestProcessor(
             new Logger<UpdateClientRequestProcessor>(_logs),
             clients.Object, tokens.Object, Mock.Of<ITokenIdGenerator>(), TimeProvider.System,
-            new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions()));
     }
 
     private static ValidUpdateClientRequest Update()

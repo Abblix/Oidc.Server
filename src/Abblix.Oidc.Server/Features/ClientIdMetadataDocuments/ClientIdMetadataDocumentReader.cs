@@ -283,10 +283,8 @@ internal sealed class ClientIdMetadataDocumentReader(
             .ToHashSet(StringComparer.Ordinal);
 
         var settings = options.CurrentValue;
-        supported.IntersectWith(settings.ClientIdMetadataDocuments.GrantTypesAllowed);
-
-        if (settings.NewClientOptions.AllowedGrantTypes is { } allowed)
-            supported.IntersectWith(allowed);
+        supported.IntersectWith(settings.ClientIdMetadataDocuments.AllowedGrantTypes);
+        supported.IntersectWith(settings.NewClientOptions.AllowedGrantTypes);
 
         supported.ExceptWith(ConfidentialGrantTypes.RefusedTo(authenticationMethod, supported));
 

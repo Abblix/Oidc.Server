@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -160,8 +161,12 @@ public class UpdateClientMemberCoverageTests
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
         var processor = new UpdateClientRequestProcessor(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, NewClients,
-            Mock.Of<IClientSecretEncryptor>());
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions
+            {
+                NewClientOptions = NewClients,
+            }));
 
         await processor.ProcessAsync(
             SingleIssuer.Tenant,

@@ -63,8 +63,21 @@ public class RegisterClientRequestProcessorTests
         return new RegisterClientRequestProcessor(
             _logger,
             credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
-            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>(),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == (settings ?? new OidcOptions())));
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == WithNewClients(settings, newClients)));
+    }
+
+    /// <summary>
+    /// <paramref name="settings"/>, or the defaults, with <paramref name="newClients"/> as the settings for new clients
+    /// where a test names them.
+    /// </summary>
+    private static OidcOptions WithNewClients(OidcOptions? settings, NewClientOptions? newClients)
+    {
+        var options = settings ?? new OidcOptions();
+        if (newClients is not null)
+            options.NewClientOptions = newClients;
+
+        return options;
     }
 
     private static ValidClientRegistrationRequest Request() => new(

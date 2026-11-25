@@ -54,27 +54,18 @@ public record NewClientOptions
     public string[]? Scope { get; init; }
 
     /// <summary>
-    /// The resources a dynamically registered client may get an access token for: the list a client registering
-    /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
-    /// client registering without the member may get a token for any registered resource, and for none a client
-    /// registered while anybody may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is
-    /// <c>false</c> and no software statement from a trusted issuer is required, and every client resolved from its
-    /// metadata document. One sending a resource is refused, since which resources a client reaches is the server's
-    /// policy rather than the client's choice.
+    /// The resources a dynamically registered client, or one resolved from its metadata document, may get an access
+    /// token for: the list a client naming no <c>allowed_resources</c> member is given, and the set a list it sends
+    /// has to stay within. Empty by default, so such a client gets an access token for no resource until the host
+    /// lists the resources new clients may reach; a client naming one the list does not hold is refused, since which
+    /// resources a client reaches is the server's policy rather than the client's choice.
     /// </summary>
     /// <remarks>
-    /// Applied on registration, on every RFC 7592 update and to every client resolved from its metadata document, since
-    /// an update replaces the metadata whole. An update of a client stored as <see cref="ClientTrust.Unreviewed"/> is
-    /// held to these defaults; a record that names no trust, as every record stored by 3.0, is
-    /// <see cref="ClientTrust.Reviewed"/> until the host writes its trust.
+    /// Applied on registration, on every RFC 7592 update and to every client resolved from its metadata document,
+    /// whatever the registration mode and the trust a client was stored with, since an update replaces the metadata
+    /// whole.
     /// </remarks>
-    public Uri[]? AllowedResources { get; init; }
-
-    /// <summary>
-    /// The resources a client registered while anybody may register, or resolved from its metadata document, is given
-    /// when it names none: <see cref="AllowedResources"/>, or none when it is unset.
-    /// </summary>
-    internal Uri[] UnreviewedClientResources => AllowedResources ?? [];
+    public Uri[] AllowedResources { get; init; } = [];
 
     /// <summary>
     /// The token exchange audiences a dynamically registered client may name: the list a client registering without
@@ -89,29 +80,21 @@ public record NewClientOptions
     /// <summary>
     /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
     /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
-    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
-    /// server supports, and a client nobody vetted only <c>authorization_code</c> and <c>refresh_token</c>: one
-    /// registered while anybody may register, that is while <see cref="OidcOptions.RequireInitialAccessToken"/> is
-    /// <c>false</c> and no software statement from a trusted issuer is required.
+    /// included, is refused with <c>invalid_client_metadata</c>. By default the grants OAuth 2.1 leaves to an
+    /// interactive sign-in, <c>authorization_code</c> and <c>refresh_token</c>; the host lists any other grant its new
+    /// clients use.
     /// </summary>
     /// <remarks>
     /// A grant outside an interactive sign-in, such as <c>client_credentials</c>, gets tokens with no user present, so
-    /// a client nobody vetted gets only the grants of one unless the host names others here. Clients the host
-    /// defines itself are not bound by it, and the discovery document still lists every grant type the server supports.
-    /// Applied on
-    /// registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client registered
-    /// before the limit was set keeps its grant types until its next update. An empty set, or one
-    /// holding a blank value, is refused at startup.
+    /// a client gets one only when the host lists it here, whatever the registration mode, an initial access token or
+    /// a trusted software statement included. Clients the host defines itself are not bound by it, and the discovery
+    /// document still lists every grant type the server supports. Applied on registration and on every RFC 7592
+    /// update, since an update replaces the metadata whole, so a client registered before the list was changed keeps
+    /// its grant types until its next update. A client resolved from its metadata document is held to it beside
+    /// <see cref="ClientIdMetadataDocumentOptions.AllowedGrantTypes"/>. An empty set, or one holding a blank value,
+    /// stops the start of a host serving dynamic client registration.
     /// </remarks>
-    public string[]? AllowedGrantTypes { get; init; }
-
-    /// <summary>
-    /// The grant types OAuth 2.1 leaves to an interactive sign-in, the authorization code and the refresh token,
-    /// which a client nobody vetted gets unless the host names others: one registered while anybody may register and
-    /// one resolved from its metadata document.
-    /// </summary>
-    internal static readonly string[] InteractiveSignInGrantTypes =
-        [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+    public string[] AllowedGrantTypes { get; init; } = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
     /// What a dynamically registered client's authentication assertions may name as their audience, and in which

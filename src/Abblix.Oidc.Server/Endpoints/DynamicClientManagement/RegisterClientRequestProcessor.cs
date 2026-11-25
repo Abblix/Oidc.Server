@@ -32,13 +32,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
-/// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
 /// <param name="clientSecretEncryptor">Encrypts the secret issued with the key of the tenant, so a client reading its
 /// registration is given its secret back (RFC 7592 section 3).</param>
-/// <param name="options">The server's settings, which decide whether registration is open when a client registers:
-/// the trust it is created with (<see cref="ClientInfo.Trust"/>) is decided then and kept.</param>
+/// <param name="options">The server's settings, read once as a client registers: the defaults it takes
+/// (<see cref="OidcOptions.NewClientOptions"/>), its scope among them, and whether registration is open, which decides
+/// the trust it is created with (<see cref="ClientInfo.Trust"/>) and keeps it.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency decides a different part of one registration: the record of it, the credentials, the store, the issue time, the registration access token id and the token, the defaults of a new client, the encryption of its secret and the trust it is created with.")]
+    Justification = "Every dependency decides a different part of one registration: the record of it, the credentials, the store, the issue time, the registration access token id and the token, the encryption of its secret, and the settings giving a new client its defaults and its trust.")]
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
@@ -46,7 +46,6 @@ public partial class RegisterClientRequestProcessor(
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    NewClientOptions newClientOptions,
     IClientSecretEncryptor clientSecretEncryptor,
     IOptionsMonitor<OidcOptions> options) : IRegisterClientRequestProcessor
 {
@@ -73,7 +72,7 @@ public partial class RegisterClientRequestProcessor(
 
         var issuedAt = clock.GetUtcNow();
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
-        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier);
+        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier, options.CurrentValue);
 
         // The registration holds the jti of its registration access token, so the management endpoint
         // accepts that token for this registration alone (RFC 7592 section 5).
@@ -123,8 +122,11 @@ public partial class RegisterClientRequestProcessor(
         TenantDefinition tenant,
         ClientRegistrationRequest model,
         ClientCredentials credentials,
-        string? sectorIdentifier)
-        => new ClientInfoBuilder(credentials.ClientId, model)
+        string? sectorIdentifier,
+        OidcOptions settings)
+    {
+        var newClientOptions = settings.NewClientOptions;
+        return new ClientInfoBuilder(credentials.ClientId, model)
             .WithSectorIdentifier(sectorIdentifier)
             .WithSoftwareStatement(model.SoftwareStatement)
             .WithHostSettingsOf(newClientOptions)
@@ -136,8 +138,9 @@ public partial class RegisterClientRequestProcessor(
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(ToClientSecrets(tenant, credentials))
-            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(options.CurrentValue) ? ClientTrust.Unreviewed : ClientTrust.Reviewed)
+            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(settings) ? ClientTrust.Unreviewed : ClientTrust.Reviewed)
             .Build();
+    }
 
     /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.

@@ -256,8 +256,8 @@ public partial class ClientManagementTests
     }
 
     /// <summary>
-    /// Registration open to anybody holds a client to its defaults on the values it is registered with, a trusted
-    /// statement's included: a statement adding a grant outside an interactive sign-in is refused as the body would be.
+    /// The host's grant types hold a client on the values it is registered with, a trusted statement's included: under
+    /// the default list a statement adding the client credentials grant is refused as the body would be.
     /// </summary>
     [Fact]
     public async Task Under_open_registration_a_statement_adding_client_credentials_is_refused()
@@ -279,8 +279,8 @@ public partial class ClientManagementTests
     }
 
     /// <summary>
-    /// A statement stating no resources leaves a client registered openly with none, though it sets the member: the
-    /// stored client has the sign-in grant it registered with and may get an access token for no resource.
+    /// A statement stating no resources leaves a client under the default empty list with none, though it sets the
+    /// member: the stored client has the sign-in grant it registered with and may get an access token for no resource.
     /// </summary>
     [Fact]
     public async Task Under_open_registration_a_statement_naming_no_resource_leaves_the_client_with_none()
@@ -303,11 +303,19 @@ public partial class ClientManagementTests
     }
 
     /// <summary>
-    /// The server's defaults for new clients in place of the grant types this suite's host names for them.
+    /// The server's defaults for new clients in place of the grant types and resources this suite's host names for
+    /// them.
     /// </summary>
     private static void WithoutHostSets(IServiceCollection services)
-        => services.PostConfigure<OidcOptions>(options => options.NewClientOptions =
-            options.NewClientOptions with { AllowedGrantTypes = null, AllowedResources = null });
+        => services.PostConfigure<OidcOptions>(options =>
+        {
+            var defaults = new NewClientOptions();
+            options.NewClientOptions = options.NewClientOptions with
+            {
+                AllowedGrantTypes = defaults.AllowedGrantTypes,
+                AllowedResources = defaults.AllowedResources,
+            };
+        });
 
     /// <summary>
     /// A client authenticating with a secret, which may hold the client credentials grant, using the authorization

@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -48,12 +49,15 @@ public class OfflineAccessValidatorTests
     }
 
     private static Subject Validator(OfflineAccess? existing, OfflineAccess? granted = null)
-        => new(
-            granted is { } host
-                ? new OfflineAccessValidator(
-                    Mock.Of<IClientInfoProvider>(MockBehavior.Strict), new NewClientOptions { OfflineAccess = host })
-                : new OfflineAccessValidator(Mock.Of<IClientInfoProvider>(MockBehavior.Strict)),
+    {
+        var settings = new OidcOptions
+        {
+            NewClientOptions = granted is { } host ? new NewClientOptions { OfflineAccess = host } : new NewClientOptions(),
+        };
+        return new(
+            new OfflineAccessValidator(Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == settings)),
             existing);
+    }
 
     private static ClientRegistrationValidationContext Context(
         OfflineAccess offlineAccess,
@@ -97,19 +101,20 @@ public class OfflineAccessValidatorTests
     }
 
     /// <summary>
-    /// A container activating the validator by its type, as a host registering it itself does, picks the constructor
-    /// taking the options for new clients when they are registered and the one without them otherwise.
+    /// A container activating the validator by its type, as a host registering it itself does, gives it the server's
+    /// settings, so it holds a client to the offline access those settings grant new clients.
     /// </summary>
     [Theory]
     [InlineData(true, null)]
     [InlineData(false, ErrorCodes.InvalidClientMetadata)]
-    public async Task AValidatorActivatedByType_TakesTheOptionsForNewClientsWhenRegistered(
-        bool optionsRegistered, string? error)
+    public async Task AValidatorActivatedByType_ReadsTheOfflineAccessOfTheServersSettings(
+        bool hostAllows, string? error)
     {
         var services = new ServiceCollection();
-        services.AddSingleton(Mock.Of<IClientInfoProvider>(MockBehavior.Strict));
-        if (optionsRegistered)
-            services.AddSingleton(new NewClientOptions { OfflineAccess = OfflineAccess.Allowed });
+        services.Configure<OidcOptions>(options => options.NewClientOptions = new NewClientOptions
+        {
+            OfflineAccess = hostAllows ? OfflineAccess.Allowed : OfflineAccess.ConsentRequired,
+        });
         services.AddSingleton<IClientRegistrationContextValidator, OfflineAccessValidator>();
         using var provider = services.BuildServiceProvider();
 

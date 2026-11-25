@@ -72,7 +72,7 @@ public static class OptionalEndpointsServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddDynamicClientRegistration(this IServiceCollection services)
     {
-        services.AddDynamicClientEndpoints(sp => sp.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
+        services.AddDynamicClientEndpoints();
         services.PostConfigure<OidcOptions>(options => options.EnabledEndpoints |= OidcEndpoints.RegisterClient);
         services.Configure<EndpointRegistrationMarker>(m => m.Registered |= OidcEndpoints.RegisterClient);
         services.AddConsentForUnreviewedClientsCheck();

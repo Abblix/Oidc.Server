@@ -65,11 +65,6 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
             client.Timeout = serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value
                 .ClientIdMetadataDocuments.FetchTimeout);
 
-        // The registration checks a document passes take the host's limits on a new client, which dynamic registration
-        // registers the same way when the host opens it
-        services.TryAddTransient(serviceProvider =>
-            serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
-
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
         services.TryAddSingleton<ProductionEnvironment>();

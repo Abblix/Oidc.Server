@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -54,7 +55,11 @@ public class UpdateClientRequestProcessorTests
         var processor = new UpdateClientRequestProcessor(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
             clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
-            newClients ?? new NewClientOptions(), Mock.Of<IClientSecretEncryptor>());
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions
+            {
+                NewClientOptions = newClients ?? new NewClientOptions(),
+            }));
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }

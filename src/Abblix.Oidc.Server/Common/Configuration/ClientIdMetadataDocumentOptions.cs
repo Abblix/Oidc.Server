@@ -97,8 +97,8 @@ public record ClientIdMetadataDocumentOptions
     public int MaxHeldDocuments { get; set; } = 10_000;
 
     /// <summary>
-    /// The grant types a client resolved from its document may use, or null (the default) for those an end user takes
-    /// part in: the authorization code and the refresh token.
+    /// The grant types a client resolved from its document may use, by default those an end user takes part in: the
+    /// authorization code and the refresh token.
     /// </summary>
     /// <remarks>
     /// A document is anybody's, so a grant no end user approves, such as client credentials, would give whoever wrote
@@ -109,13 +109,7 @@ public record ClientIdMetadataDocumentOptions
     /// grant gets tokens whose <c>idp</c> is <c>client_credentials</c>, which marks them as the client's own (RFC 9700
     /// section 4.15.1). An empty list and a blank entry are refused at startup.
     /// </remarks>
-    public string[]? AllowedGrantTypes { get; set; }
-
-    /// <summary>
-    /// The grant types a client resolved from its document may use: <see cref="AllowedGrantTypes"/>, or those of an
-    /// interactive sign-in when it is unset.
-    /// </summary>
-    internal string[] GrantTypesAllowed => AllowedGrantTypes ?? NewClientOptions.InteractiveSignInGrantTypes;
+    public string[] AllowedGrantTypes { get; set; } = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     /// <summary>
     /// The longest a fetch of a document may take, its body included. Default: 5 seconds.
