@@ -68,7 +68,8 @@ public class ProfileClockSkewReachesValidationTests
         await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
-            ClientAssertion = "header.payload.signature",
+            // A header naming HS256, so the assertion is one client_secret_jwt reads
+            ClientAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature",
         }, clientInfoProvider.Object);
 
         return captured.NotNull(nameof(captured));

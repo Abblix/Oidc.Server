@@ -50,6 +50,15 @@ public class ClientSecretJwtAuthenticator(
         get { yield return ClientAuthenticationMethods.ClientSecretJwt; }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// An assertion signed with an HS algorithm, the set the secret's validation admits, and a JWE.
+    /// </remarks>
+    protected override bool Reads(string assertion)
+        => ClientAssertionSigning.IsEncrypted(assertion) ||
+           ClientAssertionSigning.AlgorithmOf(assertion) is { } algorithm &&
+           ClientSigningKeys.SecretAlgorithms.Contains(algorithm);
+
     /// <summary>
     /// Validates the JWT assertion using HMAC signature with the client secret.
     /// </summary>
