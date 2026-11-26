@@ -49,6 +49,35 @@ public class PrivateKeyJwtAuthenticator(
         get { yield return ClientAuthenticationMethods.PrivateKeyJwt; }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// An assertion signed with an algorithm of <see cref="AssertionAlgorithms"/>, and a JWE. And one signed with no
+    /// method's algorithm - "none", an algorithm this server does not support, a header that does not read - which
+    /// client_secret_jwt passes over, so it is refused here, with the one warning, rather than by neither method.
+    /// </remarks>
+    protected override bool Reads(string assertion)
+    {
+        if (ClientAssertionSigning.IsEncrypted(assertion))
+            return true;
+
+        // A header that does not read names no method's algorithm
+        if (ClientAssertionSigning.AlgorithmOf(assertion) is not { } algorithm)
+            return true;
+
+        using var scope = Services.CreateScope();
+        var own = AssertionAlgorithms(scope.ServiceProvider);
+
+        var claimedByNoMethod = !own.Contains(algorithm) && !ClientSigningKeys.SecretAlgorithms.Contains(algorithm);
+        return own.Contains(algorithm) || claimedByNoMethod;
+    }
+
+    /// <summary>
+    /// The algorithms a private_key_jwt assertion may be signed with: those the JWT validator supports that sign with a
+    /// private key rather than a shared secret.
+    /// </summary>
+    private static IReadOnlySet<string> AssertionAlgorithms(IServiceProvider services)
+        => AsymmetricAlgorithms.Among(services.GetRequiredService<IJsonWebTokenValidator>().SigningAlgorithmsSupported);
+
     /// <summary>
     /// Validates the JWT assertion using the client's public keys from JWKS.
     /// </summary>
@@ -63,7 +92,6 @@ public class PrivateKeyJwtAuthenticator(
     {
         using var scope = Services.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-        var jwtValidator = scope.ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 
         // Stated rather than left to the default, because the requirements are this method's and not the
         // validator's, which also reads request objects: the base class judges the type and the audience after
@@ -75,7 +103,7 @@ public class PrivateKeyJwtAuthenticator(
             clients,
             jwt,
             TokenTypePolicy.CheckedByCaller,
-            AsymmetricAlgorithms.Among(jwtValidator.SigningAlgorithmsSupported),
+            AssertionAlgorithms(scope.ServiceProvider),
             AssertionValidationOptions);
     }
 }

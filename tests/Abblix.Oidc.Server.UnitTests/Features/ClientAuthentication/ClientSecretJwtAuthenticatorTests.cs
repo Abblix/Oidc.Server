@@ -42,6 +42,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// </summary>
 public class ClientSecretJwtAuthenticatorTests
 {
+    // A header naming HS256, so the assertion is one client_secret_jwt reads; the validator double ignores the rest
+    private const string SecretSignedAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+
     private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
     private const string IssuerIdentifier = "https://issuer.example.com";
@@ -73,6 +76,36 @@ public class ClientSecretJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// client_secret_jwt reads an assertion signed with an HS algorithm, the set the secret's validation admits, and a
+    /// JWE; any other is passed over as presenting nothing, before anything validates it.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.HS256, true)]
+    [InlineData(SigningAlgorithms.HS512, true)]
+    [InlineData(AssertionHeaders.Encrypted, true)]
+    [InlineData(SigningAlgorithms.PS256, false)]
+    [InlineData(SigningAlgorithms.None, false)]
+    [InlineData("XS512", false)]
+    [InlineData(AssertionHeaders.Unreadable, false)]
+    public async Task AnAssertion_IsReadOnlyWhenSignedWithAnHsAlgorithm(string form, bool read)
+    {
+        var assertion = AssertionHeaders.Assertion(form);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(assertion, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+
+        var result = await _authenticator.TryAuthenticateClientAsync(
+            Tenant,
+            new ClientRequest { ClientAssertionType = ClientAssertionTypes.JwtBearer, ClientAssertion = assertion },
+            _clientInfoProvider.Object);
+
+        Assert.Equal(!read, result.GetFailure() is UnauthenticatedCallerError);
+        _tokenValidator.Verify(
+            v => v.ValidateAsync(assertion, It.IsAny<ValidationParameters>()),
+            read ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
     /// Verifies authentication fails when client_assertion_type is not provided.
     /// Per OIDC Core, client_assertion_type is required for JWT assertion authentication.
     /// </summary>
@@ -83,7 +116,7 @@ public class ClientSecretJwtAuthenticatorTests
         var request = new ClientRequest
         {
             ClientAssertionType = null,
-            ClientAssertion = "some.jwt.token"
+            ClientAssertion = SecretSignedAssertion
         };
 
         // Act
@@ -104,7 +137,7 @@ public class ClientSecretJwtAuthenticatorTests
         var request = new ClientRequest
         {
             ClientAssertionType = "wrong-assertion-type",
-            ClientAssertion = "some.jwt.token"
+            ClientAssertion = SecretSignedAssertion
         };
 
         // Act
@@ -171,7 +204,7 @@ public class ClientSecretJwtAuthenticatorTests
     [InlineData(IssuerIdentifier, "https://another.example.com")]
     public async Task TryAuthenticateClientAsync_AnAudienceOtherThanTheIssuerAlone_IsRefused(params string[] audiences)
     {
-        const string jwt = "valid.jwt.token";
+        const string jwt = SecretSignedAssertion;
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
@@ -218,7 +251,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedInTheFormsTheClientIsAllowed(
         ClientAssertionAudiences audiences, string[] audience, bool accepted)
     {
-        const string jwt = "valid.jwt.token";
+        const string jwt = SecretSignedAssertion;
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
@@ -280,7 +313,7 @@ public class ClientSecretJwtAuthenticatorTests
         // Arrange
         var jwtId = "unique-jwt-id-123";
         var expiresAt = _clock.GetUtcNow().AddMinutes(5);
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -341,7 +374,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_WithMismatchedSigningAlg_ShouldReturnNull()
     {
         // Arrange
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -393,7 +426,7 @@ public class ClientSecretJwtAuthenticatorTests
     {
         // Arrange
         var jwtId = "unique-jwt-id-456";
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -445,7 +478,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_WithInvalidJwt_ShouldReturnNull()
     {
         // Arrange
-        var jwt = "invalid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -472,7 +505,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_WithWrongAuthMethod_ShouldReturnNull()
     {
         // Arrange
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -525,7 +558,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_WithIssuerNotEqualSubject_ShouldReturnNull()
     {
         // Arrange
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -579,7 +612,7 @@ public class ClientSecretJwtAuthenticatorTests
     public async Task TryAuthenticateClientAsync_WithoutJti_ShouldReturnNull()
     {
         // Arrange
-        var jwt = "valid.jwt.token";
+        var jwt = SecretSignedAssertion;
 
         var clientInfo = new ClientInfo(ClientId)
         {

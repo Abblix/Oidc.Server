@@ -142,16 +142,29 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
     /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
-    /// <returns>The authenticated <see cref="ClientInfo"/>, or why it is not one: no assertion presented, or one
-    /// presented and refused.</returns>
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+    /// <returns>The authenticated <see cref="ClientInfo"/>, or why it is not one: no assertion presented or one this
+    /// method does not read (<see cref="Reads"/>), or one presented and refused.</returns>
+    public Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
         TenantDefinition tenant,
         ClientRequest request,
         IClientInfoProvider clients)
     {
-        if (!IsPresented(request))
-            return ClientAuthenticationFailures.NoCredential;
+        // The request does not say which assertion method its client registered, so both are asked. An assertion this
+        // method does not read is the other one's to judge and warn about, and is passed over here unlogged
+        if (!IsPresented(request, out var presented) || !Reads(presented))
+            return Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.NoCredential);
 
+        return AuthenticateAsync(tenant, request, clients);
+    }
+
+    /// <summary>
+    /// Authenticates the client by the assertion <paramref name="request"/> presents, one this method reads.
+    /// </summary>
+    private async Task<Result<ClientInfo, OidcError>> AuthenticateAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
+    {
         if (!TryGetJwtBearerAssertion(request, out var assertion))
         {
             return ClientAuthenticationFailures.InvalidCredential;
@@ -209,12 +222,24 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         TenantDefinition tenant,
         ClientRequest request,
         IClientInfoProvider clients)
-        => Task.FromResult<IEnumerable<string>>(IsPresented(request) ? [nameof(ClientRequest.ClientAssertion)] : []);
+        => Task.FromResult<IEnumerable<string>>(
+            IsPresented(request, out _) ? [nameof(ClientRequest.ClientAssertion)] : []);
+
+    /// <summary>
+    /// Whether this method judges <paramref name="assertion"/>, read by <see cref="ClientAssertionSigning"/>: a JWS is
+    /// read by exactly one of client_secret_jwt and private_key_jwt, a JWE by both.
+    /// </summary>
+    /// <param name="assertion">The client assertion as presented, not verified.</param>
+    protected abstract bool Reads(string assertion);
 
     /// <summary>
     /// The assertion is the credential; its type only says how to read it.
     /// </summary>
-    private static bool IsPresented(ClientRequest request) => request.ClientAssertion.HasValue();
+    private static bool IsPresented(ClientRequest request, [NotNullWhen(true)] out string? assertion)
+    {
+        assertion = request.ClientAssertion;
+        return assertion.HasValue();
+    }
 
     /// <summary>
     /// Finds the JWT bearer assertion the request carries, logging a request that names another assertion type
