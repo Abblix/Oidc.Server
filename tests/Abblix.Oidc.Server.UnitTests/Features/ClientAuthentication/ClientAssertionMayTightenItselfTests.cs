@@ -54,6 +54,9 @@ public class ClientAssertionMayTightenItselfTests
     private static readonly string Issuer = TestConstants.DefaultIssuer.ToString();
     private const string JwtAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
 
+    // A header naming RS256, so the assertion is one private_key_jwt reads
+    private const string PrivateKeyAssertion = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
@@ -317,7 +320,7 @@ public class ClientAssertionMayTightenItselfTests
                 It.IsAny<TenantDefinition>(),
                 null,
                 It.IsAny<IClientInfoProvider>(),
-                JwtAssertion,
+                PrivateKeyAssertion,
                 It.IsAny<TokenTypePolicy>(),
                 It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(),
                 It.IsAny<ValidationOptions>()))
@@ -343,7 +346,7 @@ public class ClientAssertionMayTightenItselfTests
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
-            ClientAssertion = JwtAssertion,
+            ClientAssertion = PrivateKeyAssertion,
         }, clientInfoProvider.Object);
     }
 

@@ -23,7 +23,10 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This is intentionally a try-each composite rather than keyed-name DI by
 /// <c>token_endpoint_auth_method</c>: that method is not a discriminator present in the token
 /// request (it is the client's registered metadata), so it cannot be keyed on directly - each
-/// authenticator instead self-selects by recognizing its own credential form. See the rationale
+/// authenticator instead self-selects by recognizing its own credential form. client_secret_jwt and private_key_jwt
+/// read the same parameter, so each claims an assertion signed with its own algorithms, private_key_jwt also one signed
+/// with no method's, and answers the rest as presenting no credential: one of them judges and logs each signed
+/// assertion (<see cref="ClientAssertionSigning"/>). See the rationale
 /// at <see cref="ClientAuthenticationServiceCollectionExtensions.AddClientAuthentication"/>.
 /// </remarks>
 internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators)
