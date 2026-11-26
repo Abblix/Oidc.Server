@@ -24,6 +24,7 @@ using Moq;
 using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -77,21 +78,27 @@ public class ClientSecretJwtThroughTheValidatorTests
     }
 
     /// <summary>
-    /// An assertion signed with an algorithm a client secret does not sign with, such as a private_key_jwt
-    /// assertion the composite authenticator also offers here, is refused before its issuer is looked up: a
-    /// client named by a metadata document would otherwise be fetched once here and again by private_key_jwt.
+    /// The validation client_secret_jwt hands an assertion to refuses one signed with an algorithm a client secret does
+    /// not sign with before its issuer is looked up: a client named by a metadata document would otherwise be fetched
+    /// once there and again by private_key_jwt. The authenticator passes such a JWS over unvalidated, so this validation
+    /// is what a JWE, read by both methods, meets; it is driven directly for that reason.
     /// </summary>
     [Fact]
     public async Task AnAssertionNotSignedWithASecret_IsRefusedWithoutLookingTheClientUp()
     {
         await using var jwt = JsonWebTokenServices();
         var clients = Clients();
-        var authenticator = Authenticator(jwt);
+        var validator = ClientSecretJwtServices
+            .With(new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()), TimeProvider.System)
+            .GetRequiredService<IClientJwtValidator>();
 
         var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
         var request = await RequestAsync(jwt, [Globex.Issuer.OriginalString], key);
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, request, clients.Object)).TryGetSuccess(out _));
+        var result = await validator.ValidateSecretSignedAsync(
+            Globex, clients.Object, request.ClientAssertion.NotNull(nameof(request.ClientAssertion)), TokenTypePolicy.CheckedByCaller, ValidationOptions.Default);
+
+        Assert.False(result.TryGetSuccess(out _));
         clients.Verify(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 

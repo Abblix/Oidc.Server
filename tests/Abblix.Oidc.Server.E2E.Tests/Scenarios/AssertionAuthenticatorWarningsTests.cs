@@ -53,6 +53,7 @@ public class AssertionAuthenticatorWarningsTests(TestFactory factory) : TestBase
     /// </summary>
     [Theory]
     [InlineData(PrivateKeyJwtClient, OwnKey)]
+    // client_secret_jwt is asked first and its success ends the search, so this row pins that order, not the reading
     [InlineData(ClientSecretJwtClient, OwnSecret)]
     public async Task AnAssertionSignedAsTheClientRegistered_LogsNoWarning(string client, string signer)
     {
@@ -74,9 +75,12 @@ public class AssertionAuthenticatorWarningsTests(TestFactory factory) : TestBase
         var (status, warnings) = await PresentAsync(client, signer);
 
         await AssertInvalidClientAsync(status);
-        var (ownerCategory, otherCategory) = owner == nameof(PrivateKeyJwtAuthenticator)
-            ? (PrivateKeyJwtCategory, ClientSecretJwtCategory)
-            : (ClientSecretJwtCategory, PrivateKeyJwtCategory);
+        var (ownerCategory, otherCategory) = owner switch
+        {
+            nameof(PrivateKeyJwtAuthenticator) => (PrivateKeyJwtCategory, ClientSecretJwtCategory),
+            nameof(ClientSecretJwtAuthenticator) => (ClientSecretJwtCategory, PrivateKeyJwtCategory),
+            _ => throw new ArgumentOutOfRangeException(nameof(owner), owner, null),
+        };
         Assert.Single(warnings, entry => entry.Category == ownerCategory);
         Assert.DoesNotContain(warnings, entry => entry.Category == otherCategory);
     }
