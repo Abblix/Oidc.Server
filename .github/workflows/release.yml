@@ -118,9 +118,9 @@ jobs:
       projects: ${{ needs.tests.outputs.projects }}
 
   # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
-  # against the release commit's own conformance host on each transport adapter, four jobs at once. create-release
-  # needs this job, which succeeds only when all four do, before it creates the GitHub release and the packages are
-  # published, and for a pre-release before the tag is created; a stable release's tag is pushed
+  # against the release commit's own conformance host on each transport adapter, four jobs at once. release-tag
+  # needs this job, which succeeds only when all four do, before it checks the tag, and for a pre-release creates
+  # it, and so before any package is published or the GitHub release created; a stable release's tag is pushed
   # by hand before this workflow starts, so a failed run leaves that tag in place. The called workflow is this commit's
   # copy, so it needs no pin, and it is passed no secret: it holds none and reads the repository only, which the
   # workflow's contents: read grants
@@ -208,9 +208,9 @@ jobs:
         run: dotnet restore
       # MinVerVersionOverride forces MinVer to use the workflow-supplied
       # version verbatim, bypassing the tag/height computation. The
-      # subsequent create-release job then tags this exact version, so
-      # the produced .nupkg files and the resulting GitHub Release stay
-      # in lock-step.
+      # release-tag job then checks or creates the tag of this exact
+      # version, so the produced .nupkg files, the tag and the resulting
+      # GitHub Release stay in lock-step.
         timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
@@ -239,17 +239,18 @@ jobs:
           path: |
             nupkg/*.nupkg
             nupkg/*.snupkg
-          # Read only by the later jobs of this same run, behind the release-approval gate and, for the two
-          # publishes, the publish-packages gate after it, so it lives long enough for both approvals and a re-run
-          # of a failed publish, and not the 90-day default that holds the organization's shared artifact storage
+          # Read only by the later jobs of this same run, behind the release-approval gate of release-tag and the
+          # publish-packages gate of the two publishes, so it lives long enough for both approvals, a re-run of a
+          # failed publish and the GitHub release after them, and not the 90-day default that holds the
+          # organization's shared artifact storage
           retention-days: 3
 
         timeout-minutes: 3
     timeout-minutes: 5
   # The consumer path: what a reader builds from our documentation, built from the packages THIS run packed (the
   # nuget-packages artifact, restored through a source mapping that lets no Abblix package come from a feed) and
-  # started. create-release needs every job below, so a release whose quickstart, samples, guide or templates do not
-  # work for the reader stops before either approval. Our own test hosts above never see what these see: a project
+  # started. release-tag and both publishes need every job below, so a release whose quickstart, samples, guide or
+  # templates do not work for the reader stops before either approval. Our own test hosts above never see what these see: a project
   # made by `dotnet new web`, a sample from another repository, a scaffold of a template.
   #
   # The step and job ceilings below come from hosted runs of the samples' and the templates' own workflows and from
@@ -766,7 +767,10 @@ jobs:
         timeout-minutes: 4
     timeout-minutes: 5
 
-  create-release:
+  # The tag is checked before any package leaves the build, so a wrong tag never publishes one: annotated, on the
+  # dispatched commit, the branch not moved on. A pre-release run creates its tag here. Every gate above is needed,
+  # and the release-approval stop comes here, before the tag and the packages.
+  release-tag:
     needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, getting-started-guide, conformance, sonar-gate]
     runs-on: ubuntu-latest
     environment: release-approval
@@ -774,25 +778,11 @@ jobs:
       contents: write
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
-      PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
-    outputs:
-      is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
-        timeout-minutes: 3
-      - name: Validate and normalize inputs
-        id: validate_inputs
-        env:
-          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
-        run: |
-          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
         timeout-minutes: 3
       # This job pushes a tag on the pre-release path, so the checkout keeps its
       # git credentials (no persist-credentials: false). Stable releases must
@@ -800,12 +790,6 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-        timeout-minutes: 3
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
         timeout-minutes: 3
       - name: Create or verify tag
         env:
@@ -854,6 +838,50 @@ jobs:
             git push origin "v$VERSION"
           fi
         timeout-minutes: 3
+    timeout-minutes: 5
+
+  # The GitHub Release goes public only once both registries hold the packages, so a release page never offers a
+  # version that a failed or refused publish left unpublished. The tag it names was checked by release-tag.
+  create-release:
+    needs: [versioning, release-tag, publish-github-packages, publish-nuget-org]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+      PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
+    outputs:
+      is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Validate and normalize inputs
+        id: validate_inputs
+        env:
+          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
+        run: |
+          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+        timeout-minutes: 3
+      # Full history and the tags, the one release-tag pushed for a pre-release included: the changelog reads the
+      # tag's annotation. Nothing here pushes; the release is created through the API.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
       - name: Generate changelog
         id: changelog
         run: |
@@ -901,10 +929,12 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   publish-github-packages:
-    needs: [versioning, build-and-pack, test-getting-started, create-release]
+    needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, getting-started-guide, conformance, sonar-gate, release-tag]
     runs-on: ubuntu-latest
     # Same approval gate as NuGet.org: no package leaves the build for any
     # registry without passing the publish-packages environment reviewers.
+    # Every gate is named here rather than reached through release-tag, so
+    # removing one from release-tag never lets a package out without it.
     environment: publish-packages
     permissions:
       contents: read
@@ -978,7 +1008,7 @@ jobs:
   # names this repository, this workflow file and the publish-packages environment, so another
   # workflow or a run without the approval cannot obtain a key.
   publish-nuget-org:
-    needs: [versioning, build-and-pack, test-getting-started, create-release]
+    needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, getting-started-guide, conformance, sonar-gate, release-tag]
     runs-on: ubuntu-latest
     environment: publish-packages
     permissions:
