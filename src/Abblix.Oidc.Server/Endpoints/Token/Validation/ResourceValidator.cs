@@ -22,18 +22,6 @@ public class ResourceValidator(IResourceManager resourceManager)
     : SyncTokenContextValidatorBase
 {
     /// <summary>
-    /// The grants whose audience an authorization made earlier settled: the request may narrow it, and nothing is
-    /// inferred for it. Any other grant type, a host's own included, is one the request itself authorizes.
-    /// </summary>
-    private static readonly HashSet<string> AuthorizedEarlier = new(StringComparer.Ordinal)
-    {
-        GrantTypes.AuthorizationCode,
-        GrantTypes.RefreshToken,
-        GrantTypes.DeviceAuthorization,
-        GrantTypes.Ciba,
-    };
-
-    /// <summary>
     /// Validates the resources specified in a token request against known resource definitions.
     /// This validation ensures that only registered and approved resources are accessed by the client.
     /// </summary>
@@ -51,7 +39,7 @@ public class ResourceValidator(IResourceManager resourceManager)
         // A request naming its target as an audience (RFC 8693 section 2.1) has stated it, so nothing is inferred
         if (request.Resources is not { Length: > 0 } &&
             request.Audiences is not { Length: > 0 } &&
-            !AuthorizedEarlier.Contains(request.GrantType))
+            !GrantsAuthorizedEarlier.Include(request.GrantType))
         {
             if (!ResourceInference.TryInfer(tenant, scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);

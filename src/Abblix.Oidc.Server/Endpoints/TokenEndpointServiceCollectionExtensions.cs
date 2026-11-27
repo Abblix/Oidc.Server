@@ -72,8 +72,8 @@ public static class TokenEndpointServiceCollectionExtensions
         // Order is load-bearing:
         // - ClientValidator must precede DPoPTokenEndpointValidator because the latter reads
         //   ClientInfo.RequireDPoP to decide whether DPoP is mandatory or opportunistic.
-        // - ClientValidator must also precede ResourceValidator and ScopeValidator: both read the scope a request
-        //   is served with, which for a request naming none is the client's default, and ScopeValidator enforces
+        // - ClientValidator must also precede ResourceValidator and the scope validators: they read the scope a request
+        //   is served with, which for a request naming none is the client's default, and they enforce
         //   the client's registered scope set. A request failing both authentication and its resources is
         //   therefore answered invalid_client: a client that cannot authenticate gets nothing a target could fix.
         // - AuthorizationGrantValidator must precede RevokedSessionValidator, which reads the AuthSession
@@ -84,20 +84,23 @@ public static class TokenEndpointServiceCollectionExtensions
         //   AuthorizationGrantValidator, so what can refuse without the grant runs before it:
         //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry that
         //   must still find the grant. DPoPBindingValidator reads the grant and follows it.
-        // - GrantNarrowingValidator, ScopeValidator, SingleResourceValidator and AllowedResourceValidator read the grant
-        //   the token is built from, so they follow AuthorizationGrantValidator, and the authorization code they may
-        //   refuse a request for is spent only after validation. ScopeValidator judges a scope a resource declares
-        //   against the grant's resources when the request names none, and a token request redeeming a device code or
-        //   a backchannel request, spent before it, names no scope it reads (TokenRequestScope). GrantNarrowingValidator
-        //   comes first, so a resource outside the grant is refused as not granted rather than counted against the
-        //   others, and before a scope only that resource declares is judged unavailable.
+        // - ScopeValidator judges a grant the request itself authorizes before AuthorizationGrantValidator builds it,
+        //   so a refusal spends nothing its handler consumes, a JWT bearer assertion's jti included.
+        // - GrantNarrowingValidator, GrantedScopeValidator, SingleResourceValidator and AllowedResourceValidator read
+        //   the grant the token is built from, so they follow AuthorizationGrantValidator, and the authorization code
+        //   they may refuse a request for is spent only after validation. GrantedScopeValidator judges a grant
+        //   authorized earlier against the resources it holds when the request names none; a token request redeeming
+        //   a device code or a backchannel request, spent before it, names no scope it reads (TokenRequestScope).
+        //   GrantNarrowingValidator comes first, so a resource outside the grant is refused as not granted rather
+        //   than counted against the others, and before a scope only that resource declares is judged unavailable.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.GrantNarrowingValidator>(),
-            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.GrantedScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.SingleResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.AllowedResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.RevokedSessionValidator>(),

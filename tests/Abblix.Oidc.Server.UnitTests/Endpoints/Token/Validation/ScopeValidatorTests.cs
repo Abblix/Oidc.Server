@@ -32,11 +32,13 @@ public class ScopeValidatorTests
 {
     private readonly Mock<IScopeManager> _scopeManager;
     private readonly ScopeValidator _validator;
+    private readonly GrantedScopeValidator _grantedValidator;
 
     public ScopeValidatorTests()
     {
         _scopeManager = new Mock<IScopeManager>(MockBehavior.Strict);
-        _validator = new ScopeValidator(_scopeManager.Object, Mock.Of<IResourceManager>(MockBehavior.Strict));
+        _validator = new ScopeValidator(_scopeManager.Object);
+        _grantedValidator = new GrantedScopeValidator(_scopeManager.Object, Mock.Of<IResourceManager>(MockBehavior.Strict));
     }
 
     private static TokenValidationContext CreateContext(
@@ -281,6 +283,14 @@ public class ScopeValidatorTests
         AuthorizedGrant = GrantFor([]),
     };
 
+    /// <summary>
+    /// Runs <paramref name="context"/> through both scope validators in the order the token endpoint does, each judging
+    /// the grants it owns.
+    /// </summary>
+    private async Task<OidcError?> JudgeAsync(TokenValidationContext context)
+        => await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken) ??
+           await _grantedValidator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
     /// <summary>A grant holding <paramref name="scope"/> and no resource, as the validator reads it once authorized.
     /// </summary>
     private static AuthorizedGrant GrantFor(string[] scope) => new(
@@ -335,7 +345,7 @@ public class ScopeValidatorTests
     {
         var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+        var error = await JudgeAsync(context);
 
         Assert.Equal(ErrorCodes.InvalidScope, error?.Error);
     }
@@ -414,7 +424,7 @@ public class ScopeValidatorTests
     {
         var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+        var error = await JudgeAsync(context);
 
         Assert.Null(error);
         Assert.Empty(context.Scope);

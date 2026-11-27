@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -51,6 +54,35 @@ internal static class TokenRequestScope
         GrantTypes.DeviceAuthorization or GrantTypes.Ciba => [],
         _ => request.Scope,
     };
+
+    /// <summary>
+    /// Judges the scope <paramref name="context"/>'s request is served with against what <paramref name="tenant"/>
+    /// declares and what <paramref name="resources"/> declare, and holds it to the client's registered scopes; on
+    /// success the definitions of the tenant's scopes among it are set on the context.
+    /// </summary>
+    /// <returns>The refusal, or null when every scope served is available to the client.</returns>
+    public static OidcError? Judge(
+        IScopeManager scopeManager,
+        TenantDefinition tenant,
+        TokenValidationContext context,
+        ResourceDefinition[] resources)
+    {
+        if (ServedFor(context) is not { } scope)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
+
+        if (!scopeManager.Validate(tenant,
+                scope,
+                resources,
+                context.ClientInfo.AllowedScopes,
+                out var scopeDefinitions,
+                out var errorDescription))
+        {
+            return new OidcError(ErrorCodes.InvalidScope, errorDescription);
+        }
+
+        context.Scope = scopeDefinitions;
+        return null;
+    }
 
     /// <summary>
     /// The scope a token carries of <paramref name="granted"/> when its request is served with

@@ -7,8 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -20,14 +18,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// only receive permissions appropriate to their needs and in compliance with server policies.
 /// </summary>
 /// <remarks>
-/// A scope only a resource declares is available when a resource the request speaks for declares it
-/// (<see cref="TokenRequestResources.SpokenFor"/>): one it names, or one its grant holds when it names none, as a
-/// refresh naming no resource does (RFC 6749 section 6, RFC 8707 section 2.2). Read once the grant is authorized.
+/// Judges a grant the request itself authorizes, before the grant is built: its grant holds the resources the request
+/// names, so a scope only a resource declares is judged against those, and a refusal spends nothing the grant handler
+/// would consume, such as a JWT bearer assertion recorded as used. A grant authorized earlier is judged once it is
+/// known (<see cref="GrantedScopeValidator"/>).
 /// </remarks>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
-/// <param name="resourceManager">The manager the definitions of the resources a request speaks for are read from.
-/// </param>
-public class ScopeValidator(IScopeManager scopeManager, IResourceManager resourceManager): SyncTokenContextValidatorBase
+public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase
 {
     /// <summary>
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
@@ -42,37 +39,7 @@ public class ScopeValidator(IScopeManager scopeManager, IResourceManager resourc
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
-    {
-        if (TokenRequestScope.ServedFor(context) is not { } scope)
-            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
-
-        var spokenFor = TokenRequestResources.SpokenFor(
-            context.AuthorizedGrant.Context.Resources,
-            from definition in context.Resources select definition.Resource);
-
-        // A resource the host no longer knows declares no scope
-        ResourceDefinition[] resources = [.. DefinitionsOf(tenant, spokenFor ?? [])];
-
-        if (!scopeManager.Validate(tenant,
-                scope,
-                resources,
-                context.ClientInfo.AllowedScopes,
-                out var scopeDefinitions,
-                out var errorDescription))
-        {
-            return new OidcError(ErrorCodes.InvalidScope, errorDescription);
-        }
-
-        context.Scope = scopeDefinitions;
-        return null;
-    }
-
-    private IEnumerable<ResourceDefinition> DefinitionsOf(TenantDefinition tenant, Uri[] resources)
-    {
-        foreach (var resource in resources)
-        {
-            if (resourceManager.TryGet(tenant, resource, out var definition))
-                yield return definition;
-        }
-    }
+        => GrantsAuthorizedEarlier.Include(context.Request.GrantType)
+            ? null
+            : TokenRequestScope.Judge(scopeManager, tenant, context, context.Resources);
 }
