@@ -62,6 +62,8 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
             AllowedGrantTypes = [GrantTypes.AuthorizationCode],
             RedirectUris = [new Uri(RedirectUri)],
             PostLogoutRedirectUris = [new Uri(RedirectUri)],
+            // Its ID tokens name the session, so the one hinted at the tenant that issued it ends the logout unasked
+            BackChannelLogout = new BackChannelLogoutOptions(new Uri("https://client.example.com/back-channel-logout")),
             PkceRequired = true,
         });
 

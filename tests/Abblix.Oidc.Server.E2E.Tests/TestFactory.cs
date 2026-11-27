@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Tests.Shared;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -49,7 +50,14 @@ public class TestFactory : SharedHostFactory<Program>, IAsyncLifetime
             services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                 new PostConfigureOptions<OidcOptions>(
                     Options.DefaultName,
-                    options => options.RequireInitialAccessToken = false));
+                    options =>
+                    {
+                        options.RequireInitialAccessToken = false;
+                        EveryGrantTypeForNewClients.Apply(options);
+                    }));
+
+            // The suite asks for the error responses of the clients it registers openly
+            EveryRedirectUriTrusted.Register(services);
         });
     }
 

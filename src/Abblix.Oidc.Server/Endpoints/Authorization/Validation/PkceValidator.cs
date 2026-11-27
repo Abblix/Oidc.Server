@@ -80,6 +80,20 @@ public class PkceValidator(
 		SecurityProfileRequirements profile,
 		string codeChallenge)
 	{
+		// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.1 and RFC 7636 section 4.2: "code-challenge =
+		// 43*128unreserved". A challenge of another syntax could never be matched by a well-formed verifier, so it is
+		// refused here, where the client still learns why, rather than issued a code no token request can redeem. A request
+		// issuing no code has nothing for the challenge to protect, as with its method above
+		if (context.Request.ResponseType.HasFlag(ResponseTypes.Code) && !CodeChallenge.IsWellFormed(codeChallenge))
+			return context.InvalidRequest("The PKCE code challenge is malformed");
+
+		// RFC 7636 section 4.3: code_challenge_method "defaults to "plain" if not present in the request". Written into
+		// the request that goes on, so the plain rules below apply to it and the code it is issued is verified at the
+		// token endpoint by the method it was validated under. A request issuing no code has no code for the method to
+		// verify, so it is left without one
+		if (context.Request.CodeChallengeMethod is null && context.Request.ResponseType.HasFlag(ResponseTypes.Code))
+			context.Request = context.Request with { CodeChallengeMethod = CodeChallengeMethods.Plain };
+
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 		// rejected - including plain and the non-standard S512 - before the per-client plain check,
 		// so the profile cannot be loosened by PlainPkceAllowed. A missing code_challenge_method
@@ -92,7 +106,7 @@ public class PkceValidator(
 		}
 
 		if (context.Request.CodeChallengeMethod == CodeChallengeMethods.Plain &&
-		    !context.ClientInfo.PlainPkceAllowed)
+		    !AcceptsPlain(tenant, context.ClientInfo))
 		{
 			return context.InvalidRequest("The client is not allowed PKCE plain method");
 		}
@@ -106,6 +120,15 @@ public class PkceValidator(
 
 		return null;
 	}
+
+	/// <summary>
+	/// Whether <paramref name="client"/> may send a plain code challenge at <paramref name="tenant"/>: it is allowed
+	/// plain, and its security profile does not require S256. The one answer this validator refuses plain by and the
+	/// discovery document lists plain by.
+	/// </summary>
+	internal static bool AcceptsPlain(TenantDefinition tenant, ClientInfo client)
+		=> client.PlainPkceAllowed &&
+		   !SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile).RequireS256CodeChallenge;
 
 	/// <summary>
 	/// The rule a request without a code_challenge answers to: refused when PKCE is required of it.

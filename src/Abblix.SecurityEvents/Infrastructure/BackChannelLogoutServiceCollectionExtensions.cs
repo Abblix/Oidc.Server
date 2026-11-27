@@ -49,7 +49,8 @@ public static class BackChannelLogoutServiceCollectionExtensions
     /// <para>
     /// Step 8, the replay check, is optional in the specification and taken up here, because the
     /// request carrying the token is unauthenticated and the token is a bearer credential in the
-    /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>; a deployment
+    /// plainest sense. The default cache rides the host's <c>IDistributedCache</c>, or an in-process
+    /// one when the host registers none, which a deployment of several instances must not rely on; a deployment
     /// wanting a strictly atomic reservation derives a <c>ReplayCacheBase</c> over its own
     /// store's conditional write and registers that, which TryAdd here then leaves alone.
     /// </para>

@@ -18,13 +18,18 @@ using Abblix.Oidc.Server.MinimalApi;
 namespace Abblix.DocSamples.Samples;
 
 /// <summary>
-/// The compiled copy of the quick-start in the repository's README.
+/// The compiled copy of the quick-start in the repository's README.md, which the Minimal API package's README
+/// (src/Abblix.Oidc.Server.MinimalApi/README.md) carries line for line.
 /// </summary>
 /// <remarks>
+/// One copy backs both blocks, so an edit to either README is made in the other as well, or
+/// <c>ReadmeSampleTests</c> names the one that no longer matches.
+/// <para>
 /// The imports above the ambient markers are the ones the README itself shows; the two inside them are
 /// what a project created from the web template gets without asking, and <c>ReadmeSampleTests</c> holds
 /// that region to the template's own list. A copy that quietly imports something the reader has not got
 /// would compile here and fail for them, which is exactly how the stale quick-start survived.
+/// </para>
 /// </remarks>
 internal static class ReadmeQuickstartSample
 {
@@ -51,6 +56,7 @@ internal static class ReadmeQuickstartSample
 
         var app = builder.Build();
 
+        app.UseCors();
         app.MapOidcEndpoints();
         app.Run();
         // </sample>

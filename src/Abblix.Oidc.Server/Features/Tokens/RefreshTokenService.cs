@@ -54,9 +54,13 @@ public class RefreshTokenService(
 	ITenantCatalog catalog) : IRefreshTokenService
 {
 	/// <inheritdoc />
+	public bool Rotates(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo)
+		=> RefreshTokenRotationPolicy.Rotates(tenant, clientInfo, refreshToken.Payload);
+
+	/// <inheritdoc />
 	public async Task<bool> TrySpendAsync(TenantDefinition tenant, JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		if (!RefreshTokenRotationPolicy.Rotates(tenant, clientInfo) ||
+		if (!Rotates(tenant, refreshToken, clientInfo) ||
 		    refreshToken.Payload is not { JwtId: { } jwtId, ExpiresAt: { } expiresAt } payload)
 		{
 			return true;
@@ -68,7 +72,7 @@ public class RefreshTokenService(
 		if (await tokenRegistry.TrySetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Used, expiresAt))
 			return true;
 
-		await grantRevocation.RevokeAsync(tenant, payload);
+		await grantRevocation.RevokeAsync(tenant, payload, clientInfo);
 		return false;
 	}
 
@@ -100,31 +104,27 @@ public class RefreshTokenService(
 	{
 		var now = clock.GetUtcNow();
 		var issuedAt = refreshToken?.Payload.IssuedAt ?? now;
-		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
-		if (expiresAt < now)
+		if (Outlived(issuedAt, now, clientInfo.RefreshToken))
 			return null;
 
-		// The same four claims as on an access token, answering the same four questions - except that one of
-		// them answers a different question here than its name suggests:
+		var expiresAt = CalculateExpiresAt(issuedAt, now, clientInfo.RefreshToken);
+
+		// The same four claims as on an access token, answering the same four questions:
 		//
 		//   iss       - who issued it        (RFC 7519 Section 4.1.1)
-		//   aud       - not who reads it     (RFC 7519 Section 4.1.3). Set by ApplyTo below, from the same
-		//                                     authorization context the access token uses, so it holds the
-		//                                     resources the grant was issued for - or the issuer where it
-		//                                     named none. AuthorizeByRefreshTokenAsync reads them straight
-		//                                     back out of it to rebuild the grant, which makes the claim a
-		//                                     store of grant state rather than a statement about the reader,
-		//                                     and gives a refresh token the same audience as every access
-		//                                     token of the same grant.
-		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set by ApplyTo below.
+		//   aud       - who reads it         (RFC 7519 Section 4.1.3): this server, the only party a refresh token
+		//                                     is ever presented to. The resources of the grant it continues are kept
+		//                                     in a claim of the server's own (RefreshTokenResources) rather than
+		//                                     here, so a resource server checking the audience of a token presented
+		//                                     to it refuses this one without having to check its type.
+		//   client_id - who asked for it     (RFC 8693 Section 4.3) - set with the grant's context below.
 		//   sub       - who it is about      (RFC 9068 Section 2.2), sealed per sector for a pairwise client
 		//                                     further down.
 		//
-		// The type below therefore carries a protection rather than a label. With the audiences identical, it
-		// is the only thing separating a refresh token from an access token, and a resource server presented
-		// with one has nothing else to reject it by - the mutually exclusive validation rules RFC 8725
-		// Section 3.12 asks for. Encryption does not stand in for it: it applies only where the host
-		// configured a server encryption key, and without one every service token ships as a readable JWS.
+		// The type below is the second protection, the mutually exclusive validation rules RFC 8725 Section 3.12 asks
+		// for: a resource server that does check it refuses a refresh token whatever its audience. Encryption does not
+		// stand in for either: it applies only where the host configured a server encryption key, and without one every
+		// service token ships as a readable JWS.
 		var signing = options.Value.ServiceTokens.RefreshToken.Signing;
 
 		var newToken = new JsonWebToken
@@ -142,7 +142,7 @@ public class RefreshTokenService(
 				NotBefore = now,
 				ExpiresAt = expiresAt,
 				Issuer = LicenseChecker.CheckLicense(
-					tenant.Issuer.OriginalString,
+					tenant.IssuerAsWritten(),
 					tenant,
 					catalog,
 					authContext.ClientId),
@@ -151,14 +151,12 @@ public class RefreshTokenService(
 		};
 		authSession.ApplyTo(newToken.Payload);
 
-		// This is what sets the audience described above, so setting it in the initializer would only be
-		// overwritten here.
-		authContext.ApplyTo(newToken.Payload);
+		RefreshTokenResources.ApplyTo(authContext, newToken.Payload);
 
-		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
-		// pseudonym; a public client is untouched. The pseudonym carries the real subject that
+		// For a pairwise client, replace the real subject in 'sub' and every actor in 'act' with the client's
+		// reversible per-sector pseudonyms; a public client is untouched. A pseudonym carries the real identifier that
 		// AuthorizeByRefreshTokenAsync opens back to reconstruct the grant.
-		newToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
+		subjectTypeConverter.SealSubjects(tenant, newToken.Payload, clientInfo);
 
 		var encoded = await jwtFormatter.FormatAsync(
 			tenant,
@@ -167,6 +165,18 @@ public class RefreshTokenService(
 			ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
+
+	/// <summary>
+	/// Whether a refresh token family first issued at <paramref name="issuedAt"/> is past the lifetime
+	/// <paramref name="options"/> give it now: the one answer to whether such a token may still be redeemed and whether
+	/// it may be renewed.
+	/// </summary>
+	/// <remarks>
+	/// The token's own expiry was computed under the options in force when it was issued, so a host shortening the
+	/// client's absolute lifetime since leaves tokens whose expiry lies beyond the new ceiling.
+	/// </remarks>
+	private static bool Outlived(DateTimeOffset issuedAt, DateTimeOffset now, RefreshTokenOptions options)
+		=> CalculateExpiresAt(issuedAt, now, options) < now;
 
 	private static DateTimeOffset CalculateExpiresAt(
 		DateTimeOffset issuedAt,
@@ -206,14 +216,23 @@ public class RefreshTokenService(
 		TenantDefinition tenant,
 		JsonWebToken refreshToken, ClientInfo clientInfo)
 	{
-		var authSession = refreshToken.Payload.ToAuthSession();
-		var authContext = refreshToken.Payload.ToAuthorizationContext();
+		// RFC 6749 section 5.2: invalid_grant for a refresh token that is "expired", here by the client's current
+		// lifetime, before any token is issued from it
+		if (refreshToken.Payload.IssuedAt is { } issuedAt &&
+		    Outlived(issuedAt, clock.GetUtcNow(), clientInfo.RefreshToken))
+		{
+			return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
+				new OidcError(ErrorCodes.InvalidGrant, "The refresh token is past its client's refresh token lifetime"));
+		}
 
-		// ConvertBack the real subject from the per-sector pseudonym (its sector comes from clientInfo) before building
-		// the grant, so the grant carries the real subject the server refreshes and exchanges against - the
-		// refresh-token token-exchange resolver reads it from here. A public client's 'sub' is already real.
-		var subject = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo);
-		if (subject is null)
+		var authSession = refreshToken.Payload.ToAuthSession();
+		var authContext = RefreshTokenResources.ToAuthorizationContext(refreshToken.Payload);
+
+		// Open the real parties from the per-sector pseudonyms (their sector comes from clientInfo) before building
+		// the grant, so the grant carries the real subject and actors the server refreshes and exchanges against - the
+		// refresh-token token-exchange resolver reads them from here. A public client's are already real.
+		var real = subjectTypeConverter.Open(tenant, TokenSubjects.Of(refreshToken.Payload), clientInfo);
+		if (real is null)
 		{
 			// The pairwise 'sub' did not open for this client (a foreign-sector or pre-change token): reject the
 			// grant rather than faulting the refresh.
@@ -225,6 +244,9 @@ public class RefreshTokenService(
 		// belongs to. Copying the value onto the grant would let the two disagree, and would put the answer in a
 		// place a host building this grant itself can leave empty.
 		return Task.FromResult<Result<AuthorizedGrant, OidcError>>(
-			new RefreshTokenAuthorizedGrant(authSession with { Subject = subject }, authContext, refreshToken));
+			new RefreshTokenAuthorizedGrant(
+				authSession with { Subject = real.Subject },
+				authContext with { Actor = real.Actor },
+				refreshToken));
 	}
 }

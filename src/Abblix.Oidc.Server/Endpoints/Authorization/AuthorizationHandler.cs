@@ -6,7 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -22,13 +27,28 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// <param name="processor">Produces the validated authorization result projected onto the wire.</param>
 /// <param name="responseEncoder">Applies iss/scope gating and, for a JARM request, packs the response
 /// parameters into the response JWT, at the single convergence point for success and every error variant.</param>
+/// <param name="clientInfoProvider">The client store, which every step of one request asks through one
+/// <see cref="RequestScopedClientInfoProvider"/>, so the request finds its client once.</param>
+/// <param name="redirectUriTrust">Decides whether an authorization error may be redirected to the client.</param>
+/// <param name="authSessionService">The host's sessions, which tell whether the end user is authenticated before an
+/// error is redirected.</param>
+/// <param name="cutoffChecker">The revocation cutoffs, so a session the server no longer honors counts as nobody
+/// signed in.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency decides a different step of one request: the client store, the fetch, the validation, the processing, the encoding, the trust in the client's redirect URIs and the two that tell whether the end user is authenticated.")]
 public class AuthorizationHandler(
+    IClientInfoProvider clientInfoProvider,
     IAuthorizationRequestFetcher fetcher,
     IAuthorizationRequestValidator validator,
     IAuthorizationRequestProcessor processor,
-    IAuthorizationResponseEncoder responseEncoder)
+    IAuthorizationResponseEncoder responseEncoder,
+    IRedirectUriTrustPolicy redirectUriTrust,
+    IAuthSessionService authSessionService,
+    IRevocationCutoffChecker cutoffChecker)
     : IAuthorizationHandler
 {
+    private readonly UnrevokedSessions _unrevoked = new(cutoffChecker);
+
     /// <summary>
     /// Asynchronously handles an authorization request by first fetching the request if necessary,
     /// validating the request and then processing it to generate an authorization response.
@@ -56,20 +76,93 @@ public class AuthorizationHandler(
         // decorator that sets session_state), then let the encoder apply iss/scope gating and - for a
         // JARM request - pack the parameters into the response JWT. Encoding happens here, at the single
         // convergence point for success and every error variant, after session_state is finalised.
-        var response = await ProduceResponseAsync(tenant, request);
-        return await responseEncoder.EncodeAsync(tenant, response);
+        var clients = new RequestScopedClientInfoProvider(clientInfoProvider);
+        var response = await ProduceResponseAsync(tenant, request, clients);
+        Task<bool>? verdict = null;
+        Task<bool> Redirected(AuthorizationError error) => verdict ??= IsRedirectedAsync(tenant, error, clients);
+        if (await AuthenticationOwedAsync(tenant, response, Redirected) is { } login)
+            return login;
+
+        var encoded = await responseEncoder.EncodeAsync(tenant, response, clients);
+        return await KeptAtTheServerUnlessTrustedAsync(encoded, Redirected);
     }
 
-    private async Task<AuthorizationResponse> ProduceResponseAsync(TenantDefinition tenant, Model.AuthorizationRequest request)
+    /// <summary>
+    /// The login an authorization error owes before it is redirected, when nobody is signed in. RFC 9700 section
+    /// 4.11.2: "The authorization server MUST always authenticate the user first and, with the exception of the silent
+    /// authentication use case, prompt the user for credentials when needed, before redirecting the user."
+    /// </summary>
+    /// <remarks>
+    /// Only an error that is going to be redirected owes it, so trust is decided first: an error for a client whose
+    /// redirect URIs are not trusted is answered by the server at once, with nobody signed in. For a trusted client the
+    /// end user goes to the login page as a valid request without a session does, the request stored for the page as it
+    /// was fetched. The page sends it back by its request_uri, the request fails the same check again, and the error is
+    /// redirected. A silent request (<c>prompt=none</c>) cannot show a login page, so its error is answered at once, and
+    /// an error without a redirect URI is answered by the server anyway. The login page signs the end user in before it
+    /// sends the request back, as it does for a request whose session max_age or acr_values leave out, or the request
+    /// comes back to it.
+    /// </remarks>
+    private async Task<LoginRequired?> AuthenticationOwedAsync(
+        TenantDefinition tenant,
+        AuthorizationResponse response,
+        Func<AuthorizationError, Task<bool>> redirected)
     {
-        var fetchResult = await fetcher.FetchAsync(tenant, request);
+        if (response is not AuthorizationError { RedirectUri: not null, Model: var model } error ||
+            PromptPages.Asks(model, Prompts.None) ||
+            !await redirected(error))
+        {
+            return null;
+        }
+
+        return await _unrevoked.AnyAsync(tenant, authSessionService.GetAvailableAuthSessions())
+            ? null
+            : new LoginRequired(model);
+    }
+
+    /// <summary>
+    /// An authorization error for a client whose redirect URIs are not trusted, answered by the server rather than at
+    /// the client's redirect URI. RFC 9700 section 4.11.2 has the server "only automatically redirect the user agent if
+    /// it trusts the redirection URI", while every error reaches the user agent without the end user choosing that
+    /// client: a refused request, a declined consent, a silent request. Decided after encoding, so an error the encoder
+    /// itself makes of a response it could not pack is held to it too, and a packed one is answered without its JWT.
+    /// </summary>
+    private static async Task<AuthorizationResponse> KeptAtTheServerUnlessTrustedAsync(
+        AuthorizationResponse response,
+        Func<AuthorizationError, Task<bool>> redirected)
+    {
+        if (response is not AuthorizationError { RedirectUri: not null } error ||
+            await redirected(error))
+        {
+            return response;
+        }
+
+        return error with { RedirectUri = null, ResponseJwt = null };
+    }
+
+    /// <summary>
+    /// Whether <paramref name="error"/> may be redirected to its client. <see cref="HandleAsync"/> asks it once per
+    /// request and hands the verdict to the login owed before an error and to the error kept at the server, so a policy
+    /// answering differently the second time cannot let an error skip the login and still be redirected. An error naming
+    /// no client has no client to trust, so it stays at the server like an untrusted one.
+    /// </summary>
+    private async Task<bool> IsRedirectedAsync(TenantDefinition tenant, AuthorizationError error, IClientInfoProvider clients)
+        => error.Model.ClientId is { } clientId &&
+           (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) &&
+           await redirectUriTrust.IsTrustedAsync(tenant, client);
+
+    private async Task<AuthorizationResponse> ProduceResponseAsync(
+        TenantDefinition tenant,
+        Model.AuthorizationRequest request,
+        IClientInfoProvider clients)
+    {
+        var fetchResult = await fetcher.FetchAsync(tenant, request, clients);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(request, fetchError);
 
         request = fetchResult.GetSuccess();
 
-        var validationResult = await validator.ValidateAsync(tenant, request);
+        var validationResult = await validator.ValidateAsync(tenant, request, clients);
 
         return await validationResult.MatchAsync(
             onSuccess: valid => processor.ProcessAsync(tenant, valid),

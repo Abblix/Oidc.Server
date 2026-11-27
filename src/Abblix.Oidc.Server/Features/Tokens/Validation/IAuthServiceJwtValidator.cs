@@ -32,6 +32,8 @@ public interface IAuthServiceJwtValidator
 	/// </remarks>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="client">The client presenting the token, or null where no client presents it.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="jwt">The JWT string to be validated.</param>
 	/// <param name="tokenTypes">The token types the caller accepts, so a token this server issued for one purpose is
 	/// refused where another is expected.</param>
@@ -40,6 +42,7 @@ public interface IAuthServiceJwtValidator
 	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,
+		IClientInfoProvider clients,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default);

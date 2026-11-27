@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -33,7 +34,12 @@ public interface IAuthorizationResponseEncoder
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="response">The processed authorization response to encode.</param>
+	/// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.
+	/// The client a response JWT is built for is found in them.</param>
 	/// <returns>The response to deliver: <paramref name="response"/>, or the error that replaces it when its JARM
 	/// response JWT cannot be produced for the client.</returns>
-	Task<AuthorizationResponse> EncodeAsync(TenantDefinition tenant, AuthorizationResponse response);
+	Task<AuthorizationResponse> EncodeAsync(
+		TenantDefinition tenant,
+		AuthorizationResponse response,
+		IClientInfoProvider clients);
 }

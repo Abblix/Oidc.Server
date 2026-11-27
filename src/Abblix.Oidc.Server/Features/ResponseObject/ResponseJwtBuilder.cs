@@ -18,17 +18,15 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
-/// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
+/// Default <see cref="IResponseJwtBuilder"/>: builds the JARM
 /// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
 /// response JWT and hands it to <see cref="IClientJwtFormatter"/> for signing and - when the client registered an
 /// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM section 2.2).
 /// </summary>
-/// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
 /// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
 public class ResponseJwtBuilder(
-    IClientInfoProvider clientInfoProvider,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IResponseJwtBuilder
@@ -36,12 +34,9 @@ public class ResponseJwtBuilder(
     /// <inheritdoc />
     public async Task<Result<string, OidcError>> BuildAsync(
         TenantDefinition tenant,
-        string? clientId,
+        ClientInfo client,
         IReadOnlyList<(string name, string? value)> parameters)
     {
-        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
-            .NotNull(nameof(ClientInfo));
-
         var now = timeProvider.GetUtcNow();
 
         // No 'typ' header is set on purpose. The JARM specification defines none for the authorization
@@ -54,13 +49,13 @@ public class ResponseJwtBuilder(
         // 'typ' back without a registered JARM media type and a concrete threat it addresses.
         var token = new JsonWebToken
         {
-            Header = { Algorithm = clientInfo.AuthorizationSignedResponseAlgorithm },
+            Header = { Algorithm = client.AuthorizationSignedResponseAlgorithm },
             Payload =
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = tenant.Issuer.OriginalString,
-                Audiences = [clientInfo.ClientId],
+                Issuer = tenant.IssuerAsWritten(),
+                Audiences = [client.ClientId],
             },
         };
 
@@ -76,7 +71,7 @@ public class ResponseJwtBuilder(
         return await clientJwtFormatter.FormatAsync(
             tenant,
             token,
-            clientInfo,
-            ClientJwtEncryption.ForJarm(clientInfo));
+            client,
+            ClientJwtEncryption.ForJarm(client));
     }
 }

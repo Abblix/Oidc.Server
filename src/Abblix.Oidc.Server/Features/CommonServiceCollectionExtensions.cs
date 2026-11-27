@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -65,6 +66,10 @@ public static class CommonServiceCollectionExtensions
         // The one answer to which key a client-addressed JWT is encrypted to, asked where it is encrypted and where the
         // client is judged against its profile ahead of that
         services.TryAddSingleton<ClientEncryptionKeyResolver>();
+
+        // A client_secret_jwt client registered dynamically keeps its secret encrypted alone, and both the key its
+        // assertion is verified with and the key a JWT is encrypted to it with are read from there
+        services.TryAddSingleton<IClientSecretEncryptor, IssuerClientSecretEncryptor>();
         return services
             .AddJsonWebTokens()
             .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();
@@ -84,8 +89,14 @@ public static class CommonServiceCollectionExtensions
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         // Every tenant's entities are kept in one store, each under keys its stores build from the tenant. The store
         // is the one registered under the shared key, which a host substitutes in any order, or one the host
-        // registered for the server before this call, which the forwarding below then leaves in place
-        services.TryAddKeyedSingleton<IEntityStorage, DistributedCacheStorage>(TenantServiceKeys.Shared);
+        // registered for the server before this call, which the forwarding below then leaves in place. It keeps them
+        // in the host's distributed cache, or in an in-process one when the host registers none
+        services.AddInProcessCaches();
+        services.TryAddKeyedSingleton<IEntityStorage>(
+            TenantServiceKeys.Shared,
+            (serviceProvider, _) => new DistributedCacheStorage(
+                InProcessCaches.DistributedCache(serviceProvider),
+                serviceProvider.GetRequiredService<IBinarySerializer>()));
         services.TryAddSingleton<IEntityStorage>(
             serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
         return services;

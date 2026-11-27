@@ -35,18 +35,41 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
 /// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
 /// <param name="replayCache">Records each jti until its assertion expires (RFC 7523 Section 3).</param>
-/// <param name="requestInfoProvider">Names the address a replay came from and the endpoint an assertion's
-/// audience has to name.</param>
+/// <param name="requestInfoProvider">Names the address a replay came from.</param>
 /// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
+/// <param name="serviceProvider">Resolves where the transport serves the token endpoint, whose URL on the issuer's
+/// authority an assertion's audience may name beside the issuer identifier.</param>
 public sealed partial class JwtBearerAssertionPolicy(
 	ILogger<JwtBearerAssertionPolicy> logger,
 	IJwtBearerIssuerProvider issuerProvider,
 	TimeProvider timeProvider,
 	IReplayCache replayCache,
 	IRequestInfoProvider requestInfoProvider,
-	ITenantCatalog catalog)
+	ITenantCatalog catalog,
+	IServiceProvider? serviceProvider)
 {
-	private readonly JwtBearerAssertionParameters _parameters = new(logger, issuerProvider, requestInfoProvider, catalog);
+	/// <summary>
+	/// The policy without a way to resolve the token endpoint, so an assertion names this server only by the tenant's
+	/// issuer identifier.
+	/// </summary>
+	/// <param name="logger">Records why an assertion was refused.</param>
+	/// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
+	/// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
+	/// <param name="replayCache">Records each jti until its assertion expires (RFC 7523 Section 3).</param>
+	/// <param name="requestInfoProvider">Names the address a replay came from.</param>
+	/// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
+	public JwtBearerAssertionPolicy(
+		ILogger<JwtBearerAssertionPolicy> logger,
+		IJwtBearerIssuerProvider issuerProvider,
+		TimeProvider timeProvider,
+		IReplayCache replayCache,
+		IRequestInfoProvider requestInfoProvider,
+		ITenantCatalog catalog)
+		: this(logger, issuerProvider, timeProvider, replayCache, requestInfoProvider, catalog, null)
+	{
+	}
+
+	private readonly JwtBearerAssertionParameters _parameters = new(logger, issuerProvider, serviceProvider, catalog);
 
 	/// <summary>
 	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
@@ -249,7 +272,7 @@ public sealed partial class JwtBearerAssertionPolicy(
 		// the read-then-write race. An assertion carrying no expiry names no window to remember it for, so the
 		// identifier is held for the fallback the cache publishes.
 		var expiresAt = ctx.ExpiresAt ?? timeProvider.GetUtcNow() + ConfiguredReplayCache.DefaultExpiration;
-		if (!await replayCache.TryReserveAsync(jti, expiresAt))
+		if (!await replayCache.TryReserveAsync(SingleUseTokenKey.JwtBearerGrant(ctx.Issuer, jti), expiresAt))
 		{
 			LogReplayDetected(jti, clientInfo.ClientId, ctx.Issuer, ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 			return new OidcError(ErrorCodes.InvalidGrant, "The JWT assertion has already been used");

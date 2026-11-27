@@ -56,7 +56,6 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
 	private const string BindAttributeName = "global::Microsoft.AspNetCore.Mvc.Bind";
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
-	private const string SplitSourceParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.SplitSourceParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
 	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
 	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
@@ -323,7 +322,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 					break;
 
 				// The property's own source overrides the action parameter's query-or-form one, so the parameter is read
-				// from this part of the request alone, and still counted like any other single-valued parameter
+				// from this part of the request alone, and counted there alone: a copy in the other part is never read
 				case QueryParameterMarkerName
 					when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
 					EmitSingleSourceParameter("FromQuery", queryName);
@@ -352,7 +351,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wireName, quote: true);
 			_writer.AppendLine($"\t[global::Microsoft.AspNetCore.Mvc.{sourceAttribute}(Name = {literal})]");
 			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = {literal})]");
-			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({SplitSourceParameterBinderName}))]");
+			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]");
 		}
 
 		private void EmitProperty(IPropertySymbol property)

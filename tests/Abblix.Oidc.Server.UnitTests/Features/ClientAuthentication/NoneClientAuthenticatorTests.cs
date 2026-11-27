@@ -50,7 +50,7 @@ public class NoneClientAuthenticatorTests
 
         var clientInfo = CreatePublicClientInfo(PublicClientId);
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, PublicClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, PublicClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -59,7 +59,7 @@ public class NoneClientAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -78,13 +78,13 @@ public class NoneClientAuthenticatorTests
         var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/globex") };
         var (authenticator, mocks) = CreateAuthenticator();
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), PublicClientId))
+            .Setup(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), PublicClientId))
             .ReturnsAsync((TenantDefinition tenant, string _) =>
-                tenant.Id == globex.Id ? CreatePublicClientInfo(PublicClientId) : null);
+                tenant.Id == globex.Id ? CreatePublicClientInfo(PublicClientId) : ClientAbsence.Unknown);
         var request = new ClientRequest { ClientId = PublicClientId };
 
-        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
-        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request, mocks.ClientInfoProvider.Object)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request, mocks.ClientInfoProvider.Object)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -95,11 +95,11 @@ public class NoneClientAuthenticatorTests
     public async Task MissingClientId_ShouldReturnNull()
     {
         // Arrange
-        var (authenticator, _) = CreateAuthenticator();
+        var (authenticator, mocks) = CreateAuthenticator();
         var request = new ClientRequest();
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -113,14 +113,14 @@ public class NoneClientAuthenticatorTests
     public async Task EmptyClientId_ShouldReturnNull()
     {
         // Arrange
-        var (authenticator, _) = CreateAuthenticator();
+        var (authenticator, mocks) = CreateAuthenticator();
         var request = new ClientRequest
         {
             ClientId = string.Empty
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -134,14 +134,14 @@ public class NoneClientAuthenticatorTests
     public async Task WhitespaceClientId_ShouldReturnNull()
     {
         // Arrange
-        var (authenticator, _) = CreateAuthenticator();
+        var (authenticator, mocks) = CreateAuthenticator();
         var request = new ClientRequest
         {
             ClientId = "   "
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -158,8 +158,8 @@ public class NoneClientAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator();
 
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, PublicClientId))
-            .ReturnsAsync((ClientInfo?)null);
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, PublicClientId))
+            .ReturnsAsync(ClientAbsence.Unknown);
 
         var request = new ClientRequest
         {
@@ -167,7 +167,7 @@ public class NoneClientAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -188,7 +188,7 @@ public class NoneClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost
         };
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ConfidentialClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ConfidentialClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -197,7 +197,7 @@ public class NoneClientAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.False(result.TryGetSuccess(out _));
@@ -215,7 +215,7 @@ public class NoneClientAuthenticatorTests
 
         var clientInfo = CreatePublicClientInfo(PublicClientId);
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, PublicClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, PublicClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -225,7 +225,7 @@ public class NoneClientAuthenticatorTests
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request, mocks.ClientInfoProvider.Object);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -259,8 +259,7 @@ public class NoneClientAuthenticatorTests
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
 
         var authenticator = new NoneClientAuthenticator(
-            logger.Object,
-            clientInfoProvider.Object);
+            logger.Object);
 
         var mocks = new Mocks
         {
@@ -303,11 +302,11 @@ public class NoneClientAuthenticatorTests
     {
         var (authenticator, mocks) = CreateAuthenticator();
         mocks.ClientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "confidential"))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, "confidential"))
             .ReturnsAsync(new ClientInfo("confidential") { TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost });
 
         var result = await authenticator.TryAuthenticateClientAsync(
-            SingleIssuer.Tenant, new ClientRequest { ClientId = "confidential" });
+            SingleIssuer.Tenant, new ClientRequest { ClientId = "confidential" }, mocks.ClientInfoProvider.Object);
 
         Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }

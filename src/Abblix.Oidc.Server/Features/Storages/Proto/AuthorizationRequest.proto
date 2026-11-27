@@ -103,4 +103,8 @@ message AuthorizationRequest {
   // Whether the client named no scope and the request carries the default it was served with; a request
   // stored before the field existed reads false, as a scope the client named
   bool client_named_no_scope = 27;
+
+  // Whether the client named no redirect URI and the request carries the single one it registered; a request
+  // stored before the field existed reads false, as a redirect URI the client named
+  bool client_named_no_redirect_uri = 28;
 }

@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -20,15 +21,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Performs the storage-level deregistration of a client through the configured
 /// <see cref="IClientInfoManager"/> per RFC 7592 section 2.3.
 /// </summary>
+/// <param name="logger">Records the removed registration.</param>
 /// <param name="clientInfoManager">Store used to remove the client record.</param>
 /// <param name="clock">Source for the deletion timestamp recorded in the response.</param>
 /// <param name="catalog">The catalog the tenant the client is removed from was resolved from, which its license
 /// count is kept by.</param>
 public class RemoveClientRequestProcessor(
+    ILogger<RemoveClientRequestProcessor> logger,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
     ITenantCatalog catalog) : IRemoveClientRequestProcessor
 {
+    private readonly ClientRegistrationsLog _registrations = new(logger);
+
     /// <summary>
     /// Deletes the addressed client and returns the recorded removal timestamp.
     /// </summary>
@@ -43,8 +48,10 @@ public class RemoveClientRequestProcessor(
         if (!await clientInfoManager.TryRemoveClientAsync(tenant, request.Client))
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
 
-        if (LicenseChecker.ClientIssuerOf(tenant.Issuer.OriginalString, tenant, catalog) is { } issuerId)
+        if (LicenseChecker.ClientIssuerOf(tenant.IssuerAsWritten(), tenant, catalog) is { } issuerId)
             LicenseChecker.ReleaseClients(issuerId, [clientId]);
+
+        _registrations.Removed(tenant, clientId);
 
         return new RemoveClientSuccessfulResponse(
             ClientId: clientId,

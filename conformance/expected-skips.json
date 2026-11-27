@@ -5,7 +5,8 @@
       "client_auth_type": "private_key_jwt",
       "sender_constrain": "dpop"
     },
-    "configuration-filename": "*/abblix-fapi2-pkjwt-dpop.json"
+    "configuration-filename": "*/abblix-fapi2-pkjwt-dpop.json",
+    "comment": "The module skips itself before its first request: it tests that a client whose tokens are bound to its certificate cannot bypass the binding at the token endpoint outside mtls_endpoint_aliases, and in a DPoP configuration with private_key_jwt the client presents no TLS certificate, so there is nothing to bypass (FAPI2SPFinalEnsureHolderOfKeyRequiredAtNonAliasTokenEndpoint.start(): skipped when isDpop() and not mTLS client authentication and the profile does not require mTLS everywhere). The same module runs and passes in the mTLS configurations. It would run here only if the plan used tls_client_auth or a profile requiring mTLS on every endpoint; the server has nothing to change."
   },
   {
     "test-name": "fapi2-security-profile-final-ensure-holder-of-key-required-at-non-alias-token-endpoint",
@@ -13,6 +14,7 @@
       "client_auth_type": "private_key_jwt",
       "sender_constrain": "dpop"
     },
-    "configuration-filename": "*/abblix-fapi2-ms-pkjwt-dpop.json"
+    "configuration-filename": "*/abblix-fapi2-ms-pkjwt-dpop.json",
+    "comment": "The module skips itself before its first request: it tests that a client whose tokens are bound to its certificate cannot bypass the binding at the token endpoint outside mtls_endpoint_aliases, and in a DPoP configuration with private_key_jwt the client presents no TLS certificate, so there is nothing to bypass (FAPI2SPFinalEnsureHolderOfKeyRequiredAtNonAliasTokenEndpoint.start(): skipped when isDpop() and not mTLS client authentication and the profile does not require mTLS everywhere). The same module runs and passes in the mTLS configurations. It would run here only if the plan used tls_client_auth or a profile requiring mTLS on every endpoint; the server has nothing to change."
   }
 ]

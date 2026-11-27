@@ -68,9 +68,21 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
                         $"Native Clients MUST only register http: {Parameters.PostLogoutRedirectUris} with localhost, 127.0.0.1 or [::1] as the host; use 127.0.0.1 or [::1]");
 
                 case ApplicationTypes.Native when uri.Scheme == Uri.UriSchemeHttps:
-                    // Native Clients MUST only register redirect_uris using custom URI schemes
+                    // Native Clients MUST only register redirect_uris using custom URI schemes, and an app claiming
+                    // https URIs registers as a web client without credentials, as RedirectUrisValidator names it
                     return ErrorFactory.InvalidClientMetadata(
-                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes");
+                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using custom URI schemes "
+                        + $"or http loopback URLs; register an app claiming https URIs as '{Parameters.ApplicationType}' "
+                        + $"{ApplicationTypes.Web} with '{Parameters.TokenEndpointAuthMethod}' "
+                        + $"{ClientAuthenticationMethods.None}");
+
+                case ApplicationTypes.Native when !RedirectUriSchemes.IsAllowed(uri, native: true):
+                    // The rule RFC 8252 section 8.4 sets for a redirect URI, "any private-use URI scheme that doesn't
+                    // contain a period character (".") SHOULD be rejected", held for this URI the user agent is sent to
+                    // as well: the javascript, data and vbscript schemes carry no period
+                    return ErrorFactory.InvalidClientMetadata(
+                        $"Native Clients MUST only register {Parameters.PostLogoutRedirectUris} using a private-use URI "
+                        + "scheme based on a domain name in reverse order, such as com.example.app (RFC 8252 section 7.1)");
 
                 case ApplicationTypes.Native:
                     break;

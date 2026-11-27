@@ -17,11 +17,9 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -34,20 +32,14 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// in-memory DI and assert the handler's pipeline (allowlist, actor rejection, dispatch,
 /// grant assembly) without involving JWT validation.
 /// </summary>
-public class TokenExchangeGrantHandlerTests
+public partial class TokenExchangeGrantHandlerTests
 {
     private const string ClientId = "test-client";
     private const string SubjectTokenWire = "header.payload.signature";
     private const string TestSubject = "user-7";
     private const string TestSessionId = "test-session";
+    private static readonly DateTimeOffset TestAuthenticationTime = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
-    private readonly Mock<ISessionIdGenerator> _sessionIdGenerator = new(MockBehavior.Strict);
-    private readonly FakeTimeProvider _timeProvider = new();
-
-    public TokenExchangeGrantHandlerTests()
-    {
-        _sessionIdGenerator.Setup(g => g.GenerateSessionId()).Returns(TestSessionId);
-    }
 
     /// <summary>
     /// RFC 8693 section 2.1 / RFC 6749 section 5.2: a request without subject_token or subject_token_type is the
@@ -68,7 +60,7 @@ public class TokenExchangeGrantHandlerTests
             SubjectTokenType = subjectTokenType is null ? null : new Uri(subjectTokenType),
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, ClientWithAllowlist(null), TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, ClientWithAllowlist(null), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -79,12 +71,12 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: "https://issuer", Scope: [Scopes.OpenId], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(TestSubject, grant.AuthSession.Subject);
@@ -98,16 +90,44 @@ public class TokenExchangeGrantHandlerTests
         var adNode = (JsonArray)JsonNode.Parse(adWire)!;
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: adNode)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.AuthorizationDetails);
         Assert.Equal(adWire, grant.Context.AuthorizationDetails.ToJsonString());
+    }
+
+    /// <summary>
+    /// The DPoP key and the certificate the subject token is bound to bind the exchange grant, so the token endpoint
+    /// requires a proof of them (RFC 9449 section 5, RFC 8705 section 4).
+    /// </summary>
+    [Fact]
+    public async Task TheSubjectTokensBinding_BindsTheExchangeGrant()
+    {
+        var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = ClientId,
+            ProofKeyThumbprint = "the-dpop-key-thumbprint",
+            CertificateSha256Thumbprint = "the-certificate-thumbprint",
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal("the-dpop-key-thumbprint", grant.Context.ProofKeyThumbprint);
+        Assert.Equal("the-certificate-thumbprint", grant.Context.CertificateSha256Thumbprint);
     }
 
     [Fact]
@@ -119,7 +139,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(null);
         var request = ExchangeRequest(TokenExchangeTokenTypes.Saml2);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -135,14 +155,14 @@ public class TokenExchangeGrantHandlerTests
     public async Task ATokenTypeSpelledOtherwise_ReachesNoResolver()
     {
         var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
 
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             ExchangeRequest(UpperCaseScheme(TokenExchangeTokenTypes.AccessToken)),
             ClientWithAllowlist(null),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -157,14 +177,14 @@ public class TokenExchangeGrantHandlerTests
     {
         var spelledOtherwise = UpperCaseScheme(TokenExchangeTokenTypes.AccessToken);
         var ctx = new SubjectTokenContext(TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(spelledOtherwise, ctx);
 
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             ExchangeRequest(spelledOtherwise),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -180,7 +200,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist();  // empty -> deny-all
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -194,7 +214,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.IdToken);  // only id_token allowed
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -212,6 +232,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
             GrantId = grantId,
         };
@@ -221,24 +242,25 @@ public class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(grantId, grant.GrantId);
     }
 
     /// <summary>
-    /// A token exchanged within a refresh token family expires no later than the subject_token, so the family's
-    /// revocation outlasts it; one exchanged outside any family keeps its client's lifetime.
+    /// A token obtained by exchange expires no later than its subject_token, within a refresh token family or not, so
+    /// an exchange never extends the authority it hands on.
     /// </summary>
     [Theory]
-    [InlineData("grant_of_the_subject_token", true)]
-    [InlineData(null, false)]
-    public async Task ExchangedGrant_WithinAFamily_ExpiresNoLaterThanTheSubjectToken(string? grantId, bool capped)
+    [InlineData("grant_of_the_subject_token")]
+    [InlineData(null)]
+    public async Task ExchangedGrant_ExpiresNoLaterThanTheSubjectToken(string? grantId)
     {
         var subjectExpiresAt = new DateTimeOffset(2024, 1, 15, 13, 0, 0, TimeSpan.Zero);
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
             GrantId = grantId,
             ExpiresAt = subjectExpiresAt,
@@ -249,22 +271,22 @@ public class TokenExchangeGrantHandlerTests
             SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
-            TestContext.Current.CancellationToken);
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(capped ? subjectExpiresAt : null, grant.ExpiresNoLaterThan);
+        Assert.Equal(subjectExpiresAt, grant.ExpiresNoLaterThan);
     }
 
     [Fact]
     public async Task DelegationFlow_BuildsActClaimWithActorSubject()
     {
         // Single-hop delegation: subject_token has no prior act chain. Result: act = { sub: <actor> }.
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
-        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -277,15 +299,120 @@ public class TokenExchangeGrantHandlerTests
         // received it: an exchange spends nothing, so a resolver making a remote call may stop when the caller does.
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, caller.Token);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), caller.Token);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
         Assert.NotNull(grant.Context.Actor);
         Assert.Equal("svc-worker-7", grant.Context.Actor["sub"]!.GetValue<string>());
         Assert.Null(grant.Context.Actor["act"]);
-        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, SubjectTokenWire, It.IsAny<Uri>(), caller.Token), Times.Once);
-        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, It.IsAny<IClientInfoProvider>(), SubjectTokenWire, It.IsAny<Uri>(), caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
+    }
+
+    /// <summary>
+    /// The exchanged token belongs to the session of its subject_token and never to the actor's, so revoking the end
+    /// user's session reaches a delegated token too.
+    /// </summary>
+    [Fact]
+    public async Task ExchangedToken_BelongsToTheSubjectTokensSession_NotTheActors()
+    {
+        const string subjectSession = "subject-session";
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+            { SessionId = subjectSession, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null)
+            { SessionId = "actor-session", AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
+        };
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant, request, ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(subjectSession, grant.AuthSession.SessionId);
+    }
+
+    /// <summary>
+    /// The exchanged token tells of the sign-in its subject_token tells of - when, by which context class and by which
+    /// methods - and never of the actor's, so an exchange does not pass for a new sign-in.
+    /// </summary>
+    [Fact]
+    public async Task ExchangedToken_TellsOfTheSubjectTokensSignIn_NotTheActors()
+    {
+        var subjectSignedInAt = new DateTimeOffset(2024, 1, 15, 9, 30, 0, TimeSpan.Zero);
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = subjectSignedInAt,
+            AuthContextClassRef = "urn:example:acr:subject",
+            AuthenticationMethodReferences = ["pwd", "otp"],
+            OriginalClientId = ClientId,
+        };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null)
+        {
+            SessionId = "actor-session",
+            AuthenticationTime = subjectSignedInAt.AddHours(1),
+            AuthContextClassRef = "urn:example:acr:actor",
+            AuthenticationMethodReferences = ["hwk"],
+            OriginalClientId = ClientId,
+        };
+        const string actorWire = "actor.jwt";
+        var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+        resolverMock
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(actor);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
+        {
+            ActorToken = actorWire,
+            ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
+        };
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant, request, ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(subjectSignedInAt, grant.AuthSession.AuthenticationTime);
+        Assert.Equal("urn:example:acr:subject", grant.AuthSession.AuthContextClassRef);
+        Assert.Equal(["pwd", "otp"], grant.AuthSession.AuthenticationMethodReferences!);
+    }
+
+    /// <summary>
+    /// The exchanged token names the identity provider of the sign-in its subject_token belongs to, whichever kind
+    /// of token that is; only a subject_token naming none falls back to the party that issued it.
+    /// </summary>
+    [Theory]
+    [InlineData("https://upstream.example.com", "https://issuer.example.com", "https://upstream.example.com")]
+    [InlineData(null, "https://issuer.example.com", "https://issuer.example.com")]
+    public async Task ExchangedToken_NamesTheSignInsIdentityProvider(
+        string? identityProvider, string issuer, string expected)
+    {
+        var subject = new SubjectTokenContext("alice", issuer, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            OriginalClientId = ClientId,
+            IdentityProvider = identityProvider,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(expected, grant.AuthSession.IdentityProvider);
     }
 
     [Fact]
@@ -294,12 +421,12 @@ public class TokenExchangeGrantHandlerTests
         // Subject_token already carries an act chain: { sub: prev-actor }. New actor wraps it:
         // result act = { sub: new-actor, act: { sub: prev-actor } }.
         var existingChain = new JsonObject { ["sub"] = "prev-actor" };
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { Act = existingChain, OriginalClientId = ClientId };
-        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, Act = existingChain, OriginalClientId = ClientId };
+        var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -308,13 +435,45 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
         var nested = grant.Context.Actor["act"] as JsonObject;
         Assert.NotNull(nested);
         Assert.Equal("prev-actor", nested["sub"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A delegated subject_token exchanged without an actor_token still acts for somebody else, so the issued token
+    /// carries its act chain unchanged rather than presenting the delegate as the user acting directly.
+    /// </summary>
+    [Fact]
+    public async Task ADelegatedSubjectToken_ExchangedWithoutAnActor_KeepsItsActChain()
+    {
+        var existingChain = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
+        {
+            SessionId = TestSessionId,
+            AuthenticationTime = TestAuthenticationTime,
+            Act = existingChain,
+            OriginalClientId = ClientId,
+        };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
+            ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
+            Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.True(JsonNode.DeepEquals(existingChain, grant.Context.Actor));
+        Assert.NotSame(existingChain, grant.Context.Actor);
     }
 
     [Fact]
@@ -327,7 +486,7 @@ public class TokenExchangeGrantHandlerTests
             ActorToken = "actor.jwt",  // type missing
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -344,24 +503,28 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),  // value missing
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("together", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ActorResolverFailure_PropagatedWithPrefix()
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ActorResolverFailure_PropagatedWithPrefix(string resolverError, string expectedError)
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
-        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null) { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OidcError(resolverError, "actor expired"));
 
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -370,33 +533,41 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(expectedError, error.Error);
         Assert.Contains("actor_token", error.ErrorDescription);
         Assert.Contains("actor expired", error.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ResolverFailure_Propagated()
+    /// <summary>
+    /// RFC 8693 section 2.2.2: when "the subject_token ... [is] invalid for any reason, or [is] unacceptable based
+    /// on policy ... The value of the "error" parameter MUST be the "invalid_request" error code", so a resolver a
+    /// host registers that rejects the token reaches the wire with invalid_request whatever code it answered with.
+    /// A resolver that could not judge the token at all (server_error, temporarily_unavailable) says nothing about
+    /// the token, so its answer reaches the client unchanged rather than telling it to discard a token that may be
+    /// fine.
+    /// </summary>
+    [Theory]
+    [InlineData(ErrorCodes.InvalidRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.InvalidGrant, ErrorCodes.InvalidRequest)]
+    [InlineData(ErrorCodes.ServerError, ErrorCodes.ServerError)]
+    [InlineData(ErrorCodes.TemporarilyUnavailable, ErrorCodes.TemporarilyUnavailable)]
+    public async Task ResolverFailure_Propagated(string resolverError, string expectedError)
     {
-        // Resolver returns an OidcError -- the handler propagates it without rewrapping so
-        // resolver-specific failure descriptions reach the wire client (RFC 8693 section 2.2.2 maps
-        // every error to invalid_request at the wire, but the description preserves diagnostic
-        // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "subject expired"));
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OidcError(resolverError, "subject expired"));
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Equal("subject expired", error.ErrorDescription);
+        Assert.Equal(expectedError, error.Error);
+        Assert.Contains(TokenRequest.Parameters.SubjectToken, error.ErrorDescription);
     }
 
     [Fact]
@@ -404,12 +575,12 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, ctx);
         var clientInfo = ClientWithAllowlist(null);  // tri-state: no constraint
         var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(TestSubject, grant.AuthSession.Subject);
@@ -422,12 +593,12 @@ public class TokenExchangeGrantHandlerTests
         var requestScope = new[] { Scopes.OpenId };  // narrow to one
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: subjectScope, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = requestScope };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(requestScope, grant.Context.Scope);
@@ -444,7 +615,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, Scopes.Profile, "admin"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -453,7 +624,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken); // no explicit scope -> fallback
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.DoesNotContain("admin", grant.Context.Scope);
@@ -471,7 +642,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, "admin"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -480,7 +651,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal([Scopes.OpenId, "admin"], grant.Context.Scope);
@@ -496,12 +667,12 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: ["read"], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["read", "admin"] };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.DoesNotContain("admin", grant.Context.Scope);
@@ -517,12 +688,12 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: [], AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Empty(grant.Context.Scope);
@@ -538,12 +709,12 @@ public class TokenExchangeGrantHandlerTests
     {
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: null, AuthorizationDetails: null)
-            { OriginalClientId = ClientId };
+            { SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime, OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(["api:read"], grant.Context.Scope);
@@ -566,13 +737,14 @@ public class TokenExchangeGrantHandlerTests
         // by any client (confused deputy).
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = "client-A",
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -587,13 +759,14 @@ public class TokenExchangeGrantHandlerTests
         // otherwise clear the guard that a token naming another client fails.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = null,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -607,17 +780,18 @@ public class TokenExchangeGrantHandlerTests
         // whose issuer cannot be read at all. A broker trusted with the first is trusted with the second.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = null,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var brokerClient = new ClientInfo(ClientId)
         {
             TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
-            AllowCrossClientSubjectTokenExchange = true,
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -628,17 +802,18 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = "client-A",
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var brokerClient = new ClientInfo(ClientId)
         {
             TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
-            AllowCrossClientSubjectTokenExchange = true,  // explicit opt-in for broker scenarios
+            CrossClientSubjectTokenExchange = CrossClientSubjectTokenExchange.Any,  // explicit opt-in for broker scenarios
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -651,13 +826,14 @@ public class TokenExchangeGrantHandlerTests
         // self-exchange case), default policy accepts without opt-in.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -673,6 +849,7 @@ public class TokenExchangeGrantHandlerTests
         var ad = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], ad)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -683,7 +860,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientWithDifferentAllowlist, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientWithDifferentAllowlist, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -695,6 +872,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -706,7 +884,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://api1.example.com", "https://api2.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(request.Audiences, grant.Context.Audiences);
@@ -720,6 +898,7 @@ public class TokenExchangeGrantHandlerTests
         // client could mint a token for any target service it names in the issued token's aud.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -729,7 +908,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://victim.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -740,6 +919,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -752,7 +932,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://api1.example.com", "https://api2.example.com", "https://api3.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -769,6 +949,7 @@ public class TokenExchangeGrantHandlerTests
         // renaming the parameter from audience to resource.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -779,7 +960,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api2.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -791,6 +972,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -802,7 +984,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api2.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(request.Audiences, grant.Context.Audiences);
@@ -814,6 +996,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -823,7 +1006,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.Resources);
@@ -839,6 +1022,7 @@ public class TokenExchangeGrantHandlerTests
         // assumes it got what it asked for and breaks downstream.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -848,7 +1032,7 @@ public class TokenExchangeGrantHandlerTests
             RequestedTokenType = TokenExchangeTokenTypes.IdToken,
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -863,16 +1047,18 @@ public class TokenExchangeGrantHandlerTests
         // are not permitted to use access_token as an ACTOR either.
         var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId], null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         const string actorWire = "actor.jwt";
         var actor = new SubjectTokenContext("svc-worker", null, null, null)
         {
+            SessionId = TestSessionId, AuthenticationTime = TestAuthenticationTime,
             OriginalClientId = ClientId,
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
 
         // Client allowlist only id_token (subject); actor_token_type=access_token NOT in allowlist.
@@ -886,7 +1072,7 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),  // not in allowlist
         };
 
-        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -895,17 +1081,17 @@ public class TokenExchangeGrantHandlerTests
 
     // ──── helpers ────
 
-    private (TokenExchangeGrantHandler Handler, Mock<ISubjectTokenResolver> ResolverMock) CreateHandlerWith(
+    private static (TokenExchangeGrantHandler Handler, Mock<ISubjectTokenResolver> ResolverMock) CreateHandlerWith(
         string tokenType, SubjectTokenContext resolvedContext)
     {
         var (handler, resolverMock) = CreateHandlerWithResolverMock(tokenType);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<IClientInfoProvider>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(resolvedContext);
         return (handler, resolverMock);
     }
 
-    private (TokenExchangeGrantHandler Handler, Mock<ISubjectTokenResolver> ResolverMock)
+    private static (TokenExchangeGrantHandler Handler, Mock<ISubjectTokenResolver> ResolverMock)
         CreateHandlerWithResolverMock(string tokenType)
     {
         var resolverMock = new Mock<ISubjectTokenResolver>(MockBehavior.Strict);
@@ -914,14 +1100,14 @@ public class TokenExchangeGrantHandlerTests
         services.AddKeyedSingleton(tokenType, resolverMock.Object);
         var sp = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
+        var handler = new TokenExchangeGrantHandler(sp);
         return (handler, resolverMock);
     }
 
-    private TokenExchangeGrantHandler CreateHandlerWithoutResolvers()
+    private static TokenExchangeGrantHandler CreateHandlerWithoutResolvers()
     {
         var sp = new ServiceCollection().BuildServiceProvider();
-        return new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
+        return new TokenExchangeGrantHandler(sp);
     }
 
     private static ClientInfo ClientWithAllowlist(params string[]? allowlist) =>

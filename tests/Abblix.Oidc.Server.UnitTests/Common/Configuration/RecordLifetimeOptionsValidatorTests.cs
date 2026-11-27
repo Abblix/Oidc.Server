@@ -93,6 +93,24 @@ public class RecordLifetimeOptionsValidatorTests
     }
 
     /// <summary>
+    /// A client assertion lifetime of zero or less would refuse every client assertion, so it stops the host at
+    /// startup instead.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void A_client_assertion_lifetime_letting_nothing_through_is_refused(int minutes)
+    {
+        var refused = new RecordLifetimeOptionsValidator().Validate(
+            null,
+            new OidcOptions { ClientAssertionMaxLifetime = TimeSpan.FromMinutes(minutes) });
+
+        Assert.True(refused.Failed);
+        Assert.Contains(nameof(OidcOptions.ClientAssertionMaxLifetime), refused.FailureMessage);
+        Assert.False(new RecordLifetimeOptionsValidator().Validate(null, new OidcOptions()).Failed);
+    }
+
+    /// <summary>
     /// The shipped composition refuses it too, which a check nobody registers would not.
     /// </summary>
     [Fact]

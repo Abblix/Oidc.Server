@@ -35,8 +35,8 @@ using StreamConfiguration = Abblix.SharedSignals.Model.StreamConfiguration;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
-// The Redis stream store under tenants, against a real Redis server in a container
-public sealed partial class SharedSignalsTenantReleaseTests
+// The Redis stream store under tenants, against the real Redis server every test in this process shares
+public sealed partial class SharedSignalsTenantReleaseTests(RedisFixture redis)
 {
     /// <summary>
     /// The hash the transmitter's own streams are kept on, spelled out here rather than asked of the store, so a test
@@ -48,6 +48,13 @@ public sealed partial class SharedSignalsTenantReleaseTests
         => $"{TransmitterHash}:{Uri.EscapeDataString(TenantKey.PartitionOf(tenant))}";
 
     /// <summary>
+    /// The generation the tenants of this test are created in. Every test names its tenants alike and shares
+    /// one Redis server, so without a generation of its own a test would meet the streams an earlier test left on
+    /// the same tenant's hash.
+    /// </summary>
+    private readonly string _generation = Guid.NewGuid().ToString("N");
+
+    /// <summary>
     /// With two tenants holding streams, listing one tenant's streams and dispatching an event in it touch only the
     /// hash of that tenant's streams, as a recording connection shows, and releasing the tenant deletes that hash
     /// alone.
@@ -56,12 +63,11 @@ public sealed partial class SharedSignalsTenantReleaseTests
     public async Task TheRedisStoreUnderTenants_ReadsAndWritesOnlyTheTenantsHash()
     {
         var ct = TestContext.Current.CancellationToken;
-        using var redis = new RedisFixture();
         var calls = new ConcurrentQueue<(string Method, string Key)>();
         var store = new MemoryTenantStore();
         var time = new FakeTimeProvider();
-        await store.AddAsync(TenantAt("acme"), ct);
-        await store.AddAsync(TenantAt("globex"), ct);
+        await store.AddAsync(TenantAt("acme", Host, _generation), ct);
+        await store.AddAsync(TenantAt("globex", Host, _generation), ct);
         await using var app = await StartOverRedisAsync(
             store, time, RecordingRedisProxy<IConnectionMultiplexer>.Over(redis.Connection, calls));
 
@@ -107,12 +113,13 @@ public sealed partial class SharedSignalsTenantReleaseTests
     [Fact]
     public async Task AStoreWrappingTheRedisStoreWithoutItsPartitions_StopsTheServer()
     {
-        using var redis = new RedisFixture();
+        // Outside the assertion, so a container failing to start does not read as the wrong refusal
+        var connection = redis.Connection;
 
         await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            redis.Connection,
+            connection,
             streamStore: services => services
                 .AddSharedSignalsRedisStreamStore()
                 .AddSingleton<IStreamStore>(provider =>
@@ -127,10 +134,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
     public async Task AStoreWrappingTheRedisStoreWithItsPartitions_ReadsTheTenantsHash()
     {
         var ct = TestContext.Current.CancellationToken;
-        using var redis = new RedisFixture();
         var store = new MemoryTenantStore();
-        await store.AddAsync(TenantAt("acme"), ct);
-        await store.AddAsync(TenantAt("globex"), ct);
+        await store.AddAsync(TenantAt("acme", Host, _generation), ct);
+        await store.AddAsync(TenantAt("globex", Host, _generation), ct);
         var calls = new ConcurrentQueue<(string Method, string Key)>();
 
         await using var app = await StartOverRedisAsync(
@@ -167,12 +173,13 @@ public sealed partial class SharedSignalsTenantReleaseTests
     [Fact]
     public async Task TheRedisStoreRegisteredAfterTheTenantsTransmitter_IsRefusedForThatAlone()
     {
-        using var redis = new RedisFixture();
+        // Outside the assertion, so a container failing to start does not read as the wrong refusal
+        var connection = redis.Connection;
 
         var refused = await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            redis.Connection,
+            connection,
             streamStore: _ => { },
             afterSharedSignals: services => services.AddSharedSignalsRedisStreamStore()));
 

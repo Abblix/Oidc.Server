@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -25,12 +26,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 {
     private string? _sectorIdentifier;
     private ClientSecret[]? _clientSecrets;
+    private string? _softwareStatement;
     private string[]? _defaultScope;
     private Uri[]? _defaultAllowedResources;
     private string[]? _defaultTokenExchangeAudiences;
     private ClientAssertionAudiences _assertionAudiences = ClientAssertionAudiences.Issuer;
     private bool _offlineAccessWithUserAgentAccessToken;
+    private OfflineAccess _defaultOfflineAccess = OfflineAccess.ConsentRequired;
     private ClientInfo _hostSettings = new(clientId);
+
+    private ClientTrust? _trust;
 
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
@@ -70,6 +75,15 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Sets the offline access the client receives when its metadata states none.
+    /// </summary>
+    public ClientInfoBuilder WithDefaultOfflineAccess(OfflineAccess offlineAccess)
+    {
+        _defaultOfflineAccess = offlineAccess;
+        return this;
+    }
+
+    /// <summary>
     /// Sets whether the client receives offline access beside an access token carried through the user agent, which
     /// registration metadata carries no member for, so it is always the host's.
     /// </summary>
@@ -98,13 +112,49 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     }
 
     /// <summary>
+    /// Sets the software statement the client is registered with: the one a registration presents, and for an
+    /// update the one the stored client was registered with, since an update body cannot replace it.
+    /// </summary>
+    public ClientInfoBuilder WithSoftwareStatement(string? softwareStatement)
+    {
+        _softwareStatement = softwareStatement;
+        return this;
+    }
+
+    /// <summary>
     /// Takes what the host set on <paramref name="stored"/> and no registration metadata can carry, its security
     /// profile among them: RFC 7592 section 2.2 replaces the client metadata, so an update keeps these as they were.
-    /// A new registration takes the defaults of <see cref="ClientInfo"/>.
+    /// A new registration takes what <see cref="NewClientOptions"/> sets instead.
     /// </summary>
     public ClientInfoBuilder WithHostSettingsOf(ClientInfo stored)
     {
         _hostSettings = stored;
+        return this;
+    }
+
+    /// <summary>
+    /// Takes what the host sets for a client it did not define, beyond the registration metadata: a new registration
+    /// and a client resolved from its metadata document get these, while every other such member keeps the default of
+    /// <see cref="ClientInfo"/>.
+    /// </summary>
+    public ClientInfoBuilder WithHostSettingsOf(NewClientOptions newClientOptions)
+    {
+        _hostSettings = new ClientInfo(clientId)
+        {
+            AccessTokenExpiresIn = newClientOptions.AccessTokenExpiresIn,
+            SingleResourceAccessTokens = newClientOptions.SingleResourceAccessTokens,
+            RefreshToken = newClientOptions.RefreshToken,
+        };
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the trust a new client is created with, which the registration metadata cannot carry. An update leaves it
+    /// unset, so the client keeps the trust it was created with (<see cref="WithHostSettingsOf(ClientInfo)"/>).
+    /// </summary>
+    public ClientInfoBuilder WithTrust(ClientTrust trust)
+    {
+        _trust = trust;
         return this;
     }
 
@@ -118,6 +168,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             ClientSecrets = _clientSecrets,
             SectorIdentifier = _sectorIdentifier,
             SectorIdentifierUri = model.SectorIdentifierUri,
+            SoftwareStatement = _softwareStatement,
         };
 
         ApplyHostSettings(clientInfo);
@@ -142,6 +193,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private void ApplyHostSettings(ClientInfo clientInfo)
     {
         clientInfo.SecurityProfile = _hostSettings.SecurityProfile;
+        clientInfo.Trust = _trust ?? _hostSettings.Trust;
         clientInfo.PlainPkceAllowed = _hostSettings.PlainPkceAllowed;
         clientInfo.AuthorizationCodeExpiresIn = _hostSettings.AuthorizationCodeExpiresIn;
         clientInfo.AccessTokenExpiresIn = _hostSettings.AccessTokenExpiresIn;
@@ -152,7 +204,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         clientInfo.ForceUserClaimsInIdentityToken = _hostSettings.ForceUserClaimsInIdentityToken;
         clientInfo.ForceAuthorizationDetailsInIdentityToken = _hostSettings.ForceAuthorizationDetailsInIdentityToken;
         clientInfo.ResourceLocations = _hostSettings.ResourceLocations;
-        clientInfo.AllowCrossClientSubjectTokenExchange = _hostSettings.AllowCrossClientSubjectTokenExchange;
+        clientInfo.CrossClientSubjectTokenExchange = _hostSettings.CrossClientSubjectTokenExchange;
         clientInfo.AllowCrossClientIntrospection = _hostSettings.AllowCrossClientIntrospection;
         clientInfo.ParseLoginHintTokenAsJwt = _hostSettings.ParseLoginHintTokenAsJwt;
         clientInfo.DefaultScope = _hostSettings.DefaultScope;
@@ -180,7 +232,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         // would revert the client to "any scope" (null = unrestricted) and defeat per-client scope enforcement.
         // Metadata naming none takes the host's default set, RFC 7591 section 2.
         clientInfo.AllowedScopes = model.Scope ?? _defaultScope;
-        clientInfo.OfflineAccess = model.OfflineAccess;
+        clientInfo.OfflineAccess = model.StatedOfflineAccess ?? _defaultOfflineAccess;
         clientInfo.AllowOfflineAccessWithUserAgentAccessToken = _offlineAccessWithUserAgentAccessToken;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;

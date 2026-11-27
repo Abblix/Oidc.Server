@@ -87,6 +87,32 @@ public sealed class ReceiverAddressPolicy(
     }
 
     /// <summary>
+    /// What the delivery guard resolves a receiver's host through: its answer, judged by <see cref="AddressRuleFor"/>,
+    /// is the one a delivery's connection is made to.
+    /// </summary>
+    internal ResolveHostDelegate ResolveHost => _resolveHost;
+
+    /// <summary>
+    /// The forward proxy the operator named for deliveries, or null for none.
+    /// </summary>
+    internal Uri? OutboundProxy => options.OutboundProxy;
+
+    /// <summary>
+    /// Which addresses the connection a delivery to <paramref name="endpoint"/> makes may not be made to: none for a
+    /// receiver the operator named, every private or reserved one otherwise.
+    /// </summary>
+    /// <param name="endpoint">The endpoint a delivery is about to reach.</param>
+    internal OutboundAddressRule AddressRuleFor(Uri endpoint)
+        => IsPermittedOutright(endpoint) ? OutboundAddressRule.Unrestricted : OutboundAddressRule.NoPrivateOrReserved;
+
+    /// <summary>
+    /// Whether the operator named this endpoint's origin, which outranks every other rule.
+    /// </summary>
+    private bool IsPermittedOutright(Uri endpoint)
+        => options.AllowedReceiverAddresses is { Count: > 0 } allowed
+           && allowed.Any(permitted => IsSameOrigin(endpoint, permitted));
+
+    /// <summary>
     /// Judges what the address itself settles, and says whether it settled anything.
     /// </summary>
     /// <returns>
@@ -103,8 +129,7 @@ public sealed class ReceiverAddressPolicy(
     {
         refusal = null;
 
-        if (options.AllowedReceiverAddresses is { Count: > 0 } allowed
-            && allowed.Any(permitted => IsSameOrigin(endpoint, permitted)))
+        if (IsPermittedOutright(endpoint))
         {
             // An operator naming a destination outranks everything below, and it has to: a receiver deployed
             // inside the same network is reached at a private address by definition.
@@ -154,7 +179,8 @@ public sealed class ReceiverAddressPolicy(
 
         // Every answer has to be acceptable, not just the first: a name answering with one public address and one
         // private address would otherwise be reachable by whichever the connection happened to pick.
-        var refused = Array.Find(addresses, PrivateNetworks.IsPrivateOrReservedAddress);
+        var rule = AddressRuleFor(endpoint);
+        var refused = Array.Find(addresses, address => rule.Refuses(address));
         return refused is null
             ? null
             : $"the host '{endpoint.Host}' resolves to '{refused}', which is private or reserved";

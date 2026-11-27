@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Security;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 
@@ -14,13 +15,15 @@ namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// Accepts the conformance suite's self-signed certificate on the server's outgoing calls to the suite: a client's
-/// key set, request object, sector identifier and back-channel logout endpoint all live there.
+/// key set, request object, sector identifier, back-channel logout endpoint and CIBA notification endpoint all live
+/// there.
 /// </summary>
 /// <remarks>
 /// The suite's nginx image generates a certificate for <c>localhost</c> at build time, so it fails both the chain
 /// and the name check. Only the suite's own host is excused; every other destination is validated as usual, and the
-/// address checks of the library's guarded clients stay in place, because the callback is set on the transport
-/// underneath them rather than by replacing them.
+/// address checks of the library's guarded clients stay in place, because the callback is set through the guard's own
+/// TLS options rather than by replacing the guard. A primary handler this walk does not know stops the client from
+/// being built, so a transport the trust cannot reach fails by name instead of as a timeout in the suite.
 /// </remarks>
 public static class SuiteCertificateTrust
 {
@@ -32,6 +35,10 @@ public static class SuiteCertificateTrust
     {
         switch (handler)
         {
+            case AddressValidatingHttpMessageHandler guarded:
+                guarded.SslOptions.RemoteCertificateValidationCallback = SuiteOnly(suiteHost);
+                break;
+
             case DelegatingHandler delegating:
                 Trust(delegating.InnerHandler, suiteHost);
                 break;
@@ -42,13 +49,20 @@ public static class SuiteCertificateTrust
                 break;
 
             case SocketsHttpHandler socketsHandler:
-                socketsHandler.SslOptions.RemoteCertificateValidationCallback = (sender, _, _, errors)
-                    => errors == SslPolicyErrors.None ||
-                       sender is SslStream stream &&
-                       string.Equals(stream.TargetHostName, suiteHost, StringComparison.OrdinalIgnoreCase);
+                socketsHandler.SslOptions.RemoteCertificateValidationCallback = SuiteOnly(suiteHost);
                 break;
+
+            default:
+                throw new InvalidOperationException(
+                    $"The suite's certificate cannot be trusted on a {handler?.GetType().FullName ?? "missing"} handler");
         }
     }
+
+    private static RemoteCertificateValidationCallback SuiteOnly(string suiteHost)
+        => (sender, _, _, errors)
+            => errors == SslPolicyErrors.None ||
+               sender is SslStream stream &&
+               string.Equals(stream.TargetHostName, suiteHost, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSuite(Uri? uri, string suiteHost)
         => uri != null && string.Equals(uri.Host, suiteHost, StringComparison.OrdinalIgnoreCase);

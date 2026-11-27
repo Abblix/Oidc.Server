@@ -650,7 +650,7 @@ public class LogoutTokenServiceTests
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
                     new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
-                    TimeProvider.System, TestEncryptionAlgorithms.Every),
+                    TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()),
                 serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             _tokenIdGenerator.Object);
 

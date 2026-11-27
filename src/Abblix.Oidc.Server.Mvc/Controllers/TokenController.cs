@@ -95,7 +95,7 @@ public class TokenController : ControllerBase
     /// <remarks>
     /// Adheres to the OAuth 2.0 Token Revocation standard, allowing clients to manage the lifecycle of their tokens
     /// securely.
-    /// <see href="https://www.rfc-editor.org/rfc/rfc7009#section-2">OAuth 2.0 Token Revocation Documentation</see>
+    /// <see href="https://datatracker.ietf.org/doc/html/rfc7009#section-2">OAuth 2.0 Token Revocation Documentation</see>
     /// </remarks>
     [HttpPost]
     [ActionName(nameof(RevocationAsync))]
@@ -130,11 +130,14 @@ public class TokenController : ControllerBase
     /// <remarks>
     /// Implements the OAuth 2.0 Token Introspection specification, allowing clients to verify the status of tokens
     /// securely.
-    /// <see href="https://www.rfc-editor.org/rfc/rfc7662#section-2">OAuth 2.0 Token Introspection Documentation</see>
+    /// <see href="https://datatracker.ietf.org/doc/html/rfc7662#section-2">OAuth 2.0 Token Introspection Documentation</see>
     /// </remarks>
     [HttpPost]
     [ActionName(nameof(IntrospectionAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2 names introspection among the endpoints that "MUST also send
+    // the CORS header fields to allow access"
+    [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter<ActionResult> formatter,

@@ -31,7 +31,7 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
         from handler in grantHandlers
         from grantType in handler.GrantTypesSupported
         select new KeyValuePair<string, IAuthorizationGrantHandler>(grantType, handler),
-        StringComparer.OrdinalIgnoreCase);
+        StringComparer.Ordinal);
 
     /// <summary>
     /// Provides a list of all the supported grant types across the registered grant handlers.
@@ -55,8 +55,10 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
     /// <returns>A task that resolves to the result of the authorization process.
     /// If successful, it contains the granted authorization;
     /// otherwise, it contains an error explaining why the authorization failed.</returns>
+    /// <param name="clients">The clients of the request being served, where a client a presented token names
+    /// is looked up.</param>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, IClientInfoProvider clients, CancellationToken cancellationToken)
     {
         // Check if there is a handler for the requested grant type.
         // If no handler exists, return an error indicating that the grant type is unsupported.
@@ -68,6 +70,6 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
         }
 
         // Delegate the authorization request to the handler that supports the specified grant type.
-        return await grantHandler.AuthorizeAsync(tenant, request, clientInfo, cancellationToken);
+        return await grantHandler.AuthorizeAsync(tenant, request, clientInfo, clients, cancellationToken);
     }
 }

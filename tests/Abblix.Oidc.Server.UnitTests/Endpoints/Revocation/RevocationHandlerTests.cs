@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -51,7 +52,7 @@ public class RevocationHandlerTests
     private static ValidRevocationRequest CreateValidRevocationRequest(RevocationRequest request)
     {
         var token = new Jwt.JsonWebToken();
-        return new ValidRevocationRequest(request, token);
+        return new ValidRevocationRequest(request, token, new ClientInfo(TestConstants.DefaultClientId));
     }
 
     private static TokenRevoked CreateTokenRevoked() => new(

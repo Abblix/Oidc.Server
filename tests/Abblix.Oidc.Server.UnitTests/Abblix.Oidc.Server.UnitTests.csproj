@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The suite tests the experimental Client ID Metadata Documents (ABX9001). -->
+    <NoWarn>$(NoWarn);ABX9001</NoWarn>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -50,9 +52,11 @@
         <!-- One statement of what a host is promised, compiled into every package's suite. -->
         <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
         <Compile Include="../Shared/EntityStorageMock.cs" Link="Shared/EntityStorageMock.cs" />
+        <Compile Include="../Shared/TestCertificateAuthority.cs" Link="Shared/TestCertificateAuthority.cs" />
         <Compile Include="..\Shared\FlakyOriginHandler.cs">
           <Link>Shared\FlakyOriginHandler.cs</Link>
         </Compile>
+        <Compile Include="../Shared/MetadataDocumentOrigin.cs" Link="Shared/MetadataDocumentOrigin.cs" />
     </ItemGroup>
   <!-- Every other project of the solution, built before this one and referenced for nothing else: the
        architecture tests read the assemblies of the whole solution, and a project this one does not
@@ -118,6 +122,10 @@
       <_Parameter1>ProjectAssetsFile</_Parameter1>
       <_Parameter2>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), $(ProjectAssetsFile)))</_Parameter2>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Shared/LoopbackOrigin.cs" Link="Shared/LoopbackOrigin.cs" />
   </ItemGroup>
 
 </Project>

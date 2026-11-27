@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -55,6 +56,14 @@ public class SupportedResponseTypeValidator(
         {
             return ErrorFactory.InvalidClientMetadata(
                 $"The following response types are not supported by this server: {string.Join(", ", unsupported)}");
+        }
+
+        if (context.Request.ApplicationType == ApplicationTypes.Native &&
+            context.Request.ResponseTypes.FirstOrDefault(combination => !combination.ServesNativeApps()) is { } refused)
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"A native app uses a response type carrying a code, which PKCE protects, and gets its access token " +
+                $"at the token endpoint, not '{string.Join(' ', refused)}' (RFC 8252 section 8.2, RFC 9700 section 2.1.2)");
         }
 
         return WhyResponseModesRefused(context.Request.ResponseModes);

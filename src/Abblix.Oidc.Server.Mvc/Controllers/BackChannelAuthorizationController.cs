@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.AspNetCore.Formatters;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -60,6 +61,9 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     [HttpPost]
     [ActionName(nameof(PushAuthorizeAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
+    // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2: a browser-based application posts its pushed request to this
+    // endpoint itself, which the section has "send the CORS header fields to allow access"
+    [EnableCors(OidcConstants.CorsPolicyName)]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
@@ -122,7 +126,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// Handles the device authorization endpoint for getting user authorization on limited-input devices.
     /// </summary>
     /// <remarks>
-    /// <see href="https://www.rfc-editor.org/rfc/rfc8628">
+    /// <see href="https://datatracker.ietf.org/doc/html/rfc8628">
     /// OAuth 2.0 Device Authorization Grant Documentation
     /// </see>
     /// </remarks>

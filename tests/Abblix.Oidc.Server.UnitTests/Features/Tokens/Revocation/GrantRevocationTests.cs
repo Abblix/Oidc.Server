@@ -93,6 +93,7 @@ public class GrantRevocationTests
     private readonly RefreshTokenService _service;
     private readonly RevocationRequestProcessor _processor;
     private readonly TokenStatusCheck _check;
+    private readonly Mock<IClientInfoProvider> _clients = new();
     private readonly Dictionary<string, JsonWebToken> _issued = new(StringComparer.Ordinal);
     private int _next;
 
@@ -110,23 +111,27 @@ public class GrantRevocationTests
                 return jwt.Payload.JwtId!;
             });
 
-        var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(provider => provider.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(() => _knownClient ? _client : null);
-        var grants = new GrantRevocation(_registry, clients.Object);
+        _clients.Setup(provider => provider.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(() => _client);
+        var grants = new GrantRevocation(_registry);
+        _grants = grants;
 
         var options = Options.Create(new OidcOptions());
         _service = new RefreshTokenService(
             _clock, ids.Object, formatter.Object, _registry, grants, new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options, SingleIssuer.LicensedCatalog);
-        _processor = new RevocationRequestProcessor(_registry, grants, _clock);
+        _processor = new RevocationRequestProcessor(
+            _registry,
+            grants,
+            new RegistrationAccessTokenRevocation(Mock.Of<IClientInfoManager>(MockBehavior.Strict), Mock.Of<ITokenIdGenerator>(), new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>())),
+            _clock);
 
         var cutoff = new Mock<IRevocationCutoffChecker>();
-        cutoff.Setup(checker => checker.CheckAsync(TestTenant.Matched, It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
-        _check = new TokenStatusCheck(_registry, cutoff.Object, grants);
+        cutoff.Setup(checker => checker.CheckAsync(TestTenant.Matched, It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
+        _check = new TokenStatusCheck(_registry, cutoff.Object, grants, new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
     }
 
     private ClientInfo _client = ClientWith(RefreshTokenReusePolicy.Rotate);
-    private bool _knownClient = true;
+    private readonly GrantRevocation _grants;
 
     private static ClientInfo ClientWith(RefreshTokenReusePolicy reusePolicy) => new(ClientId)
     {
@@ -155,10 +160,10 @@ public class GrantRevocationTests
 
     private Task RevokeAsync(JsonWebToken token) => _processor.ProcessAsync(
         SingleIssuer.Tenant,
-        new ValidRevocationRequest(new RevocationRequest { Token = token.Payload.JwtId! }, token));
+        new ValidRevocationRequest(new RevocationRequest { Token = token.Payload.JwtId! }, token, _client));
 
     private async Task<bool> AcceptedAsync(JsonWebToken token)
-        => (await _check.CheckAsync(SingleIssuer.Tenant, _issued[token.Payload.JwtId!], ValidationOptions.Default)).TryGetSuccess(out _);
+        => (await _check.CheckAsync(SingleIssuer.Tenant, _clients.Object, _issued[token.Payload.JwtId!], ValidationOptions.Default)).TryGetSuccess(out _);
 
     private JsonWebToken AccessTokenOfTheGrant()
     {
@@ -248,6 +253,27 @@ public class GrantRevocationTests
     }
 
     /// <summary>
+    /// A request losing the race to spend the refresh token it presented revokes the grant as a replay does, until the
+    /// last moment a token of the grant could be valid, which the client it renews for bounds.
+    /// </summary>
+    [Fact]
+    public async Task AGrantRevokedByALostSpendRace_StaysRevoked_PastThePresentedTokensExpiry()
+    {
+        var first = await RefreshAsync(null);
+        _clock.Advance(TimeSpan.FromMinutes(30));
+        var active = await RefreshAsync(first);
+
+        // A second presentation of the token, spent meanwhile by the first, loses the race to spend it
+        Assert.False(await _service.TrySpendAsync(SingleIssuer.Tenant, first, _client));
+
+        _clock.Advance(TimeSpan.FromMinutes(35));
+        Assert.True(_clock.GetUtcNow() > first.Payload.ExpiresAt);
+        Assert.True(_clock.GetUtcNow() < active.Payload.ExpiresAt);
+
+        Assert.False(await AcceptedAsync(active));
+    }
+
+    /// <summary>
     /// An access token issued from the last refresh token of a grant, close to the grant's absolute expiry, outlives
     /// every refresh token of the grant, and is still refused once their last moment has passed. The client keeps
     /// its grant alive by refreshing before each sliding expiry, as a real one does.
@@ -290,9 +316,12 @@ public class GrantRevocationTests
         if (!withIssueTime)
             refreshToken.Payload.IssuedAt = null;
 
-        _knownClient = knownClient;
-
-        await RevokeAsync(refreshToken);
+        // The client is handed by the caller: the revocation endpoint's caller is the token's own, while a replay
+        // found in the token's records looks it up and may find none
+        if (knownClient)
+            await RevokeAsync(refreshToken);
+        else
+            await _grants.RevokeAsync(SingleIssuer.Tenant, refreshToken.Payload, client: null);
 
         Assert.Equal(refreshToken.Payload.ExpiresAt, _registry.ExpiryOf(GrantId));
     }

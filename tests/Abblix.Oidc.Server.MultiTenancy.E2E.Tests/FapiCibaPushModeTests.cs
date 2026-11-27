@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -68,6 +70,10 @@ public sealed class FapiCibaPushModeTests : IAsyncLifetime
     {
         Id = "acme",
         Issuer = new Uri(Host + Acme),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
@@ -76,6 +82,10 @@ public sealed class FapiCibaPushModeTests : IAsyncLifetime
     {
         Id = "globex",
         Issuer = new Uri(Host + Globex),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
 
@@ -90,7 +100,7 @@ public sealed class FapiCibaPushModeTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
-        builder.Services.AddConsentGrantedForEveryClient();
+        EveryConsentGiven.Register(builder.Services);
         builder.Services.AddDynamicClientRegistration();
         builder.Services.AddBackChannelAuthentication();
         // FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to PS256, ES256 or EdDSA too
@@ -99,6 +109,8 @@ public sealed class FapiCibaPushModeTests : IAsyncLifetime
             options.EnabledEndpoints =
                 OidcEndpoints.Base | OidcEndpoints.BackChannelAuthentication | OidcEndpoints.RegisterClient;
             options.RequireInitialAccessToken = false;
+            // A client registering without a token is given only the sign-in grants unless the host names others
+            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = [GrantTypes.Ciba] };
             options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;

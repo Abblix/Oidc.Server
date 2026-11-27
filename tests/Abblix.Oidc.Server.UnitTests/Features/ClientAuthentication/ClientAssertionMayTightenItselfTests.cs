@@ -38,10 +38,11 @@ namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 /// deployment's. A client asking to be held to a tighter profile could not be heard on this path.
 /// </summary>
 /// <remarks>
-/// The subject is <see cref="ClientSecretJwtAuthenticator"/> rather than its sibling, because this is
-/// where the base class's second pass is the ONLY one: it validates through
-/// <see cref="IJsonWebTokenValidator"/> directly, while <see cref="PrivateKeyJwtAuthenticator"/> goes
-/// through the client JWT validator, which now performs the same check itself.
+/// The subject is <see cref="ClientSecretJwtAuthenticator"/> over a stub of <see cref="IJsonWebTokenValidator"/>
+/// that verifies no signature, so the windows alone decide. The client JWT validator it goes through also holds the
+/// client to its own profile's algorithms, and no FAPI profile admits one a client secret signs with, so the
+/// assertion of a client naming such a profile is written PS256 here. Under a tenant naming a FAPI profile the subject
+/// is <see cref="PrivateKeyJwtAuthenticator"/> with that validator a stub.
 ///
 /// Every assertion here carries the identifier and the expiry the specification demands and names the
 /// issuer as its audience, so the only thing separating acceptance from refusal is which profile the
@@ -52,6 +53,9 @@ public class ClientAssertionMayTightenItselfTests
     private const string ClientId = "tightening_client";
     private static readonly string Issuer = TestConstants.DefaultIssuer.ToString();
     private const string JwtAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
+
+    // A header naming RS256, so the assertion is one private_key_jwt reads
+    private const string PrivateKeyAssertion = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
 
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -75,7 +79,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            issuedAt: Now + BeyondEveryProfileButNone);
+            issuedAt: Now + BeyondEveryProfileButNone,
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
 
@@ -104,13 +109,13 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// The floor is the tenant's own: under a tenant naming FAPI 2.0 a client naming nothing is held to the seconds
-    /// the profile grants, though the validator here is a stub that applies no window at all.
+    /// the profile grants, though the validator here is a stub that applies no window at all. Driven through
+    /// private_key_jwt, since the profile admits no algorithm a client secret signs with.
     /// </summary>
     [Fact]
     public async Task UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt()
     {
-        var result = await Authenticate(
-            clientProfile: null,
+        var result = await AuthenticateWithPrivateKey(
             issuedAt: Now + BeyondEveryProfileButNone,
             tenantProfile: ClientSecurityProfile.Fapi2);
 
@@ -125,8 +130,7 @@ public class ClientAssertionMayTightenItselfTests
     [Fact]
     public async Task UnderATenantNamingFapi2_AClientNamingNothingKeepsItsWindow()
     {
-        var result = await Authenticate(
-            clientProfile: null,
+        var result = await AuthenticateWithPrivateKey(
             issuedAt: Now.AddSeconds(5),
             tenantProfile: ClientSecurityProfile.Fapi2);
 
@@ -142,7 +146,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            expiresAt: Now.AddSeconds(-1));
+            expiresAt: Now.AddSeconds(-1),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
     }
@@ -171,7 +176,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            notBefore: Now + BeyondEveryProfileButNone);
+            notBefore: Now + BeyondEveryProfileButNone,
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.False((result).TryGetSuccess(out _));
     }
@@ -215,7 +221,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            issuedAt: Now.AddSeconds(5));
+            issuedAt: Now.AddSeconds(5),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.True((result).TryGetSuccess(out _));
     }
@@ -230,7 +237,8 @@ public class ClientAssertionMayTightenItselfTests
     {
         var result = await Authenticate(
             ClientSecurityProfile.Fapi2,
-            notBefore: Now.AddSeconds(5));
+            notBefore: Now.AddSeconds(5),
+            algorithm: SigningAlgorithms.PS256);
 
         Assert.True((result).TryGetSuccess(out _));
     }
@@ -240,7 +248,7 @@ public class ClientAssertionMayTightenItselfTests
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
         DateTimeOffset? notBefore = null,
-        ClientSecurityProfile tenantProfile = ClientSecurityProfile.None)
+        string algorithm = SigningAlgorithms.HS256)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -249,10 +257,14 @@ public class ClientAssertionMayTightenItselfTests
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
-        var token = CreateAssertion(issuedAt, expiresAt, notBefore);
+        var token = CreateAssertion(
+            issuedAt,
+            expiresAt,
+            notBefore,
+            algorithm);
 
         // The real validator drives these callbacks, signing keys first and the issuer after, and the
         // assertion path depends on what they leave behind: resolving the keys is what finds the client
@@ -277,30 +289,78 @@ public class ClientAssertionMayTightenItselfTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            new ProfiledJwtValidator(tokenValidator.Object),
-            clientInfoProvider.Object,
             new FakeTimeProvider(Now),
             replayCache.Object,
-            new ServiceCollection().BuildServiceProvider());
+            ClientSecretJwtServices.With(new ProfiledJwtValidator(tokenValidator.Object), new FakeTimeProvider(Now)),
+            DefaultOidcOptions.Monitor());
+
+        var tenant = new TestIssuer { Issuer = new Uri(Issuer) }.ToTenant();
+        return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        }, clientInfoProvider.Object);
+    }
+
+    /// <summary>
+    /// A private_key_jwt assertion of a client naming no profile, under a tenant naming
+    /// <paramref name="tenantProfile"/>, with the client JWT validator a stub applying no window, so only the base
+    /// class's pass judges the window.
+    /// </summary>
+    private async Task<Result<ClientInfo, OidcError>> AuthenticateWithPrivateKey(
+        DateTimeOffset issuedAt,
+        ClientSecurityProfile tenantProfile)
+    {
+        var clientInfo = new ClientInfo(ClientId) { TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt };
+        var token = CreateAssertion(issuedAt, expiresAt: null, notBefore: null, SigningAlgorithms.PS256);
+
+        var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
+        clientJwtValidator
+            .Setup(v => v.ValidateAsync(
+                It.IsAny<TenantDefinition>(),
+                null,
+                It.IsAny<IClientInfoProvider>(),
+                PrivateKeyAssertion,
+                It.IsAny<TokenTypePolicy>(),
+                It.IsAny<System.Collections.Generic.IReadOnlySet<string>?>(),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var services = new ServiceCollection()
+            .AddSingleton(clientJwtValidator.Object)
+            .AddSingleton(Mock.Of<IJsonWebTokenValidator>(
+                validator => validator.SigningAlgorithmsSupported == new[] { SigningAlgorithms.PS256 }))
+            .BuildServiceProvider();
+        var authenticator = new PrivateKeyJwtAuthenticator(
+            Mock.Of<ILogger<PrivateKeyJwtAuthenticator>>(),
+            replayCache.Object,
+            services,
+            new FakeTimeProvider(Now),
+            DefaultOidcOptions.Monitor());
 
         var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
-            ClientAssertion = JwtAssertion,
-        });
+            ClientAssertion = PrivateKeyAssertion,
+        }, clientInfoProvider.Object);
     }
 
     private static JsonWebToken CreateAssertion(
         DateTimeOffset? issuedAt,
         DateTimeOffset? expiresAt,
-        DateTimeOffset? notBefore)
+        DateTimeOffset? notBefore,
+        string algorithm = SigningAlgorithms.HS256)
     {
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject
             {
-                [JwtClaimTypes.Algorithm] = "HS256",
+                [JwtClaimTypes.Algorithm] = algorithm,
                 [JwtClaimTypes.Type] = "JWT",
             }),
             Payload = new JsonWebTokenPayload(new JsonObject

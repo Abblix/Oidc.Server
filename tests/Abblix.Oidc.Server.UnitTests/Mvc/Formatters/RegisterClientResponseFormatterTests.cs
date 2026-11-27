@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 using Moq;
 
@@ -46,7 +47,16 @@ public class RegisterClientResponseFormatterTests
 
     private readonly RegisterClientResponseFormatter _formatter = new(
         new RegistrationClientUriBuilder(
-            new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
+            // The request's tenant, whose issuer authority the configuration endpoint is published on
+            new HttpContextAccessor
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    RequestServices = new ServiceCollection()
+                        .AddSingleton(SingleIssuer.Accessor)
+                        .BuildServiceProvider(),
+                },
+            },
             new FixedLinkGenerator(ConfigurationEndpoint)),
         SingleIssuer.Accessor);
 

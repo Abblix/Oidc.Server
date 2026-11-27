@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// <summary>
 /// Fails at startup on a duration that would keep nothing: a record gone before anything could read it, or a write
 /// the storage refuses outright. That includes a time to keep the record of a session's clients too short for the
-/// record to be renewed.
+/// record to be renewed, and a client assertion lifetime that would let no assertion through.
 /// </summary>
 /// <remarks>
 /// At zero or below a record would be gone before anything could read it. For the session's clients that means a
@@ -52,6 +52,14 @@ public sealed class RecordLifetimeOptionsValidator : IValidateOptions<OidcOption
                 $"{nameof(options.LogoutConfirmationLifetime)} is {options.LogoutConfirmationLifetime}, so the " +
                 "value asking the end user to confirm a logout could not be stored at all and every logout " +
                 "question would fail. Set it to as long as somebody may take to answer.");
+        }
+
+        if (options.ClientAssertionMaxLifetime <= TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(options.ClientAssertionMaxLifetime)} is {options.ClientAssertionMaxLifetime}, so every " +
+                "private_key_jwt and client_secret_jwt client assertion would be refused. Set it to the longest a " +
+                "client assertion may be valid for, such as a few minutes.");
         }
 
         return ValidateOptionsResult.Success;

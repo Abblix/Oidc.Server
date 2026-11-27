@@ -52,6 +52,7 @@ public class IdTokenHintValidatorTests
             IdTokenHint = hint,
         })
     {
+        Clients = Mock.Of<IClientInfoProvider>(),
         ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         ResponseMode = ResponseModes.Query,
     };

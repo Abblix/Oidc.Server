@@ -22,7 +22,13 @@ namespace Abblix.Oidc.Server.UnitTests;
 internal static class NothingRecorded
 {
     /// <summary>
-    /// A check that refuses no token.
+    /// The identifier of the registration access token every registration of this server holds.
+    /// </summary>
+    public const string RegistrationAccessTokenId = "registration-access-token";
+
+    /// <summary>
+    /// A check that refuses no token: every client has a registration managed by the registration access token
+    /// <see cref="RegistrationAccessTokenId"/> identifies.
     /// </summary>
     public static TokenStatusCheck StatusCheck
     {
@@ -35,13 +41,20 @@ internal static class NothingRecorded
 
             var cutoffs = new Mock<IRevocationCutoffChecker>();
             cutoffs
-                .Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebTokenPayload>()))
+                .Setup(c => c.CheckAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebTokenPayload>()))
                 .ReturnsAsync((JwtValidationError?)null);
+
+            var registrations = new Mock<IClientInfoManager>();
+            registrations
+                .Setup(m => m.TryFindRegisteredClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+                .ReturnsAsync((TenantDefinition _, string clientId) =>
+                    new RegisteredClient(new ClientInfo(clientId), RegistrationAccessTokenId));
 
             return new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>()));
+                new GrantRevocation(registry.Object),
+                new RegistrationAccessTokenBinding(registrations.Object));
         }
     }
 }

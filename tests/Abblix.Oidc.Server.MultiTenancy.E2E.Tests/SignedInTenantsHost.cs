@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Security.Cryptography;
 using System.Web;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
@@ -101,6 +102,12 @@ internal sealed class SignedInTenantsHost : IAsyncDisposable
         Clients = [client],
         LoginUri = new Uri("/login", UriKind.Relative),
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+
+        // A test serving dynamic client registration needs the key a registered client's secret is kept encrypted with
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
     };
 
     /// <summary>

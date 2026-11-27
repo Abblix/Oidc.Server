@@ -34,12 +34,12 @@ public class RequestObjectFetchAdapterTests
     private readonly Mock<IRequestObjectFetcher> _requestObjectFetcher = new(MockBehavior.Strict);
     private readonly ClientInfo _namedClient = new(ClientId);
     private readonly RequestObjectFetchAdapter _adapter;
+    private readonly Mock<IClientInfoProvider> _clients = new();
 
     public RequestObjectFetchAdapterTests()
     {
-        var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
-        _adapter = new RequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
+        _clients.Setup(p => p.FindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
+        _adapter = new RequestObjectFetchAdapter(_requestObjectFetcher.Object);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest());
 
-        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
@@ -69,7 +69,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest());
 
-        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
@@ -107,9 +107,7 @@ public class RequestObjectFetchAdapterTests
     [InlineData(SigningAlgorithms.None, true, false)]
     public async Task FetchAsync_APushedObject_IsRefusedNamingNoClient(string algorithm, bool namesClient, bool refused)
     {
-        var clients = new Mock<IClientInfoProvider>();
-        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
-        var adapter = new PushedRequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
+        var adapter = new PushedRequestObjectFetchAdapter(_requestObjectFetcher.Object);
 
         var whyRefused = await RuleHandedToTheFetcherAsync(adapter);
 
@@ -130,7 +128,7 @@ public class RequestObjectFetchAdapterTests
                 string[] _, Func<JsonWebToken, string?> whyRefused) => captured = whyRefused)
             .ReturnsAsync(CreateRequest());
 
-        await adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        await adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         return captured ?? throw new InvalidOperationException("The fetcher was handed no rule");
     }
@@ -170,7 +168,7 @@ public class RequestObjectFetchAdapterTests
     [Fact]
     public async Task FetchAsync_ARequestObjectWithoutAnOuterClientId_IsRefusedUnread()
     {
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(clientId: null));
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(clientId: null), _clients.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -187,7 +185,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest();
         SetupFetcher(CreateRequest());
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer, _clients.Object);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -202,7 +200,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(clientId: ClientId);
         SetupFetcher(CreateRequest(clientId: "another-client"));
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer, _clients.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -218,7 +216,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(responseType: [ResponseTypes.Code]);
         SetupFetcher(CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken]));
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer, _clients.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -232,7 +230,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest() with { Prompt = [Prompts.Login, "unknown"] });
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -248,7 +246,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest() with { Request = null });
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         Assert.True(result.TryGetSuccess(out var fetched));
         Assert.Equal(RequestJwt, fetched.Request);
@@ -262,7 +260,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest() with { Request = "other.payload.signature" });
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clients.Object);
 
         Assert.True(result.TryGetSuccess(out var fetched));
         Assert.Equal(RequestJwt, fetched.Request);
@@ -281,7 +279,7 @@ public class RequestObjectFetchAdapterTests
             ProofKeyThumbprint = "stored-thumbprint",
         };
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, stored);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, stored, _clients.Object);
 
         Assert.True(result.TryGetSuccess(out var fetched));
         Assert.Same(stored, fetched);
@@ -298,7 +296,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(responseType: [ResponseTypes.Code]);
         SetupFetcher(CreateRequest(responseType: [ResponseTypes.IdToken]) with { Prompt = ["unknown"] });
 
-        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer, _clients.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);

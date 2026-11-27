@@ -18,7 +18,9 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// providing a URL-safe, human-readable identifier. The length and format of the generated client IDs can be configured
 /// through OIDC options.
 /// </summary>
-public class ClientIdGenerator(IOptions<OidcOptions> options) : IClientIdGenerator
+/// <param name="options">The server's settings, whose <see cref="NewClientOptions.ClientId"/> gives the length of an
+/// identifier, read as it is generated.</param>
+public class ClientIdGenerator(IOptionsMonitor<OidcOptions> options) : IClientIdGenerator
 {
     /// <summary>
     /// Generates a new client ID for an OIDC client. The method produces a random, URL-safe, and human-readable
@@ -29,7 +31,7 @@ public class ClientIdGenerator(IOptions<OidcOptions> options) : IClientIdGenerat
     /// OIDC options. The client ID is encoded in Base32 format to ensure URL safety and readability.</returns>
     public string GenerateClientId()
     {
-        var desiredLength = options.Value.NewClientOptions.ClientId.Length;
+        var desiredLength = options.CurrentValue.NewClientOptions.ClientId.Length;
         var randomBytes = CryptoRandom.GetRandomBytes((desiredLength + 4) * 5 / 8);
         return Base32.EncodeHex(randomBytes, padding: false).ToLowerInvariant();
     }

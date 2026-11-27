@@ -72,8 +72,8 @@ public static class TransmitterServiceCollectionExtensions
 
         // A receiver names the address its stream is delivered to, so that address is input from outside. The
         // policy judges it, and the validating handler puts that judgment on the connection itself - refusing
-        // redirects and re-checking the address before every send - so a redirect or a DNS rebinding cannot carry
-        // a delivery past the check.
+        // redirects and connecting only to an address it judged - so a redirect or a DNS rebinding cannot carry a
+        // delivery past the check.
         // Built here rather than by the container's own constructor selection, which would fill the policy's
         // optional resolution parameter from any registration of that delegate - and a host that registered one
         // for something else would silently decide what every delivery address resolves to. A host that means to
@@ -81,6 +81,8 @@ public static class TransmitterServiceCollectionExtensions
         services.TryAddSingleton(serviceProvider => new ReceiverAddressPolicy(
             serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>()));
         services.TryAddTransient<ReceiverAddressValidatingHandler>();
+
+        OutboundProxyStartupCheck.Register(services);
         services
             .AddHttpClient<PushDeliverySender>()
             .ConfigurePrimaryHttpMessageHandler<ReceiverAddressValidatingHandler>();

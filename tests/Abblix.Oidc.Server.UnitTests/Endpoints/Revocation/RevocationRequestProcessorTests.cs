@@ -9,10 +9,12 @@
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
@@ -31,15 +33,17 @@ public class RevocationRequestProcessorTests
     private readonly Mock<ITokenRegistry> _tokenRegistry;
     private readonly FakeTimeProvider _clock;
     private readonly RevocationRequestProcessor _processor;
-    private readonly Mock<IClientInfoProvider> _clients;
+    private readonly Mock<IClientInfoManager> _registrations = new(MockBehavior.Strict);
 
     public RevocationRequestProcessorTests()
     {
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _processor = new RevocationRequestProcessor(
-            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock);
+            _tokenRegistry.Object,
+            new GrantRevocation(_tokenRegistry.Object),
+            new RegistrationAccessTokenRevocation(_registrations.Object, Mock.Of<ITokenIdGenerator>(), new RegistrationAccessTokenBinding(_registrations.Object)),
+            _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()
@@ -60,7 +64,9 @@ public class RevocationRequestProcessorTests
         RevocationRequest request,
         JsonWebToken? token = null)
     {
-        return new ValidRevocationRequest(request, token!);
+        return token is null
+            ? ValidRevocationRequest.InvalidToken(request)
+            : new ValidRevocationRequest(request, token, new ClientInfo("client_1"));
     }
 
     /// <summary>
@@ -434,5 +440,45 @@ public class RevocationRequestProcessorTests
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(TestTenant.Matched, "token_2", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A registration access token is revoked at its registration, which the client configuration endpoint decides by,
+    /// and one issued with an expiry is recorded as revoked in the registry as well, which introspection reads.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProcessAsync_WithRegistrationAccessToken_RevokesItAtItsRegistrationAndRecordsAnExpiringOne(
+        bool expires)
+    {
+        var token = CreateValidToken();
+        token.Header.Type = JwtTypes.RegistrationAccessToken;
+        token.Payload.Subject = "client_1";
+        if (!expires)
+            token.Payload.ExpiresAt = null;
+
+        var registration = new RegisteredClient(new ClientInfo("client_1"), "another_token_id");
+        _registrations
+            .Setup(manager => manager.TryFindRegisteredClientAsync(TestTenant.Matched, "client_1"))
+            .ReturnsAsync(registration);
+        if (expires)
+        {
+            _tokenRegistry
+                .Setup(r => r.SetStatusAsync(
+                    TestTenant.Matched,
+                    token.Payload.JwtId!,
+                    JsonWebTokenStatus.Revoked,
+                    token.Payload.ExpiresAt!.Value))
+                .Returns(Task.CompletedTask);
+        }
+
+        var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant, CreateValidRevocationRequest(CreateRevocationRequest(), token));
+
+        Assert.True(result.TryGetSuccess(out _));
+        _registrations.VerifyAll();
+        _tokenRegistry.VerifyAll();
+        _tokenRegistry.VerifyNoOtherCalls();
     }
 }

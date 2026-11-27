@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates the scope values in a client registration request per RFC 7591 Section 2.
-/// Each requested scope must be recognized by the server.
+/// Each requested scope must be one an authorization request of the client may carry.
 /// </summary>
 /// <param name="scopeManager">Provides access to known scope definitions.</param>
 public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistrationContextValidator
@@ -31,8 +31,11 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistration
         if (scope.Length == 0)
             return ErrorFactory.InvalidClientMetadata("The scope names no value");
 
+        // RFC 7591 section 2 registers the scope values "that the client can use when requesting access tokens", and
+        // a request naming a resource of the tenant may carry the scopes that resource declares, so every resource
+        // counts: which resources the client may reach is settled on each request, not here
         return (from value in scope
-            where !scopeManager.TryGet(tenant, value, out _)
+            where !scopeManager.IsAvailable(tenant, value, tenant.Resources, out _)
             select ErrorFactory.InvalidClientMetadata($"Unknown scope: {value}")).FirstOrDefault();
     }
 }

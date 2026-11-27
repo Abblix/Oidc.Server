@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
@@ -89,6 +90,7 @@ public class GrantNarrowingValidatorTests
             new TokenRequest { GrantType = GrantTypes.RefreshToken },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(ClientId),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

@@ -72,6 +72,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
                 BackChannelAuthentication.Validation.RequiredAuthContextClassRefValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, RequestedExpiryValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserCodeValidator>(),
+            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BindingMessageValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PingModeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, PushModeValidator>(),
             // RFC 9396 section 3 authorization_details on CIBA backchannel auth requests.

@@ -23,6 +23,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -48,15 +49,17 @@ public class UpdateClientMemberCoverageTests
 
     /// <summary>
     /// The members an update keeps from the stored client: what the host set and no registration metadata carries, the
-    /// credentials, and the identity and sector the client's end users are known under. Every other member is the
-    /// request's, so a member of the request copied from the stored client fails as surely as a host setting lost.
+    /// credentials, the identity and sector the client's end users are known under, and the software statement it was
+    /// registered with. Every other member is the request's, so a member of the request copied from the stored client fails as surely as a host setting lost.
     /// </summary>
     private static readonly string[] KeptFromHost =
     [
         nameof(ClientInfo.ClientId),
         nameof(ClientInfo.ClientSecrets),
         nameof(ClientInfo.SectorIdentifier),
+        nameof(ClientInfo.SoftwareStatement),
         nameof(ClientInfo.SecurityProfile),
+        nameof(ClientInfo.Trust),
         nameof(ClientInfo.PlainPkceAllowed),
         nameof(ClientInfo.AuthorizationCodeExpiresIn),
         nameof(ClientInfo.AccessTokenExpiresIn),
@@ -69,7 +72,7 @@ public class UpdateClientMemberCoverageTests
         nameof(ClientInfo.ForceUserClaimsInIdentityToken),
         nameof(ClientInfo.ForceAuthorizationDetailsInIdentityToken),
         nameof(ClientInfo.ResourceLocations),
-        nameof(ClientInfo.AllowCrossClientSubjectTokenExchange),
+        nameof(ClientInfo.CrossClientSubjectTokenExchange),
         nameof(ClientInfo.AllowCrossClientIntrospection),
         nameof(ClientInfo.ParseLoginHintTokenAsJwt),
         nameof(ClientInfo.DefaultScope),
@@ -157,7 +160,13 @@ public class UpdateClientMemberCoverageTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, NewClients);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UpdateClientRequestProcessor>.Instance,
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == new OidcOptions
+            {
+                NewClientOptions = NewClients,
+            }));
 
         await processor.ProcessAsync(
             SingleIssuer.Tenant,

@@ -7,11 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using System.Security.Cryptography;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
@@ -106,6 +108,10 @@ public sealed class LibraryRouteServiceParameterTests
             {
                 Id = "acme",
                 Issuer = new Uri(Host + "/tenants/acme"),
+                ClientSecretEncryption = new ClientSecretEncryptionSettings
+                {
+                    Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                },
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)],
             });
         });

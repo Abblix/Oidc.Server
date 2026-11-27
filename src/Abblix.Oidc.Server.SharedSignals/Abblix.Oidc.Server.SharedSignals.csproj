@@ -17,7 +17,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Runs a Shared Signals transmitter per tenant on a multi-tenant server. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.0</PackageReleaseNotes>
+    <PackageReleaseNotes>Runs a Shared Signals transmitter per tenant on a multi-tenant server. Nothing in this package changes in 3.1; it ships with the 3.1 line. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.1</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

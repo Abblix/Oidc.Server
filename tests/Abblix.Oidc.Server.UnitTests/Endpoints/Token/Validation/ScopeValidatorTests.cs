@@ -45,6 +45,7 @@ public class ScopeValidatorTests
         var clientRequest = new ClientRequest();
         var context = new TokenValidationContext(tokenRequest, clientRequest)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client"),
         };
         if (resources != null)
@@ -269,6 +270,7 @@ public class ScopeValidatorTests
     private static TokenValidationContext ContextOf(string grantType, ClientInfo client) => new(
         new TokenRequest { GrantType = grantType, Scope = [] }, new ClientRequest())
     {
+        Clients = Mock.Of<IClientInfoProvider>(),
         ClientInfo = client,
     };
 
@@ -323,6 +325,65 @@ public class ScopeValidatorTests
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Equal(ErrorCodes.InvalidScope, error?.Error);
+    }
+
+    /// <summary>
+    /// A request of a grant starting from the client alone naming only an offline_access the client may not receive a
+    /// refresh token for names no scope, as an authorization request naming it does: it is served with the client's
+    /// default, without offline_access, or refused with invalid_scope from a client required to name one.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.Password, false, null)]
+    [InlineData(GrantTypes.JwtBearer, false, null)]
+    [InlineData(GrantTypes.ClientCredentials, false, null)]
+    [InlineData(GrantTypes.Password, true, ErrorCodes.InvalidScope)]
+    public async Task ARequestNamingOnlyAnOfflineAccessTheClientMayNotReceive_NamesNoScope(
+        string grantType, bool requireScope, string? expectedError)
+    {
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = grantType, Scope = [Scopes.OfflineAccess] }, new ClientRequest())
+        {
+            Clients = Mock.Of<IClientInfoProvider>(),
+            ClientInfo = new ClientInfo("test-client")
+            {
+                AllowedGrantTypes = [grantType],
+                AllowedScopes = ["read", Scopes.OfflineAccess],
+                DefaultScope = ["read", Scopes.OfflineAccess],
+                RequireScope = requireScope,
+            },
+        };
+        SetupScopeManagerForScopes("read", Scopes.OfflineAccess);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, error?.Error);
+        if (expectedError is null)
+            Assert.Equal("read", Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client that may receive a refresh token is served the offline_access it names.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingOnlyOfflineAccess_FromAClientThatMayReceiveIt_IsServedWithIt()
+    {
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.Password, Scope = [Scopes.OfflineAccess] }, new ClientRequest())
+        {
+            Clients = Mock.Of<IClientInfoProvider>(),
+            ClientInfo = new ClientInfo("test-client")
+            {
+                AllowedGrantTypes = [GrantTypes.Password, GrantTypes.RefreshToken],
+                AllowedScopes = ["read", Scopes.OfflineAccess],
+                DefaultScope = ["read"],
+            },
+        };
+        SetupScopeManagerForScopes("read", Scopes.OfflineAccess);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Equal(Scopes.OfflineAccess, Assert.Single(context.Scope).Scope);
     }
 
     /// <summary>

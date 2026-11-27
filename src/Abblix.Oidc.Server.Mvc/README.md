@@ -2,16 +2,20 @@
 
 Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
 
-## What's New in Version 3.0
+## What's New in Version 3.1
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
-
-🚀 Features
-- The endpoints are mapped with `MapOidcControllers()`, at the routes `OidcRouteOptions` sets
-- Every tenant of a multi-tenant server is served through the same controllers
+Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before moving a 3.0 host. Every change of the release is in [What's new in 3.1](https://www.abblix.com/en/docs/whats-new-in-3.1).
 
 ✏️ Improvements
-- The MVC and Minimal API hosts read a request the same way
+- Discovery publishes every endpoint on the issuer's scheme, host and port, and the registration responses return `registration_client_uri` on it
+- Dynamic client registration, pushed authorization requests and introspection apply the server's CORS policy, as the token, revocation, UserInfo and discovery endpoints do ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2)
+- The end session endpoint sends the end user to the logout confirmation page a tenant names, with a 303 redirect and `Referrer-Policy: no-referrer`
+- A host with no cache of its own starts on in-process caches
+
+🛠 Fixes
+- A failed client authentication answered with 401 and a `Basic` challenge only when the request used HTTP Basic, otherwise with the endpoint's own status ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2.4)
+
+The server's own changes are listed in the [Abblix.OIDC.Server README](https://www.nuget.org/packages/Abblix.OIDC.Server).
 
 ## Key Features
 
@@ -60,6 +64,7 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapOidcControllers();

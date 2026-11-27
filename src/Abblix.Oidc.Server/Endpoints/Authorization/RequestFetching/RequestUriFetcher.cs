@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -30,11 +31,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// data required for processing the authorization request.
 /// </summary>
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
-/// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
 public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
-    IClientInfoProvider clientInfoProvider,
     ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
@@ -44,6 +43,7 @@ public partial class RequestUriFetcher(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request, which contains the RequestUri.</param>
+    /// <param name="clients">The clients the request names, each found once: the answers are fixed for this request.</param>
     /// <returns>
     /// A task representing the asynchronous operation, with the result being the fetched request object or an error.
     /// </returns>
@@ -54,7 +54,8 @@ public partial class RequestUriFetcher(
     /// </remarks>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
         TenantDefinition tenant,
-        AuthorizationRequest request)
+        AuthorizationRequest request,
+        IClientInfoProvider clients)
     {
         if (request is { Request: not null, RequestUri: not null })
         {
@@ -84,12 +85,11 @@ public partial class RequestUriFetcher(
                 $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (clientInfo == null)
+        var found = await clients.FindClientAsync(tenant, clientId);
+        if (!found.TryGetSuccess(out var clientInfo))
         {
             LogClientNotFound(clientId);
-            return AuthorizationErrorFactory.ValidationError(
-                ErrorCodes.UnauthorizedClient, "The client is not authorized");
+            return AuthorizationErrorFactory.AbsentClient(found.GetFailure());
         }
 
         var requestUriValidator = UriValidatorFactory.Create(true, clientInfo.RequestUris);
@@ -99,8 +99,11 @@ public partial class RequestUriFetcher(
                 ErrorCodes.InvalidRequestUri, "The request URI is not allowed for the client");
         }
 
-        // SSRF validation is handled by the ISecureHttpFetcher decorator
-        var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
+        // SSRF validation is handled by the ISecureHttpFetcher decorator, to the registries as written for a client
+        // resolved from its metadata document
+        Result<string, OidcError> contentResult;
+        using (SpecialPurposeFetches.For(clientInfo))
+            contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
         return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
             // The fetched object takes the reference's place rather than standing beside it: a request kept for a

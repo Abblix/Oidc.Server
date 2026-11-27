@@ -116,7 +116,40 @@ public class BackChannelAuthenticationOptionsValidatorTests
             provider.GetRequiredService<IOptions<OidcOptions>>().Value.BackChannelAuthentication.MaximumExpiry);
     }
 
-    private static ServiceProvider BuildProvider(TimeSpan defaultExpiry, TimeSpan maximumExpiry)
+    /// <summary>
+    /// A longest binding message of no length or below it refuses every request carrying one, so it is refused when
+    /// the settings are read, naming it.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ALongestBindingMessageOfNoLengthIsRefusedNamingIt(int maximumLength)
+    {
+        var provider = BuildProvider(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30), maximumLength);
+
+        var failure = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(nameof(BackChannelAuthenticationOptions.MaximumBindingMessageLength), failure.Message);
+    }
+
+    /// <summary>
+    /// The control: the shortest positive longest binding message is served.
+    /// </summary>
+    [Fact]
+    public void TheShortestPositiveLongestBindingMessageIsAccepted()
+    {
+        var provider = BuildProvider(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30), maximumBindingMessageLength: 1);
+
+        Assert.Equal(
+            1,
+            provider.GetRequiredService<IOptions<OidcOptions>>().Value.BackChannelAuthentication
+                .MaximumBindingMessageLength);
+    }
+
+    private static ServiceProvider BuildProvider(
+        TimeSpan defaultExpiry,
+        TimeSpan maximumExpiry,
+        int? maximumBindingMessageLength = null)
     {
         var services = new ServiceCollection();
         services.AddDistributedMemoryCache();
@@ -136,6 +169,8 @@ public class BackChannelAuthenticationOptionsValidatorTests
             options.RequireInitialAccessToken = false;
             options.BackChannelAuthentication.DefaultExpiry = defaultExpiry;
             options.BackChannelAuthentication.MaximumExpiry = maximumExpiry;
+            if (maximumBindingMessageLength is { } length)
+                options.BackChannelAuthentication.MaximumBindingMessageLength = length;
         });
 
         return services.BuildServiceProvider();

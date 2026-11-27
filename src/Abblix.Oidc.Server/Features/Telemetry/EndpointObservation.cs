@@ -96,6 +96,22 @@ internal static class EndpointObservation
     }
 
     /// <summary>
+    /// Names <paramref name="clientId"/> on the span of the endpoint whose handling is under way, however many stage
+    /// spans and activities of the host's own sit between; nothing when no such span is recorded.
+    /// </summary>
+    public static void NameClient(string clientId)
+    {
+        for (var activity = Activity.Current; activity != null; activity = activity.Parent)
+        {
+            if (activity.Source == OidcTelemetry.Source && activity.GetTagItem(TelemetryTags.Endpoint) is not null)
+            {
+                activity.SetTag(TelemetryTags.ClientId, clientId);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
     /// Closes the span with the status <paramref name="error"/> tells, counts a refusal for a spent budget, and
     /// returns how the request ended with the error code a measurement may name.
     /// </summary>
@@ -111,7 +127,7 @@ internal static class EndpointObservation
             return (TelemetryOutcomes.Success, null);
         }
 
-        var errorCode = KnownErrors.Contains(error.Error) ? error.Error : TelemetryTags.Other;
+        var errorCode = ErrorCodeOf(error);
         span?.SetTag(TelemetryTags.Error, errorCode);
         span?.SetStatus(ActivityStatusCode.Error);
 
@@ -134,17 +150,29 @@ internal static class EndpointObservation
     }
 
     /// <summary>
+    /// The error code a span and a measurement name a refusal by.
+    /// </summary>
+    private static string ErrorCodeOf(OidcError error)
+    {
+        if (error is ClientTemporarilyUnavailableError)
+            return TelemetryTags.ClientMetadataUnavailable;
+
+        return KnownErrors.Contains(error.Error) ? error.Error : TelemetryTags.Other;
+    }
+
+    /// <summary>
     /// The error of a refusal, or null for a success.
     /// </summary>
     public static OidcError? ErrorOf<TSuccess>(Result<TSuccess, OidcError> result)
         => result.TryGetFailure(out var error) ? error : null;
 
     /// <summary>
-    /// The error an authorization response refuses the request with, or null for any other response, a redirect to
-    /// a page the end user acts on included.
+    /// The error an authorization response refuses the request with, the one it is answered by its status with where
+    /// it has one (<see cref="AuthorizationError.Refusal"/>), or null for any other response, a redirect to a page the
+    /// end user acts on included.
     /// </summary>
     public static OidcError? ErrorOf(AuthorizationResponse response)
-        => response is AuthorizationError error ? new OidcError(error.Error, error.ErrorDescription) : null;
+        => response is AuthorizationError error ? error.Refusal ?? new OidcError(error.Error, error.ErrorDescription) : null;
 
     /// <summary>
     /// An outcome that never refuses.

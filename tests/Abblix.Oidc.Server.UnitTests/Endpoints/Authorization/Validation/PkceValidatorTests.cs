@@ -31,7 +31,7 @@ public class PkceValidatorTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
     private const string CodeChallengeS256 = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
-    private const string CodeChallengePlain = "test_code_verifier_plain";
+    private const string CodeChallengePlain = "test_code_verifier_plain_of_43_characters__";
 
     private readonly PkceValidator _validator;
 
@@ -99,6 +99,7 @@ public class PkceValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             ResponseMode = ResponseModes.Query,
             ValidRedirectUri = request.RedirectUri,
@@ -232,9 +233,9 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge without explicit method (defaults to plain).
-    /// Per RFC 7636 Section 4.3, missing code_challenge_method defaults to "plain".
-    /// Tests backward compatibility with minimal PKCE implementations.
+    /// A code_challenge without code_challenge_method is a plain one: RFC 7636 section 4.3, "defaults to "plain" if not
+    /// present in the request". A client allowed plain is served, and the request that goes on carries the method, so
+    /// the code it is issued is verified the same way at the token endpoint.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithCodeChallengeWithoutMethod_ShouldUseDefaultPlain()
@@ -250,16 +251,15 @@ public class PkceValidatorTests
 
         // Assert
         Assert.Null(result);
+        Assert.Equal(CodeChallengeMethods.Plain, context.Request.CodeChallengeMethod);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge without method when plain not allowed.
-    /// Per RFC 7636 Section 4.3, if code_challenge_method is not specified, validator only
-    /// checks if plain method is explicitly used. Null method means client didn't specify,
-    /// so no validation against PlainPkceAllowed is performed.
+    /// A code_challenge without code_challenge_method is plain (RFC 7636 section 4.3), so a client not allowed plain is
+    /// refused with invalid_request, as it is when it names plain.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithCodeChallengeWithoutMethodWhenPlainNotAllowed_ShouldSucceed()
+    public async Task ValidateAsync_WithCodeChallengeWithoutMethodWhenPlainNotAllowed_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(
@@ -271,7 +271,27 @@ public class PkceValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// A request issuing no code has no code for a code_challenge to protect, so a challenge it carries without a method
+    /// is not read as plain, and a client not allowed plain is not refused for it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithCodeChallengeWithoutMethodAndNoCode_IsNotReadAsPlain()
+    {
+        var context = CreateContext(
+            codeChallenge: CodeChallengePlain,
+            codeChallengeMethod: null,
+            plainPkceAllowed: false,
+            responseType: [ResponseTypes.IdToken]);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
         Assert.Null(result);
+        Assert.Null(context.Request.CodeChallengeMethod);
     }
 
     /// <summary>
@@ -401,64 +421,71 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts whitespace-only code challenge as valid PKCE.
-    /// Per RFC 7636, code challenge is opaque string that may contain whitespace.
-    /// Tests edge case of unusual but technically valid code challenges.
+    /// OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 4.1.1 and RFC 7636 section 4.2: "code-challenge =
+    /// 43*128unreserved". A challenge of either bound and one using every unreserved punctuation character is accepted,
+    /// for either method.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithWhitespaceCodeChallenge_ShouldSucceed()
+    [Theory]
+    [InlineData(43, CodeChallengeMethods.S256)]
+    [InlineData(128, CodeChallengeMethods.S256)]
+    [InlineData(43, CodeChallengeMethods.Plain)]
+    [InlineData(128, CodeChallengeMethods.Plain)]
+    public async Task ValidateAsync_WithAWellFormedCodeChallenge_ShouldSucceed(int length, string method)
     {
-        // Arrange
         var context = CreateContext(
-            codeChallenge: "   ",
-            codeChallengeMethod: CodeChallengeMethods.S256);
+            codeChallenge: "a-b_c.d~e" + new string('x', length - 9),
+            codeChallengeMethod: method,
+            plainPkceAllowed: true);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
         Assert.Null(result);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts very long code challenge.
-    /// Per RFC 7636 Section 4.1, code challenge length is 43-128 characters.
-    /// Tests validator doesn't enforce length constraints (handled elsewhere).
+    /// A challenge shorter than 43 or longer than 128 characters, or carrying a character outside the unreserved set,
+    /// is a malformed request, refused with invalid_request at the redirect URI before any code is issued for it.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithVeryLongCodeChallenge_ShouldSucceed()
+    [Theory]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-c")]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM=")]
+    [InlineData("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw+cM")]
+    [InlineData("a-b_c.d~e")]
+    [InlineData("   ")]
+    public async Task ValidateAsync_WithAMalformedCodeChallenge_IsRefused(string codeChallenge)
     {
-        // Arrange
-        var longChallenge = new string('a', 200);
-        var context = CreateContext(
-            codeChallenge: longChallenge,
-            codeChallengeMethod: CodeChallengeMethods.S256);
+        var context = CreateContext(codeChallenge: codeChallenge, codeChallengeMethod: CodeChallengeMethods.S256);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Equal(context.ValidRedirectUri, result?.RedirectUri);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts code challenge with special characters.
-    /// Per RFC 7636, code challenge uses base64url encoding allowing specific characters.
-    /// Tests handling of valid base64url character set.
+    /// A request issuing no code has no code for the challenge to protect, so a malformed one is not refused there.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithSpecialCharactersInCodeChallenge_ShouldSucceed()
+    public async Task ValidateAsync_WithAMalformedCodeChallengeAndNoCodeIssued_Succeeds()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: "a-b_c.d~e",
-            codeChallengeMethod: CodeChallengeMethods.S256);
+            codeChallengeMethod: CodeChallengeMethods.S256,
+            responseType: [ResponseTypes.IdToken]);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithACodeChallengeLongerThan128Characters_IsRefused()
+    {
+        var context = CreateContext(codeChallenge: new string('a', 129), codeChallengeMethod: CodeChallengeMethods.S256);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
 
     /// <summary>
@@ -746,5 +773,37 @@ public class PkceValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
         Assert.Contains("requires PKCE", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A client that turned PKCE off still uses it when it is a native app or has no credentials, wherever it came
+    /// from: declared by the host, registered, or stored before the rule. RFC 8252 section 8.1 has a server reject a
+    /// native app's request without PKCE, and this server holds a public client to the PKCE RFC 9700 section 2.1.1 has
+    /// it use. A confidential web client keeps the opt-out.
+    /// </summary>
+    [Theory]
+    [InlineData(ApplicationTypes.Native, ClientAuthenticationMethods.None, false)]
+    [InlineData(ApplicationTypes.Native, ClientAuthenticationMethods.ClientSecretBasic, false)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.None, false)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.ClientSecretBasic, true)]
+    [InlineData(ApplicationTypes.Web, ClientAuthenticationMethods.PrivateKeyJwt, true)]
+    public async Task ValidateAsync_WithoutPkceForAClientThatTurnedItOff_IsServedOnlyForAConfidentialWebClient(
+        string applicationType, string authMethod, bool served)
+    {
+        var context = CreateContext(pkceRequired: false);
+        context.ClientInfo.ApplicationType = applicationType;
+        context.ClientInfo.TokenEndpointAuthMethod = authMethod;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        if (served)
+        {
+            Assert.Null(result);
+        }
+        else
+        {
+            Assert.NotNull(result);
+            Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        }
     }
 }

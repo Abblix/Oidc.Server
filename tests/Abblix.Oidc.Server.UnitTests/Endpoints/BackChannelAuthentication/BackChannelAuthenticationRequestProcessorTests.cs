@@ -87,7 +87,9 @@ public class BackChannelAuthenticationRequestProcessorTests
         string? claimsJson = null,
         JsonArray? authorizationDetails = null,
         bool namesScope = true,
-        TimeSpan? expiresIn = null)
+        TimeSpan? expiresIn = null,
+        string[]? named = null,
+        string[]? allowedGrantTypes = null)
     {
         var hint = hintedSubject is null
             ? null
@@ -100,14 +102,14 @@ public class BackChannelAuthenticationRequestProcessorTests
             new BackChannelAuthenticationValidationContext(
                 new WireRequest
                 {
-                    Scope = namesScope ? [Scopes.OpenId] : [],
+                    Scope = named ?? (namesScope ? [Scopes.OpenId] : []),
                     Claims = claimsJson is null
                         ? null
                         : JsonSerializer.Deserialize<RequestedClaims>(claimsJson),
                 },
                 new ClientRequest { ClientId = ClientId })
             {
-                ClientInfo = new ClientInfo(ClientId),
+                ClientInfo = new ClientInfo(ClientId) { AllowedGrantTypes = allowedGrantTypes },
                 Scope = [new ScopeDefinition(Scopes.OpenId)],
                 ExpiresIn = expiresIn ?? TimeSpan.FromMinutes(5),
                 IdToken = hint,
@@ -308,6 +310,34 @@ public class BackChannelAuthenticationRequestProcessorTests
             .ReturnsAsync("auth-req-id");
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, namesScope: namesScope));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expected, stored?.AuthorizedGrant.Context.ClientNamedNoScope);
+    }
+
+    /// <summary>
+    /// A request naming only an offline_access the client may not receive a refresh token for names no scope, as the
+    /// scope validator serves it, so the stored grant says so; a client that may receive one named it.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task TheStoredGrant_OfARequestNamingOnlyOfflineAccess_NamesNoScopeUnlessTheClientMayReceiveIt(
+        bool mayReceiveRefreshToken, bool expected)
+    {
+        HostAuthenticates(Approved);
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant,
+            Request(
+                null,
+                named: [Scopes.OfflineAccess],
+                allowedGrantTypes: mayReceiveRefreshToken ? [GrantTypes.Ciba, GrantTypes.RefreshToken] : [GrantTypes.Ciba]));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(expected, stored?.AuthorizedGrant.Context.ClientNamedNoScope);

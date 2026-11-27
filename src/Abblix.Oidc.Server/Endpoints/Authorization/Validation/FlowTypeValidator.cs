@@ -201,6 +201,11 @@ public partial class FlowTypeValidator(
         // Convert the requested response type array into a hashset for faster lookup
         var responseTypeSet = responseType.ToHashSet(StringComparer.Ordinal);
 
+        // A native app is held to the response types it may use whatever it lists, as a client the host's own
+        // store supplies never met the check of the settings
+        if (context.ClientInfo.ApplicationType == ApplicationTypes.Native && !responseType.ServesNativeApps())
+            return false;
+
         // Check if any of the allowed response types matches the requested response type
         return Array.Exists(
             context.ClientInfo.EffectiveResponseTypes,

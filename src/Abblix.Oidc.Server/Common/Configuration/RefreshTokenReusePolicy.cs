@@ -38,6 +38,10 @@ public enum RefreshTokenReusePolicy
 	/// The client keeps redeeming its refresh tokens, bound to it by its client authentication alone
 	/// (RFC 6749 section 6).
 	/// </summary>
+	/// <remarks>
+	/// A public client's refresh token that no DPoP key binds rotates all the same (RFC 9700 section 2.2.2), and a
+	/// warning is logged for a public client declared with Reuse that does not require DPoP.
+	/// </remarks>
 	Reuse,
 
 	/// <summary>

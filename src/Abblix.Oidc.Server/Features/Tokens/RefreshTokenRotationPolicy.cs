@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -19,17 +20,50 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 public static class RefreshTokenRotationPolicy
 {
 	/// <summary>
-	/// Whether renewing a refresh token of <paramref name="clientInfo"/> spends the token it renews.
+	/// Whether renewing <paramref name="refreshToken"/> of <paramref name="clientInfo"/> spends it.
 	/// </summary>
 	/// <param name="tenant">The tenant the client is registered at, whose security profile applies to it.</param>
 	/// <param name="clientInfo">The client renewing its refresh token.</param>
+	/// <param name="refreshToken">The payload of the refresh token presented for renewal.</param>
 	/// <remarks>
-	/// The profile and the default policy drop rotation only for a confidential client whose tokens are
-	/// sender-constrained, the two controls that replace it; an explicit Reuse is the host's own decision and
-	/// drops it for whatever client the host sets it on.
+	/// The profile and the default policy reuse tokens only of a confidential client whose tokens are
+	/// sender-constrained, the two controls that replace rotation; an explicit Reuse reuses the tokens of any client,
+	/// and <see cref="MustRotate"/> decides over both.
 	/// </remarks>
-	public static bool Rotates(TenantDefinition tenant, ClientInfo clientInfo)
-		=> !ReusesRefreshTokens(tenant, clientInfo) && !ProfileForbidsRotation(tenant, clientInfo);
+	public static bool Rotates(TenantDefinition tenant, ClientInfo clientInfo, JsonWebTokenPayload refreshToken)
+		=> (!ReusesRefreshTokens(tenant, clientInfo) && !ProfileForbidsRotation(tenant, clientInfo)) ||
+		   MustRotate(clientInfo, refreshToken);
+
+	/// <summary>
+	/// Whether <paramref name="refreshToken"/> of <paramref name="clientInfo"/> rotates over the client's policy and
+	/// profile.
+	/// </summary>
+	/// <remarks>
+	/// RFC 9700 section 2.2.2: "Refresh tokens for public clients MUST be sender-constrained or use refresh token
+	/// rotation", and section 4.14.2 names the two ways. A public client authenticates no token request, so only a DPoP
+	/// key binds its refresh token: the token carries the key's thumbprint, and every refresh must present a proof of
+	/// that key (RFC 9449 section 5). The decision is the presented token's binding, which a client's current
+	/// registration does not change. A certificate binds nothing here, since a public client presenting none is issued
+	/// an unbound token.
+	/// </remarks>
+	internal static bool MustRotate(ClientInfo clientInfo, JsonWebTokenPayload refreshToken)
+		=> clientInfo.ClientType == ClientType.Public &&
+		   refreshToken is not { Confirmation.JwkThumbprint: { Length: > 0 } };
+
+	/// <summary>
+	/// Whether <paramref name="clientInfo"/> declares Reuse while a refresh token issued to it now can come without a
+	/// DPoP binding, which <see cref="MustRotate"/> rotates.
+	/// </summary>
+	/// <remarks>
+	/// A public client not requiring DPoP is issued a bound token only for a request that happens to carry a proof.
+	/// </remarks>
+	internal static bool DeclaresReuseWithoutDPoP(ClientInfo clientInfo)
+		=> clientInfo is
+		{
+			ClientType: ClientType.Public,
+			RequireDPoP: false,
+			RefreshToken.ReusePolicy: RefreshTokenReusePolicy.Reuse,
+		};
 
 	/// <summary>
 	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens under its

@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -90,6 +91,10 @@ public static class ConformanceHost
         addOidcServices(options => ConformanceServer.Configure(options, tenant));
 
         services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
+
+        // The suite registers its clients openly and checks the error responses they are sent (RFC 9700 section 4.11.2
+        // has the server keep those at the server for an untrusted client)
+        EveryRedirectUriTrusted.Register(services);
         services.Decorate<IAuthServiceKeysProvider, RotatingSigningKeys>();
         services.Decorate<IUserConsentsProvider, RefusedAuthorizations>();
 

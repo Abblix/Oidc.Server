@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -65,17 +66,10 @@ public partial class DPoPTokenEndpointValidator(
                     "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
             }
 
-            // RFC 6749 section 5.2, invalid_client: "Client authentication failed", the mutual TLS the token would be
-            // bound through being what is missing
-            if (!WillIssueCertificateBoundToken(context, profile))
-            {
-                LogProofRequiredButMissing("security profile");
-                return new OidcError(
-                    ErrorCodes.InvalidClient,
-                    "The security profile requires a certificate-bound token: authenticate with mutual TLS.");
-            }
+            if (WillIssueCertificateBoundToken(context, profile))
+                return null;
 
-            return null;
+            return CertificateMissing(context, "The security profile issues certificate-bound access tokens only:");
         }
 
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
@@ -101,6 +95,15 @@ public partial class DPoPTokenEndpointValidator(
         // profile tightens, and the granular RequireDPoP toggle cannot weaken it.
         if (profile.RequireSenderConstrainedTokens && !WillIssueCertificateBoundToken(context, profile))
         {
+            // A client whose tokens are certificate-bound gets here only without a certificate - calling the token
+            // endpoint outside mtls_endpoint_aliases (RFC 8705 section 5), say - so what it lacks is the certificate
+            if (CertificateBoundAccessTokens.AreIssuedTo(context.ClientInfo, profile))
+            {
+                return CertificateMissing(
+                    context,
+                    "The security profile requires a sender-constrained token: present a DPoP proof, or");
+            }
+
             LogProofRequiredButMissing("security profile");
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
@@ -109,6 +112,26 @@ public partial class DPoPTokenEndpointValidator(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The refusal of a request presenting no proof and no certificate from a client whose tokens are
+    /// certificate-bound, under a profile requiring sender-constrained tokens. RFC 8705 section 3.4 leaves it to the
+    /// server "whether to return an error or issue an unbound token" and names no code, and the profile rules out the
+    /// second. The code, invalid_client, follows RFC 8705 section 2's answer to a missing certificate and is the one
+    /// the FAPI 1.0 Advanced branch gives; <paramref name="requirement"/> states what else the profile accepts, a
+    /// DPoP proof under FAPI 2.0.
+    /// </summary>
+    private OidcError CertificateMissing(TokenValidationContext context, string requirement)
+    {
+        LogCertificateRequiredButMissing();
+        return new OidcError(
+            ErrorCodes.InvalidClient,
+            requirement + " present the client certificate over mutual TLS, at the token endpoint of " +
+            "mtls_endpoint_aliases when the server publishes one.")
+        {
+            BasicChallengeOwed = BasicChallenge.IsOwed(context.ClientRequest),
+        };
     }
 
     /// <summary>

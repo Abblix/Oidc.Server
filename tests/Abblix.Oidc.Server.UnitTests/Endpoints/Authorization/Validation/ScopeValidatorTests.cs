@@ -112,10 +112,12 @@ public class ScopeValidatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             OfflineAccess = offlineAccess,
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken],
         };
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
             FlowType = flowType,
             ResponseMode = ResponseModes.Query,
@@ -170,19 +172,23 @@ public class ScopeValidatorTests
     /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
     /// it is served the client's default on the first pass, marked as not named, and the same request read back from
     /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
-    /// the client named.
+    /// the client named. A client that may not receive a refresh token has it ignored even with prompt=consent, so the
+    /// code its consent brings carries the default, never a scope left empty at the code exchange.
     /// </summary>
     [Theory]
-    [InlineData(false, new[] { Scopes.OpenId }, true)]
-    [InlineData(true, new[] { Scopes.OfflineAccess }, false)]
+    [InlineData(false, true, new[] { Scopes.OpenId }, true)]
+    [InlineData(true, true, new[] { Scopes.OfflineAccess }, false)]
+    [InlineData(true, false, new[] { Scopes.OpenId }, true)]
     public async Task ValidateAsync_OfflineAccessAlone_IsServedAlikeOnEveryPass(
-        bool promptConsent, string[] expectedScope, bool expectedNamedNoScope)
+        bool promptConsent, bool mayReceiveRefreshToken, string[] expectedScope, bool expectedNamedNoScope)
     {
         var context = CreateContext(
             [Scopes.OfflineAccess],
             offlineAccess: OfflineAccess.ConsentRequired,
             prompt: promptConsent ? [Prompts.Consent] : null);
         context.ClientInfo.DefaultScope = [Scopes.OpenId];
+        if (!mayReceiveRefreshToken)
+            context.ClientInfo.AllowedGrantTypes = [GrantTypes.AuthorizationCode];
 
         Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal(expectedScope, context.Request.Scope);
@@ -193,6 +199,7 @@ public class ScopeValidatorTests
             offlineAccess: OfflineAccess.ConsentRequired,
             prompt: promptConsent ? [Prompts.Consent] : null);
         readBack.ClientInfo.DefaultScope = [Scopes.OpenId];
+        readBack.ClientInfo.AllowedGrantTypes = context.ClientInfo.AllowedGrantTypes;
         readBack.Request = readBack.Request with { ClientNamedNoScope = context.Request.ClientNamedNoScope };
 
         Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, readBack));
@@ -280,6 +287,33 @@ public class ScopeValidatorTests
         Assert.DoesNotContain(context.Scope, scope => scope.Scope == Scopes.OfflineAccess);
         Assert.DoesNotContain(Scopes.OfflineAccess, context.Request.Scope);
         Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
+    }
+
+    /// <summary>
+    /// A request with prompt=consent receives offline_access only for a client that may receive the refresh token it
+    /// asks for, through the refresh token grant or a token exchange of it; for any other client it is ignored, so
+    /// neither the end user's consent nor the code it brings carries it.
+    /// </summary>
+    [Theory]
+    [InlineData(null, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, OfflineAccess.ConsentRequired, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, OfflineAccess.Disabled, false)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, OfflineAccess.ConsentRequired, true)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.TokenExchange }, OfflineAccess.ConsentRequired, true)]
+    public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyByAClientThatMayReceiveARefreshToken(
+        string[]? allowedGrantTypes, OfflineAccess offlineAccess, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            offlineAccess: offlineAccess,
+            prompt: [Prompts.Consent]);
+        context.ClientInfo.AllowedGrantTypes = allowedGrantTypes;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Equal(received, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
     }
 
     /// <summary>

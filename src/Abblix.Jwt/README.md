@@ -2,15 +2,10 @@
 
 A JWT and JOSE toolkit for .NET, built entirely on the platform's cryptographic primitives and `System.Text.Json.Nodes` - no dependency on `Microsoft.IdentityModel.Tokens`. It implements JWS ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)), JWE ([RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)), JWK ([RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517)) and JWA ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)), and is the token layer behind Abblix OIDC Server, usable on its own.
 
-## What's New in Version 3.0
-
-🚀 Features
-- Every validation states the token types it accepts ([RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html))
+## What's New in Version 3.1
 
 ✏️ Improvements
-- AES key wrap from the platform rather than a copy of its own
-- An inbound encrypted token that no key opens is recorded in the log
-- A custodian failure the caller can act on
+- The replay cache registered by `AddDistributedReplayCache()` keeps its reservations in process when the host registers no `IDistributedCache`, enough for one instance; several instances register a shared one
 
 ## Install
 
@@ -89,7 +84,7 @@ services.AddSingleton<IReplayCache>(provider =>
     provider.CreateService<DistributedReplayCache>(Dependency.Override("MyApp:ReplayPrevention:")));
 ```
 
-The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behavior and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
+The shipped implementation stores in the host's `IDistributedCache`. Registered through `AddDistributedReplayCache()`, it falls back to an in-process cache when the host registers none, so a single-instance deployment works as it is and a scaled-out one shares its reservations by registering a shared cache, such as Redis; a store the host builds itself, as above, takes the host's cache. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
 
 ## External keys
 

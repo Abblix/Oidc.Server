@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -68,7 +69,7 @@ internal partial class ReloadableClientInfoStorage(
     {
         var clients = tenant.Clients;
         return configured.GetOrCreate(tenant, clients, () => Evicting(
-            tenant, clients.ToDictionary(client => client.ClientId, StringComparer.OrdinalIgnoreCase)));
+            tenant, clients.ToDictionary(client => client.ClientId, ClientIdComparison.Held)));
     }
 
     /// <summary>
@@ -122,8 +123,7 @@ internal partial class ReloadableClientInfoStorage(
     private bool ConfiguredInForce(TenantDefinition tenant, string clientId)
     {
         var inForce = catalog is StoreTenantCatalog own ? own.InForce(tenant) ?? tenant : tenant;
-        return inForce.Clients.Any(
-            client => string.Equals(client.ClientId, clientId, StringComparison.OrdinalIgnoreCase));
+        return inForce.Clients.Any(client => ClientIdComparison.Held.Equals(client.ClientId, clientId));
     }
 
     /// <summary>
@@ -132,16 +132,18 @@ internal partial class ReloadableClientInfoStorage(
     /// <param name="tenant">The tenant whose clients are searched.</param>
     /// <param name="clientId">The unique identifier of the client to find.</param>
     /// <returns>
-    /// A task that returns the <see cref="ClientInfo"/> if found; otherwise, null.
+    /// A task that returns the <see cref="ClientInfo"/> if found; otherwise, <see cref="ClientAbsence.Unknown"/>.
     /// </returns>
-    public async Task<ClientInfo?> TryFindClientAsync(TenantDefinition tenant, string clientId)
+    public async Task<Result<ClientInfo, ClientAbsence>> FindClientAsync(TenantDefinition tenant, string clientId)
     {
         ArgumentNullException.ThrowIfNull(clientId);
-        if (ConfiguredAt(tenant).TryGetValue(clientId, out var configuredClient))
+        if (ConfiguredAt(tenant).TryGetValue(clientId, out var configuredClient) && configuredClient.IsNamedBy(clientId))
             return configuredClient;
 
-        var registration = await registrations.TryFindAsync(tenant, clientId);
-        return registration is null || await RecheckAsync(tenant, registration) ? null : registration.ClientInfo;
+        if (await TryFindRegisteredClientAsync(tenant, clientId) is not { } registration)
+            return ClientAbsence.Unknown;
+
+        return registration.ClientInfo;
     }
 
     /// <summary>
@@ -157,10 +159,15 @@ internal partial class ReloadableClientInfoStorage(
     /// <inheritdoc />
     public async Task<RegisteredClient?> TryFindRegisteredClientAsync(TenantDefinition tenant, string clientId)
     {
-        // The settings are read last, so the answer is theirs as they stand once the registration was read: a reload
-        // configuring the id before that drops the registration here, so it does not come back once they let it go
+        // A registration the store answers under another spelling of the id is not the one asked for, and is left as
+        // held. The settings are read last, so the answer is theirs as they stand once the registration was read: a
+        // reload configuring the id before that drops the registration here, so it does not come back once they let
+        // it go
         var client = await registrations.TryFindAsync(tenant, clientId);
-        return client is null || await RecheckAsync(tenant, client) ? null : client;
+        if (client is null || !client.ClientInfo.IsNamedBy(clientId))
+            return null;
+
+        return await RecheckAsync(tenant, client) ? null : client;
     }
 
     /// <inheritdoc />

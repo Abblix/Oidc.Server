@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
@@ -55,27 +56,7 @@ public static class SecurityProfileConsistency
         SecurityProfileRequirements requirements)
     {
         var violations = new List<string>(AssertionAudienceViolations(assertionAudiences, requirements));
-
-        // RFC 6749 draws the line at whether the client can hold a credential at all, and the
-        // registered authentication method is where that shows: a client authenticating with
-        // nothing IS the public client the profile excludes.
-        if (requirements.RequireConfidentialClient &&
-            tokenEndpointAuthMethod == ClientAuthenticationMethods.None)
-        {
-            violations.Add(
-                "the client's security profile admits confidential clients only, " +
-                "but the client authenticates with none at the token endpoint");
-        }
-
-        // Both surviving methods prove possession of a key. Every other method the server offers
-        // proves possession of a shared secret, which is what the profile removes.
-        if (requirements.RequireKeyBasedClientAuthentication &&
-            !KeyBasedAuthenticationMethods.Contains(tokenEndpointAuthMethod))
-        {
-            violations.Add(
-                "the client's security profile requires client authentication by mutual TLS or a " +
-                $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
-        }
+        violations.AddRange(FindAuthenticationMethodViolations(tokenEndpointAuthMethod, requirements));
 
         // FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
         // section 2 defines response_types as those "the client can use at the authorization endpoint". A client
@@ -164,10 +145,12 @@ public static class SecurityProfileConsistency
     /// formatter's, where the JWT is issued.
     /// </remarks>
     /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to.</param>
+    /// <param name="tenant">The tenant the client is registered at.</param>
     /// <param name="client">The client.</param>
     /// <param name="requirements">The control bundle the client is held to.</param>
     public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
         ClientEncryptionKeyResolver encryptionKeyResolver,
+        TenantDefinition tenant,
         ClientInfo client,
         SecurityProfileRequirements requirements)
     {
@@ -189,7 +172,7 @@ public static class SecurityProfileConsistency
                 continue;
 
             var key = await encryptionKeyResolver.ResolveAsync(
-                requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
+                tenant, requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
             if (key is null)
             {
                 violations.Add(
@@ -437,6 +420,43 @@ public static class SecurityProfileConsistency
         => requirements.RequireHttpsJwksUri && jwksUri is { } uri && uri is not { IsAbsoluteUri: true, Scheme: "https" }
             ? [$"the client's security profile requires a jwks_uri served over TLS, but {uri} is not"]
             : [];
+
+    /// <summary>
+    /// Names what the profile refuses in a client authenticating with <paramref name="tokenEndpointAuthMethod"/>, or
+    /// nothing: the profile binds every client of a tenant held to it, so a method named here is one no such client
+    /// authenticates with.
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindAuthenticationMethodViolations(
+        string tokenEndpointAuthMethod,
+        SecurityProfileRequirements requirements)
+    {
+        var violations = new List<string>();
+
+        // RFC 6749 draws the line at whether the client can hold a credential at all, and the
+        // registered authentication method is where that shows: a client authenticating with
+        // nothing IS the public client the profile excludes.
+        if (requirements.RequireConfidentialClient &&
+            tokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+        {
+            violations.Add(
+                "the client's security profile admits confidential clients only, " +
+                "but the client authenticates with none at the token endpoint");
+        }
+
+        // Both surviving methods prove possession of a key. Every other method the server offers
+        // proves possession of a shared secret, which is what the profile removes.
+        if (requirements.RequireKeyBasedClientAuthentication &&
+            !KeyBasedAuthenticationMethods.Contains(tokenEndpointAuthMethod))
+        {
+            violations.Add(
+                "the client's security profile requires client authentication by mutual TLS or a " +
+                $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
+        }
+
+        return violations;
+    }
 
     /// <summary>
     /// Names a grant type the profile refuses, or nothing: FAPI 2.0 Security Profile section 5.3.2.1 has authorization

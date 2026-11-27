@@ -96,6 +96,12 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
     tenant.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
     tenant.RegistrationUri = new Uri("/register", UriKind.Relative);
     tenant.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+    // The host serves dynamic client registration, which needs the key a registered client's secret is kept
+    // encrypted with
+    tenant.ClientSecretEncryption = new ClientSecretEncryptionSettings
+    {
+        Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+    };
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
 
@@ -287,9 +293,8 @@ builder.Services.AddAuthentication().AddCookie();
 // so app.UseCors() below resolves that policy without a manual AddCors here.
 builder.Services.AddAuthorization();
 
-// The MVC host received IMemoryCache transitively through AddControllersWithViews; the Minimal API
-// host registers it (and the distributed cache) directly, per the documented host caching responsibility.
-builder.Services.AddMemoryCache();
+// A cache of the host's own is optional, since the server falls back to an in-process one; this host registers one so
+// the suite runs over a host-registered cache.
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddHttpContextAccessor();
 

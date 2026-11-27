@@ -25,7 +25,7 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// The Redis stream store against a live wire-compatible server: registrations survive whole,
 /// ownership rides in the key, and the conditioned update refuses what nobody created.
 /// </summary>
-public sealed class RedisStreamStoreTests(RedisFixture redis) : IClassFixture<RedisFixture>
+public sealed class RedisStreamStoreTests(RedisFixture redis)
 {
     private static readonly SharedSignalsTransmitterOptions Options = new() { Issuer = "https://transmitter.example.com" };
 

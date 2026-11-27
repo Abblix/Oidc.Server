@@ -9,8 +9,10 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Utils;
 using P = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -29,7 +31,10 @@ public class AuthorizationResponseEncoder(
 	IResponseJwtBuilder responseJwtBuilder) : IAuthorizationResponseEncoder
 {
 	/// <inheritdoc />
-	public async Task<AuthorizationResponse> EncodeAsync(TenantDefinition tenant, AuthorizationResponse response)
+	public async Task<AuthorizationResponse> EncodeAsync(
+		TenantDefinition tenant,
+		AuthorizationResponse response,
+		IClientInfoProvider clients)
 	{
 		switch (response)
 		{
@@ -44,7 +49,7 @@ public class AuthorizationResponseEncoder(
 				success.Issuer = IssuerOf(tenant);
 				success.Scope = success.AccessToken is not null ? string.Join(' ', success.GrantedScopes) : null;
 
-				return await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
+				return await PackJwtAsync(tenant, clients, success, carriesTokens, SuccessParameters(success));
 			}
 
 			// Errors are JARM-packed only when delivered to a redirect URI; non-redirectable errors
@@ -57,7 +62,7 @@ public class AuthorizationResponseEncoder(
 
 				error.Issuer = IssuerOf(tenant);
 
-				return await PackJwtAsync(tenant, error, carriesTokens, ErrorParameters(error));
+				return await PackJwtAsync(tenant, clients, error, carriesTokens, ErrorParameters(error));
 			}
 
 			// Interaction responses (login/consent/account-selection) redirect to the AS's own UI,
@@ -72,7 +77,7 @@ public class AuthorizationResponseEncoder(
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	private string? IssuerOf(TenantDefinition tenant) => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? tenant.Issuer.OriginalString
+		? tenant.IssuerAsWritten()
 		: null;
 
 	/// <summary>
@@ -90,6 +95,7 @@ public class AuthorizationResponseEncoder(
 	/// </remarks>
 	private async Task<AuthorizationResponse> PackJwtAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		ClientDeliveredResponse response,
 		bool carriesTokens,
 		IReadOnlyList<(string name, string? value)> parameters)
@@ -98,7 +104,10 @@ public class AuthorizationResponseEncoder(
 			return response;
 
 		var deliveryMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
-		var built = await responseJwtBuilder.BuildAsync(tenant, response.Model.ClientId, parameters);
+		// A response delivered to a redirect URI is one the client validation let through, so its client is found
+		var clientId = response.Model.ClientId.NotNull(nameof(response.Model.ClientId));
+		var client = (await clients.FindClientAsync(tenant, clientId)).GetSuccess();
+		var built = await responseJwtBuilder.BuildAsync(tenant, client, parameters);
 		if (built.TryGetFailure(out var refusal))
 		{
 			if (response is AuthorizationError error)

@@ -64,7 +64,8 @@ public static class UriValidatorFactory
 
 	/// <summary>
 	/// Creates the validator for the redirect URI of an authorization request. A registered loopback IP redirect URI
-	/// accepts any port, as RFC 8252 section 7.3 requires; every other registered URI must match exactly.
+	/// accepts any port, as RFC 8252 section 7.3 requires; every other registered URI must match as written (RFC 9700
+	/// section 4.1.3).
 	/// </summary>
 	/// <param name="redirectUris">The client's registered redirect URIs.</param>
 	/// <returns>
@@ -78,11 +79,5 @@ public static class UriValidatorFactory
 			_ => new CompositeUriValidator(redirectUris.Select(ForRedirectUri)),
 		};
 
-	private static IUriValidator ForRedirectUri(Uri redirectUri)
-	{
-		if (LoopbackHosts.IsLoopbackIpRedirectUri(redirectUri))
-			return new LoopbackRedirectUriValidator(redirectUri);
-
-		return new ExactMatchUriValidator(redirectUri);
-	}
+	private static IUriValidator ForRedirectUri(Uri redirectUri) => new RegisteredRedirectUriValidator(redirectUri);
 }

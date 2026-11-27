@@ -35,15 +35,16 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     /// one without holding the token that states it, as a token exchange does from its subject token; a
     /// <see cref="RefreshTokenAuthorizedGrant"/> states it in the token it carries instead, so it does not
     /// repeat it here. <c>null</c> where the grant exercises no such authority, in which case a grant issuing its
-    /// first refresh token starts a family of its own.
+    /// first refresh token starts a family of its own. On a stored authorization code grant it is written back with
+    /// <see cref="IssuedTokens"/> after the first redemption, naming the family that redemption founded, so a reuse of
+    /// the code revokes the family (RFC 6749 section 4.1.2).
     /// </summary>
     public string? GrantId { get; init; }
 
     /// <summary>
     /// The latest moment an access token issued from this grant may expire, or <c>null</c> when only the client's
-    /// access token lifetime bounds it. Set by a token exchange joining the subject token's refresh token family, so
-    /// the exchanged token expires no later than the token it came from and a revocation of the family, which lasts
-    /// as long as the family's own tokens, outlasts it too.
+    /// access token lifetime bounds it. Set by a token exchange, so the exchanged token expires no later than the
+    /// token it came from: an exchange never extends the authority it hands on.
     /// </summary>
     [NotStored("Set only by a token exchange, whose grant is never stored")]
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }

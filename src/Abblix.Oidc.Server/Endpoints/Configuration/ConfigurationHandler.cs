@@ -8,11 +8,14 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
+using Abblix.Jwt.Signing;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -60,6 +63,21 @@ public sealed class ConfigurationHandler(
 	{
 		var requestObjectEncryption = await RequestObjectEncryptionAsync(tenant);
 
+		// The token, revocation and introspection endpoints authenticate their callers with this one authenticator,
+		// so each lists the methods the token endpoint does, the introspection endpoint's narrowed by the same rule
+		// that endpoint refuses a caller by. The assertion algorithms are the authenticator's too, and RFC 8414 section 2
+		// has each endpoint's algorithms present once a JWT-based method is listed for it. An endpoint that is not
+		// enabled accepts no caller at all, so nothing is said about it.
+		var authenticationMethods = tenant.AdmittedAuthenticationMethods(
+			clientAuthenticator.ClientAuthenticationMethodsSupported);
+		var assertionAlgorithms = Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported)
+			.Where(options.Value.NewClientOptions.ClientSecret.Keys)
+			.ToArray();
+		var revocationMethods = WhereEnabled(OidcEndpoints.Revocation, authenticationMethods);
+		var introspectionMethods = WhereEnabled(
+			OidcEndpoints.Introspection,
+			IntrospectionCallers.Admitted(authenticationMethods).ToArray());
+
 		return new ConfigurationResponse
 		{
 			Issuer = Licensed(tenant),
@@ -79,7 +97,8 @@ public sealed class ConfigurationHandler(
 			ResponseModesSupported = authorizationMetadata.ResponseModesSupported,
 
 			PromptValuesSupported = authorizationMetadata.PromptValuesSupported,
-			CodeChallengeMethodsSupported = authorizationMetadata.CodeChallengeMethodsSupported,
+			CodeChallengeMethodsSupported =
+				AdmittedCodeChallengeMethods(tenant, authorizationMetadata.CodeChallengeMethodsSupported),
 			RequestParameterSupported = authorizationMetadata.RequestParameterSupported,
 			RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
 				? Signing(tenant, jwtAlgorithms.SigningAlgorithmsSupported)
@@ -108,19 +127,23 @@ public sealed class ConfigurationHandler(
 			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
 			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
-			TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+			TokenEndpointAuthMethodsSupported = WhereAnyMethod(authenticationMethods, authenticationMethods),
+			RevocationEndpointAuthMethodsSupported = WhereAnyMethod(revocationMethods, revocationMethods),
+			RevocationEndpointAuthSigningAlgValuesSupported = WhereAssertionMethod(revocationMethods, assertionAlgorithms),
+			IntrospectionEndpointAuthMethodsSupported = WhereAnyMethod(introspectionMethods, introspectionMethods),
+			IntrospectionEndpointAuthSigningAlgValuesSupported =
+				WhereAssertionMethod(introspectionMethods, assertionAlgorithms),
 
 			// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
 			// authentication method is available - the server then both issues bound tokens and
 			// enforces the binding at its protected resources (MtlsUserInfoValidator).
-			TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
+			TlsClientCertificateBoundAccessTokens = authenticationMethods.Any(
 				method => method is ClientAuthenticationMethods.TlsClientAuth
 					or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
 				? true
 				: null,
 
-			TokenEndpointAuthSigningAlgValuesSupported =
-				Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
+			TokenEndpointAuthSigningAlgValuesSupported = WhereAssertionMethod(authenticationMethods, assertionAlgorithms),
 			IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 			// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
@@ -143,8 +166,40 @@ public sealed class ConfigurationHandler(
 			AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 
 			AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
+
+			// draft-ietf-oauth-client-id-metadata-document section 8: a server publishing its metadata "MUST include"
+			// this property to signal support, and a server without support says nothing rather than false
+			ClientIdMetadataDocumentSupported = options.Value.ClientIdMetadataDocuments.Enabled ? true : null,
 		};
 	}
+
+	/// <summary>
+	/// <paramref name="values"/> describing how an endpoint authenticates its callers, or null where it admits a caller
+	/// by none of the methods the server has: OpenID Connect Discovery 1.0 section 4.2, "Claims with zero elements
+	/// MUST be omitted from the response".
+	/// </summary>
+	private static string[]? WhereAnyMethod(string[] methods, string[] values)
+		=> methods.Length > 0 ? values : null;
+
+	/// <summary>
+	/// <paramref name="algorithms"/>, the algorithms of a client authentication assertion, where
+	/// <paramref name="methods"/> lists a method authenticating with one: RFC 8414 section 2 has the list present "if
+	/// either of these authentication methods", private_key_jwt and client_secret_jwt, is listed, and without one it
+	/// describes nothing. Null as well where no algorithm is left: OpenID Connect Discovery 1.0 section 4.2, "Claims
+	/// with zero elements MUST be omitted from the response".
+	/// </summary>
+	private static string[]? WhereAssertionMethod(string[] methods, string[] algorithms)
+		=> algorithms.Length > 0 && methods.Any(method => method
+			is ClientAuthenticationMethods.PrivateKeyJwt
+			or ClientAuthenticationMethods.ClientSecretJwt)
+			? algorithms
+			: null;
+
+	/// <summary>
+	/// <paramref name="methods"/> where <paramref name="endpoint"/> is enabled, otherwise none.
+	/// </summary>
+	private string[] WhereEnabled(OidcEndpoints endpoint, string[] methods)
+		=> options.Value.EnabledEndpoints.HasFlag(endpoint) ? methods : [];
 
 	/// <summary>
 	/// The key management algorithms a client can encrypt a request object to <paramref name="tenant"/> under: those
@@ -185,6 +240,18 @@ public sealed class ConfigurationHandler(
 		return grantTypes.Where(grantType =>
 			(!profile.RequireCodeResponseTypeOnly || grantType != GrantTypes.Implicit) &&
 			SecurityProfileConsistency.FindGrantTypeViolations([grantType], profile).Count == 0);
+	}
+
+	/// <summary>
+	/// The code challenge methods of <paramref name="methods"/> a client of <paramref name="tenant"/> can use: plain
+	/// only where a client declared in the tenant's settings is accepted with it, as the authorization endpoint
+	/// decides. A client registered dynamically or resolved from a metadata document is never allowed plain, and the
+	/// clients of a host's own store are not known here, so plain is not listed for them.
+	/// </summary>
+	private static IEnumerable<string> AdmittedCodeChallengeMethods(TenantDefinition tenant, IEnumerable<string> methods)
+	{
+		var plainAccepted = tenant.Clients.Any(client => PkceValidator.AcceptsPlain(tenant, client));
+		return methods.Where(method => plainAccepted || method != CodeChallengeMethods.Plain);
 	}
 
 	/// <summary>
@@ -264,7 +331,7 @@ public sealed class ConfigurationHandler(
 	/// </summary>
 	private Uri Licensed(TenantDefinition tenant)
 	{
-		LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+		LicenseChecker.CheckIssuer(tenant.IssuerAsWritten(), tenant, catalog);
 		return tenant.Issuer;
 	}
 }

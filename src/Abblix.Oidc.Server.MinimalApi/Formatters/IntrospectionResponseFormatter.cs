@@ -52,7 +52,7 @@ public class IntrospectionResponseFormatter(
         NotAcceptableError => Results.Json(
             new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status406NotAcceptable),
 
-        _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
+        _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().IssuerAsWritten()),
     };
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
@@ -88,7 +88,7 @@ public class IntrospectionResponseFormatter(
         {
             // The JWT was refused for this client, not the representation: RFC 6749 section 5.2 answers it with 400,
             // and the plain document is not sent in its place, as the client registered the JWT encrypted
-            return error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString);
+            return error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().IssuerAsWritten());
         }
 
         if (representation.JsonAcceptable)

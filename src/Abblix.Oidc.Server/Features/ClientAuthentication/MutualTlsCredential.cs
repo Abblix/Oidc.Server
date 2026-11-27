@@ -35,25 +35,27 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// told of is not a secret (RFC 6749 section 2.2).
 /// </para>
 /// </remarks>
-/// <param name="clientInfoProvider">Finds the client the request's client_id names.</param>
 /// <param name="authenticationMethod">The mutual-TLS method the certificate has to be a credential of.</param>
-internal sealed class MutualTlsCredential(IClientInfoProvider clientInfoProvider, string authenticationMethod)
+internal sealed class MutualTlsCredential(string authenticationMethod)
 {
     /// <summary>
     /// The client the request's certificate is a credential of, with the certificate, or null when it is none.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <param name="clientNotFound">Told the client_id that names no client, for the owner to record.</param>
     public async Task<(ClientInfo Client, X509Certificate2 Certificate)?> FindAsync(
-        TenantDefinition tenant, ClientRequest request, Action<string>? clientNotFound = null)
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients,
+        Action<string>? clientNotFound = null)
     {
         if (request is not { ClientCertificate: { } certificate, ClientId: var clientId } ||
             !clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
+        if (!(await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client))
         {
             clientNotFound?.Invoke(clientId);
             return null;
@@ -71,10 +73,14 @@ internal sealed class MutualTlsCredential(IClientInfoProvider clientInfoProvider
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The client request.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <param name="clientNotFound">Told the client_id that names no client, for the owner to record.</param>
     public async Task<IEnumerable<string>> FindPresentedAsync(
-        TenantDefinition tenant, ClientRequest request, Action<string>? clientNotFound = null)
-        => await FindAsync(tenant, request, clientNotFound) is not null
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients,
+        Action<string>? clientNotFound = null)
+        => await FindAsync(tenant, request, clients, clientNotFound) is not null
             ? [nameof(ClientRequest.ClientCertificate)]
             : [];
 }

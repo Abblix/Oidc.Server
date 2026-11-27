@@ -11,6 +11,9 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using Abblix.Jwt;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -56,6 +59,73 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.NotNull(ad);
         Assert.Equal(PaymentInitiationWireJson, ad.ToJsonString());
         Assert.Null(newPayload["act"]);
+    }
+
+    /// <summary>
+    /// RFC 8693 section 2.1 lists no redirect_uri, and RFC 6749 section 3.2 has the server "ignore unrecognized
+    /// request parameters", so an exchange carrying one is served rather than refused for a redirect it never had.
+    /// </summary>
+    [Fact]
+    public async Task A_redirect_uri_on_an_exchange_is_ignored()
+    {
+        var initial = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson);
+        var subjectToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.NotNull(exchanged[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// A delegated token exchanged again without an actor_token keeps its act: RFC 8693 section 4.1 has act tell
+    /// the resource server who acts for the subject, and dropping it would present the delegate as the user.
+    /// </summary>
+    [Fact]
+    public async Task A_delegated_token_exchanged_without_an_actor_keeps_its_act()
+    {
+        var subjectToken = (await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var actorToken = (await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var actorSub = DecodeJwtPayload(actorToken)[IanaClaimTypes.Sub]!.GetValue<string>();
+
+        var delegated = (await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.ActorToken] = actorToken,
+            [TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        }))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = delegated,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var act = DecodeJwtPayload(exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>())[IanaClaimTypes.Act]
+            as JsonObject;
+        Assert.NotNull(act);
+        Assert.Equal(actorSub, act[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.Null(act[IanaClaimTypes.Act]);
     }
 
     [Fact]
@@ -128,6 +198,47 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(TokenExchangeTokenTypes.IdToken, echoed[1]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// An actor_token is checked against a session revocation the same way a subject_token is, so an ID token naming
+    /// no session is refused as the actor too, while the same exchange with an ID token that names its session goes
+    /// through.
+    /// </summary>
+    [Theory]
+    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, HttpStatusCode.BadRequest)]
+    public async Task An_actor_id_token_is_exchanged_only_when_it_names_its_session(
+        bool clientUsesSessionAtLogout, HttpStatusCode expected)
+    {
+        await using var host = clientUsesSessionAtLogout ? Factory.WithSessionLogout() : Factory.WithWebHostBuilder(_ => { });
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var subject = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
+        var actor = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = subject[TokenResponse.Parameters.AccessToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.ActorToken] = actor[TokenResponse.Parameters.IdToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.IdToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(ErrorCodes.InvalidRequest, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        }
+    }
+
     [Fact]
     public async Task Cross_client_id_token_exchange_rejected_by_default()
     {
@@ -136,18 +247,21 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         // though the id_token is a valid, AS-signed token: an id_token carries no client_id claim,
         // so its origin is recovered from the audience. Without that recovery any client could
         // exchange any user's id_token for an access token bound to itself.
+        // Client A uses the session at logout, so its id_token names the session and only the origin is at issue
         var clientA = TestConstants.ConfidentialClientId;
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
         var issued = await PerformParFlowAsync(
             clientA, TestConstants.ConfidentialClientSecret,
-            TestConstants.RedirectUri, PaymentInitiationWireJson);
+            TestConstants.RedirectUri, PaymentInitiationWireJson, client: client);
         var idToken = issued[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // Premise of the finding: the id_token's aud is client A and it has no client_id claim.
         var idPayload = DecodeJwtPayload(idToken);
         Assert.Equal(clientA, idPayload["aud"]!.GetValue<string>());
         Assert.Null(idPayload[IanaClaimTypes.ClientId]);
+        Assert.NotNull(idPayload[IanaClaimTypes.Sid]);
 
-        var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
@@ -177,7 +291,9 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
     [InlineData(Scopes.OpenId, true, HttpStatusCode.OK)]
     public async Task AnExchange_IsBoundByTheSubjectTokensScope(string? granted, bool idToken, HttpStatusCode expected)
     {
-        var client = CreateClient();
+        // The client uses the session at logout, so its id_token names the session and can be exchanged at all
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var (verifier, challenge) = GeneratePkcePair();
         var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
@@ -217,10 +333,99 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         }
     }
 
+    /// <summary>
+    /// Each token in a chain of exchanges expires no later than the token it was exchanged from, and its expires_in
+    /// says so, while it tells of the sign-in the chain started from rather than of the moment of the exchange.
+    /// </summary>
+    /// <remarks>
+    /// Each exchange waits a second first, so a token given a fresh lifetime would expire later than its subject
+    /// token and a fresh authentication time would differ from the sign-in, both in the whole seconds a JWT states.
+    /// An access token is taken both from a refresh token family and from outside one, since a token of a family was
+    /// cut short to its subject token before any other was.
+    /// </remarks>
+    [Theory]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, true)]
+    [InlineData(TokenExchangeTokenTypes.AccessToken, false)]
+    [InlineData(TokenExchangeTokenTypes.IdToken, false)]
+    [InlineData(TokenExchangeTokenTypes.RefreshToken, true)]
+    public async Task A_chain_of_exchanges_never_outlives_its_subject_token_and_keeps_its_sign_in(
+        string subjectTokenType, bool offline)
+    {
+        await using var host = Factory.WithSessionLogout();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = offline
+            ? await ObtainConfidentialOfflineTokensAsync(client, discovery)
+            : await ObtainConfidentialOnlineTokensAsync(client, discovery);
+        var signedInAt = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.AuthTime]!
+            .GetValue<long>();
+
+        // The sign-in's identity provider, which an access or refresh token states; an ID token states none, so a
+        // chain started from one names the server that issued it.
+        var accessPayload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var signedInWith = subjectTokenType == TokenExchangeTokenTypes.IdToken
+            ? accessPayload[JwtClaimTypes.Issuer]!.GetValue<string>()
+            : accessPayload[OidcClaimTypes.IdentityProvider]!.GetValue<string>();
+
+        var token = tokens[ResponseMemberOf(subjectTokenType)]!.GetValue<string>();
+        var tokenType = subjectTokenType;
+        for (var exchange = 1; exchange <= 2; exchange++)
+        {
+            var subjectExpiresAt = DecodeJwtPayload(token)[JwtClaimTypes.ExpiresAt]!.GetValue<long>();
+            await Task.Delay(TimeSpan.FromSeconds(1.1), TestContext.Current.CancellationToken);
+
+            var response = await ExchangeAsConfidentialClientAsync(client, discovery, token, tokenType);
+            token = response[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+            tokenType = TokenExchangeTokenTypes.AccessToken;
+
+            var payload = DecodeJwtPayload(token);
+            var expiresAt = payload[JwtClaimTypes.ExpiresAt]!.GetValue<long>();
+            Assert.True(
+                expiresAt <= subjectExpiresAt,
+                $"exchange {exchange}: the token expires at {expiresAt}, after its subject token at {subjectExpiresAt}");
+            Assert.Equal(
+                expiresAt - payload[JwtClaimTypes.IssuedAt]!.GetValue<long>(),
+                response[TokenResponse.Parameters.ExpiresIn]!.GetValue<long>());
+            Assert.Equal(signedInAt, payload[IanaClaimTypes.AuthTime]!.GetValue<long>());
+            Assert.Equal(signedInWith, payload[OidcClaimTypes.IdentityProvider]!.GetValue<string>());
+        }
+    }
+
+    /// <summary>
+    /// The token response of an authorization code grant to the confidential client without offline access, so its
+    /// access token belongs to no refresh token family.
+    /// </summary>
+    private static async Task<JsonObject> ObtainConfidentialOnlineTokensAsync(HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+        var code = await AuthorizeAndExtractCodeAsync(
+            client, discovery, CodeFlowParameters(TestConstants.ConfidentialClientId, challenge));
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        Assert.Null(DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>())[OidcClaimTypes.GrantId]);
+        return tokens;
+    }
+
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         return await ExchangeCodeForTokensAsync(client, discovery, form);
     }
+
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+        => host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
 }

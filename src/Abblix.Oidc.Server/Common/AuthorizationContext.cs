@@ -179,9 +179,9 @@ public record AuthorizationContext
 
     /// <summary>
     /// RFC 8693 section 4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
-    /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
-    /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
-    /// non-Token-Exchange grants.
+    /// represents, nested delegation chains included, each <c>sub</c> the real identifier of its actor; a
+    /// token issued to a pairwise client carries them sealed for its sector. <c>null</c> when the token
+    /// is no delegation token.
     /// </summary>
     public JsonObject? Actor { get; init; }
 
@@ -193,6 +193,13 @@ public record AuthorizationContext
     /// before this member existed reads false, as a scope the client named.
     /// </summary>
     public bool ClientNamedNoScope { get; init; }
+
+    /// <summary>
+    /// Whether the authorization request this grant comes from named no redirect URI, so <see cref="RedirectUri"/> is
+    /// the single one its client registered (OAuth 2.1 section 4.1.1). RFC 6749 section 4.1.3 then asks for none at
+    /// the token endpoint. A grant stored before this member existed reads false, as a redirect URI the client named.
+    /// </summary>
+    public bool ClientNamedNoRedirectUri { get; init; }
 
     /// <summary>
     /// RFC 8693 section 2.1 <c>audience</c> request parameter passed through to the issued token. Logical

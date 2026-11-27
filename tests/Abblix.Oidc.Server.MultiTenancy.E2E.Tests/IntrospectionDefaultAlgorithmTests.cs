@@ -100,6 +100,7 @@ public sealed class IntrospectionDefaultAlgorithmTests
 
         var app = builder.Build();
         app.UseMultiTenancy();
+        app.UseCors();
         app.MapOidcEndpoints();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;

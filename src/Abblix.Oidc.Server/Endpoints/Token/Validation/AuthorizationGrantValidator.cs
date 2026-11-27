@@ -9,26 +9,26 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
-/// Validates the authorization grant in the context of a token request, ensuring that the request is authorized
-/// and that the associated redirect URI matches the one used during the initial authorization request
+/// Validates the authorization grant in the context of a token request, ensuring that the client may use the grant
+/// type and that the grant's handler authorizes the request
 /// </summary>
 /// <remarks>
 /// This validator interacts with the <see cref="IAuthorizationGrantHandler"/> to perform the necessary checks
-/// on the authorization grant. It ensures that the token request is made for an authorized grant and verifies
-/// the consistency of the redirect URI. If the grant is valid and authorized, it updates the validation context
+/// on the authorization grant. The checks a grant type owns, such as the redirect URI of the authorization code
+/// grant, live in its handler. If the grant is valid and authorized, it updates the validation context
 /// </remarks>
 /// <param name="grantHandler">The handler responsible for authorizing the grant.</param>
 public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler): ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the authorization grant in the token request context. This method checks if the grant
-    /// is valid and authorized for the client making the request. It also ensures that the redirect URI used in the
-    /// token request matches the one used during the initial authorization request.
+    /// is valid and authorized for the client making the request.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the token request and client information.</param>
@@ -40,12 +40,34 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: unsupported_grant_type is "The authorization grant type is
+        // not supported by the authorization server", unauthorized_client "The authenticated client is not authorized to
+        // use this authorization grant type". A type no handler serves is no client's to use, so it is answered for
+        // what it is before the client's permission is asked. The handler answering it is the one dispatching the grant
+        if (!grantHandler.GrantTypesSupported.Contains(context.Request.GrantType, StringComparer.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.UnsupportedGrantType,
+                "The grant type is not supported");
+        }
+
         // Ensure the client is authorized to use the requested grant type
-        if (!context.ClientInfo.EffectiveGrantTypes.Contains(context.Request.GrantType))
+        if (!context.ClientInfo.MayUseGrantType(context.Request.GrantType))
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient,
                 "The grant type is not allowed for this client");
+        }
+
+        // RFC 6749 section 4.4.2: for the client credentials grant "The client MUST authenticate". A client that
+        // authenticates with none is refused such a grant here too, since a client the host's own store serves never
+        // passes the checks a registration or the tenant's settings go through
+        if (ConfidentialGrantTypes.RefusedTo(context.ClientInfo.TokenEndpointAuthMethod, [context.Request.GrantType])
+            is { Length: > 0 })
+        {
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient,
+                "The grant type is only for a client that authenticates itself");
         }
 
         // A grant starting from the client alone builds its context from the request's scope, so it is handed the
@@ -54,6 +76,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
             tenant,
             context.Request with { Scope = TokenRequestScope.ServedFor(context) ?? [] },
             context.ClientInfo,
+            context.Clients,
             cancellationToken);
 
         if (result.TryGetFailure(out var error))
@@ -61,20 +84,9 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
             return error;
         }
 
-        var grant = result.GetSuccess();
-
-        // Ensure that the redirect URI used matches the original authorization request
-        // to prevent redirection attacks
-        if (grant.Context.RedirectUri != context.Request.RedirectUri)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "The redirect Uri value does not match to the value used before");
-        }
-
         // Accept the request if the grant is valid, and securely store it in the validation context
         // for further processing
-        context.AuthorizedGrant = grant;
+        context.AuthorizedGrant = result.GetSuccess();
         return null;
     }
 }

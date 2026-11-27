@@ -33,11 +33,16 @@ namespace Abblix.Oidc.Server.UnitTests.Model;
 public class RegisteredClientMetadataTests
 {
     /// <summary>
-    /// The two request members that are not client metadata: the identifier the server assigns, and a software
-    /// statement the server reads and does not keep, which the registration response returns from the request.
+    /// The request members that are not client metadata: the identifier the server assigns, a software statement the
+    /// server keeps beside the metadata and returns as the client was registered with it, and the secret an update
+    /// carries back, which the server issued and the response returns beside the metadata.
     /// </summary>
     private static readonly string[] NotMetadata =
-        [ClientRegistrationRequest.Parameters.ClientId, ClientRegistrationRequest.Parameters.SoftwareStatement];
+    [
+        ClientRegistrationRequest.Parameters.ClientId,
+        ClientRegistrationRequest.Parameters.SoftwareStatement,
+        ClientRegistrationRequest.Parameters.ClientSecret,
+    ];
 
     /// <summary>
     /// Every member the registration request accepts comes back under the same name, so a member added to the
@@ -91,6 +96,21 @@ public class RegisteredClientMetadataTests
 
         Assert.Null(metadata.UserInfoSignedResponseAlg);
         Assert.Null(metadata.IntrospectionSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// The software statement a client was registered with comes back unmodified (RFC 7591 section 3.2.1), and a
+    /// client registered without one returns none.
+    /// </summary>
+    [Theory]
+    [InlineData("eyJhbGciOiJSUzI1NiJ9.eyJyZWRpcmVjdF91cmlzIjpbXX0.c2lnbmF0dXJl")]
+    [InlineData(null)]
+    public void TheRegisteredStatement_ComesBackUnmodified(string? statement)
+    {
+        var client = Registered(FullRequest());
+        client.SoftwareStatement = statement;
+
+        Assert.Equal(statement, RegisteredClientMetadata.Of(client).SoftwareStatement);
     }
 
     /// <summary>
@@ -190,7 +210,9 @@ public class RegisteredClientMetadataTests
         DefaultAcrValues = ["urn:example:loa:2"],
         InitiateLoginUri = new Uri("https://client.example.com/login"),
         RequestUris = [new Uri("https://client.example.com/request")],
-        PkceRequired = false,
+        // A native client uses PKCE whatever it states (ClientInfo.RequiresPkce), so its read-back is true; the false a
+        // confidential web client keeps is echoed by the end-to-end registration tests
+        PkceRequired = true,
         OfflineAccess = OfflineAccess.Disabled,
         DpopBoundAccessTokens = true,
         RequirePushedAuthorizationRequests = true,

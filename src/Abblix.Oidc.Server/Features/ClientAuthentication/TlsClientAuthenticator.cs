@@ -27,12 +27,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsClientAuthenticator(
     ILogger<TlsClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientKeysProvider) : IClientAuthenticator
+    IClientKeysProvider clientKeysProvider,
+    TimeProvider clock) : IClientAuthenticator
 {
     // Only the self-signed variant is served here; tls_client_auth has its own authenticator
     private readonly MutualTlsCredential _credential =
-        new(clientInfoProvider, ClientAuthenticationMethods.SelfSignedTlsClientAuth);
+        new(ClientAuthenticationMethods.SelfSignedTlsClientAuth);
 
     /// <summary>
     /// Gets the collection of client authentication methods supported by this authenticator.
@@ -55,6 +55,7 @@ public partial class TlsClientAuthenticator(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
+    /// <param name="clients">The clients of the request being served, where the client is looked up.</param>
     /// <returns>
     /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
     /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
@@ -69,13 +70,37 @@ public partial class TlsClientAuthenticator(
     /// 5. Comparing it against all keys in the client's JWKS (jwks or jwks_uri)
     /// Supports both RSA and ECDSA certificates.
     /// </remarks>
-    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
     {
-        if (await _credential.FindAsync(tenant, request, LogNotFound) is not (var client, var certificate))
+        if (await _credential.FindAsync(tenant, request, clients, LogNotFound) is not (var client, var certificate))
             return ClientAuthenticationFailures.NoCredential;
 
-        // Compute certificate public key and compare against client's JWKS signing keys
-        var certJwk = certificate.ToJsonWebKey();
+        // RFC 8705 section 2.2 has the server not validate the chain of a self-signed certificate, which leaves the
+        // certificate's own validity period (RFC 5280 section 4.1.2.5) to be checked here
+        var notBefore = new DateTimeOffset(certificate.NotBefore);
+        var notAfter = new DateTimeOffset(certificate.NotAfter);
+        var now = clock.GetUtcNow();
+        if (now < notBefore || notAfter < now)
+        {
+            LogOutsideValidityPeriod(client.ClientId, notBefore, notAfter);
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
+
+        // Compute certificate public key and compare against client's JWKS signing keys. A key of a type the
+        // conversion does not read is the client's certificate, not a fault of the server, so it is a refusal
+        JsonWebKey certJwk;
+        try
+        {
+            certJwk = certificate.ToJsonWebKey();
+        }
+        catch (InvalidOperationException)
+        {
+            LogUnsupportedKeyType(client.ClientId);
+            return ClientAuthenticationFailures.InvalidCredential;
+        }
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
             LogNoMatchingPublicKey(client.ClientId);
@@ -87,8 +112,11 @@ public partial class TlsClientAuthenticator(
     }
 
     /// <inheritdoc />
-    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
-        => _credential.FindPresentedAsync(tenant, request, LogNotFound);
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+        TenantDefinition tenant,
+        ClientRequest request,
+        IClientInfoProvider clients)
+        => _credential.FindPresentedAsync(tenant, request, clients, LogNotFound);
 
     private void LogNotFound(string clientId) => LogClientNotFound(clientId);
 

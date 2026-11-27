@@ -153,14 +153,15 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, (await PushAsync(Acme)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await PushAsync(Globex)).StatusCode);
+        // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+        Assert.Equal(HttpStatusCode.BadRequest, (await PushAsync(Globex)).StatusCode);
     }
 
     /// <summary>
     /// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
-    /// parameters". The tenant holding its clients to FAPI 2.0 answers a token in the userinfo query with
-    /// invalid_request and 400 (RFC 6750 section 3.1), and answers the same token in the Authorization header and in
-    /// the form-encoded body.
+    /// parameters". The tenant holding its clients to FAPI 2.0 answers a token in the userinfo query alone as a request
+    /// with no token, 401 with a bare challenge (RFC 6750 section 3.1), and answers the same token in the Authorization
+    /// header and in the form-encoded body.
     /// </summary>
     [Fact]
     public async Task AStrictProfile_RefusesTheAccessTokenInTheUserInfoQuery()
@@ -178,8 +179,9 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             $"{Globex}/connect/userinfo?{UserInfoRequest.Parameters.AccessToken}={accessToken.EncodedJwt}",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, inQuery.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(inQuery));
+        Assert.Equal(HttpStatusCode.Unauthorized, inQuery.StatusCode);
+        var challenge = Assert.Single(inQuery.Headers.WwwAuthenticate, value => value.Scheme == TokenTypes.Bearer);
+        Assert.DoesNotContain("error=", challenge.Parameter ?? string.Empty);
 
         using var inHeader = new HttpRequestMessage(HttpMethod.Get, $"{Globex}/connect/userinfo");
         inHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken.EncodedJwt);

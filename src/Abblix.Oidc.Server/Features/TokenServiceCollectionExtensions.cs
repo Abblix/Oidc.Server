@@ -107,6 +107,8 @@ public static class TokenServiceCollectionExtensions
         services.TryAddSingleton<IRevocationCutoffChecker, RevocationCutoffChecker>();
         services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
         services.TryAddSingleton<GrantRevocation>();
+        services.TryAddSingleton<RegistrationAccessTokenBinding>();
+        services.TryAddSingleton<RegistrationAccessTokenRevocation>();
         services.TryAddSingleton<TokenStatusCheck>();
         services.TryAddSingleton(TimeProvider.System);
         return services;

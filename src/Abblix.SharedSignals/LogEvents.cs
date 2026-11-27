@@ -77,5 +77,8 @@ public static class LogEvents
 
         /// <summary>A stream named for a repeated dispatch could not be read, so the event was not queued for it.</summary>
         public const int StreamNotRead = Base + 18;
+
+        /// <summary>The delivery guard refused a receiver's address, so the stream's queue is held.</summary>
+        public const int ReceiverAddressRefused = Base + 19;
     }
 }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -78,7 +79,7 @@ public class SingleResourceAccessTokensTests
                     RedirectUri = new Uri("https://client.example.com/callback"),
                     Scope = [],
                     Resources = resources,
-                }) { ClientInfo = client }))?.Error,
+                }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client }))?.Error,
             "back-channel" => (await new BackChannelResourceValidator(SingleIssuer.ResourceManager()).ValidateAsync(
                 Tenant,
                 new BackChannelAuthenticationValidationContext(
@@ -109,6 +110,7 @@ public class SingleResourceAccessTokensTests
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = audiences },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource: true),
             // The exchange handler carries the audiences its request names into the grant
             AuthorizedGrant = new AuthorizedGrant(
@@ -143,6 +145,7 @@ public class SingleResourceAccessTokensTests
             },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource: true),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
@@ -177,6 +180,7 @@ public class SingleResourceAccessTokensTests
             new TokenRequest { GrantType = GrantTypes.AuthorizationCode, Resources = granted[..named] },
             new ClientRequest { ClientId = ClientId })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = Client(singleResource),
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),

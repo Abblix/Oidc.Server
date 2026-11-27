@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
@@ -24,13 +26,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Handles the registration of new clients by generating the necessary credentials and adding client information to
 /// the system. Ensures the secure and compliant registration of clients as per OAuth 2.0 and OpenID Connect standards.
 /// </summary>
-/// <param name="logger">Records a registration the client store did not keep.</param>
+/// <param name="logger">Records a registration the client store kept, and one it did not.</param>
 /// <param name="credentialFactory">Generates the client id and secret.</param>
 /// <param name="clientInfoManager">Stores the registration with its registration access token id.</param>
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
-/// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
+/// <param name="clientSecretEncryptor">Encrypts the secret issued with the key of the tenant, so a client reading its
+/// registration is given its secret back (RFC 7592 section 3).</param>
+/// <param name="options">The server's settings, read once as a client registers: the defaults it takes
+/// (<see cref="OidcOptions.NewClientOptions"/>), its scope among them, and whether registration is open, which decides
+/// the trust it is created with (<see cref="ClientInfo.Trust"/>) and keeps it.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency decides a different part of one registration: the record of it, the credentials, the store, the issue time, the registration access token id and the token, the encryption of its secret, and the settings giving a new client its defaults and its trust.")]
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
@@ -38,8 +46,11 @@ public partial class RegisterClientRequestProcessor(
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    NewClientOptions newClientOptions) : IRegisterClientRequestProcessor
+    IClientSecretEncryptor clientSecretEncryptor,
+    IOptionsMonitor<OidcOptions> options) : IRegisterClientRequestProcessor
 {
+    private readonly ClientRegistrationsLog _registrations = new(logger);
+
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
@@ -61,7 +72,7 @@ public partial class RegisterClientRequestProcessor(
 
         var issuedAt = clock.GetUtcNow();
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
-        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier);
+        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier, options.CurrentValue);
 
         // The registration holds the jti of its registration access token, so the management endpoint
         // accepts that token for this registration alone (RFC 7592 section 5).
@@ -89,6 +100,8 @@ public partial class RegisterClientRequestProcessor(
                 $"The client with id={credentials.ClientId} is already registered");
         }
 
+        _registrations.Registered(tenant, clientInfo);
+
         var response = new ClientRegistrationSuccessResponse(
             credentials.ClientId,
             issuedAt,
@@ -109,40 +122,44 @@ public partial class RegisterClientRequestProcessor(
         TenantDefinition tenant,
         ClientRegistrationRequest model,
         ClientCredentials credentials,
-        string? sectorIdentifier)
-        => new ClientInfoBuilder(credentials.ClientId, model)
+        string? sectorIdentifier,
+        OidcOptions settings)
+    {
+        var newClientOptions = settings.NewClientOptions;
+        return new ClientInfoBuilder(credentials.ClientId, model)
             .WithSectorIdentifier(sectorIdentifier)
+            .WithSoftwareStatement(model.SoftwareStatement)
+            .WithHostSettingsOf(newClientOptions)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
+            .WithClientSecrets(ToClientSecrets(tenant, credentials))
+            .WithTrust(OpenRegistration.AdmitsAnyRegistrant(settings) ? ClientTrust.Untrusted : ClientTrust.Trusted)
             .Build();
-
-    /// <summary>
-    /// Whether a client registered with <paramref name="tokenEndpointAuthMethod"/> has its secret kept itself rather
-    /// than only its hash: client_secret_jwt alone, since verifying the client's HMAC-signed assertion needs it; every
-    /// other method is verified against the hash.
-    /// </summary>
-    internal static bool KeepsSecretValue(string tokenEndpointAuthMethod)
-        => tokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
+    }
 
     /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
+    /// <remarks>
+    /// The secret is kept as its hash and encrypted, never as itself: the server reads it back by decrypting it where
+    /// <see cref="ClientSecretValues"/> says it does.
+    /// </remarks>
+    private ClientSecret[]? ToClientSecrets(TenantDefinition tenant, ClientCredentials credentials)
     {
-        if (!credentials.ClientSecret.HasValue())
+        if (credentials.ClientSecret is not { Length: > 0 } secret)
             return null;
 
         return
         [
             new ClientSecret
             {
-                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? credentials.ClientSecret : null,
                 Sha512Hash = credentials.Sha512Hash,
+                EncryptedValue = clientSecretEncryptor.Encrypt(tenant, credentials.ClientId, secret),
                 ExpiresAt = credentials.ExpiresAt,
             }
         ];

@@ -2,15 +2,20 @@
 
 Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
 
-## What's New in Version 3.0
+## What's New in Version 3.1
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
-
-🚀 Features
-- Every tenant of a multi-tenant server is served through the same endpoints
+Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before moving a 3.0 host. Every change of the release is in [What's new in 3.1](https://www.abblix.com/en/docs/whats-new-in-3.1).
 
 ✏️ Improvements
-- The MVC and Minimal API hosts read a request the same way
+- Discovery publishes every endpoint on the issuer's scheme, host and port, and the registration responses return `registration_client_uri` on it
+- Dynamic client registration, pushed authorization requests and introspection apply the server's CORS policy, as the token, revocation, UserInfo and discovery endpoints do ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2)
+- The end session endpoint sends the end user to the logout confirmation page a tenant names, with a 303 redirect and `Referrer-Policy: no-referrer`
+- A host with no cache of its own starts on in-process caches
+
+🛠 Fixes
+- A failed client authentication answered with 401 and a `Basic` challenge only when the request used HTTP Basic, otherwise with the endpoint's own status ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17) section 3.2.4)
+
+The server's own changes are listed in the [Abblix.OIDC.Server README](https://www.nuget.org/packages/Abblix.OIDC.Server).
 
 ## Key Features
 
@@ -19,7 +24,7 @@ Version 3.0 changes how a host registers and configures the server. Read [Upgrad
 - Single Route Group: `MapOidcEndpoints()` returns the `RouteGroupBuilder`, so cross-cutting conventions (rate limiting, auth, filters) apply to all OIDC endpoints at once
 - Endpoint Enablement: each endpoint is mapped only when its flag is set in `OidcOptions.EnabledEndpoints`; a disabled endpoint is never registered and returns 404
 - Configurable Routes & Prefix: route templates default to `/connect/*` and `/.well-known/*`, overridable via `OidcRouteOptions`, with an optional path prefix
-- CORS-aware: cross-origin endpoints (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
+- CORS-aware: cross-origin endpoints (discovery, jwks, checksession, token, revoke, introspect, userinfo, endsession, pushed authorization and client registration) carry CORS metadata for the `OidcConstants.CorsPolicyName` policy
 - Discovery Endpoint: auto-configured `/.well-known/openid-configuration` metadata
 - Dynamic Client Registration: REST API for client management per RFC 7591/7592
 
@@ -45,11 +50,12 @@ var builder = WebApplication.CreateBuilder(args);
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-// The server serves tenants; a host serving one issuer declares one, with its clients, scopes and signing keys
+// Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    // The address the app is served on, read from the "Issuer" setting
+    // The address the app is served on, written into every token it issues.
+    // Set it as "Issuer" in appsettings.json or any other configuration source
     Issuer = new Uri(builder.Configuration["Issuer"]
         ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
@@ -58,11 +64,8 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
+app.UseCors();
 app.MapOidcEndpoints();
-
 app.Run();
 ```
 
@@ -81,7 +84,7 @@ An optional prefix mounts every endpoint under a sub-path:
 app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-known/jwks
 ```
 
-Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them must register a CORS policy named `OidcConstants.CorsPolicyName` and call `app.UseCors()`.
+Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, introspect, userinfo, endsession, pushed authorization and client registration) carry CORS metadata, so the host calls `app.UseCors()`. The server registers a policy named `OidcConstants.CorsPolicyName` that allows any origin without credentials; a host narrows it through `OidcCorsOptions.AllowedOrigins`, or replaces it by registering its own policy of that name.
 
 ## Migrating from the MVC integration
 

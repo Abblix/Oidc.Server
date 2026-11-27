@@ -116,6 +116,33 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
         AssertDPoPBound(refreshBody, expectedThumbprint: proofKey.Thumbprint);
     }
 
+    /// <summary>
+    /// A public client revokes its own refresh token naming only itself, the none method discovery publishes for
+    /// the revocation endpoint, and the token is no longer redeemed.
+    /// </summary>
+    [Fact]
+    public async Task Public_client_revokes_its_refresh_token_authenticating_with_none()
+    {
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var refreshToken = await ObtainRefreshTokenBoundToAsync(
+            client, discovery, TestConstants.DPoPPublicClientId, proofKey, clientSecret: null);
+
+        var revocation = await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
+        {
+            [RevocationRequest.Parameters.Token] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.DPoPPublicClientId,
+        });
+        Assert.Equal(HttpStatusCode.OK, revocation.StatusCode);
+
+        var refreshProof = proofKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint);
+        var refreshHttp = await SendRefreshAsync(
+            client, discovery, refreshToken, TestConstants.DPoPPublicClientId, refreshProof, clientSecret: null);
+        Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
+    }
+
     [Fact]
     public async Task Public_client_non_par_refresh_with_same_dpop_key_yields_new_token_bound_to_same_jkt()
     {

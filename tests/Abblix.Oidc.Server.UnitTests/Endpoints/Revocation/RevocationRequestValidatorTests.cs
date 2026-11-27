@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -38,6 +39,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Revocation;
 /// </summary>
 public class RevocationRequestValidatorTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     /// <summary>
     /// A window long enough that nothing in a test run replenishes a budget mid-test: what is being checked is
     /// the refusal, not the clock.
@@ -89,7 +93,7 @@ public class RevocationRequestValidatorTests
 
     private readonly Mock<ILogger<RevocationRequestValidator>> _logger;
     private readonly Mock<IClientAuthenticator> _clientAuthenticator;
-    private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
+    private readonly Mock<IAuthServiceJwtReader> _jwtValidator;
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly RevocationRequestValidator _validator;
 
@@ -97,7 +101,12 @@ public class RevocationRequestValidatorTests
     {
         _logger = new Mock<ILogger<RevocationRequestValidator>>();
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+        _jwtValidator = new Mock<IAuthServiceJwtReader>(MockBehavior.Strict);
+
+        // What is recorded about a token refuses none here: each test decides its outcome by what the token read gives
+        _jwtValidator
+            .Setup(v => v.ReadRecordsAsync(It.IsAny<TenantDefinition>(), It.IsAny<IClientInfoProvider>(), It.IsAny<JsonWebToken>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync((TenantDefinition _, IClientInfoProvider _, JsonWebToken token, ValidationOptions _) => token);
         _requestInfoProvider = new Mock<IRequestInfoProvider>();
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
         _validator = CreateValidator(new CallerRateLimitOptions());
@@ -112,6 +121,7 @@ public class RevocationRequestValidatorTests
         => new(
             _logger.Object,
             _clientAuthenticator.Object,
+            Clients,
             _jwtValidator.Object,
             rateLimiter,
             _requestInfoProvider.Object,
@@ -138,7 +148,7 @@ public class RevocationRequestValidatorTests
 
     private static JsonWebToken CreateValidJsonWebToken(string clientId = TestConstants.DefaultClientId)
     {
-        var token = new JsonWebToken();
+        var token = new JsonWebToken { Header = { Type = JsonWebTokenTypes.AccessToken } };
         token.Payload.ClientId = clientId;
         token.Payload.JwtId = "jwt_id_123";
         return token;
@@ -158,11 +168,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -172,8 +182,8 @@ public class RevocationRequestValidatorTests
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Equal(revocationRequest, validRequest.Model);
         Assert.Equal(token, validRequest.Token);
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, clientInfo, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, clientInfo, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -188,7 +198,7 @@ public class RevocationRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
@@ -198,7 +208,7 @@ public class RevocationRequestValidatorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
         Assert.Equal("The client is not authorized", error.ErrorDescription);
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
         _jwtValidator.VerifyNoOtherCalls();
     }
 
@@ -222,11 +232,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(publicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -254,11 +264,11 @@ public class RevocationRequestValidatorTests
             "Token is expired");
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         // Act
@@ -268,8 +278,8 @@ public class RevocationRequestValidatorTests
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Equal(revocationRequest, validRequest.Model);
         Assert.Null(validRequest.Token);
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -285,12 +295,12 @@ public class RevocationRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
@@ -314,11 +324,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken("different_client");
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -328,8 +338,49 @@ public class RevocationRequestValidatorTests
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Equal(revocationRequest, validRequest.Model);
         Assert.Null(validRequest.Token);
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A token is acted on only for the client it belongs to - an access or refresh token's client_id, a registration
+    /// access token's subject, and no client for an initial access token - and that is decided before anything
+    /// recorded about the token is read, since reading the records of a superseded refresh token revokes its grant.
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken, TestConstants.DefaultClientId, null, true)]
+    [InlineData(JwtTypes.RefreshToken, TestConstants.DefaultClientId, null, true)]
+    [InlineData(JwtTypes.RegistrationAccessToken, null, TestConstants.DefaultClientId, true)]
+    [InlineData(JsonWebTokenTypes.AccessToken, "different_client", TestConstants.DefaultClientId, false)]
+    [InlineData(JsonWebTokenTypes.AccessToken, null, TestConstants.DefaultClientId, false)]
+    [InlineData(JwtTypes.RefreshToken, "different_client", null, false)]
+    [InlineData(JwtTypes.RegistrationAccessToken, null, "different_client", false)]
+    [InlineData(JwtTypes.RegistrationAccessToken, TestConstants.DefaultClientId, "different_client", false)]
+    [InlineData(JwtTypes.InitialAccessToken, null, "registration-portal", false)]
+    [InlineData(JwtTypes.InitialAccessToken, TestConstants.DefaultClientId, TestConstants.DefaultClientId, false)]
+    public async Task ValidateAsync_ActsOnlyOnTheTokensOfTheClientAsking_DecidedBeforeTheRecords(
+        string type, string? clientIdClaim, string? subject, bool owned)
+    {
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
+        var token = new JsonWebToken { Header = { Type = type } };
+        token.Payload.ClientId = clientIdClaim;
+        token.Payload.Subject = subject;
+        token.Payload.JwtId = "jwt_id_123";
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
+        _jwtValidator
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, clientInfo, It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Equal(owned ? token : null, validRequest.Token);
+        _jwtValidator.Verify(
+            v => v.ReadRecordsAsync(TestTenant.Matched, It.IsAny<IClientInfoProvider>(), token, It.IsAny<ValidationOptions>()),
+            owned ? Times.Once() : Times.Never());
     }
 
     /// <summary>
@@ -348,13 +399,13 @@ public class RevocationRequestValidatorTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Callback(new Action<TenantDefinition, ClientRequest>((_, _) => callOrder.Add("authenticate")))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .Callback(new Action<TenantDefinition, ClientRequest, IClientInfoProvider>((_, _, _) => callOrder.Add("authenticate")))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, __) => callOrder.Add("validate")))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, ClientInfo?, IClientInfoProvider, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, _, __) => callOrder.Add("validate")))
             .ReturnsAsync(token);
 
         // Act
@@ -378,14 +429,14 @@ public class RevocationRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
-        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
+        _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()), Times.Once);
         _jwtValidator.VerifyNoOtherCalls();
     }
 
@@ -404,18 +455,18 @@ public class RevocationRequestValidatorTests
         var jwt = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(jwt);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -432,11 +483,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -461,11 +512,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -490,11 +541,11 @@ public class RevocationRequestValidatorTests
         var token = CreateValidJsonWebToken();
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         // Act
@@ -519,11 +570,11 @@ public class RevocationRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -537,7 +588,7 @@ public class RevocationRequestValidatorTests
         Assert.Equal(ErrorCodes.TemporarilyUnavailable, refusal.Error);
         Assert.Equal(CallerRateLimiters.Revocation, refusal.Budget);
         Assert.NotNull(refusal.RetryAfter);
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -552,11 +603,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -569,7 +620,7 @@ public class RevocationRequestValidatorTests
         Assert.IsType<TooManyRequestsError>(error);
 
         // The token in the second request was never read, which is the work this is protecting.
-        _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
+        _jwtValidator.Verify(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
     }
 
     /// <summary>
@@ -584,11 +635,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -616,11 +667,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -628,7 +679,7 @@ public class RevocationRequestValidatorTests
         var flooded = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(AnotherPublicClient));
 
         var neighbor = await validator.ValidateAsync(
@@ -660,11 +711,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(CallerRateLimiters.Create(new CallerRateLimitOptions()), recorded);
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(
                 isPublic ? PublicClientNamed(TestConstants.DefaultClientId) : new ClientInfo(TestConstants.DefaultClientId)));
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -690,6 +741,7 @@ public class RevocationRequestValidatorTests
         var validator = new RevocationRequestValidator(
             new Logger<RevocationRequestValidator>(recorded),
             _clientAuthenticator.Object,
+            Clients,
             _jwtValidator.Object,
             CallerRateLimiters.Create(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute }),
             _requestInfoProvider.Object,
@@ -698,11 +750,11 @@ public class RevocationRequestValidatorTests
                 Options.Create(new OidcOptions())));
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -710,7 +762,7 @@ public class RevocationRequestValidatorTests
         await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(AnotherPublicClient));
 
         await validator.ValidateAsync(
@@ -758,18 +810,18 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo($"{NamedClientId}@{Source}")));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
         var spender = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClientNamed(NamedClientId)));
 
         var impersonated = await validator.ValidateAsync(
@@ -798,11 +850,11 @@ public class RevocationRequestValidatorTests
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}"));
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -831,11 +883,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -868,11 +920,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(new CallerRateLimitOptions { PermitLimit = 1, Window = OneMinute });
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act, Assert
@@ -897,11 +949,11 @@ public class RevocationRequestValidatorTests
         var validator = CreateValidator(defaults);
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
@@ -931,7 +983,7 @@ public class RevocationRequestValidatorTests
                     _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 })));
 
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         // The second request is made from inside the first one's token validation, which is the only moment
@@ -942,7 +994,7 @@ public class RevocationRequestValidatorTests
         var reentered = false;
         OidcError? reentrantError = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .Returns(async () =>
             {
                 if (!reentered)
@@ -965,5 +1017,89 @@ public class RevocationRequestValidatorTests
         // Assert
         Assert.True(first.TryGetSuccess(out _));
         Assert.IsType<TooManyRequestsError>(reentrantError);
+    }
+
+    /// <summary>
+    /// A token a revocation already reached is the ordinary end of a client's sign-out: it ends the session, which
+    /// revokes the session's tokens, and then revokes its refresh token here as RFC 7009 asks. The request is
+    /// answered as RFC 7009 Section 2.2 answers an invalid token, and nobody did anything wrong, so nothing is
+    /// logged as a warning.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithATokenAlreadyRevoked_ShouldNotWarn()
+    {
+        var recorded = await ValidateRecordingAsync(
+            new JwtValidationError(JwtError.TokenRevoked, "Tokens issued before the revocation cutoff are rejected"));
+
+        Assert.DoesNotContain(recorded, entry => entry.Level >= LogLevel.Warning);
+        var entry = Assert.Single(
+            recorded,
+            entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.TokenAlreadyRevoked);
+        Assert.Equal(LogLevel.Information, entry.Level);
+    }
+
+    /// <summary>
+    /// Every refusal but a revocation already recorded is a warning, so moving a reason from one level to the other
+    /// turns one of these cases red.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtError.InvalidToken)]
+    [InlineData(JwtError.TokenAlreadyUsed)]
+    [InlineData(JwtError.MalformedToken)]
+    [InlineData(JwtError.InvalidAlgorithm)]
+    [InlineData(JwtError.InvalidTokenType)]
+    [InlineData(JwtError.InvalidHeader)]
+    [InlineData(JwtError.InvalidSignature)]
+    public async Task ValidateAsync_WithAnyOtherRefusal_ShouldWarn(JwtError error)
+    {
+        var recorded = await ValidateRecordingAsync(new JwtValidationError(error, "The token was not accepted"));
+
+        var entry = Assert.Single(
+            recorded,
+            entry => entry.EventId.Id == LogEvents.Endpoints.RevocationRequestValidator.TokenValidationFailed);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+    }
+
+    /// <summary>
+    /// Every refusal has a level, so a reason added later is answered as RFC 7009 Section 2.2 asks rather than
+    /// thrown, and the theory above names each one logged as a warning.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_LogsEveryRefusalAtSomeLevel()
+    {
+        foreach (var error in Enum.GetValues<JwtError>())
+        {
+            var recorded = await ValidateRecordingAsync(new JwtValidationError(error, "The token was not accepted"));
+            Assert.NotEmpty(recorded);
+        }
+    }
+
+    private async Task<List<LogRecord>> ValidateRecordingAsync(JwtValidationError refusal)
+    {
+        var recorded = new RecordingLoggerFactory();
+        var validator = new RevocationRequestValidator(
+            new Logger<RevocationRequestValidator>(recorded),
+            _clientAuthenticator.Object,
+            Clients,
+            _jwtValidator.Object,
+            CallerRateLimiters.Create(new CallerRateLimitOptions()),
+            _requestInfoProvider.Object,
+            new UnnamedSourceNotice(
+                new Logger<UnnamedSourceNotice>(new RecordingLoggerFactory()),
+                Options.Create(new OidcOptions())));
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
+
+        _jwtValidator
+            .Setup(v => v.ReadAuthenticAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<IClientInfoProvider>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(refusal);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Null(validRequest.Token);
+        return recorded.Entries;
     }
 }

@@ -30,7 +30,7 @@ public class SecureUriValidatorTests
     [Theory]
     [InlineData("https://example.com/api")]
     [InlineData("https://auth.example.com:8443/path")]
-    [InlineData("https://203.0.113.10/api")] // public IP literal
+    [InlineData("https://8.8.8.8/api")] // public IP literal
     public void Validate_PublicHttpsUri_UnderSecureDefaults_ReturnsNull(string uri)
     {
         Assert.Null(CreateValidator(SecureDefaults).Validate(new Uri(uri)));

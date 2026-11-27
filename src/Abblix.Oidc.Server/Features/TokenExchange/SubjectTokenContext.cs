@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 
@@ -17,14 +18,16 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <c>subject_token</c>. Independent of the token's on-wire format -- JWT-based resolvers parse
 /// the payload, opaque-token resolvers recover the equivalent fields from a previously stored
 /// grant. The <see cref="TokenExchangeGrantHandler"/> consumes this record to
-/// synthesise the new <see cref="AuthorizationContext"/> and
+/// synthesize the new <see cref="AuthorizationContext"/> and
 /// <see cref="UserAuthentication.AuthSession"/>.
 /// </summary>
 /// <param name="Subject">The end-user identifier the subject_token represents (RFC 7519 <c>sub</c>
-/// claim or its opaque-token equivalent). Required.</param>
+/// claim or its opaque-token equivalent), the real one: a pairwise pseudonym is opened by the resolver, since the
+/// issued token seals it for the client receiving it. Required.</param>
 /// <param name="Issuer">The party that issued the subject_token, used as the
-/// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c>. <c>null</c> when the resolver
-/// cannot determine it (e.g. opaque tokens without an issuer field).</param>
+/// <c>IdentityProvider</c> on the synthesized <c>AuthSession</c> when <see cref="IdentityProvider"/> is
+/// <c>null</c>. <c>null</c> when the resolver cannot determine it (e.g. opaque tokens without an issuer
+/// field).</param>
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
 /// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 section 2.1 narrow
 /// only -- never widen). <c>null</c> when the subject_token did not carry a scope claim.</param>
@@ -37,12 +40,21 @@ public sealed record SubjectTokenContext(
     string[]? Scope,
     JsonArray? AuthorizationDetails)
 {
-    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, captured as
-    /// a raw <see cref="JsonObject"/>. When the exchange adds a new actor on top of a subject_token
-    /// that already had its own act chain, the grant handler nests this value under the new actor's
-    /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
-    /// subject_token was not itself a delegation token.</summary>
+    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, every <c>sub</c> in the
+    /// chain the real identifier of its actor: a resolver opens pairwise pseudonyms as it opens
+    /// <see cref="Subject"/>, since the issued token seals them for the client receiving it. The exchanged
+    /// token keeps this chain, nested under the new actor's <c>act</c> member when the request supplies an
+    /// actor_token. <c>null</c> when the subject_token was not itself a delegation token.</summary>
     public JsonObject? Act { get; init; }
+
+    /// <summary>
+    /// The identity provider the end user signed in with in the session the subject_token belongs to, carried into
+    /// the exchanged token, so that token names the same sign-in whatever kind of token it was exchanged from.
+    /// <c>null</c> when the subject_token states none: an ID token never does, and neither may a host's own token
+    /// type. <see cref="Issuer"/> stands in for it then, so a token exchanged from an ID token names the ID token's
+    /// issuer.
+    /// </summary>
+    public string? IdentityProvider { get; init; }
 
     /// <summary>
     /// The <c>client_id</c> the subject_token was originally issued to. The grant handler uses this
@@ -54,6 +66,13 @@ public sealed record SubjectTokenContext(
     public string? OriginalClientId { get; init; }
 
     /// <summary>
+    /// The audience of the subject_token, which <see cref="ClientInformation.CrossClientSubjectTokenExchange.AddressedToClient"/>
+    /// matches against the presenting client's own locations to exchange a token issued to another client. <c>null</c>
+    /// when the resolver states none, which matches no location.
+    /// </summary>
+    public IReadOnlyCollection<string>? Audiences { get; init; }
+
+    /// <summary>
     /// The refresh token family the subject_token carries, so the exchanged token joins it and a revoked family
     /// refuses the exchanged token too (RFC 9700 section 4.14.2). The authority the exchange hands out comes from
     /// the subject_token, so it must not outlive the grant that token came from. <c>null</c> when the
@@ -62,8 +81,72 @@ public sealed record SubjectTokenContext(
     public string? GrantId { get; init; }
 
     /// <summary>
-    /// When the subject_token expires, so a token exchanged from it within a refresh token family does not outlive
-    /// it, and with it the revocation of that family. <c>null</c> when the subject_token states no expiry.
+    /// When the subject_token expires, so a token exchanged from it does not outlive it: an exchange hands on the
+    /// authority of the subject_token and never extends it. <c>null</c> when the subject_token states no expiry.
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// The thumbprint of the DPoP key the subject_token is bound to (its <c>cnf.jkt</c>), which the client the token was
+    /// issued to proves to exchange it. <c>null</c> when the subject_token is bound to no DPoP key.
+    /// </summary>
+    public string? ProofKeyThumbprint { get; init; }
+
+    /// <summary>
+    /// The SHA-256 thumbprint of the client certificate the subject_token is bound to (its <c>cnf.x5t#S256</c>), which
+    /// the client the token was issued to presents to exchange it. <c>null</c> when the subject_token is bound to no
+    /// certificate.
+    /// </summary>
+    public string? CertificateSha256Thumbprint { get; init; }
+
+    /// <summary>
+    /// The session the subject_token belongs to. The exchanged token joins it, so revoking that session refuses every
+    /// token derived from it, however many exchanges stand between them. A resolver refuses a token naming no session
+    /// rather than resolving it.
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// When the end user signed in to the session the subject_token belongs to. The exchanged token carries it rather
+    /// than the moment of the exchange, which authenticated nobody.
+    /// </summary>
+    public required DateTimeOffset AuthenticationTime { get; init; }
+
+    /// <summary>
+    /// The authentication context class that sign-in satisfied, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public string? AuthContextClassRef { get; init; }
+
+    /// <summary>
+    /// The authentication methods that sign-in used, carried into the exchanged token. <c>null</c> when the
+    /// subject_token states none.
+    /// </summary>
+    public ICollection<string>? AuthenticationMethodReferences { get; init; }
+
+    /// <summary>
+    /// The <c>act</c> claim of a token exchanged from this subject_token, with <paramref name="actor"/> acting where an
+    /// actor_token was presented.
+    /// </summary>
+    /// <remarks>
+    /// Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's act object names
+    /// the actor's subject; any prior act chain inherited from the subject_token becomes the new actor's nested
+    /// act.act, preserving the full delegation path. Without an actor_token the subject_token's own chain is kept as it
+    /// is: a delegated token exchanged again still acts for somebody else, and only a subject_token carrying no act
+    /// yields a token without one.
+    /// </remarks>
+    /// <param name="actor">The resolved actor_token, or null where none was presented.</param>
+    public JsonObject? ActorChainWith(SubjectTokenContext? actor)
+    {
+        if (actor is null)
+            return (JsonObject?)Act?.DeepClone();
+
+        var actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
+        if (Act is not null)
+        {
+            actorClaim[IanaClaimTypes.Act] = Act.DeepClone();
+        }
+
+        return actorClaim;
+    }
 }

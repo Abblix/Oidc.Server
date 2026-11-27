@@ -23,6 +23,7 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SecurityEvents.Subjects;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -126,6 +127,43 @@ public class SharedSignalsServiceCollectionTests
         // compares, and the defect is precisely that they can differ.
         Assert.Equal(hostIssuer, minted.Issuer);
         Assert.Equal(stream.Configuration.Issuer, minted.Issuer);
+    }
+
+    /// <summary>
+    /// A delivery proxy no transport can use stops the host from starting, judged on the decisions the container
+    /// holds, rather than failing the first delivery.
+    /// </summary>
+    [Theory]
+    [InlineData("ftp://proxy.example.com", true)]
+    [InlineData("http://proxy.example.com:3128", false)]
+    public async Task AnUnusableOutboundProxy_IsRefusedAtStartup(string proxy, bool refused)
+    {
+        var services = SecurityEventsBase();
+        services.AddSharedSignalsTransmitter(TransmitterOptions with { OutboundProxy = new Uri(proxy) });
+        using var provider = services.BuildServiceProvider();
+
+        var failure = await Record.ExceptionAsync(() => provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(refused, failure is OptionsValidationException);
+        Assert.Equal(refused, failure is not null);
+    }
+
+    /// <summary>
+    /// The proxy judged at startup is the one the delivery guard uses: that of the address policy the container
+    /// holds, which a host may register itself with decisions of its own.
+    /// </summary>
+    [Fact]
+    public async Task AnUnusableProxyOfAHostsOwnAddressPolicy_IsRefusedAtStartup()
+    {
+        var services = SecurityEventsBase();
+        services.AddSingleton(new ReceiverAddressPolicy(
+            TransmitterOptions with { OutboundProxy = new Uri("ftp://proxy.example.com") }));
+        services.AddSharedSignalsTransmitter(TransmitterOptions);
+        using var provider = services.BuildServiceProvider();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(() => provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>

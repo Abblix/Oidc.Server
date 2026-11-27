@@ -10,6 +10,8 @@ using System.Net;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Tests.Shared;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -23,13 +25,17 @@ namespace Abblix.SharedSignals.UnitTests;
 /// </summary>
 public class PushDeliverySsrfWiringTests
 {
-    private static IHttpMessageHandlerFactory HandlerFactory()
+    private static IHttpMessageHandlerFactory HandlerFactory(params Uri[] allowedReceivers)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions();
         services.AddSecurityEvents();
-        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" });
+        services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
+        {
+            Issuer = "https://transmitter.test",
+            AllowedReceiverAddresses = allowedReceivers,
+        });
         return services.BuildServiceProvider().GetRequiredService<IHttpMessageHandlerFactory>();
     }
 
@@ -72,19 +78,22 @@ public class PushDeliverySsrfWiringTests
     }
 
     [Fact]
-    public void ThePushClientRoutesThroughTheValidatingHandler_WithRedirectsDisabled()
+    public async Task ThePushClientRoutesThroughTheValidatingHandler_WithRedirectsDisabled()
     {
-        using var handler = HandlerFactory().CreateHandler(PushDeliveryTransport.HttpClientName);
+        using var origin = new LoopbackOrigin("302 Found", "Location: http://169.254.169.254/\r\n");
+        var receiver = new Uri($"http://127.0.0.1:{origin.Port}/events");
+        using var handler = HandlerFactory(receiver).CreateHandler(PushDeliveryTransport.HttpClientName);
 
-        // One guard, not the first of several: with a second one chained on, the outer one's inner handler is the
-        // other guard, and the IsType assertion on its inner handler would refuse it for the wrong reason - a type that
-        // does not match rather than a chain carrying two.
-        var guard = Assert.Single(Chain(handler).OfType<ReceiverAddressValidatingHandler>());
+        Assert.Single(Chain(handler).OfType<ReceiverAddressValidatingHandler>());
 
         // The redirect-following that would carry a delivery to an unvetted second address is off, so a receiver's
-        // 3xx comes back as an ordinary non-success response instead.
-        var transport = Assert.IsType<HttpClientHandler>(guard.InnerHandler);
-        Assert.False(transport.AllowAutoRedirect);
+        // 3xx comes back as an ordinary non-success response instead, driven to a receiver the operator named.
+        using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
+        using var response = await invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Post, receiver), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal(1, origin.Requests);
     }
 
     /// <summary>
@@ -102,11 +111,60 @@ public class PushDeliverySsrfWiringTests
         };
         using var client = new HttpClient(guard);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => client.GetAsync(
             new Uri("https://169.254.169.254/events"), TestContext.Current.CancellationToken));
 
         // The refusal happened before anything reached the transport.
         Assert.Equal(0, probe.Requests);
+    }
+
+    /// <summary>
+    /// A receiver's name standing for an internal address is refused on the send, by the address its connection would
+    /// be made to: the name itself passes every rule a string can be judged by.
+    /// </summary>
+    [Fact]
+    public async Task TheValidatingHandler_RefusesANameStandingForAnInternalAddress()
+    {
+        var probe = new ConnectionProbe();
+        var guard = new ReceiverAddressValidatingHandler(
+            new ReceiverAddressPolicy(
+                new SharedSignalsTransmitterOptions { Issuer = "https://transmitter.test" },
+                (_, _) => Task.FromResult(new[] { IPAddress.Parse("10.0.0.1") })));
+        guard.InnerHandler!.Dispose();
+        guard.InnerHandler = probe;
+        using var client = new HttpClient(guard);
+
+        await Assert.ThrowsAsync<OutboundAddressRefusedException>(() => client.PostAsync(
+            new Uri("https://receiver.example.com/events"), null, TestContext.Current.CancellationToken));
+
+        Assert.Equal(0, probe.Requests);
+    }
+
+    /// <summary>
+    /// The proxy an operator names for deliveries is the one a delivery goes through: an HTTPS receiver is asked for
+    /// through a tunnel the proxy opens.
+    /// </summary>
+    [Fact]
+    public async Task TheNamedOutboundProxy_CarriesTheDelivery()
+    {
+        using var proxy = new LoopbackOrigin();
+        var guard = new ReceiverAddressValidatingHandler(
+            new ReceiverAddressPolicy(
+                new SharedSignalsTransmitterOptions
+                {
+                    Issuer = "https://transmitter.test",
+                    OutboundProxy = new Uri($"http://127.0.0.1:{proxy.Port}/"),
+                },
+                (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") })));
+        using var invoker = new HttpMessageInvoker(guard);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+
+        // The stand-in proxy speaks no TLS inside the tunnel, so the delivery fails once the proxy was asked
+        await Assert.ThrowsAnyAsync<Exception>(() => invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Post, "https://receiver.example.com/events"), deadline.Token));
+
+        Assert.Equal(["CONNECT receiver.example.com:443 HTTP/1.1"], proxy.RequestLines);
     }
 
     private sealed class ConnectionProbe : HttpMessageHandler

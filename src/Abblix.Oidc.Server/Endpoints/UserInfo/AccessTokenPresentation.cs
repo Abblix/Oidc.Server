@@ -25,8 +25,9 @@ public static class AccessTokenPresentation
     /// </summary>
     /// <returns>
     /// <see cref="AccessTokenScheme.Bearer"/> for the <c>Authorization: Bearer</c> header or an <c>access_token</c>
-    /// parameter, each one of the "three methods of sending bearer access tokens" of RFC 6750 section 2, so the header
-    /// and a parameter together still name one scheme; <see cref="AccessTokenScheme.DPoP"/> for the
+    /// parameter of the body, each a method of sending bearer access tokens of RFC 6750 section 2, so the header and
+    /// the parameter together still name one scheme; a token in the query, which is ignored (OAuth 2.1 section 5.1),
+    /// names none; <see cref="AccessTokenScheme.DPoP"/> for the
     /// <c>Authorization: DPoP</c> header alone; null for that header beside a parameter, two schemes at once
     /// (answered as section 7.2 answers two Authorization headers in Figure 19), for the Authorization header sent
     /// more than once, answered as that figure answers it whichever schemes the lines name, and for a request presenting
@@ -38,7 +39,7 @@ public static class AccessTokenPresentation
             return null;
 
         var header = clientRequest.AuthorizationHeader;
-        var parameter = request.AccessToken;
+        var parameter = request.AccessTokenInForm;
 
         if (header.HasScheme(TokenTypes.DPoP))
             return parameter is null ? AccessTokenScheme.DPoP : null;

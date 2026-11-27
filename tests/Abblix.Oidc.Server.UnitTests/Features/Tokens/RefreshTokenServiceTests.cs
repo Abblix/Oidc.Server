@@ -9,6 +9,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -69,7 +70,7 @@ public class RefreshTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new GrantRevocation(_tokenRegistry.Object),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog);
@@ -594,6 +595,49 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// A refresh token older than its client's absolute lifetime is refused with invalid_grant before any token is
+    /// issued from it, although its own expiry, set while the lifetime was longer, has not come: the lifetime it is
+    /// judged by is the one that decides whether it may be renewed, so a token that may be redeemed may be renewed.
+    /// </summary>
+    [Theory]
+    [InlineData(10, false)]
+    [InlineData(7, true)]
+    public async Task AuthorizeByRefreshToken_JudgesTheTokenByItsClientsCurrentLifetime(int issuedHoursAgo, bool accepted)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+            SlidingExpiresIn = null,
+        });
+        var issuedAt = _currentTime.AddHours(-issuedHoursAgo);
+        var refreshToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                Subject = UserId,
+                SessionId = SessionId,
+                AuthenticationTime = issuedAt,
+                IdentityProvider = "local",
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+                IssuedAt = issuedAt,
+                ExpiresAt = issuedAt + TimeSpan.FromHours(24),
+            },
+        };
+
+        var authorized = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, clientInfo);
+
+        Assert.Equal(accepted, authorized.TryGetSuccess(out _));
+        if (!accepted)
+        {
+            Assert.Equal(ErrorCodes.InvalidGrant, authorized.GetFailure().Error);
+            Assert.Null(await _service.CreateRefreshTokenAsync(
+                SingleIssuer.Tenant, CreateAuthSession(), CreateAuthorizationContext(), clientInfo, refreshToken, GrantId));
+        }
+    }
+
+    /// <summary>
     /// Verifies that CreateRefreshTokenAsync returns a properly formatted EncodedJsonWebToken
     /// containing both the decoded JWT and its encoded string representation.
     /// The encoded string is what gets transmitted to the client.
@@ -985,6 +1029,55 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// A public client's refresh token rotates unless it is bound to a DPoP key, over the client's policy and profile
+    /// (RFC 9700 section 2.2.2), for a client from a host's own store or kept through a registration update as for a
+    /// declared one. The decision is the presented token's binding: an unbound token of a client requiring DPoP
+    /// rotates, and a token bound by a proof the client sent unasked is reused.
+    /// </summary>
+    [Theory]
+    [InlineData(RefreshTokenReusePolicy.Reuse, false, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, true, true, false)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, true, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Reuse, false, true, false)]
+    [InlineData(RefreshTokenReusePolicy.WhenSenderConstrained, false, false, true)]
+    [InlineData(RefreshTokenReusePolicy.Rotate, true, true, true)]
+    public async Task TrySpend_OfAPublicClient_RotatesUnlessTheTokenIsBoundToADPoPKey(
+        RefreshTokenReusePolicy reusePolicy,
+        bool requireDPoP,
+        bool tokenBoundToADPoPKey,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = reusePolicy,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.None;
+        clientInfo.RequireDPoP = requireDPoP;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+        if (tokenBoundToADPoPKey)
+            oldToken.Payload.Confirmation = new JsonWebTokenConfirmation { JwkThumbprint = "the-dpop-key-thumbprint" };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
     /// A policy value the enum does not define, a number a configuration binder takes as it stands or a value a host's
     /// client store holds, is refused rather than read as one of the three.
     /// </summary>
@@ -1046,6 +1139,191 @@ public class RefreshTokenServiceTests
             Times.Once);
     }
 
+    /// <summary>
+    /// A refresh token reaches its pairwise client, so the actors of a delegated grant are sealed in it for that
+    /// client's sector as its sub is, and opened back when the token is redeemed: a refresh then issues tokens naming
+    /// the same real parties instead of sealing a pseudonym a second time.
+    /// </summary>
+    [Fact]
+    public async Task APairwiseDelegatedRefreshToken_SealsEveryActor_AndOpensThemBack()
+    {
+        var converter = new SubjectTypeConverter(
+            new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>();
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var service = new RefreshTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            _jwtFormatter.Object,
+            _tokenRegistry.Object,
+            new GrantRevocation(_tokenRegistry.Object),
+            new FixedSubjectTypeConverter(converter),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.LicensedCatalog);
+        var client = CreateClientInfo();
+        client.SubjectType = SubjectTypes.Pairwise;
+        client.SectorIdentifier = "sector.example.com";
+        var actor = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "current-actor",
+            [IanaClaimTypes.Act] = new JsonObject { [IanaClaimTypes.Sub] = "prior-actor" },
+        };
+        var authContext = CreateAuthorizationContext() with { Actor = actor };
+        var authSession = CreateAuthSession() with { AuthenticationTime = _currentTime.AddMinutes(-5) };
+
+        var issued = await service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, client, null, GrantId);
+
+        Assert.NotNull(issued);
+        var act = Assert.IsType<JsonObject>(issued.Token.Payload.Json[IanaClaimTypes.Act]);
+        Assert.Equal(converter.Convert("current-actor", client), act[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.Equal(
+            converter.Convert("prior-actor", client),
+            act[IanaClaimTypes.Act]![IanaClaimTypes.Sub]!.GetValue<string>());
+
+        var redeemed = await service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued.Token, client);
+
+        Assert.True(redeemed.TryGetSuccess(out var grant));
+        Assert.Equal(UserId, grant.AuthSession.Subject);
+        Assert.True(JsonNode.DeepEquals(actor, grant.Context.Actor));
+    }
+
+
+    /// <summary>
+    /// A refresh token of a grant for a resource names this server as its audience, so a resource server checking
+    /// the audience of a token presented to it (RFC 9068 section 4) refuses it, and keeps the grant's resources in
+    /// the server's own claim instead.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_ForAResourceGrant_NamesTheIssuer_AndKeepsTheResourcesInTheServersClaim()
+    {
+        var authContext = CreateAuthorizationContext() with { Resources = [ApiResource, OtherApiResource] };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        Assert.NotNull(issued);
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.Equal(
+            [ApiResource.OriginalString, OtherApiResource.OriginalString],
+            issued.Token.Payload.Json.GetArrayOfStringsOrNull(RefreshTokenResources.ClaimType));
+    }
+
+    /// <summary>
+    /// A refresh token of a grant naming no resource still states that it names none, so its reader tells it from a
+    /// token that carries its resources in the audience.
+    /// </summary>
+    [Fact]
+    public async Task CreateRefreshToken_ForAGrantNamingNoResource_StatesAnEmptyList()
+    {
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), null, GrantId);
+
+        Assert.NotNull(issued);
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.IsType<JsonArray>(issued.Token.Payload.Json[RefreshTokenResources.ClaimType]);
+        Assert.Empty(issued.Token.Payload.Json.GetArrayOfStringsOrNull(RefreshTokenResources.ClaimType)!);
+    }
+
+    /// <summary>
+    /// The grant's resources are read from the server's claim where the token carries it, an empty one naming no
+    /// resource, and from the audience where it does not, as a refresh token issued by 3.0 has them.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "https://api.example.com" }, null, new[] { "https://api.example.com" })]
+    [InlineData(new string[0], null, null)]
+    [InlineData(new string[0], new[] { "https://api.example.com" }, new[] { "https://api.example.com" })]
+    [InlineData(new string[0], new string[0], null)]
+    [InlineData(new[] { "https://api.example.com" }, new string[0], null)]
+    [InlineData(new string[0], new[] { "not-a-uri", "https://api.example.com" }, new[] { "https://api.example.com" })]
+    public async Task AuthorizeByRefreshToken_ReadsTheResourcesFromTheServersClaim_ElseFromTheAudience(
+        string[] audienceResources,
+        string[]? claimed,
+        string[]? expected)
+    {
+        var refreshToken = new JsonWebToken
+        {
+            Payload =
+            {
+                Subject = UserId,
+                SessionId = SessionId,
+                AuthenticationTime = _currentTime.AddMinutes(-30),
+                IdentityProvider = "local",
+                Issuer = Issuer,
+                Audiences = audienceResources is { Length: > 0 } ? audienceResources : [Issuer],
+                ClientId = ClientId,
+                Scope = [Scopes.OpenId],
+                GrantId = GrantId,
+            },
+        };
+        if (claimed is not null)
+        {
+            refreshToken.Payload.Json[RefreshTokenResources.ClaimType] =
+                new JsonArray([.. claimed.Select(value => (JsonNode?)JsonValue.Create(value))]);
+        }
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(expected?.Select(value => new Uri(value)).ToArray(), grant.Context.Resources);
+    }
+
+    /// <summary>
+    /// A refresh token issued for a resource grant is read back to the same resources, which the access tokens
+    /// renewed from it are issued for.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenOfAResourceGrant_IsReadBackToTheSameResources()
+    {
+        var authContext = CreateAuthorizationContext() with { Resources = [ApiResource, OtherApiResource] };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued!.Token, CreateClientInfo());
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal([ApiResource, OtherApiResource], grant.Context.Resources!);
+    }
+
+    /// <summary>
+    /// The RFC 8693 audiences of a grant are kept in the refresh token beside its resources and read back, so the access
+    /// tokens renewed from it are addressed to the same services; a grant naming none keeps no such claim.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TheAudiencesOfAGrant_AreKeptInItsRefreshToken(bool namesAudiences)
+    {
+        string[]? audiences = namesAudiences ? ["billing", "ledger"] : null;
+        var authContext = CreateAuthorizationContext() with { Audiences = audiences };
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+        var issued = await _service.CreateRefreshTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), authContext, CreateClientInfo(), null, GrantId);
+
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, issued!.Token, CreateClientInfo());
+
+        Assert.Equal([Issuer], issued.Token.Payload.Audiences);
+        Assert.Equal(audiences is not null, issued.Token.Payload.Json.ContainsKey(RefreshTokenResources.AudiencesClaimType));
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Equal(audiences, grant.Context.Audiences);
+    }
+
+    private static readonly Uri ApiResource = new("https://api.example.com");
+    private static readonly Uri OtherApiResource = new("https://other.example.com/mcp");
 
     private static AuthSession CreateAuthSession() => new(
         Subject: UserId,

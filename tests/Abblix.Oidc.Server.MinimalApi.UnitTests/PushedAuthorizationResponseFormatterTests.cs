@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -61,12 +62,12 @@ public class PushedAuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// RFC 6749 section 5.2: a failure to authenticate the client is a 401, and everything else the endpoint
-    /// refuses is a 400. The two are separate arms, so both are driven - answering 400 for a bad secret would
-    /// tell the client its request was malformed when its credentials were.
+    /// RFC 9126 section 2.3 answers an error as the token endpoint does: 400, invalid_client included where no Basic
+    /// challenge is owed (OAuth 2.1 section 3.2.4: "Client authentication methods that do not use an HTTP
+    /// authentication scheme have no corresponding challenge").
     /// </summary>
     [Theory]
-    [InlineData(ErrorCodes.InvalidClient, StatusCodes.Status401Unauthorized)]
+    [InlineData(ErrorCodes.InvalidClient, StatusCodes.Status400BadRequest)]
     [InlineData(ErrorCodes.InvalidRequest, StatusCodes.Status400BadRequest)]
     [InlineData(ErrorCodes.InvalidRedirectUri, StatusCodes.Status400BadRequest)]
     public async Task An_error_is_answered_with_json_at_the_status_its_kind_calls_for(
@@ -83,17 +84,24 @@ public class PushedAuthorizationResponseFormatterTests
     }
 
     /// <summary>
-    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and RFC 6749 section 5.2 gives a client
-    /// that authenticated through the Authorization header a 401 with a challenge for its scheme.
+    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and OAuth 2.1 section 3.2.4 gives a client
+    /// that used HTTP Basic, or is registered for it, a 401 with the Basic challenge, which the refusal carries.
     /// </summary>
     [Fact]
-    public async Task A_failed_client_authentication_carries_a_basic_challenge()
+    public async Task A_failed_client_authentication_owing_the_challenge_carries_it()
     {
         var request = new AuthorizationRequest();
+        var error = Error(ErrorCodes.InvalidClient) with
+        {
+            Refusal = new OidcError(ErrorCodes.InvalidClient, "the description the client reads")
+            {
+                BasicChallengeOwed = true,
+            },
+        };
 
-        var result = await HttpResultRunner.RunAsync(
-            await _formatter.FormatResponseAsync(request, Error(ErrorCodes.InvalidClient)));
+        var result = await HttpResultRunner.RunAsync(await _formatter.FormatResponseAsync(request, error));
 
+        Assert.Equal(StatusCodes.Status401Unauthorized, result.StatusCode);
         Assert.StartsWith(
             TokenTypes.Basic,
             result.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate].ToString());

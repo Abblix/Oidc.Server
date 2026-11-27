@@ -75,6 +75,7 @@ public class FlowTypeValidatorTests
 
         return new AuthorizationValidationContext(request)
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = clientInfo,
         };
     }
@@ -955,5 +956,29 @@ public class FlowTypeValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(ErrorCodes.UnauthorizedClient, result?.Error);
+    }
+
+    /// <summary>
+    /// A native app is refused a response type without a code, or one with a token, even when its client lists it, as a client from the
+    /// host's own store may: RFC 8252 section 8.2 has the implicit flow NOT RECOMMENDED for native apps, since PKCE
+    /// cannot protect it, and RFC 9700 section 2.1.2 has the tokens issued at the token endpoint. One carrying a code
+    /// is served.
+    /// </summary>
+    [Theory]
+    [InlineData(false, ResponseTypes.Token)]
+    [InlineData(false, ResponseTypes.IdToken)]
+    [InlineData(false, ResponseTypes.IdToken, ResponseTypes.Token)]
+    [InlineData(false, ResponseTypes.Code, ResponseTypes.Token)]
+    [InlineData(false, ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token)]
+    [InlineData(true, ResponseTypes.Code, ResponseTypes.IdToken)]
+    [InlineData(true, ResponseTypes.Code)]
+    public async Task ValidateAsync_ANativeApp_IsServedOnlyAResponseTypeWithACode(bool served, params string[] responseType)
+    {
+        var context = CreateContext(responseType, [responseType]);
+        context.ClientInfo.ApplicationType = ApplicationTypes.Native;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(served ? null : ErrorCodes.UnauthorizedClient, result?.Error);
     }
 }

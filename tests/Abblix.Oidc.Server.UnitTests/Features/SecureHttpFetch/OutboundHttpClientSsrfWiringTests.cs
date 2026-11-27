@@ -10,10 +10,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -107,22 +109,30 @@ public class OutboundHttpClientSsrfWiringTests
     /// </summary>
     /// <remarks>
     /// A followed 3xx re-sends the request to an address nothing vetted, which is the one bypass the guard cannot
-    /// see. That the transport refuses them is a promise of the type that builds it and is held in that type's own
-    /// suite; what an assembled client owes is to still arrive there.
+    /// see. Driven through the assembled client to an origin the host named, which answers a redirect: the 3xx comes
+    /// back as the response, and nothing else is asked for.
     /// </remarks>
     [Theory]
     [InlineData(BackChannelNotificationTransport.HttpClientName)]
     [InlineData(BackChannelLogoutTransport.HttpClientName)]
-    public void ADeployedClient_ReachesATransportThatFollowsNoRedirect(string clientName)
+    public async Task ADeployedClient_ReachesATransportThatFollowsNoRedirect(string clientName)
     {
-        using var serviceProvider = BuildHost().BuildServiceProvider();
+        using var origin = new LoopbackOrigin("302 Found", "Location: http://169.254.169.254/\r\n");
+        var services = BuildHost();
+        services.Configure<SecureHttpFetchOptions>(options =>
+            options.AllowedDestinations = [new System.Uri($"http://127.0.0.1:{origin.Port}/")]);
+        using var serviceProvider = services.BuildServiceProvider();
         using var handler = serviceProvider.GetRequiredService<IHttpMessageHandlerFactory>()
             .CreateHandler(clientName);
+        Assert.Single(Chain(handler).OfType<SsrfValidatingHttpMessageHandler>());
 
-        var guard = Assert.Single(Chain(handler).OfType<SsrfValidatingHttpMessageHandler>());
-        var transport = Assert.IsType<HttpClientHandler>(guard.InnerHandler);
+        using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
+        using var response = await invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{origin.Port}/"),
+            TestContext.Current.CancellationToken);
 
-        Assert.False(transport.AllowAutoRedirect);
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal(1, origin.Requests);
     }
 
     /// <summary>

@@ -196,6 +196,42 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
     }
 
+    /// <summary>
+    /// A reused authorization code revokes all tokens issued from it (RFC 6749 section 4.1.2, RFC 9700 section 4.2.4),
+    /// the refresh token the first redemption's token was rotated into and its access token included.
+    /// </summary>
+    [Fact]
+    public async Task Reusing_the_code_revokes_the_family_its_first_redemption_founded()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+        var redemption = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        };
+        var initial = await ExchangeCodeForTokensAsync(client, discovery, redemption);
+
+        var rotation = await RefreshAsync(client, discovery, initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>());
+        var rotated = await ReadJsonAsync(rotation);
+        Assert.True(rotation.IsSuccessStatusCode, $"refresh should rotate, got {(int)rotation.StatusCode}: {rotated}");
+        var rt2 = rotated[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var rotatedAccessToken = rotated[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        await AssertInvalidGrantAsync(await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, redemption));
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {
@@ -205,15 +241,32 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
-    private static async Task<HttpResponseMessage> RefreshAsync(
-        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
-        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+    /// <summary>
+    /// A superseded refresh token presented by a client it was not issued to is refused for not being that client's
+    /// (RFC 6749 section 6), and the grant of the client it was issued to stays: only its own client's replay is the
+    /// theft signal that ends the family, as the revocation endpoint holds for such a token too.
+    /// </summary>
+    [Fact]
+    public async Task Another_clients_superseded_refresh_token_is_refused_and_leaves_the_family()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var rt2 = await RotateAsync(client, discovery, rt1);
+
+        var presentedByAnother = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [TokenRequest.Parameters.RefreshToken] = rt1,
+            [ClientRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
+        await AssertInvalidGrantAsync(presentedByAnother);
+
+        await RotateAsync(client, discovery, rt2);
+    }
 
     /// <summary>
     /// Refreshes with <paramref name="refreshToken"/>, asserts the rotation succeeded, and returns the newly

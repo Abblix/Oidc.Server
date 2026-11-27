@@ -19,11 +19,13 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Introspection;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -33,6 +35,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Abblix.Tests.Shared;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
@@ -42,6 +45,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
 /// </summary>
 public class ConfigurationHandlerTests
 {
+    /// <summary>The client store the class under test is given; the authenticator it calls is a double.</summary>
+    private static readonly IClientInfoProvider Clients = new Mock<IClientInfoProvider>().Object;
+
     /// <summary>
     /// The scopes, claims and subject types the document lists are those of the tenant the request is served at:
     /// the provider answers them for that tenant alone.
@@ -113,7 +119,8 @@ public class ConfigurationHandlerTests
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var clientAuthenticator = new Mock<IClientAuthenticator>();
-        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns([]);
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported)
+            .Returns([ClientAuthenticationMethods.PrivateKeyJwt]);
         // A key declaring no algorithm, whose material performs every RSA key management algorithm
         var keys = KeysProviderOf(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption));
         var handler = new ConfigurationHandler(
@@ -146,6 +153,61 @@ public class ConfigurationHandlerTests
         Assert.Equal(encryption, document.RequestObjectEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.AuthorizationEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.IntrospectionEncryptionAlgValuesSupported);
+    }
+
+    /// <summary>
+    /// The revocation and introspection endpoints authenticate with the authenticator the token endpoint does, so
+    /// each publishes its methods from it: the revocation endpoint every one, the introspection endpoint those it
+    /// admits a caller by, and each the assertion algorithms beside them, which RFC 8414 section 2 requires once a
+    /// JWT-based method is listed. An endpoint that is not enabled has nothing published about it.
+    /// </summary>
+    [Theory]
+    [InlineData(OidcEndpoints.Revocation | OidcEndpoints.Introspection)]
+    [InlineData(OidcEndpoints.Revocation)]
+    [InlineData(OidcEndpoints.Introspection)]
+    public async Task TheDocument_ListsTheMethodsTheRevocationAndIntrospectionEndpointsAccept(OidcEndpoints enabled)
+    {
+        string[] methods =
+        [
+            ClientAuthenticationMethods.None,
+            ClientAuthenticationMethods.ClientSecretBasic,
+            ClientAuthenticationMethods.ClientSecretPost,
+            ClientAuthenticationMethods.PrivateKeyJwt,
+        ];
+        string[] signing = [SigningAlgorithms.RS256, SigningAlgorithms.PS256];
+        var algorithms = new Mock<IJwtAlgorithmsProvider>();
+        algorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns(signing);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions { EnabledEndpoints = OidcEndpoints.Base | enabled });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(methods);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            algorithms.Object,
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(SingleIssuer.Tenant);
+
+        var revocation = enabled.HasFlag(OidcEndpoints.Revocation);
+        Assert.Equal(revocation ? methods : null, document.RevocationEndpointAuthMethodsSupported);
+        Assert.Equal(revocation ? signing : null, document.RevocationEndpointAuthSigningAlgValuesSupported);
+
+        // Tied to the rule the introspection endpoint refuses a caller by, so the two cannot drift apart
+        var introspection = enabled.HasFlag(OidcEndpoints.Introspection);
+        Assert.Equal(
+            introspection ? methods.Where(IntrospectionCallers.Admit) : null,
+            document.IntrospectionEndpointAuthMethodsSupported);
+        Assert.Equal(introspection ? signing : null, document.IntrospectionEndpointAuthSigningAlgValuesSupported);
+        Assert.DoesNotContain(ClientAuthenticationMethods.None, document.IntrospectionEndpointAuthMethodsSupported ?? []);
     }
 
     /// <summary>
@@ -288,6 +350,7 @@ public class ConfigurationHandlerTests
                     ResponseMode = responseMode,
                 })
                 {
+                    Clients = Mock.Of<IClientInfoProvider>(),
                     ClientInfo = new ClientInfo(TestConstants.DefaultClientId) { AllowedResponseTypes = everyResponseType },
                 };
 
@@ -349,7 +412,7 @@ public class ConfigurationHandlerTests
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             };
-            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
             if (authenticated.TryGetSuccess(out _))
                 accepted.Add(grantType);
         }
@@ -402,7 +465,7 @@ public class ConfigurationHandlerTests
                 IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
                 AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             };
-            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
             if (authenticated.TryGetSuccess(out _))
                 accepted.Add(deliveryMode);
         }
@@ -420,6 +483,190 @@ public class ConfigurationHandlerTests
     }
 
     /// <summary>
+    /// The methods each endpoint lists are exactly those a client of the tenant registered for can still authenticate
+    /// with: FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 admit mutual TLS and the
+    /// private key JWT alone, and a client registered for any other method does not authenticate at a tenant held to
+    /// either. The token, revocation and introspection endpoints authenticate with that one check, the introspection
+    /// endpoint admitting fewer callers by its own rule. RFC 8414 section 2 has the assertion algorithms present once a
+    /// JWT-based method is listed, and an endpoint listing none has no use for them. The client registers certificate
+    /// bound access tokens and its ID tokens are signed PS256, so every profile admits it but for its method; a profile
+    /// this server does not define holds it to every control.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData((ClientSecurityProfile)int.MaxValue)]
+    public async Task TheDocument_ListsExactlyTheMethodsAClientCanAuthenticateWith(ClientSecurityProfile profile)
+    {
+        string[] methods =
+        [
+            ClientAuthenticationMethods.None,
+            ClientAuthenticationMethods.ClientSecretBasic,
+            ClientAuthenticationMethods.ClientSecretPost,
+            ClientAuthenticationMethods.ClientSecretJwt,
+            ClientAuthenticationMethods.PrivateKeyJwt,
+            ClientAuthenticationMethods.TlsClientAuth,
+            ClientAuthenticationMethods.SelfSignedTlsClientAuth,
+        ];
+        string[] signing = [SigningAlgorithms.HS256, SigningAlgorithms.RS256, SigningAlgorithms.PS256, SigningAlgorithms.ES256];
+
+        // Trusting an authority for tls_client_auth, so the profile alone decides which methods are listed
+        using var authority = TestCertificateAuthority.Create();
+        var tenant = new TestIssuer
+        {
+            DefaultSecurityProfile = profile,
+            TlsClientAuthCertificateAuthorities = [authority.RootEncoded],
+        }.ToTenant();
+
+        var accepted = new List<string>();
+        foreach (var method in methods)
+        {
+            var client = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                TokenEndpointAuthMethod = method,
+                AllowedGrantTypes = [GrantTypes.ClientCredentials],
+                AllowedResponseTypes = [],
+                TlsClientCertificateBoundAccessTokens = true,
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            };
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest(), Clients);
+            if (authenticated.TryGetSuccess(out _))
+                accepted.Add(method);
+        }
+
+        var algorithms = new Mock<IJwtAlgorithmsProvider>();
+        algorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns(signing);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions
+        {
+            EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.Revocation | OidcEndpoints.Introspection,
+        });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(methods);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            algorithms.Object,
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(tenant);
+
+        var admittedAlgorithms = signing
+            .Where(SecurityProfileRequirements.For(tenant, client: null).PermitsSigningAlgorithm)
+            .ToArray();
+        string[]? AlgorithmsFor(IEnumerable<string> listed)
+            => listed.Any(method => method is ClientAuthenticationMethods.ClientSecretJwt
+                or ClientAuthenticationMethods.PrivateKeyJwt)
+                ? admittedAlgorithms
+                : null;
+
+        var introspection = accepted.Where(IntrospectionCallers.Admit).ToArray();
+        Assert.Equal(accepted, document.TokenEndpointAuthMethodsSupported);
+        Assert.Equal(AlgorithmsFor(accepted), document.TokenEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(accepted, document.RevocationEndpointAuthMethodsSupported);
+        Assert.Equal(AlgorithmsFor(accepted), document.RevocationEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(introspection, document.IntrospectionEndpointAuthMethodsSupported);
+        Assert.Equal(AlgorithmsFor(introspection), document.IntrospectionEndpointAuthSigningAlgValuesSupported);
+    }
+
+    /// <summary>
+    /// Each endpoint lists the assertion algorithms beside either JWT-based method and nowhere else: RFC 8414 section 2
+    /// asks for them where such a method is listed. A server whose algorithms the profile admits none of lists none,
+    /// since an empty list says nothing (OpenID Connect Discovery 1.0 section 4.2).
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.ClientSecretBasic, false)]
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.ClientSecretJwt, true)]
+    [InlineData(ClientSecurityProfile.None, ClientAuthenticationMethods.PrivateKeyJwt, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAuthenticationMethods.PrivateKeyJwt, false)]
+    public async Task TheDocument_ListsAssertionAlgorithms_OnlyBesideAMethodSigningAnAssertion(
+        ClientSecurityProfile profile,
+        string method,
+        bool listed)
+    {
+        var algorithms = new Mock<IJwtAlgorithmsProvider>();
+        algorithms.Setup(a => a.TokenEndpointAuthSigningAlgValuesSupported).Returns([SigningAlgorithms.RS256]);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions
+        {
+            EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.Revocation | OidcEndpoints.Introspection,
+        });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported)
+            .Returns([method, ClientAuthenticationMethods.TlsClientAuth]);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            algorithms.Object,
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
+
+        string[]? expected = listed ? [SigningAlgorithms.RS256] : null;
+        Assert.Equal(expected, document.TokenEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(expected, document.RevocationEndpointAuthSigningAlgValuesSupported);
+        Assert.Equal(expected, document.IntrospectionEndpointAuthSigningAlgValuesSupported);
+    }
+
+    /// <summary>
+    /// A server none of whose methods the tenant's profile admits lists no methods for any endpoint: OpenID Connect
+    /// Discovery 1.0 section 4.2, "Claims with zero elements MUST be omitted from the response".
+    /// </summary>
+    [Fact]
+    public async Task TheDocument_ListsNoMethods_WhereTheProfileAdmitsNone()
+    {
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions
+        {
+            EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.Revocation | OidcEndpoints.Introspection,
+        });
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported)
+            .Returns([ClientAuthenticationMethods.None, ClientAuthenticationMethods.ClientSecretBasic]);
+        var handler = new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            Mock.Of<IScopeClaimsProvider>(),
+            Mock.Of<IScopesAndClaimsProvider>(),
+            Mock.Of<IJwtAlgorithmsProvider>(),
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
+
+        var document = await handler.HandleAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant());
+
+        Assert.Null(document.TokenEndpointAuthMethodsSupported);
+        Assert.Null(document.RevocationEndpointAuthMethodsSupported);
+        Assert.Null(document.IntrospectionEndpointAuthMethodsSupported);
+    }
+
+    /// <summary>
     /// The profile check every client meets where it authenticates at the token endpoint, over an authenticator whose
     /// credential check <paramref name="client"/> passes. The service tokens are signed PS256, which every profile
     /// admits.
@@ -427,7 +674,7 @@ public class ConfigurationHandlerTests
     private static SecurityProfileClientAuthenticator AuthenticatorOver(ClientInfo client)
     {
         var inner = new Mock<IClientAuthenticator>();
-        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>()))
+        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>(), It.IsAny<IClientInfoProvider>()))
             .ReturnsAsync(client);
         var options = new OidcOptions();
         options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
@@ -439,7 +686,7 @@ public class ConfigurationHandlerTests
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(MockBehavior.Strict), TestEncryptionAlgorithms.Every),
                 Mock.Of<IClientKeysProvider>(MockBehavior.Strict),
-                TimeProvider.System, TestEncryptionAlgorithms.Every),
+                TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>()),
             Options.Create(options));
     }
 
@@ -512,6 +759,54 @@ public class ConfigurationHandlerTests
 
         Assert.Null(document.RequestObjectEncryptionAlgValuesSupported);
         Assert.Null(document.RequestObjectEncryptionEncValuesSupported);
+    }
+
+    /// <summary>
+    /// The document lists plain among the code challenge methods exactly where the authorization endpoint accepts a
+    /// plain challenge from some client of the tenant: one allowed plain and not held to S256 by its security profile.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, true)]
+    [InlineData(true, ClientSecurityProfile.Fapi2, false)]
+    public async Task TheDocument_ListsPlainWhereAClientIsAcceptedWithIt(
+        bool plainPkceAllowed, ClientSecurityProfile? securityProfile, bool listed)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            PlainPkceAllowed = plainPkceAllowed,
+            SecurityProfile = securityProfile,
+        };
+        var tenant = new TestIssuer { Clients = [client] }.ToTenant();
+        var handler = HandlerFor(KeysProviderOf(), new AuthorizationMetadataProvider([]));
+
+        var document = await handler.HandleAsync(tenant);
+        var refusal = await new PkceValidator(Mock.Of<IAuthorizationValueReuseDetector>())
+            .ValidateAsync(tenant, PlainChallengeOf(client));
+
+        Assert.Contains(CodeChallengeMethods.S256, document.CodeChallengeMethodsSupported!);
+        Assert.Equal(listed, document.CodeChallengeMethodsSupported!.Contains(CodeChallengeMethods.Plain));
+        Assert.Equal(listed, refusal is null);
+    }
+
+    private static AuthorizationValidationContext PlainChallengeOf(ClientInfo client)
+    {
+        var request = new AuthorizationRequest
+        {
+            ClientId = client.ClientId,
+            ResponseType = [ResponseTypes.Code],
+            RedirectUri = new Uri("https://client.example.com/callback"),
+            Scope = [Scopes.OpenId],
+            CodeChallenge = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            CodeChallengeMethod = CodeChallengeMethods.Plain,
+        };
+        return new AuthorizationValidationContext(request)
+        {
+            Clients = Clients,
+            ClientInfo = client,
+            ResponseMode = ResponseModes.Query,
+            ValidRedirectUri = request.RedirectUri,
+        };
     }
 
     /// <summary>

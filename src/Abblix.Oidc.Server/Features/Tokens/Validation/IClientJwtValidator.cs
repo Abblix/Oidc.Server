@@ -30,8 +30,12 @@ public interface IClientJwtValidator
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="client">The client the request names outside the token, whose profile the token is held to before
     /// it is read; null where the request names none.</param>
+    /// <param name="clients">The clients of the request being served, where a client the token names is looked
+    /// up.</param>
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="tokenTypes">The token types the caller accepts.</param>
+    /// <param name="signingAlgorithms">The signature algorithms the caller admits, within those the security
+    /// profile admits, refused before any client is looked up; null where the caller narrows nothing.</param>
     /// <param name="options">Optional validation options that define the specific checks and constraints
     /// to apply during validation. Default is <see cref="ValidationOptions.Default"/>.</param>
     /// <returns>
@@ -41,5 +45,29 @@ public interface IClientJwtValidator
     public Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         TenantDefinition tenant,
         ClientInfo? client,
-        string jwt, TokenTypePolicy tokenTypes, ValidationOptions options = ValidationOptions.Default);
+        IClientInfoProvider clients,
+        string jwt,
+        TokenTypePolicy tokenTypes,
+        IReadOnlySet<string>? signingAlgorithms,
+        ValidationOptions options = ValidationOptions.Default);
+
+    /// <summary>
+    /// Validates a JWT a client signed with its client secret, a client_secret_jwt assertion (OpenID Connect Core 1.0
+    /// section 9), as <see cref="ValidateAsync"/> validates one signed with a key the client publishes: the same issuer
+    /// lookup and checks, only the keys differ, each derived from one of the client's secrets for the HS algorithms its
+    /// length keys.
+    /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="clients">The clients of the request being served, where the client the token names is looked
+    /// up.</param>
+    /// <param name="jwt">The JWT to validate.</param>
+    /// <param name="tokenTypes">The token types the caller accepts.</param>
+    /// <param name="options">The checks to apply.</param>
+    /// <returns>The token with the client it names, or why it is refused.</returns>
+    public Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateSecretSignedAsync(
+        TenantDefinition tenant,
+        IClientInfoProvider clients,
+        string jwt,
+        TokenTypePolicy tokenTypes,
+        ValidationOptions options);
 }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -57,6 +58,7 @@ public class RequestedSubjectValidatorTests
                 Claims = claims,
             })
         {
+            Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
             ResponseMode = ResponseModes.Query,
         };

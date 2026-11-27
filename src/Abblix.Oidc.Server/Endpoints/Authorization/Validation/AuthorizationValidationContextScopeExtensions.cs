@@ -71,12 +71,30 @@ internal static class AuthorizationValidationContextScopeExtensions
 	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
 	/// access without it (section 11). The second condition is lifted for a client the host lets keep receiving
 	/// offline access beside such a token (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>).
+	/// RFC 6749 section 3.3 lets the server "fully or partially ignore the scope requested by the client, based on the
+	/// authorization server policy", and offline access is also ignored for a client that may not receive the refresh
+	/// token it asks for (<see cref="ClientInfo.MayReceiveRefreshToken"/>), so the end user is not asked to consent to
+	/// what the client cannot get.
 	/// </summary>
+	/// <remarks>
+	/// Whether an authorization code is returned is read off the response type rather than the flow type, which is
+	/// the same answer for every response type the server accepts (the code and hybrid flows are those whose response
+	/// type names code), and is known before the flow type is settled, so a validator running earlier asks the same
+	/// question the same way.
+	/// </remarks>
 	public static bool OfflineAccessReceived(this AuthorizationValidationContext context)
-		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
+		=> context.Request.ResponseType.HasFlag(ResponseTypes.Code)
 		   && AccessTokenAdmitsOfflineAccess(context)
-		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
-		       || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt());
+		   && ConsentConditionsHold(context)
+		   && context.ClientInfo.MayReceiveRefreshToken();
+
+	/// <summary>
+	/// Whether the request asks for consent with <c>prompt=consent</c>, or the client is configured to receive offline
+	/// access without it: the conditions OpenID Connect Core 1.0 section 11 puts on offline access.
+	/// </summary>
+	private static bool ConsentConditionsHold(AuthorizationValidationContext context)
+		=> context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
+		   || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt();
 
 	/// <summary>
 	/// Whether the access token the response carries, if any, may sit beside offline access: one returned through the

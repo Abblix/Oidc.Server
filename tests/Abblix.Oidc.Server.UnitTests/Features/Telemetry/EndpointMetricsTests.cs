@@ -175,6 +175,20 @@ public sealed class EndpointMetricsTests : IDisposable
         Assert.Equal(counted, refusal[TelemetryTags.RateLimitBudget]);
     }
 
+    /// <summary>
+    /// A request refused because a client metadata document could not be had for now is counted apart from one
+    /// refused for a spent budget, though neither answer carries an error code on the wire.
+    /// </summary>
+    [Fact]
+    public async Task AClientNotToBeHadForNow_IsCountedApartFromASpentBudget()
+    {
+        await Token(new ClientTemporarilyUnavailableError("Not to be had for now"));
+        await Token(new TooManyRequestsError("Too many", RetryAfter: null, CallerRateLimiters.Introspection));
+
+        var errors = _measured.Of(OidcMetrics.RequestDuration).Select(request => request[TelemetryTags.Error]).ToArray();
+        Assert.Equal([TelemetryTags.ClientMetadataUnavailable, ErrorCodes.TemporarilyUnavailable], errors);
+    }
+
     [Fact]
     public async Task SpentAuthenticationFailures_AreCountedAsARefusalAndPassOn()
     {
@@ -232,7 +246,12 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MeasuredTokenRequestProcessor>.Instance,
+            TestFingerprints.Instance,
+            inner.Object,
+            _instruments,
+            Grants);
 
         // A CIBA push delivery mints its tokens through the processor with no request to the token endpoint
         await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest(GrantTypes.Ciba));
@@ -258,7 +277,12 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task AGrantTypeTheServerDoesNotSupportAsSpelled_IsNotNamed()
     {
-        var measured = new MeasuredTokenRequestProcessor(Issuing().Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MeasuredTokenRequestProcessor>.Instance,
+            TestFingerprints.Instance,
+            Issuing().Object,
+            _instruments,
+            Grants);
 
         await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest("Authorization_Code"));
 
@@ -271,7 +295,12 @@ public sealed class EndpointMetricsTests : IDisposable
         var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
         var inner = new Mock<ITokenRequestProcessor>();
         inner.Setup(p => p.ProcessAsync(served.Tenant, It.IsAny<ValidTokenRequest>())).ReturnsAsync(Issued);
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MeasuredTokenRequestProcessor>.Instance,
+            TestFingerprints.Instance,
+            inner.Object,
+            _instruments,
+            Grants);
 
         await measured.ProcessAsync(served.Tenant, ValidRequest(GrantTypes.AuthorizationCode));
 
@@ -285,7 +314,12 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
+        var measured = new MeasuredTokenRequestProcessor(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MeasuredTokenRequestProcessor>.Instance,
+            TestFingerprints.Instance,
+            inner.Object,
+            _instruments,
+            Grants);
 
         await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest(GrantTypes.AuthorizationCode));
 
@@ -300,7 +334,8 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(TestTenant.Matched, request))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
-        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var observed = new ObservedAuthorizationHandler(
+            inner.Object, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, TestFingerprints.Instance, _instruments);
 
         await observed.HandleAsync(SingleIssuer.Tenant, request);
 
@@ -322,7 +357,8 @@ public sealed class EndpointMetricsTests : IDisposable
                 AccessToken = AToken,
                 IdToken = AToken,
             });
-        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments);
+        var traced = new ObservedAuthorizationHandler(
+            inner.Object, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, TestFingerprints.Instance, _instruments);
 
         await traced.HandleAsync(SingleIssuer.Tenant, request);
 

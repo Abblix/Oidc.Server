@@ -8,6 +8,8 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -121,6 +123,24 @@ public record ConfigurationResponse
         /// <summary>The <c>token_endpoint_auth_signing_alg_values_supported</c> metadata field listing
         /// JWS algorithms accepted on client authentication assertions.</summary>
         public const string TokenEndpointAuthSigningAlgValuesSupported = "token_endpoint_auth_signing_alg_values_supported";
+
+        /// <summary>The <c>revocation_endpoint_auth_methods_supported</c> metadata field listing client
+        /// authentication methods accepted at the revocation endpoint (RFC 8414 section 2).</summary>
+        public const string RevocationEndpointAuthMethodsSupported = "revocation_endpoint_auth_methods_supported";
+
+        /// <summary>The <c>revocation_endpoint_auth_signing_alg_values_supported</c> metadata field listing
+        /// JWS algorithms accepted on client authentication assertions at the revocation endpoint.</summary>
+        public const string RevocationEndpointAuthSigningAlgValuesSupported =
+            "revocation_endpoint_auth_signing_alg_values_supported";
+
+        /// <summary>The <c>introspection_endpoint_auth_methods_supported</c> metadata field listing client
+        /// authentication methods accepted at the introspection endpoint (RFC 8414 section 2).</summary>
+        public const string IntrospectionEndpointAuthMethodsSupported = "introspection_endpoint_auth_methods_supported";
+
+        /// <summary>The <c>introspection_endpoint_auth_signing_alg_values_supported</c> metadata field listing
+        /// JWS algorithms accepted on client authentication assertions at the introspection endpoint.</summary>
+        public const string IntrospectionEndpointAuthSigningAlgValuesSupported =
+            "introspection_endpoint_auth_signing_alg_values_supported";
 
         /// <summary>The <c>id_token_signing_alg_values_supported</c> metadata field listing JWS algorithms
         /// the provider uses to sign ID Tokens.</summary>
@@ -244,6 +264,11 @@ public record ConfigurationResponse
         /// authorization-detail <c>type</c> values this server understands (RFC 9396 section 10).
         /// Absent when no per-type validators are registered.</summary>
         public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
+
+        /// <summary>The <c>client_id_metadata_document_supported</c> metadata field saying the server
+        /// fetches a client's metadata from its client identifier URL
+        /// (draft-ietf-oauth-client-id-metadata-document section 8).</summary>
+        public const string ClientIdMetadataDocumentSupported = "client_id_metadata_document_supported";
     }
 
     /// <summary>
@@ -411,6 +436,31 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlgValuesSupported)]
     public IEnumerable<string>? TokenEndpointAuthSigningAlgValuesSupported { get; init; }
+
+    /// <summary>
+    /// Lists the client authentication methods the revocation endpoint accepts. RFC 8414 section 2 reads an omitted
+    /// list as client_secret_basic alone.
+    /// </summary>
+    [JsonPropertyName(Parameters.RevocationEndpointAuthMethodsSupported)]
+    public IEnumerable<string>? RevocationEndpointAuthMethodsSupported { get; init; }
+
+    /// <summary>
+    /// Lists the signing algorithms accepted on client authentication assertions at the revocation endpoint.
+    /// </summary>
+    [JsonPropertyName(Parameters.RevocationEndpointAuthSigningAlgValuesSupported)]
+    public IEnumerable<string>? RevocationEndpointAuthSigningAlgValuesSupported { get; init; }
+
+    /// <summary>
+    /// Lists the client authentication methods the introspection endpoint accepts.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEndpointAuthMethodsSupported)]
+    public IEnumerable<string>? IntrospectionEndpointAuthMethodsSupported { get; init; }
+
+    /// <summary>
+    /// Lists the signing algorithms accepted on client authentication assertions at the introspection endpoint.
+    /// </summary>
+    [JsonPropertyName(Parameters.IntrospectionEndpointAuthSigningAlgValuesSupported)]
+    public IEnumerable<string>? IntrospectionEndpointAuthSigningAlgValuesSupported { get; init; }
 
     /// <summary>
     /// Lists the ID token signing algorithm values supported by the OpenID Provider,
@@ -613,4 +663,12 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
     public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
+
+    /// <summary>
+    /// draft-ietf-oauth-client-id-metadata-document section 8: "Boolean value specifying whether the authorization
+    /// server supports retrieving client metadata from a client_id URL". Omitted when the server does not.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientIdMetadataDocumentSupported)]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public bool? ClientIdMetadataDocumentSupported { get; init; }
 }

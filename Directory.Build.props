@@ -43,9 +43,11 @@
        way, look for consumers floating on the abandoned range - a range with none is why the move
        costs nothing, and a range with some is the case the paragraph above is about.
 
-       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
-       range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
-       tagged release drops the suffix by itself.
+       MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev", so a build is
+       MAJOR.MINOR.PATCH-dev.HEIGHT and the range a consumer floats on reads MAJOR.MINOR.0-dev.*
+       and cannot be confused with an alpha. A tagged release drops the suffix by itself. It is what develop publishes under; a release
+       branch's push overrides it with rc in .github/workflows/publish-dev-builds.yml, whose header
+       says why the two branches cannot share one line.
 
        No version number is written in this comment on purpose: a number repeated in prose beside
        the property it describes goes stale without anything noticing. The run summary in
@@ -62,7 +64,7 @@
 
        Nothing depends on it reading them. A release takes its version from the workflow input via
        MinVerVersionOverride, and a dev build takes it from this property. What it does mean is
-       that the number after dev.0 counts from the ROOT COMMIT rather than from the last release.
+       that the number after dev counts from the ROOT COMMIT rather than from the last release.
 
        It is the FIRST-PARENT distance, which is checkable at any commit rather than quotable:
        the height plus one is the number of commits on the first-parent chain from HEAD, exactly,
@@ -87,8 +89,8 @@
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
        range written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build. -->
   <PropertyGroup>
-    <MinVerMinimumMajorMinor>3.0</MinVerMinimumMajorMinor>
-    <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
+    <MinVerMinimumMajorMinor>3.1</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>dev</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MinVer" PrivateAssets="all" />

@@ -25,7 +25,8 @@ public static class OidcResults
     /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
-    /// and the JSON error body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback, a
+    /// where one is owed (OAuth 2.1 section 3.2.4), and the fallback status without one otherwise, and the JSON error
+    /// body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback, a
     /// <see cref="BearerRequestError"/> with a Bearer challenge carrying it too; everything else uses the fallback
     /// status code with a JSON body.
     /// </summary>
@@ -47,9 +48,10 @@ public static class OidcResults
                 .StatusCode(StatusCodes.Status403Forbidden)
                 .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
-            // RFC 6749 section 5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
-            // JSON body because RFC 7617 defines no error attributes for the Basic scheme.
-            (ErrorCodes.InvalidClient, _) => Results
+            // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2.4: a 401 with a Basic challenge for a request that
+            // authenticated with HTTP Basic; the error stays in the JSON body because RFC 7617 defines no error
+            // attributes for the Basic scheme. Any other refusal of client authentication takes the endpoint's status
+            (ErrorCodes.InvalidClient, _) when error.BasicChallengeOwed => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
                 .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
@@ -136,6 +138,8 @@ public static class OidcResults
     /// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
     /// body, because the status says the whole of it and no registered error code means "you asked too often".
     /// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+    /// A client whose metadata document could not be had for now is answered 503 with no body, the status
+    /// draft-ietf-oauth-client-id-metadata-document-03 section 6.1 names (experimental).
     /// </summary>
     /// <remarks>
     /// Every way of formatting an error passes through here first, so a refusal cannot take the status of
@@ -150,6 +154,10 @@ public static class OidcResults
                     .WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
 
             TooManyRequestsError => Results.StatusCode(StatusCodes.Status429TooManyRequests),
+
+#pragma warning disable ABX9001 // The refusal of the experimental Client ID Metadata Documents
+            ClientTemporarilyUnavailableError => Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
+#pragma warning restore ABX9001
 
             _ => null,
         };

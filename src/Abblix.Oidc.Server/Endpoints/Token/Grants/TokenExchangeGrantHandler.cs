@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -51,10 +50,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// the new actor's nested <c>act.act</c>).
 /// </para>
 /// </remarks>
-public class TokenExchangeGrantHandler(
-    IServiceProvider serviceProvider,
-    ISessionIdGenerator sessionIdGenerator,
-    TimeProvider timeProvider) : IAuthorizationGrantHandler
+public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuthorizationGrantHandler
 {
     /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
@@ -67,9 +63,10 @@ public class TokenExchangeGrantHandler(
         TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
+        IClientInfoProvider clients,
         CancellationToken cancellationToken)
     {
-        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo);
+        Result<ValidationContext, OidcError> initial = new ValidationContext(request, clientInfo, clients);
 
         return initial
             .Bind(ValidateRequiredParameters)
@@ -78,7 +75,7 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
             .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
-            .Bind(ValidateSubjectTokenOrigin)
+            .Bind(ctx => ValidateSubjectTokenOrigin(tenant, ctx))
             .Bind(ValidateForwardedAuthorizationDetails)
             .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateActorTokenOrigin)
@@ -94,6 +91,7 @@ public class TokenExchangeGrantHandler(
     private sealed record ValidationContext(
         TokenRequest Request,
         ClientInfo ClientInfo,
+        IClientInfoProvider Clients,
         SubjectTokenContext? Subject = null,
         SubjectTokenContext? Actor = null);
 
@@ -199,28 +197,19 @@ public class TokenExchangeGrantHandler(
         ClientInfo clientInfo,
         string fieldName)
     {
-        if (tokenTypeUri is null)
+        if (tokenTypeUri is null || clientInfo.MayExchangeTokenType(tokenTypeUri))
             return null;
 
-        // Tri-state: null = no per-client constraint -- skip membership check entirely so the
-        // null-allowlist passthrough case does not NRE at .Contains().
-        switch (clientInfo.TokenExchangeAllowedSubjectTokenTypes)
+        if (clientInfo.TokenExchangeAllowedSubjectTokenTypes is { Length: 0 })
         {
-            case { Length: 0 }:
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "Client is not permitted to use the Token Exchange grant.");
-
-            // A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by
-            // their spelling rather than as equivalent addresses
-            case { Length: > 0 } allowlist when !allowlist.Any(allowed =>
-                string.Equals(allowed.OriginalString, tokenTypeUri.OriginalString, StringComparison.Ordinal)):
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "Client is not permitted to use the Token Exchange grant.");
         }
 
-        return null;
+        return new OidcError(
+            ErrorCodes.InvalidRequest,
+            $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
     }
 
     /// <summary>
@@ -234,21 +223,29 @@ public class TokenExchangeGrantHandler(
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
+            tenant,
+            ctx,
+            TokenRequest.Parameters.SubjectToken,
+            ctx.Request.SubjectTokenType,
+            subjectToken,
+            cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
     /// <summary>
     /// The subject_token must have been issued to the requesting client
-    /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
-    /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
+    /// (confused-deputy guard; <see cref="ClientInfo.CrossClientSubjectTokenExchange"/> admits one addressed to
+    /// the client as a resource server, or any for broker scenarios). The typ header is matched against the presented URI earlier, by the
     /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(
+        TenantDefinition tenant,
+        ValidationContext ctx)
     {
-        if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
+        var subject = ctx.Subject.NotNull(nameof(ctx.Subject));
+        if (TokenOrigin.CheckSubject(tenant, subject.OriginalClientId, subject.Audiences, ctx.ClientInfo) is { } error)
         {
-            return error;
+            return new OidcError(ErrorCodes.InvalidRequest, $"subject_token: {error.ErrorDescription}");
         }
 
         return ctx;
@@ -296,8 +293,7 @@ public class TokenExchangeGrantHandler(
 
     /// <summary>
     /// Resolves the optional <c>actor_token</c>. Passthrough (no enrichment) when the request
-    /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
-    /// error pinpoints which token was rejected.
+    /// has no actor.
     /// </summary>
     private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
         TenantDefinition tenant,
@@ -308,23 +304,25 @@ public class TokenExchangeGrantHandler(
             return ctx;
 
         var result = await ResolveTokenAsync(
-            tenant, ctx.ClientInfo, ctx.Request.ActorTokenType, actorToken, cancellationToken);
-        return result.Match<Result<ValidationContext, OidcError>>(
-            actor => ctx with { Actor = actor },
-            failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
+            tenant,
+            ctx,
+            TokenRequest.Parameters.ActorToken,
+            ctx.Request.ActorTokenType,
+            actorToken,
+            cancellationToken);
+        return result.MapSuccess(actor => ctx with { Actor = actor });
     }
 
     /// <summary>
-    /// Applies the same origin guard to the actor_token (when present) that
-    /// <see cref="ValidateSubjectTokenOrigin"/> applies to the subject_token. No-op when
-    /// the request had no actor.
+    /// Holds the actor_token (when present) to the client it was issued to, as
+    /// <see cref="TokenOrigin.CheckActor"/> decides. No-op when the request had no actor.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateActorTokenOrigin(ValidationContext ctx)
     {
         if (ctx.Actor is not { } actor)
             return ctx;
 
-        return CheckTokenOrigin(actor, ctx.ClientInfo) is { } error
+        return TokenOrigin.CheckActor(actor.OriginalClientId, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
     }
@@ -382,43 +380,45 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// The origin guard applied identically to subject and actor tokens; the token's type is judged where it is
-    /// validated, against the type it was presented under.
+    /// Resolves a subject_token or an actor_token through the resolver registered for its type.
     /// </summary>
-    private static OidcError? CheckTokenOrigin(
-        SubjectTokenContext token,
-        ClientInfo clientInfo)
-    {
-        // The confused-deputy check needs an origin to compare against, and an absent one is the case
-        // it cannot decide: a token whose issuing client is undeterminable may or may not belong to the
-        // presenting client, and the guard exists precisely because the difference matters. Refusing is
-        // the only reading that keeps the check meaningful - skipping on absence would let a subject_token
-        // shaped to hide its origin pass the guard that a token naming another client fails.
-        // AllowCrossClientSubjectTokenExchange remains the single opt-out: a client trusted to present
-        // tokens it was not issued is equally trusted to present one whose issuer cannot be read.
-        if (!clientInfo.AllowCrossClientSubjectTokenExchange)
-        {
-            if (token.OriginalClientId is not { Length: > 0 } originalClient)
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "The client the subject_token was issued to could not be determined.");
-            }
-
-            if (!string.Equals(originalClient, clientInfo.ClientId, StringComparison.Ordinal))
-            {
-                return new OidcError(
-                    ErrorCodes.InvalidRequest,
-                    "subject_token was issued to a different client than the one presenting it.");
-            }
-        }
-
-        return null;
-    }
-
+    /// <remarks>
+    /// RFC 8693 section 2.2.2: "If the request itself is not valid or if either the "subject_token" or
+    /// "actor_token" are invalid for any reason, or are unacceptable based on policy ... The value of the "error"
+    /// parameter MUST be the "invalid_request" error code." A resolver may be the host's and answer with any code,
+    /// so a rejection is rewritten here to that code. A resolver that could not judge the token at all answers
+    /// server_error or temporarily_unavailable, the codes RFC 6749 section 4.1.2.1 defines for the server's own
+    /// failure; that says nothing about the token, so it reaches the client unchanged instead of telling it to
+    /// discard a token that may be fine, as section 2.2.2 allows: "Other error codes may also be used, as
+    /// appropriate." Every description is prefixed with the parameter it concerns, so it says
+    /// which token was meant.
+    /// </remarks>
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
         TenantDefinition tenant,
-        ClientInfo clientInfo,
+        ValidationContext ctx,
+        string parameterName,
+        Uri? tokenType,
+        string tokenValue,
+        CancellationToken cancellationToken)
+    {
+        var result = await ResolveByTypeAsync(tenant, ctx, tokenType, tokenValue, cancellationToken);
+        return result.MapFailure(
+            failure => new OidcError(WireErrorOf(failure.Error), $"{parameterName}: {failure.ErrorDescription}"));
+    }
+
+    /// <summary>
+    /// The error code a resolver's failure reaches the client with: the server's own failure as it is, any
+    /// rejection of the token as invalid_request.
+    /// </summary>
+    private static string WireErrorOf(string resolverError) => resolverError switch
+    {
+        ErrorCodes.ServerError or ErrorCodes.TemporarilyUnavailable => resolverError,
+        _ => ErrorCodes.InvalidRequest,
+    };
+
+    private async Task<Result<SubjectTokenContext, OidcError>> ResolveByTypeAsync(
+        TenantDefinition tenant,
+        ValidationContext ctx,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
@@ -431,7 +431,7 @@ public class TokenExchangeGrantHandler(
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
+        return await resolver.ResolveAsync(tenant, ctx.ClientInfo, ctx.Clients, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
@@ -467,44 +467,49 @@ public class TokenExchangeGrantHandler(
             scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
         }
 
-        // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
-        // act object names the actor's subject; any prior act chain inherited from the
-        // subject_token becomes the new actor's nested act.act, preserving the full delegation
-        // path. Impersonation = no actor_token = no act emission.
-        JsonObject? actorClaim = null;
-        if (actor is not null)
-        {
-            actorClaim = new JsonObject { [IanaClaimTypes.Sub] = actor.Subject };
-            if (subject.Act is not null)
-            {
-                actorClaim[IanaClaimTypes.Act] = subject.Act.DeepClone();
-            }
-        }
+        var actorClaim = subject.ActorChainWith(actor);
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
         // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than
         // silently dropping them
+        var (proofKeyThumbprint, certificateThumbprint) = SubjectTokenBinding.RequiredOf(subject, clientInfo);
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
             AuthorizationDetails = subject.AuthorizationDetails,
             Actor = actorClaim,
             Audiences = request.Audiences is { Length: > 0 } ? request.Audiences : null,
+
+            // The keys the token endpoint then requires a proof of (RFC 9700 sections 2.2.1 and 2.2.2, the server's
+            // policy), as SubjectTokenBinding decides them
+            ProofKeyThumbprint = proofKeyThumbprint,
+            CertificateSha256Thumbprint = certificateThumbprint,
         };
 
+        // The exchanged token belongs to the session of its subject_token and tells of the same sign-in, never the
+        // actor's, so revoking the end user's session reaches it and the exchange does not pass for a new sign-in.
+        // The identity provider is the one exception: an ID token states none, and the server keeps no record of a
+        // session by its identifier that would (the session client registry holds client identifiers only, and the
+        // host's sessions are reachable only through the browser's request), so a token exchanged from an ID token
+        // names the issuer of that ID token instead of the sign-in's provider.
         var authSession = new AuthSession(
             Subject: subject.Subject,
-            SessionId: sessionIdGenerator.GenerateSessionId(),
-            AuthenticationTime: timeProvider.GetUtcNow(),
-            IdentityProvider: subject.Issuer ?? "self");
+            SessionId: subject.SessionId,
+            AuthenticationTime: subject.AuthenticationTime,
+            IdentityProvider: subject.IdentityProvider ?? subject.Issuer ?? "self")
+        {
+            AuthContextClassRef = subject.AuthContextClassRef,
+            AuthenticationMethodReferences = subject.AuthenticationMethodReferences,
+        };
 
         // The exchanged token carries authority that came from the subject_token, so it joins that token's
-        // refresh token family and a replay revoking the family refuses it too. The subject_token's family and no
-        // other, even where an actor_token was presented as well: a token names one family, and the one the
+        // refresh token family and a replay revoking the family refuses it too, and it expires no later than the
+        // subject_token, so a chain of exchanges never outlives the token it started from. The subject_token's family
+        // and no other, even where an actor_token was presented as well: a token names one family, and the one the
         // issued token acts under is the end user's.
         return new AuthorizedGrant(authSession, authContext)
         {
             GrantId = subject.GrantId,
-            ExpiresNoLaterThan = subject.GrantId is not null ? subject.ExpiresAt : null,
+            ExpiresNoLaterThan = subject.ExpiresAt,
         };
     }
 

@@ -38,14 +38,14 @@ public class IdTokenHintParserTests
 
     public IdTokenHintParserTests()
     {
-        _parser = new IdTokenHintParser(_jwtValidator.Object);
+        _parser = new IdTokenHintParser(_jwtValidator.Object, Mock.Of<IClientInfoProvider>());
     }
 
     private void SetupToken(JsonWebToken token)
     {
         Result<JsonWebToken, JwtValidationError> success = token;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(success);
     }
 
@@ -55,7 +55,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidTokenType, "a registration access token");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(refusal);
     }
 
@@ -90,7 +90,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidToken, "bad signature");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(failure);
 
         var result = await _parser.ParseAsync(SingleIssuer.Tenant, null, Hint);
@@ -186,8 +186,8 @@ public class IdTokenHintParserTests
         Result<JsonWebToken, JwtValidationError> success = IdToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback((TenantDefinition _, ClientInfo? _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<IClientInfoProvider>(), Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback((TenantDefinition _, ClientInfo? _, IClientInfoProvider _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
             .ReturnsAsync(success);
 
         await _parser.ParseAsync(SingleIssuer.Tenant, null, Hint);

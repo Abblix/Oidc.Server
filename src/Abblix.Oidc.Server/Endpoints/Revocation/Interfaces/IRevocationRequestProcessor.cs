@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 /// If a refresh token is revoked and the server supports revocation of access tokens, associated access tokens should also be invalidated.
 /// </summary>
 /// <remarks>
-/// For more details, refer to RFC 7009 Section 2.1: https://www.rfc-editor.org/rfc/rfc7009#section-2.1
+/// For more details, refer to RFC 7009 Section 2.1: https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
 /// </remarks>
 public interface IRevocationRequestProcessor
 {

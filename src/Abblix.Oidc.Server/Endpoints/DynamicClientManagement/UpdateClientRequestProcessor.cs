@@ -15,6 +15,8 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -22,19 +24,25 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Processes requests to update existing client configurations per RFC 7592 Section 2.2.
 /// Updates client metadata while preserving credentials and system-managed fields.
 /// </summary>
+/// <param name="logger">Records the replaced registration.</param>
 /// <param name="clientInfoManager">Stores the updated client.</param>
 /// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
 /// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
 /// <param name="clock">Provides the issue time.</param>
-/// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
-/// </param>
+/// <param name="clientSecretEncryptor">Decrypts the secret the tenant kept encrypted.</param>
+/// <param name="options">The server's settings, whose <see cref="OidcOptions.NewClientOptions"/> hold the defaults a
+/// client takes when its metadata omits them, its scope among them, read as the update is built.</param>
 public class UpdateClientRequestProcessor(
+    ILogger<UpdateClientRequestProcessor> logger,
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
     TimeProvider clock,
-    NewClientOptions newClientOptions) : IUpdateClientRequestProcessor
+    IClientSecretEncryptor clientSecretEncryptor,
+    IOptionsMonitor<OidcOptions> options) : IUpdateClientRequestProcessor
 {
+    private readonly ClientRegistrationsLog _registrations = new(logger);
+
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
     /// </summary>
@@ -46,21 +54,24 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint
+    /// - Client secrets cannot be updated via this endpoint; the one issued is returned as a read returns it
     /// </remarks>
     public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
         var existingClient = request.Client.ClientInfo;
+        var newClientOptions = options.CurrentValue.NewClientOptions;
 
         // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
         // rather than updated here; the sector identifier the pairwise subjects hang on is kept too, and so is what
         // the host set on the client beyond its metadata, the security profile it is held to among them.
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithSoftwareStatement(existingClient.SoftwareStatement)
             .WithHostSettingsOf(existingClient)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.For(tenant, existingClient)))
@@ -94,33 +105,16 @@ public class UpdateClientRequestProcessor(
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
         }
 
+        _registrations.Updated(tenant, updatedClient);
+
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // The update issues no new secret, so there is none to return
-            ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
+            // RFC 7592 Appendix A.1: the client's current credentials "MUST be included in the client information
+            // response" of a read or an update alike, and the update keeps the secret issued
+            ClientSecret = IssuedClientSecret.Of(tenant, updatedClient, clientSecretEncryptor),
+            ClientSecretExpiresAt = IssuedClientSecret.ExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
         };
-    }
-
-    /// <summary>
-    /// Determines the latest expiration time among all client secrets.
-    /// </summary>
-    private static DateTimeOffset? GetClientSecretExpiresAt(ClientInfo client)
-    {
-        if (client.ClientSecrets == null)
-            return null;
-
-        DateTimeOffset? result = null;
-        foreach (var secretExpiresAt in client.ClientSecrets.Select(s => s.ExpiresAt))
-        {
-            if (!secretExpiresAt.HasValue)
-                continue;
-
-            if (!result.HasValue || result.Value < secretExpiresAt.Value)
-                result = secretExpiresAt;
-        }
-
-        return result;
     }
 }

@@ -109,7 +109,7 @@ public class TokenStatusCoverageTests
 
         var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo("client_1") { SubjectType = SubjectTypes.Public });
 
         var token = new JsonWebToken
@@ -129,11 +129,11 @@ public class TokenStatusCoverageTests
                 NullLogger<RevocationCutoffChecker>.Instance,
                 cutoffs.Object,
                 Options.Create(new OidcOptions()),
-                clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter())),
-            new GrantRevocation(registry.Object, clients.Object));
+            new GrantRevocation(registry.Object),
+            new RegistrationAccessTokenBinding(Mock.Of<IClientInfoManager>()));
 
-        var result = await check.CheckAsync(SingleIssuer.Tenant, token, ValidationOptions.Default);
+        var result = await check.CheckAsync(SingleIssuer.Tenant, clients.Object, token, ValidationOptions.Default);
 
         if (expected is null)
         {

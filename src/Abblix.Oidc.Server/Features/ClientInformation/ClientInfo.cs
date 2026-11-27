@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -31,6 +34,30 @@ public record ClientInfo(string ClientId)
     public string ClientId { get; set; } = ClientId;
 
     /// <summary>
+    /// Whether the client was resolved from the metadata document its identifier names, so the server's fetches of
+    /// its URIs are held to the special-purpose address registries as written, and a host's
+    /// <see cref="IRedirectUriTrustPolicy"/> can tell such a client from one somebody registered. Set by the server,
+    /// never by configuration or a stored record: it is neither written to nor read from JSON.
+    /// </summary>
+    [JsonIgnore]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
+    public bool ResolvedFromMetadataDocument { get; internal set; }
+
+    /// <summary>
+    /// Whether somebody answering for the deployment let the client in, decided when the client was created and kept
+    /// with it: <see cref="ClientTrust.Trusted"/>, the default, for a client the host declares, and the value the
+    /// server set for one it registered or resolved. A record naming none is trusted.
+    /// </summary>
+    /// <remarks>
+    /// A host changing it writes the client's record, and every replica answers from that record once it reads it
+    /// again: a registration in the host's <see cref="MultiTenancy.ITenantClientRegistrationStore"/> on its next lookup,
+    /// a client declared in a tenant read from a tenant store at the next reading of the store
+    /// (<see cref="OidcOptions.RefreshTenantsEvery"/>). A client resolved from its metadata document has it decided
+    /// again as the document is fetched again, within <see cref="ClientIdMetadataDocumentOptions.MaximumCacheDuration"/>.
+    /// </remarks>
+    public ClientTrust Trust { get; set; }
+
+    /// <summary>
     /// Classifies the client based on its ability to securely maintain a client secret. Derived from
     /// <see cref="TokenEndpointAuthMethod"/>: <c>none</c> yields <see cref="ClientType.Public"/>; any
     /// other authentication method (secrets, keys, certificates) yields <see cref="ClientType.Confidential"/>.
@@ -41,7 +68,14 @@ public record ClientInfo(string ClientId)
     /// this library has never heard of still carries a credential. Enumerating the known methods here would
     /// classify every host-added one as public.
     /// </remarks>
-    public ClientType ClientType => TokenEndpointAuthMethod switch
+    public ClientType ClientType => ClientTypeOf(TokenEndpointAuthMethod);
+
+    /// <summary>
+    /// The type of a client authenticating at the token endpoint with <paramref name="tokenEndpointAuthMethod"/>, as
+    /// <see cref="ClientType"/> derives it.
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">The client's token endpoint authentication method.</param>
+    internal static ClientType ClientTypeOf(string tokenEndpointAuthMethod) => tokenEndpointAuthMethod switch
     {
         ClientAuthenticationMethods.None => ClientType.Public,
         _ => ClientType.Confidential,
@@ -67,14 +101,48 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Indicates whether the client is to use Proof Key for Code Exchange (PKCE) in the authorization code flow,
-    /// enhancing security for public clients.
+    /// enhancing security for public clients. A native app and a public client use PKCE whatever this states, as
+    /// <see cref="EffectivePkceRequired"/> answers.
     /// </summary>
+    /// <remarks>
+    /// False marks the client as an OAuth 2.0 client in the sense of OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 1.8,
+    /// where "Which rules apply to a given client is determined by the authorization server's configuration for that
+    /// client". Section 7.5.1.1 has the server enforce code_challenge and code_verifier "unless both of the following
+    /// criteria are met: The client is a confidential client" and "there is reasonable assurance by the authorization
+    /// server that the client implements the OpenID Connect nonce mechanism properly". Such a client may then send an
+    /// authorization request without a code_challenge, including one carrying no nonce, which OpenID Connect Core 1.0
+    /// section 3.1.2.1 leaves optional in the code flow, so the server cannot have that assurance of every request it
+    /// admits: setting this to false is the deployment's statement that the client is held to OAuth 2.0 rather than to
+    /// OAuth 2.1.
+    /// </remarks>
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
-    /// Whether the client uses PKCE when nothing else requires it: what it states, or true when it states nothing.
+    /// Whether the client uses PKCE when nothing else requires it: always for a native app and for a public client,
+    /// otherwise what it states, or true when it states nothing.
     /// </summary>
-    public bool EffectivePkceRequired => PkceRequired ?? true;
+    /// <remarks>
+    /// The authorization endpoint asks this of every client, however it entered the server, so a client registered or
+    /// stored with <see cref="PkceRequired"/> false is held to it as a client the host declares is.
+    /// </remarks>
+    public bool EffectivePkceRequired => RequiresPkce(PkceRequired, TokenEndpointAuthMethod, ApplicationType);
+
+    /// <summary>
+    /// Whether a client stating <paramref name="pkceRequired"/> uses PKCE, as <see cref="EffectivePkceRequired"/>
+    /// answers it, so registration refuses the statement this would override.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8252 section 8.1: "Authorization servers SHOULD reject authorization requests from native apps that don't
+    /// use PKCE". RFC 9700 section 2.1.1 has "Public clients MUST use PKCE", a requirement of the client, which this
+    /// server chooses to enforce: a public client has no credential, so its code is bound to it by PKCE alone.
+    /// </remarks>
+    /// <param name="pkceRequired">What the client states about PKCE.</param>
+    /// <param name="tokenEndpointAuthMethod">The client's token endpoint authentication method.</param>
+    /// <param name="applicationType">The client's application type.</param>
+    internal static bool RequiresPkce(bool? pkceRequired, string tokenEndpointAuthMethod, string applicationType)
+        => applicationType == ApplicationTypes.Native
+           || ClientTypeOf(tokenEndpointAuthMethod) == ClientType.Public
+           || (pkceRequired ?? true);
 
     /// <summary>
     /// Indicates if the client is allowed to use the "plain" method for PKCE.
@@ -92,7 +160,12 @@ public record ClientInfo(string ClientId)
     /// Specifies the lifetime of access tokens issued to this client.
     /// Shorter access token lifetimes reduce the risk of token leakage.
     /// </summary>
-    public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+    public TimeSpan AccessTokenExpiresIn { get; set; } = DefaultAccessTokenExpiresIn;
+
+    /// <summary>
+    /// The access token lifetime a client takes unless one is set on it, a dynamically registered client included.
+    /// </summary>
+    internal static readonly TimeSpan DefaultAccessTokenExpiresIn = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Whether every access token issued to this client names one resource. An authorization may still grant several
@@ -169,6 +242,14 @@ public record ClientInfo(string ClientId)
     /// grant at all.
     /// </summary>
     public string[] EffectiveGrantTypes => AllowedGrantTypes ?? [GrantTypes.AuthorizationCode];
+
+    /// <summary>
+    /// Whether this client may use the grant type: the one answer both the token endpoint refusing a grant with
+    /// <c>unauthorized_client</c> and the issuance of a credential only that grant redeems ask, so the server never
+    /// hands out what it then refuses.
+    /// </summary>
+    /// <param name="grantType">The grant type, as the <c>grant_type</c> parameter names it.</param>
+    internal bool MayUseGrantType(string grantType) => EffectiveGrantTypes.Contains(grantType, StringComparer.Ordinal);
 
     /// <summary>
     /// Optionally restricts the <c>response_mode</c> values this client may use, pinning the channel through
@@ -288,6 +369,55 @@ public record ClientInfo(string ClientId)
     public Uri[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
+    /// Whether <see cref="TokenExchangeAllowedSubjectTokenTypes"/> admits the token type: the one answer the Token
+    /// Exchange grant refusing a token type and the issuance of a token only an exchange may redeem both ask.
+    /// </summary>
+    /// <remarks>
+    /// A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by their
+    /// spelling rather than as equivalent addresses.
+    /// </remarks>
+    /// <param name="tokenType">The token type URI, as the request names it.</param>
+    internal bool MayExchangeTokenType(Uri tokenType)
+        => TokenExchangeAllowedSubjectTokenTypes is not { } allowlist ||
+           allowlist.Any(allowed => string.Equals(allowed.OriginalString, tokenType.OriginalString, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Whether this client may receive a refresh token: whether it may redeem one, through the refresh token grant or
+    /// through a token exchange naming it as the subject token (RFC 8693 section 3) where its token types admit it.
+    /// </summary>
+    /// <remarks>
+    /// The one answer both the issuance of a refresh token and the authorization steps ignoring an
+    /// <c>offline_access</c> ask, so the server neither issues a refresh token the token endpoint then refuses nor has
+    /// the end user consent to offline access the client cannot receive.
+    /// </remarks>
+    internal bool MayReceiveRefreshToken()
+        => MayUseGrantType(GrantTypes.RefreshToken) ||
+           MayUseGrantType(GrantTypes.TokenExchange) && MayExchangeTokenType(RefreshTokenType);
+
+    private static readonly Uri RefreshTokenType = new(TokenExchangeTokenTypes.RefreshToken);
+
+    /// <summary>
+    /// The scope without an <c>offline_access</c> this client may not receive a refresh token for
+    /// (<see cref="MayReceiveRefreshToken"/>), which a device authorization or a backchannel authentication request
+    /// has ignored as if never asked for.
+    /// </summary>
+    /// <param name="scope">The scope a request names or is served with.</param>
+    internal string[] ReceivableScope(string[] scope)
+        => !scope.Contains(Scopes.OfflineAccess, StringComparer.Ordinal) || MayReceiveRefreshToken()
+            ? scope
+            : [.. scope.Where(value => value != Scopes.OfflineAccess)];
+
+    /// <summary>
+    /// The scope a device authorization or a backchannel authentication request is served with: the one it names
+    /// without an ignored <c>offline_access</c> (<see cref="ReceivableScope"/>), or else <see cref="DefaultScope"/>
+    /// likewise, or null when <see cref="RequireScope"/> refuses a request naming none. A request naming only an
+    /// ignored <c>offline_access</c> names none.
+    /// </summary>
+    /// <param name="requested">The scope the request names, empty when it names none.</param>
+    internal string[]? ReceivableScopeServedFor(string[] requested)
+        => ScopeServedFor(ReceivableScope(requested)) is { } served ? ReceivableScope(served) : null;
+
+    /// <summary>
     /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when
     /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
     /// claim, so without a constraint a client could mint a token for any target service it names.
@@ -305,9 +435,10 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The locations this client answers for when it acts as a resource server, matched against the
-    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
-    /// issued to somebody else returns the entries addressed to one of these, and nothing when the
-    /// list is absent.
+    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry and, under
+    /// <see cref="CrossClientSubjectTokenExchange.AddressedToClient"/>, against the audience of a subject token
+    /// issued to another client. Introspecting a token issued to somebody else returns the entries addressed to
+    /// one of these, and nothing when the list is absent.
     /// </summary>
     /// <remarks>
     /// RFC 9396 section 9 obliges the server to make the granted details available to the resource server
@@ -335,15 +466,15 @@ public record ClientInfo(string ClientId)
     public Uri[]? ResourceLocations { get; set; }
 
     /// <summary>
-    /// RFC 8693 section 1.3: by default this AS rejects a Token Exchange request where the
-    /// <c>subject_token</c> was originally issued to a different client than the one presenting
-    /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
-    /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
-    /// to <c>true</c> to opt out of the default check. The opt-out also covers a subject_token whose
-    /// origin cannot be determined at all, which is otherwise refused: a client trusted to present
-    /// tokens issued to others is equally trusted to present one whose issuer cannot be read.
+    /// Which subject tokens issued to another client this client may present at the token exchange grant.
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Refused"/> by default, the guard against a
+    /// confused deputy turning a token issued to somebody else into one of its own;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.AddressedToClient"/> for a resource server
+    /// delegating upstream with the tokens presented to it;
+    /// <see cref="ClientInformation.CrossClientSubjectTokenExchange.Any"/> for a broker trusted with tokens issued
+    /// to others.
     /// </summary>
-    public bool AllowCrossClientSubjectTokenExchange { get; set; } = false;
+    public CrossClientSubjectTokenExchange CrossClientSubjectTokenExchange { get; set; }
 
     /// <summary>
     /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
@@ -755,6 +886,14 @@ public record ClientInfo(string ClientId)
     /// A version identifier for the client software per RFC 7591 Section 2.
     /// </summary>
     public string? SoftwareVersion { get; set; }
+
+    /// <summary>
+    /// The software statement the client was registered with, as it was presented and validated (RFC 7591 section
+    /// 2.3), or <c>null</c> for a client registered without one. The metadata it carries stays the client's through
+    /// every RFC 7592 update, and every registration, read and update response returns it unmodified (RFC 7591 section
+    /// 3.2.1).
+    /// </summary>
+    public string? SoftwareStatement { get; set; }
 
     /// <summary>
     /// Expiration time for this dynamically registered client in distributed cache.

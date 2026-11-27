@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -40,7 +41,10 @@ public class RegisterClientRequestProcessorTests
 
     private RegisterClientRequestProcessor Processor() => Processor(_clients.Object);
 
-    private RegisterClientRequestProcessor Processor(IClientInfoManager clients, NewClientOptions? newClients = null)
+    private RegisterClientRequestProcessor Processor(
+        IClientInfoManager clients,
+        NewClientOptions? newClients = null,
+        OidcOptions? settings = null)
     {
         var credentials = new Mock<IClientCredentialFactory>(MockBehavior.Strict);
         credentials
@@ -59,7 +63,21 @@ public class RegisterClientRequestProcessorTests
         return new RegisterClientRequestProcessor(
             _logger,
             credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
-            newClients ?? new NewClientOptions());
+            Mock.Of<IClientSecretEncryptor>(),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == WithNewClients(settings, newClients)));
+    }
+
+    /// <summary>
+    /// <paramref name="settings"/>, or the defaults, with <paramref name="newClients"/> as the settings for new clients
+    /// where a test names them.
+    /// </summary>
+    private static OidcOptions WithNewClients(OidcOptions? settings, NewClientOptions? newClients)
+    {
+        var options = settings ?? new OidcOptions();
+        if (newClients is not null)
+            options.NewClientOptions = newClients;
+
+        return options;
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -69,6 +87,41 @@ public class RegisterClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
         },
         SectorIdentifier: null);
+
+    /// <summary>
+    /// A client registered while anybody may register one is untrusted, and one registered while registration asks
+    /// an initial access token, or a software statement from an issuer the host trusts, is trusted. Decided as the
+    /// client registers and kept in its record: a later change of the settings leaves the stored client as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false, ClientTrust.Untrusted)]
+    [InlineData(true, false, false, ClientTrust.Trusted)]
+    [InlineData(false, true, true, ClientTrust.Trusted)]
+    [InlineData(false, true, false, ClientTrust.Untrusted)]
+    [InlineData(false, false, true, ClientTrust.Untrusted)]
+    public async Task ARegistration_IsTrustedOnlyWhileRegistrationIsClosed(
+        bool requireInitialAccessToken, bool requireSoftwareStatement, bool trustedIssuer, ClientTrust expected)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var settings = new OidcOptions
+        {
+            RequireInitialAccessToken = requireInitialAccessToken,
+            SoftwareStatement =
+            {
+                RequireSoftwareStatement = requireSoftwareStatement,
+                TrustedIssuers = trustedIssuer ? [new TrustedIssuer { Issuer = "https://statements.example.com", JwksUri = new Uri("https://statements.example.com/jwks") }] : [],
+            },
+        };
+
+        await Processor(_clients.Object, settings: settings).ProcessAsync(SingleIssuer.Tenant, Request());
+        settings.RequireInitialAccessToken = !requireInitialAccessToken;
+
+        Assert.Equal(expected, stored!.ClientInfo.Trust);
+    }
 
     [Fact]
     public async Task ARegistrationTheStoreKeeps_IsAnsweredWithItsToken()
@@ -119,6 +172,27 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
+    /// The settings for new clients are read as a client registers, so settings changed after the processor was built,
+    /// as a configuration reload changes them, decide the next registration.
+    /// </summary>
+    [Fact]
+    public async Task ARegistration_TakesTheSettingsInForceWhenItIsMade()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var settings = new OidcOptions { NewClientOptions = new NewClientOptions { Scope = ["read"] } };
+        var processor = Processor(_clients.Object, settings: settings);
+
+        settings.NewClientOptions = new NewClientOptions { Scope = ["write"] };
+        await processor.ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.Equal((string[])["write"], stored!.ClientInfo.AllowedScopes);
+    }
+
+    /// <summary>
     /// A registered client takes the assertion audiences the host grants new clients, since registration metadata has
     /// no member for them, and a tenant held to FAPI 2.0 gives it the issuer alone whatever the host grants.
     /// </summary>
@@ -144,6 +218,33 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
+    /// A client_secret_jwt client's secret is kept as its hash and encrypted, never as itself: its assertion is
+    /// verified with the secret decrypted.
+    /// </summary>
+    [Fact]
+    public async Task AClientSecretJwtClient_IsStoredWithoutItsSecretInTheClear()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var request = new ValidClientRegistrationRequest(
+            new ClientRegistrationRequest
+            {
+                ClientId = "client-1",
+                RedirectUris = [new Uri("https://client.example.com/cb")],
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            },
+            SectorIdentifier: null);
+
+        Assert.True((await Processor().ProcessAsync(SingleIssuer.Tenant, request)).TryGetSuccess(out _));
+
+        var secret = Assert.Single(stored!.ClientInfo.ClientSecrets!);
+        Assert.Null(secret.Value);
+    }
+
+    /// <summary>
     /// A registered client takes the host's grant of offline access beside an access token carried through the user
     /// agent, which registration metadata has no member for.
     /// </summary>
@@ -162,6 +263,38 @@ public class RegisterClientRequestProcessorTests
             .ProcessAsync(SingleIssuer.Tenant, Request());
 
         Assert.Equal(granted, stored!.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken);
+    }
+
+    /// <summary>
+    /// A client registering without the offline access member takes what the host grants new clients, and one stating
+    /// a value is registered with the value it states.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.ConsentRequired, null, OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed, null, OfflineAccess.Allowed)]
+    [InlineData(OfflineAccess.Disabled, null, OfflineAccess.Disabled)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.ConsentRequired, OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.Disabled, OfflineAccess.Disabled)]
+    public async Task ARegisteredClient_TakesTheHostsOfflineAccessUnlessItStatesOne(
+        OfflineAccess granted, OfflineAccess? stated, OfflineAccess expected)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var model = new ClientRegistrationRequest
+        {
+            ClientId = "client-1",
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        if (stated is { } value)
+            model = model with { OfflineAccess = value };
+
+        await Processor(_clients.Object, new NewClientOptions { OfflineAccess = granted })
+            .ProcessAsync(SingleIssuer.Tenant, new ValidClientRegistrationRequest(model, SectorIdentifier: null));
+
+        Assert.Equal(expected, stored!.ClientInfo.OfflineAccess);
     }
 
     [Fact]
@@ -214,6 +347,75 @@ public class RegisterClientRequestProcessorTests
         Assert.True((await processor.ProcessAsync(SingleIssuer.Tenant, Request())).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
         Assert.NotNull(await store.TryFindRegisteredClientAsync(SingleIssuer.Tenant, "client-1"));
+    }
+
+    /// <summary>
+    /// The trust a client is registered with travels in its record: the server's own store answers it back as it was
+    /// decided, whatever the settings say when the client is read.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustOfARegistration_IsWhatTheStoreAnswersLater()
+    {
+        var store = new ReloadableClientInfoStorage(
+            NullLogger<ReloadableClientInfoStorage>.Instance,
+            SingleIssuer.Catalog,
+            SingleIssuer.LocalOf<Dictionary<string, ClientInfo>>(),
+            new IssuerClientRegistrations(
+                SingleIssuer.LocalOf<ConcurrentDictionary<string, RegisteredClient>>()));
+        var settings = new OidcOptions { RequireInitialAccessToken = false };
+
+        Assert.True((await Processor(store, settings: settings).ProcessAsync(SingleIssuer.Tenant, Request())).TryGetSuccess(out _));
+        settings.RequireInitialAccessToken = true;
+
+        Assert.True((await store.FindClientAsync(SingleIssuer.Tenant, "client-1")).TryGetSuccess(out var client));
+        Assert.Equal(ClientTrust.Untrusted, client.Trust);
+    }
+
+    /// <summary>
+    /// A registered client takes the token lifetimes and the single resource rule the host sets for new clients, which
+    /// registration metadata has no member for.
+    /// </summary>
+    [Fact]
+    public async Task ARegisteredClient_TakesTheTokenSettingsTheHostSetsForNewClients()
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var newClients = new NewClientOptions
+        {
+            AccessTokenExpiresIn = TimeSpan.FromSeconds(37),
+            SingleResourceAccessTokens = true,
+            RefreshToken = new()
+            {
+                AbsoluteExpiresIn = TimeSpan.FromHours(3),
+                SlidingExpiresIn = null,
+                ReusePolicy = RefreshTokenReusePolicy.Rotate,
+            },
+        };
+
+        var result = await Processor(_clients.Object, newClients).ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(newClients.AccessTokenExpiresIn, stored!.ClientInfo.AccessTokenExpiresIn);
+        Assert.True(stored.ClientInfo.SingleResourceAccessTokens);
+        Assert.Equal(newClients.RefreshToken, stored.ClientInfo.RefreshToken);
+    }
+
+    /// <summary>
+    /// Left at their defaults, the settings for new clients give a registered client what a client takes unless one is
+    /// set on it, so a host setting none of them sees no change.
+    /// </summary>
+    [Fact]
+    public void TheDefaultTokenSettingsForNewClients_AreThoseOfAnyClient()
+    {
+        var newClients = new NewClientOptions();
+        var client = new ClientInfo("client-1");
+
+        Assert.Equal(client.AccessTokenExpiresIn, newClients.AccessTokenExpiresIn);
+        Assert.Equal(client.SingleResourceAccessTokens, newClients.SingleResourceAccessTokens);
+        Assert.Equal(client.RefreshToken, newClients.RefreshToken);
     }
 
     /// <summary>

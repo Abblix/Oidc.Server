@@ -46,7 +46,6 @@ public class PushedRequestFetcherTests
         return new PushedRequestFetcher(
             snapshot.Object,
             _storage.Object,
-            _clientInfoProvider.Object,
             _consumedRequestUris.Object);
     }
 
@@ -72,7 +71,7 @@ public class PushedRequestFetcherTests
             .ReturnsAsync(CreateRequest() with { OriginRequestUri = originUri });
         _consumedRequestUris.Setup(r => r.IsConsumedAsync(TestTenant.Matched, originUri)).ReturnsAsync(true);
 
-        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest() with { RequestUri = pageUri });
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest() with { RequestUri = pageUri }, _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
@@ -93,7 +92,8 @@ public class PushedRequestFetcherTests
 
         var result = await CreateFetcher().FetchAsync(
             SingleIssuer.Tenant,
-            new AuthorizationRequest { ClientId = "another-client", RequestUri = requestUri });
+            new AuthorizationRequest { ClientId = "another-client", RequestUri = requestUri },
+            _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
@@ -115,7 +115,8 @@ public class PushedRequestFetcherTests
 
         var result = await CreateFetcher().FetchAsync(
             SingleIssuer.Tenant,
-            new AuthorizationRequest { ClientId = clientId, RequestUri = requestUri });
+            new AuthorizationRequest { ClientId = clientId, RequestUri = requestUri },
+            _clientInfoProvider.Object);
 
         Assert.True(result.TryGetSuccess(out var request));
         Assert.Equal(TestConstants.DefaultClientId, request.ClientId);
@@ -126,13 +127,13 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_FlaggedClientWithoutPushedRequest_ReturnsError()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 RequirePushedAuthorizationRequests = true,
             });
 
-        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -142,11 +143,11 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_UnflaggedClientWithoutPushedRequest_PassesThrough()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
         var request = CreateRequest();
-        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, request);
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, request, _clientInfoProvider.Object);
 
         Assert.True(result.TryGetSuccess(out var passed));
         Assert.Same(request, passed);
@@ -158,11 +159,11 @@ public class PushedRequestFetcherTests
     [Fact]
     public async Task FetchAsync_ServerWideRequirement_ReturnsErrorWithoutClientLookup()
     {
-        var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
+        _clientInfoProvider.Verify(p => p.FindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -174,13 +175,13 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_Fapi2ClientWithoutPushedRequest_ReturnsError()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 SecurityProfile = ClientSecurityProfile.Fapi2,
             });
 
-        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest(), _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -194,11 +195,11 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_GlobalDefaultFapi2_ImposesPushedRequestOnUnprofiledClient()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
         var result = await CreateFetcher()
-            .FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), CreateRequest());
+            .FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), CreateRequest(), _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -213,14 +214,14 @@ public class PushedRequestFetcherTests
     public async Task FetchAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefuses()
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 SecurityProfile = ClientSecurityProfile.None,
             });
 
         var request = CreateRequest();
-        var result = await CreateFetcher().FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), request);
+        var result = await CreateFetcher().FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), request, _clientInfoProvider.Object);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

@@ -52,7 +52,10 @@ internal static class TokenEndpoints
         {
             oidcGroup
                 .MapPost(routes.Introspection, IntrospectionAsync)
-                .WithName(EndpointNames.Introspection);
+                .WithName(EndpointNames.Introspection)
+                // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2 names introspection among the endpoints that "MUST
+                // also send the CORS header fields to allow access"
+                .RequireCors(OidcConstants.CorsPolicyName);
         }
     }
 

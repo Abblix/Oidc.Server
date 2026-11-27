@@ -30,4 +30,16 @@ partial class TlsClientAuthenticator
         Level = LogLevel.Information,
         Message = "mTLS client authenticated via self-signed certificate for client_id {ClientId}")]
     private partial void LogAuthenticated(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.TlsClientAuthenticator.OutsideValidityPeriod,
+        Level = LogLevel.Warning,
+        Message = "mTLS auth failed: the certificate presented for client_id {ClientId} is outside its validity period, {NotBefore} to {NotAfter}")]
+    private partial void LogOutsideValidityPeriod(string ClientId, DateTimeOffset NotBefore, DateTimeOffset NotAfter);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.TlsClientAuthenticator.UnsupportedKeyType,
+        Level = LogLevel.Warning,
+        Message = "mTLS auth failed: the certificate presented for client_id {ClientId} carries a key of a type no JWK of a client is compared with")]
+    private partial void LogUnsupportedKeyType(string ClientId);
 }

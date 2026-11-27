@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
@@ -26,7 +28,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// server advertises.
 /// </summary>
 /// <param name="jwtAlgorithms">Source of the per-parameter supported signing algorithm sets.</param>
-public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : SyncClientRegistrationContextValidator
+/// <param name="options">Where the length of the secret a client is issued is read, which keys the HS algorithms it may sign
+/// with.</param>
+public class SigningAlgorithmsValidator(
+    IJwtAlgorithmsProvider jwtAlgorithms,
+    IOptionsMonitor<OidcOptions> options) : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Validates the signing algorithms specified in the client registration request against the
@@ -54,9 +60,11 @@ public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : 
                 backChannelAlg, StringComparer.Ordinal))
             return NotSupported(Parameters.BackChannelAuthenticationRequestSigningAlg);
 
+        // An HS algorithm only where the secret this server issues keys it, as discovery publishes them
         if (request.TokenEndpointAuthSigningAlg is { } tokenEndpointAlg &&
-            !jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported.Contains(
-                tokenEndpointAlg, StringComparer.Ordinal))
+            (!jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported.Contains(
+                tokenEndpointAlg, StringComparer.Ordinal) ||
+             !options.CurrentValue.NewClientOptions.ClientSecret.Keys(tokenEndpointAlg)))
             return NotSupported(Parameters.TokenEndpointAuthSigningAlg);
 
         return null;

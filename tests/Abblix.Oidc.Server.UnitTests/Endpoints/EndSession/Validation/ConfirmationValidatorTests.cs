@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -15,6 +16,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -33,9 +35,17 @@ public class ConfirmationValidatorTests
     private const string CurrentSessionId = "session-b";
     private const string IssuedConfirmation = "issued-for-the-current-session";
     private const string IssuedForAnotherSession = "issued-for-somebody-else";
+    private const string ClientOfAnotherSession = "client-of-another-session";
+
+    /// <summary>
+    /// When the current session's end user authenticated, in the whole seconds a session read back from its cookie
+    /// holds it.
+    /// </summary>
+    private static readonly DateTimeOffset CurrentAuthenticationTime = new(2026, 11, 23, 10, 15, 30, TimeSpan.Zero);
 
     private readonly Mock<IAuthSessionService> _authSessionService = new(MockBehavior.Strict);
     private readonly Mock<ILogoutConfirmationStore> _confirmationStore = new(MockBehavior.Strict);
+    private readonly Mock<ISessionClientRegistry> _sessionClients = new(MockBehavior.Strict);
     private readonly ConfirmationValidator _validator;
 
     public ConfirmationValidatorTests()
@@ -43,7 +53,10 @@ public class ConfirmationValidatorTests
         // These rows exercise public clients (the default subject type), so a converter with no pairwise settings
         // is the production path: it passes a subject through unchanged.
         _validator = new ConfirmationValidator(
-            _authSessionService.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _confirmationStore.Object);
+            _authSessionService.Object,
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            _sessionClients.Object,
+            _confirmationStore.Object);
 
         SignedIn(null);
 
@@ -55,6 +68,14 @@ public class ConfirmationValidatorTests
         _confirmationStore
             .Setup(s => s.RedeemLogoutConfirmationAsync(TestTenant.Matched, CurrentSessionId, IssuedConfirmation))
             .ReturnsAsync(true);
+
+        // The request's client signed in to the current session; another session knows only a client of its own
+        _sessionClients
+            .Setup(s => s.GetClientsAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ClientOfAnotherSession]);
+        _sessionClients
+            .Setup(s => s.GetClientsAsync(TestTenant.Matched, CurrentSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ClientOfAnotherSession, TestConstants.DefaultClientId]);
     }
 
     /// <summary>
@@ -63,14 +84,19 @@ public class ConfirmationValidatorTests
     private void SignedIn(AuthSession? session)
         => _authSessionService.Setup(s => s.AuthenticateAsync()).ReturnsAsync(session);
 
-    private static AuthSession Session(string subject, string sessionId)
-        => new(subject, sessionId, DateTimeOffset.UnixEpoch, "local");
+    /// <summary>
+    /// A session whose end user authenticated at <see cref="CurrentAuthenticationTime"/>, unless another time is given.
+    /// </summary>
+    private static AuthSession Session(string subject, string sessionId, DateTimeOffset? authenticationTime = null)
+        => new(subject, sessionId, authenticationTime ?? CurrentAuthenticationTime, "local");
 
     private static EndSessionValidationContext CreateContext(
         string? confirmation = null,
         string? idTokenHint = null,
         string? hintSubject = null,
-        string? hintSessionId = null)
+        string? hintSessionId = null,
+        DateTimeOffset? hintAuthenticationTime = null,
+        string clientId = TestConstants.DefaultClientId)
     {
         var request = new EndSessionRequest
         {
@@ -80,10 +106,10 @@ public class ConfirmationValidatorTests
 
         var context = new EndSessionValidationContext(request)
         {
-            ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
+            ClientInfo = new ClientInfo(clientId),
         };
 
-        if (hintSubject != null || hintSessionId != null)
+        if (hintSubject != null || hintSessionId != null || hintAuthenticationTime != null)
         {
             context.IdToken = new JsonWebToken
             {
@@ -91,6 +117,7 @@ public class ConfirmationValidatorTests
                 {
                     Subject = hintSubject,
                     SessionId = hintSessionId,
+                    AuthenticationTime = hintAuthenticationTime,
                 },
             };
         }
@@ -165,17 +192,71 @@ public class ConfirmationValidatorTests
     }
 
     /// <summary>
-    /// An ID token carries a session identifier only when the deployment issues one, so a hint without it is judged
-    /// by its subject alone.
+    /// A client not told the session at logout receives ID tokens without <c>sid</c>. Its hint still belongs to the
+    /// current session when it names the end user signed in now, the authentication that began this session, and a
+    /// client recorded as signed in to it: RP-Initiated Logout 1.0 section 2 has the OP accept a hint when "the RP
+    /// identified by the ID Token's aud claim and/or sid claim has a current session", so the end user is not asked.
+    /// The time is compared in the whole seconds an ID token states it in.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithHintNamingTheCurrentSubjectAndNoSession_AsksNobody()
+    public async Task ValidateAsync_WithHintOfTheCurrentAuthenticationByAClientOfTheSessionAndNoSid_AsksNobody()
     {
-        SignedIn(Session(CurrentSubject, CurrentSessionId));
+        SignedIn(Session(CurrentSubject, CurrentSessionId, CurrentAuthenticationTime.AddMilliseconds(400)));
 
         Assert.False(await AsksTheEndUserAsync(CreateContext(
             idTokenHint: "id_token_value",
-            hintSubject: CurrentSubject)));
+            hintSubject: CurrentSubject,
+            hintAuthenticationTime: CurrentAuthenticationTime)));
+    }
+
+    /// <summary>
+    /// Each condition a hint without <c>sid</c> is held to, broken alone: another end user, another authentication
+    /// of the same one (an earlier session, or one in another browser), a client the current session never signed in
+    /// to, and a hint stating no authentication time. Each leaves the hint unproven to belong to this session, and
+    /// section 2 then says the OP "MUST ask the End-User".
+    /// </summary>
+    /// <param name="hintSubject">The end user the hint names.</param>
+    /// <param name="secondsBeforeTheSession">How long before the session's authentication the hint's was, or null
+    /// for a hint stating none.</param>
+    /// <param name="clientId">The client the hint was issued to.</param>
+    [Theory]
+    [InlineData("user-a", 0, TestConstants.DefaultClientId)]
+    [InlineData(CurrentSubject, 1, TestConstants.DefaultClientId)]
+    [InlineData(CurrentSubject, 0, "client-signed-in-elsewhere")]
+    [InlineData(CurrentSubject, null, TestConstants.DefaultClientId)]
+    public async Task ValidateAsync_WithHintWithoutSidNotShownToBelongToTheSession_AsksTheEndUser(
+        string hintSubject, int? secondsBeforeTheSession, string clientId)
+    {
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+
+        var context = CreateContext(
+            idTokenHint: "id_token_value",
+            hintSubject: hintSubject,
+            hintAuthenticationTime: CurrentAuthenticationTime.AddSeconds(-secondsBeforeTheSession ?? 0),
+            clientId: clientId);
+
+        if (secondsBeforeTheSession == null)
+            context.IdToken!.Payload.AuthenticationTime = null;
+
+        Assert.True(await AsksTheEndUserAsync(context));
+    }
+
+    /// <summary>
+    /// With no client recorded for the session, as when the records have expired, whether the hint's client signed in
+    /// to it cannot be decided, and the end user is asked.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithHintWithoutSidAndNoClientsRecorded_AsksTheEndUser()
+    {
+        SignedIn(Session(CurrentSubject, CurrentSessionId));
+        _sessionClients
+            .Setup(s => s.GetClientsAsync(TestTenant.Matched, CurrentSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        Assert.True(await AsksTheEndUserAsync(CreateContext(
+            idTokenHint: "id_token_value",
+            hintSubject: CurrentSubject,
+            hintAuthenticationTime: CurrentAuthenticationTime)));
     }
 
     /// <summary>
@@ -207,7 +288,8 @@ public class ConfirmationValidatorTests
         Assert.True(await AsksTheEndUserAsync(CreateContext(
             idTokenHint: "id_token_value",
             hintSubject: CurrentSubject,
-            hintSessionId: "session-a")));
+            hintSessionId: "session-a",
+            hintAuthenticationTime: CurrentAuthenticationTime)));
     }
 
     /// <summary>
@@ -275,7 +357,7 @@ public class ConfirmationValidatorTests
         subjects.Setup(s => s.Convert(TestTenant.Matched, CurrentSubject, client)).Returns(pseudonym);
 
         var validator = new ConfirmationValidator(
-            _authSessionService.Object, subjects.Object, _confirmationStore.Object);
+            _authSessionService.Object, subjects.Object, _sessionClients.Object, _confirmationStore.Object);
 
         SignedIn(Session(CurrentSubject, CurrentSessionId));
 

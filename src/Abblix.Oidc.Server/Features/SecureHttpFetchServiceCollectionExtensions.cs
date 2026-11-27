@@ -7,9 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -40,7 +42,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
     /// - Blocking requests to internal hostnames (localhost, internal, etc.)
     /// - Blocking requests to internal TLDs (.local, .internal, etc.)
     /// - DNS resolution and blocking of private/reserved IP address ranges
-    /// - Re-validation of DNS before HTTP request to prevent DNS rebinding attacks (TOCTOU)
+    /// - One resolution per send, judged, with connections made only to judged addresses, so DNS rebinding
+    ///   reaches nothing new
     /// - HTTP redirect disabling to prevent redirect-based SSRF bypass
     /// - Response size and timeout limits (configurable via <see cref="SecureHttpFetchOptions"/>)
     ///
@@ -54,8 +57,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
         this IServiceCollection services,
         Action<SecureHttpFetchOptions>? configure = null)
     {
-        // Register and configure options
-        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>();
+        // Register and configure options, refused at startup rather than at the first fetch
+        var optionsBuilder = services.AddOptions<SecureHttpFetchOptions>().ValidateOnStart();
 
         if (configure != null)
         {
@@ -92,6 +95,10 @@ public static class SecureHttpFetchServiceCollectionExtensions
             client.Timeout = options.RequestTimeout;
         });
 
+        // The cached fetchers below keep fetched documents in the host's memory cache, or in an in-process one when
+        // the host registers none, as one created from the web template without views does
+        services.AddInProcessCaches();
+
         // The cached fetchers are created per resolution, so the fetches they share live in one loader of the
         // container's, and every consumer asking for the same URI at once shares a single fetch
         services.TryAddSingleton(TimeProvider.System);
@@ -124,7 +131,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
             Dependency.Override(serviceProvider => serviceProvider
                 .GetRequiredService<IOptionsMonitor<OidcOptions>>()
                 .CurrentValue.JwtBearer.JwksCacheDuration),
-            SharedFetches());
+            SharedFetches(),
+            HostMemoryCache());
 
         return services;
     }
@@ -145,7 +153,10 @@ public static class SecureHttpFetchServiceCollectionExtensions
             consumer,
             Dependency.Override(serviceProvider => duration(
                 serviceProvider.GetRequiredService<IOptionsMonitor<SecureHttpFetchOptions>>().CurrentValue)),
-            SharedFetches());
+            SharedFetches(),
+            HostMemoryCache());
+
+    private static Dependency HostMemoryCache() => Dependency.Override<IMemoryCache>(InProcessCaches.MemoryCache);
 
     private static Dependency SharedFetches()
         => Dependency.Override(serviceProvider =>

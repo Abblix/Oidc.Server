@@ -353,22 +353,14 @@ public class HashServiceTests
     }
 
     /// <summary>
-    /// Verifies ASCII encoding is used correctly.
-    /// Non-ASCII characters should be handled by ASCII encoding rules.
+    /// A non-ASCII value is hashed as its UTF-8 octets, the digest a standard tool computes.
     /// </summary>
     [Fact]
-    public void Sha_UsesAsciiEncoding()
+    public void ANonAsciiValueIsHashedAsItsUtf8Octets()
     {
-        // Arrange
-        var data = "test";
-        var expectedBytes = Encoding.ASCII.GetBytes(data);
-        var expectedHash = SHA256.HashData(expectedBytes);
+        const string data = "pass£";
 
-        // Act
-        var result = _service.Sha(HashAlgorithm.Sha256, data);
-
-        // Assert
-        Assert.Equal(expectedHash, result);
+        Assert.Equal(SHA512.HashData(Encoding.UTF8.GetBytes(data)), _service.Sha(HashAlgorithm.Sha512, data));
     }
 
     /// <summary>

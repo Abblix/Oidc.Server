@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -57,7 +58,13 @@ public static class EndpointRouteBuilderExtensions
         oidcGroup.MapTokenEndpoints(options, routes);
         oidcGroup.MapBackChannelEndpoints(options, routes);
         oidcGroup.MapInteractionEndpoints(options, routes);
-        oidcGroup.MapClientRegistrationEndpoints(options, routes);
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 3.2: dynamic client registration is among the endpoints a
+        // browser-based application calls, which "MUST also send the CORS header fields to allow access", so every route
+        // of RFC 7591 and RFC 7592 requires the policy, the refusals of another media type included
+        oidcGroup
+            .MapGroup(string.Empty)
+            .RequireCors(OidcConstants.CorsPolicyName)
+            .MapClientRegistrationEndpoints(options, routes);
 
         return oidcGroup;
     }

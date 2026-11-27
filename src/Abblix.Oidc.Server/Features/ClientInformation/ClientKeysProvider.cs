@@ -50,7 +50,24 @@ public class ClientKeysProvider(
     /// <param name="clientInfo">The client information specifying where to find the JWKS.</param>
     /// <param name="refetch">Whether to read the keys at the JWKS URI again past the copy held.</param>
     /// <returns>An asynchronous enumerable of <see cref="JsonWebKey"/>.</returns>
-    private IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo, bool refetch = false)
-        => serviceProvider.ResolveKeysAsync(
-            clientInfo.Jwks, clientInfo.JwksUri, logger, clientInfo.ClientId, KeySetOwners.Client, refetch);
+    private async IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo, bool refetch = false)
+    {
+        await using var keys = serviceProvider.ResolveKeysAsync(
+            clientInfo.Jwks, clientInfo.JwksUri, logger, clientInfo.ClientId, KeySetOwners.Client, refetch)
+            .GetAsyncEnumerator();
+
+        // The scope is opened around each step, which is where the key set is fetched: what a step of this iterator
+        // sets does not reach the next one
+        while (true)
+        {
+            bool next;
+            using (SpecialPurposeFetches.For(clientInfo))
+                next = await keys.MoveNextAsync();
+
+            if (!next)
+                yield break;
+
+            yield return keys.Current;
+        }
+    }
 }

@@ -29,6 +29,40 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 public partial class TokenRequestProcessorTests
 {
     /// <summary>
+    /// A token request naming only an offline_access the client may not receive a refresh token for, left with no
+    /// scope once it is ignored, is refused with invalid_scope rather than answered with a token of no scope, which
+    /// RFC 6749 section 5.1 would let the client read as offline access granted. Nothing else is issued.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ATokenRequestNamingOnlyAnIgnoredOfflineAccess_IsRefusedWithInvalidScope()
+    {
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.Password, Scope = [Scopes.OfflineAccess] },
+            CreateAuthorizedGrant([Scopes.OfflineAccess]),
+            new ClientInfo(TestConstants.DefaultClientId)
+            {
+                OfflineAccess = OfflineAccess.ConsentRequired,
+                AllowedGrantTypes = [GrantTypes.Password],
+            },
+            [],
+            []);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
+            .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OfflineAccess], null));
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromMinutes(10), scope: []));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
+        _refreshTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// A request naming scopes none of which survives - offline_access from a client not allowed it, a scope its
     /// resource narrowed away - is refused with invalid_scope (RFC 6749 section 5.2) rather than answered with a token
     /// of no scope, which section 5.1 would let the client read as granted as requested. Nothing else is issued.

@@ -353,7 +353,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
     }
 
     /// <summary>The identifier the client passes to name the end-user to be contacted.</summary>
-    private const string LoginHint = "e2e-subject";
+    private const string LoginHint = ReachableUserDeviceHandler.Subject;
 
     /// <summary>
     /// Where a push client is told to deliver. Absolute and https because dynamic registration requires it;
@@ -650,24 +650,5 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
-    }
-
-    /// <summary>
-    /// Test double for the integrator-supplied device interaction. It reports that the user was reached and
-    /// identifies them, which is what puts the stored request into the Pending state the tests poll against.
-    /// It never reports the user as having answered, because that is precisely the state under test.
-    /// </summary>
-    private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
-    {
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172",
-            Justification = "The parameters belong to the interface; this stand-in answers the same way at every tenant.")]
-        public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
-            TenantDefinition tenant,
-            ValidBackChannelAuthenticationRequest request)
-            => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
-                Subject: LoginHint,
-                SessionId: Guid.NewGuid().ToString("N"),
-                AuthenticationTime: clock.GetUtcNow(),
-                IdentityProvider: "e2e-test"));
     }
 }

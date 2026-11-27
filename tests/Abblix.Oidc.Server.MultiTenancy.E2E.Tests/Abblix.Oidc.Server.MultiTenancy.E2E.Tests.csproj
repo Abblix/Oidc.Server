@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<!-- The suite registers the experimental Client ID Metadata Documents (ABX9001) among every feature a host turns on. -->
+		<NoWarn>$(NoWarn);ABX9001</NoWarn>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>false</IsPackable>
@@ -49,6 +51,7 @@
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
 		<Compile Include="../Shared/RedisFixture.cs" Link="Shared/RedisFixture.cs" />
+		<Compile Include="../Shared/EveryConsentGiven.cs" Link="Shared/EveryConsentGiven.cs" />
 		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/DPoPProofGenerator.cs" Link="Shared/DPoPProofGenerator.cs" />
 		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/ErrorResponseReader.cs" Link="Shared/ErrorResponseReader.cs" />
 		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/ChallengeAssert.cs" Link="Shared/ChallengeAssert.cs" />

@@ -156,6 +156,24 @@ public sealed class TenantDefinition
     public Uri? LoginUri { get; init; }
 
     /// <summary>
+    /// The page the end user is asked on whether to log out, when a logout request does not show that it belongs to
+    /// their current session (OpenID Connect RP-Initiated Logout 1.0 section 2). A relative address is a page under
+    /// this tenant's issuer.
+    /// </summary>
+    /// <remarks>
+    /// The end-session endpoint redirects the user agent there with the parameters of the logout request and
+    /// <c>confirmation</c>, the value the server issued for the question. When the end user agrees, the page sends
+    /// all of them back to the end-session endpoint, with GET or POST; the value is good for one use and for
+    /// <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>. When the end user declines, the page
+    /// does not send them to the <c>post_logout_redirect_uri</c> its query carries: only the end-session endpoint
+    /// checks that address against the client's registration (RP-Initiated Logout 1.0 section 3). The page's address
+    /// carries the hint and the issued value, so the page sends no referrer and loads nothing from another origin. Left unset, the endpoint answers such
+    /// a request with the <c>confirmation_required</c> error and the value in its body, for a host that asks the
+    /// question through an end-session response formatter of its own.
+    /// </remarks>
+    public Uri? LogoutConfirmationUri { get; init; }
+
+    /// <summary>
     /// The page a user creates an account on when a client requests registration with <c>prompt=create</c>
     /// (Initiating User Registration via OpenID Connect 1.0); left unset, <see cref="LoginUri"/> is used instead,
     /// so a login page that also offers registration needs nothing more. A relative address is a page under this
@@ -176,6 +194,16 @@ public sealed class TenantDefinition
     /// Each tenant keeps its own, so the pseudonyms two tenants give one user cannot be matched to each other.
     /// </summary>
     public PairwiseSubjectSettings? PairwiseSubject { get; init; }
+
+    /// <summary>
+    /// The key the client secrets this tenant issues on dynamic registration are also kept encrypted with, so a client
+    /// reading its registration at the client configuration endpoint (RFC 7592 section 3) is given its secret back.
+    /// </summary>
+    /// <remarks>
+    /// Required while the server serves dynamic client registration: a tenant without it stops the server at startup
+    /// when declared in the settings, and is refused, not served, when read from a store of tenants. Null otherwise.
+    /// </remarks>
+    public ClientSecretEncryptionSettings? ClientSecretEncryption { get; init; }
 
     /// <summary>
     /// The keys this tenant signs its tokens with and publishes in its JWKS, when the keys come from each tenant's
@@ -208,4 +236,22 @@ public sealed class TenantDefinition
     /// reaches the tenant.
     /// </remarks>
     public Uri? MtlsBaseUri { get; init; }
+
+    /// <summary>
+    /// The certificates of the certificate authorities this tenant trusts to issue the certificates its
+    /// <c>tls_client_auth</c> clients authenticate with, each base64-encoded DER, as the <c>x5c</c> member of a JWK
+    /// carries one (RFC 7517 section 4.7). A self-signed one is a trust anchor; any other is an intermediate
+    /// certificate a client certificate may chain through to one of the anchors listed beside it.
+    /// </summary>
+    /// <remarks>
+    /// RFC 8705 section 2.1 has the PKI method rely "on a validated certificate chain [RFC5280]", and section 7.4 has
+    /// the authorization server "only accept, as trust anchors, a limited number of CAs whose certificate issuance
+    /// policy meets its security requirements". The chain is built against these authorities alone, and each tenant
+    /// keeps its own: an authority trusted by one tenant does
+    /// not vouch for a subject registered at another. Only the client's own certificate reaches the server, so an
+    /// intermediate certificate between it and the anchor is listed here. With none listed the tenant serves no
+    /// <c>tls_client_auth</c>: its discovery document does not name the method, registration refuses it, and a
+    /// client registered for it is refused. Judged when the tenant enters the server, by the check of the tenant list.
+    /// </remarks>
+    public IReadOnlyCollection<string> TlsClientAuthCertificateAuthorities { get; init; } = [];
 }

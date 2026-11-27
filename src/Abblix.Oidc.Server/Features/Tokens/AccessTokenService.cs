@@ -130,7 +130,7 @@ internal class AccessTokenService(
 					? latest
 					: issuedAt + clientInfo.AccessTokenExpiresIn,
 				Issuer = LicenseChecker.CheckLicense(
-					tenant.Issuer.OriginalString,
+					tenant.IssuerAsWritten(),
 					tenant,
 					catalog,
 					authContext.ClientId),
@@ -162,10 +162,10 @@ internal class AccessTokenService(
 		if (options.Value.FilterAuthorizationDetailsByLocation)
 			accessToken.Payload.NarrowAuthorizationDetailsToAudience();
 
-		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
-		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
-		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
-		accessToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
+		// For a pairwise client, replace the real subject in 'sub' and every actor in 'act' with the client's reversible
+		// per-sector pseudonyms (the id_token carries the same 'sub'); a public client is left untouched. A pseudonym
+		// carries the real identifier, which the server opens back at UserInfo, refresh and token exchange.
+		subjectTypeConverter.SealSubjects(tenant, accessToken.Payload, clientInfo);
 
 		var encryption = await AudienceKeyRefusal.WithAudienceKeyAsync(
 			ServiceJwtEncryption.ForAccessToken(options.Value), tenant, clientInfo, audienceContext, audienceKeys, logger);
@@ -209,13 +209,15 @@ internal class AccessTokenService(
 		var authSession = accessToken.Payload.ToAuthSession();
 		var authorizationContext = accessToken.Payload.ToAuthorizationContext();
 
-		// ConvertBack the real subject: for a pairwise token 'sub' is the per-sector pseudonym the server opens back to
-		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
-		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
-		// at the protocol level instead of faulting.
-		var result = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo)
+		// Open the real parties: for a pairwise token 'sub' and every 'act' member are per-sector pseudonyms the server
+		// opens back (their sector comes from clientInfo). A public client's are already real. One that does not open
+		// (a foreign-sector or pre-change token) yields null, so reject the token at the protocol level instead of
+		// faulting.
+		var result = subjectTypeConverter.Open(tenant, TokenSubjects.Of(accessToken.Payload), clientInfo)
 			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
-			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
+			.MapSuccess(real => new AuthorizedGrant(
+				authSession with { Subject = real.Subject },
+				authorizationContext with { Actor = real.Actor }));
 
 		return Task.FromResult(result);
 	}

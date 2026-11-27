@@ -212,6 +212,67 @@ public abstract class TestBase(TestFactory factory)
         return parsed;
     }
 
+    /// <summary>Runs the auth-code flow for the given client and returns its access token.</summary>
+    protected static async Task<string> ObtainAccessTokenAsync(
+        HttpClient client, DiscoveryDocument discovery, string clientId, string clientSecret)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+        });
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = clientSecret,
+        });
+
+        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+    }
+
+    /// <summary>
+    /// Redeems <paramref name="refreshToken"/> at the token endpoint as the confidential test client, the client the
+    /// offline tokens of <see cref="ObtainConfidentialOfflineTokensAsync"/> are issued to.
+    /// </summary>
+    protected static async Task<HttpResponseMessage> RefreshAsync(
+        HttpClient client, DiscoveryDocument discovery, string refreshToken) =>
+        await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+    /// <summary>
+    /// Asks the revocation endpoint to revoke <paramref name="token"/> as <paramref name="clientId"/>, a confidential
+    /// test client authenticating with the shared secret.
+    /// </summary>
+    protected static async Task<HttpResponseMessage> RevokeAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string token,
+        string clientId = TestConstants.ConfidentialClientId) =>
+        await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
+        {
+            [RevocationRequest.Parameters.Token] = token,
+            [ClientRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
     /// <summary>
     /// Drives a plain auth-code flow with <c>offline_access</c> for the confidential test client and
     /// returns the parsed token response - its <c>refresh_token</c> is the first member of a fresh
@@ -283,6 +344,31 @@ public abstract class TestBase(TestFactory factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
+
+    /// <summary>
+    /// The member of a token response that carries a token of the RFC 8693 type named.
+    /// </summary>
+    protected static string ResponseMemberOf(string tokenType) => tokenType switch
+    {
+        TokenExchangeTokenTypes.AccessToken => TokenResponse.Parameters.AccessToken,
+        TokenExchangeTokenTypes.IdToken => TokenResponse.Parameters.IdToken,
+        TokenExchangeTokenTypes.RefreshToken => TokenResponse.Parameters.RefreshToken,
+        _ => throw new ArgumentOutOfRangeException(nameof(tokenType), tokenType, null),
+    };
+
+    /// <summary>
+    /// Exchanges a subject token as the confidential test client and returns the successful token response.
+    /// </summary>
+    protected static Task<JsonObject> ExchangeAsConfidentialClientAsync(
+        HttpClient client, DiscoveryDocument discovery, string subjectToken, string subjectTokenType)
+        => ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = subjectTokenType,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
 
     protected static JsonObject DecodeJwtPayload(string jwt)
     {

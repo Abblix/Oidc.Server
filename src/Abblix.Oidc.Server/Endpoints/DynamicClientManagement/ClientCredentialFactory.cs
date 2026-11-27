@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -19,11 +20,17 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Coordinates credential generation by composing ID generation, secret generation, hashing, and expiration calculation.
 /// Uses SHA-512 for strong cryptographic hashing while maintaining configurable secret length and expiration policies.
 /// </summary>
+/// <param name="clientIdGenerator">Generates the identifier of a client that proposes none.</param>
+/// <param name="clientSecretGenerator">Generates the secret.</param>
+/// <param name="hashService">Hashes the secret for storage.</param>
+/// <param name="options">The server's settings, whose <see cref="NewClientOptions.ClientSecret"/> gives the length and
+/// lifetime of a secret, read as it is generated.</param>
+/// <param name="clock">Provides the issue time the secret's expiry counts from.</param>
 public class ClientCredentialFactory(
     IClientIdGenerator clientIdGenerator,
     IClientSecretGenerator clientSecretGenerator,
     IHashService hashService,
-    NewClientOptions options,
+    IOptionsMonitor<OidcOptions> options,
     TimeProvider clock) : IClientCredentialFactory
 {
     /// <summary>
@@ -32,7 +39,7 @@ public class ClientCredentialFactory(
     /// SHA-512 provides cryptographic strength while remaining compatible with HMAC-based client_secret_jwt.
     /// </summary>
     /// <param name="tokenEndpointAuthMethod">Determines whether secret generation is required.</param>
-    /// <param name="clientId">Allows external client ID assignment for pre-registration scenarios.</param>
+    /// <param name="clientId">The identifier to register the client under, or null for one the server generates.</param>
     /// <returns>
     /// Credentials containing both plain-text (for transmission) and hashed (for storage) secret formats,
     /// along with calculated expiration timestamp.
@@ -47,10 +54,11 @@ public class ClientCredentialFactory(
             case ClientAuthenticationMethods.ClientSecretPost:
             case ClientAuthenticationMethods.ClientSecretJwt:
 
-                var plainSecret = clientSecretGenerator.GenerateClientSecret(options.ClientSecret.Length);
+                var secretOptions = options.CurrentValue.NewClientOptions.ClientSecret;
+                var plainSecret = clientSecretGenerator.GenerateClientSecret(secretOptions.Length);
                 var hashedSecret = hashService.Sha(HashAlgorithm.Sha512, plainSecret);
                 var issuedAt = clock.GetUtcNow();
-                var expiresAt = issuedAt + options.ClientSecret.ExpiresAfter;
+                var expiresAt = issuedAt + secretOptions.ExpiresAfter;
 
                 return new ClientCredentials(finalClientId, plainSecret, hashedSecret, expiresAt);
 

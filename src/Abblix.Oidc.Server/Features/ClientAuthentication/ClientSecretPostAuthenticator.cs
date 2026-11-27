@@ -25,12 +25,10 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public class ClientSecretPostAuthenticator(
 	ILogger<ClientSecretPostAuthenticator> logger,
-	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
 	IHashService hashService)
 	: ClientSecretAuthenticator(
 		logger,
-		clientInfoProvider,
 		clock, hashService), IClientAuthenticator
 {
 	/// <summary>
@@ -50,11 +48,15 @@ public class ClientSecretPostAuthenticator(
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="request">The client request containing the client_id and client_secret for authentication.</param>
+	/// <param name="clients">The clients of the request being served, where the client is looked up.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
 	/// <see cref="ClientInfo"/>, or why it is not one: no client_secret presented, or one presented and refused.
 	/// </returns>
-	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 	{
 		if (!IsPresented(request))
 			return ClientAuthenticationFailures.NoCredential;
@@ -64,13 +66,17 @@ public class ClientSecretPostAuthenticator(
 
 		return await TryAuthenticateAsync(
 			tenant,
+			clients,
 			request.ClientId,
 			request.ClientSecret,
 			ClientAuthenticationMethods.ClientSecretPost);
 	}
 
 	/// <inheritdoc />
-	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 		=> Task.FromResult<IEnumerable<string>>(
 			IsPresented(request) ? [nameof(ClientRequest.ClientSecret)] : []);
 

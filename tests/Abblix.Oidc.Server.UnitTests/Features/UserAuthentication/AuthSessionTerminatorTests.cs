@@ -43,10 +43,8 @@ public class AuthSessionTerminatorTests
     private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options));
 
     [Fact]
-    public async Task Revokes_the_session_tokens_before_any_client_is_told_when_the_deployment_asks()
+    public async Task Revokes_the_session_tokens_before_any_client_is_told_by_default()
     {
-        _options.RevokeSessionTokensOnLogout = true;
-
         var context = await Terminator.TerminateAsync(SingleIssuer.Tenant, "session", "alice");
 
         Assert.Equal(["revoke session", "notify session alice"], _calls);
@@ -54,8 +52,10 @@ public class AuthSessionTerminatorTests
     }
 
     [Fact]
-    public async Task Only_notifies_by_default()
+    public async Task Only_notifies_when_the_deployment_turns_revocation_off()
     {
+        _options.RevokeSessionTokensOnLogout = false;
+
         await Terminator.TerminateAsync(SingleIssuer.Tenant, "session", "alice");
 
         Assert.Equal(["notify session alice"], _calls);

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -14,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -44,6 +46,7 @@ public static class AuthorizationEndpointServiceCollectionExtensions
             .AddAuthorizationContextValidators();
 
         services.TryAddScoped<AuthorizationHandler>();
+        services.TryAddSingleton<IRedirectUriTrustPolicy, RedirectUriTrustPolicy>();
         services.TryAddScoped<IAuthorizationRequestValidator, AuthorizationRequestValidator>();
         services.AddTelemetryDecorator<IAuthorizationRequestValidator, ObservedAuthorizationRequestValidator>();
         services.TryAddSingleton<IConsentConstraintEnforcer, ConsentConstraintEnforcer>();
@@ -70,6 +73,11 @@ public static class AuthorizationEndpointServiceCollectionExtensions
         // (every contributor is Singleton - no captive-dep risk for Singleton consumers).
         // TryAddAlias keeps the host-first contract on this seam (issue #226).
         services.TryAddAlias<IAuthorizationHandler, AuthorizationHandler>();
+
+        // The decorator records the tokens the endpoint hands out, naming the end user by a fingerprint. The common
+        // services register the same singleton; added here too, idempotently, because this method is public and a
+        // host may call it on its own
+        services.TryAddSingleton<CredentialFingerprints>();
         return services.AddTelemetryDecorator<IAuthorizationHandler, ObservedAuthorizationHandler>();
     }
 

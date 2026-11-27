@@ -128,11 +128,22 @@ public record ClientRegistrationRequest
     public string[]? Contacts { get; init; }
 
     /// <summary>
-    /// A client-proposed <c>client_id</c>. Servers MAY ignore this and assign their own identifier;
-    /// when accepted, the value is echoed back in the registration response.
+    /// The <c>client_id</c> an RFC 7592 section 2.2 update carries, which must be the client's own. On a registration
+    /// it is a proposal, ignored unless the host accepts proposals
+    /// (<see cref="Common.Configuration.NewClientOptions.AcceptProposedClientId"/>), and the response names the
+    /// identifier the client was registered under.
     /// </summary>
     [JsonPropertyName(Parameters.ClientId)]
     public string? ClientId { get; init; }
+
+    /// <summary>
+    /// The <c>client_secret</c> an RFC 7592 section 2.2 update carries back, which "MUST match the currently issued
+    /// client secret for that client": an update carrying another is refused, and none ever replaces the secret
+    /// issued. A registration carrying one is not given it either, since the server issues every secret.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientSecret)]
+    [Credential]
+    public string? ClientSecret { get; init; }
 
     /// <summary>
     /// The <c>client_name</c> (RFC 7591 section 2): a human-readable display name for the client, shown to end-users
@@ -496,18 +507,30 @@ public record ClientRegistrationRequest
     public bool? PkceRequired { get; init; }
 
     /// <summary>
-    /// The offline access the client asks for, a server extension to RFC 7591 metadata:
-    /// <see cref="OfflineAccess.Disabled"/>, or <see cref="OfflineAccess.ConsentRequired"/> when the
-    /// request does not state it.
+    /// The offline access the client asks for, a server extension to RFC 7591 metadata. It reads as
+    /// <see cref="OfflineAccess.ConsentRequired"/> when the request does not state it, and such a client is registered
+    /// with <see cref="Common.Configuration.NewClientOptions.OfflineAccess"/>.
     /// </summary>
     /// <remarks>
-    /// <see cref="OfflineAccess.Allowed"/> is refused by
-    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>: it waives
-    /// <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0, section 11, leaves to the conditions the
-    /// host states, never to the client itself.
+    /// A value beyond <see cref="Common.Configuration.NewClientOptions.OfflineAccess"/> is refused by
+    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>, unless an RFC 7592 update
+    /// states what the client already has:
+    /// <see cref="OfflineAccess.Allowed"/> waives <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0,
+    /// section 11, leaves to the conditions the host states, never to the client itself.
     /// </remarks>
     [JsonPropertyName(Parameters.OfflineAccess)]
-    public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
+    public OfflineAccess OfflineAccess
+    {
+        get => StatedOfflineAccess ?? OfflineAccess.ConsentRequired;
+        init => StatedOfflineAccess = value;
+    }
+
+    /// <summary>
+    /// The offline access the request states, or <c>null</c> when it does not state any, which
+    /// <see cref="OfflineAccess"/> cannot tell apart from a stated <see cref="OfflineAccess.ConsentRequired"/>.
+    /// </summary>
+    [JsonIgnore]
+    internal OfflineAccess? StatedOfflineAccess { get; private init; }
 
     /// <summary>
     /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 section 5.2: when <c>true</c>,
@@ -713,13 +736,12 @@ public record ClientRegistrationRequest
     /// through the family API rather than by registering the contract directly.
     /// </para>
     /// <para>
-    /// These are body members and nothing else. A claim carried in a trusted <c>software_statement</c>
-    /// never appears here, so a host reading one of these values is reading the client's own assertion
-    /// even when the software statement contradicts it - and RFC 7591 Section 2 gives the software
-    /// statement precedence: "If the same client metadata name is present in both locations and the
-    /// software statement is trusted by the authorization server, the value of a claim in the software
-    /// statement MUST take precedence". A host acting on a member that its software statements can also
-    /// carry has to resolve that itself.
+    /// A validation step running after the software statement check reads these with the members of a
+    /// trusted <c>software_statement</c> laid over the body's, as RFC 7591 Section 2 has it: "If the same
+    /// client metadata name is present in both locations and the software statement is trusted by the
+    /// authorization server, the value of a claim in the software statement MUST take precedence". The
+    /// claims a statement carries as a JWT (<c>iss</c>, <c>iat</c> and the like) are not client metadata
+    /// and never appear here.
     /// </para>
     /// <para>
     /// What arrives here is attacker-controlled, unlike the provider metadata a client keeps the same
@@ -764,12 +786,12 @@ public record ClientRegistrationRequest
         /// responsible for the client.</summary>
         public const string Contacts = "contacts";
 
-        /// <summary>The <c>client_id</c> registration parameter; a client-proposed identifier that the OP
-        /// may accept or ignore.</summary>
+        /// <summary>The <c>client_id</c> parameter an RFC 7592 update carries; on a registration, a proposal the
+        /// server ignores unless the host accepts proposals.</summary>
         public const string ClientId = "client_id";
 
         /// <summary>The <c>client_secret</c> a client update request carries when the server issued one
-        /// (RFC 7592 section 2.2); the update keeps the issued secret whatever this member says.</summary>
+        /// (RFC 7592 section 2.2), which must be the secret issued; the update keeps that secret.</summary>
         public const string ClientSecret = "client_secret";
 
         /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name
@@ -871,6 +893,11 @@ public record ClientRegistrationRequest
         /// <summary>The <c>token_endpoint_auth_method</c> registration parameter selecting the client
         /// authentication method used at the token endpoint.</summary>
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>The <c>token_endpoint_auth_methods_supported</c> client metadata (OpenID Connect Relying Party
+        /// Metadata Choices 1.0 section 2) listing every client authentication method the client can use, of which
+        /// the server picks one.</summary>
+        public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
 
         /// <summary>The <c>token_endpoint_auth_signing_alg</c> registration parameter naming the JWS
         /// algorithm used when the client authenticates with a signed JWT assertion.</summary>

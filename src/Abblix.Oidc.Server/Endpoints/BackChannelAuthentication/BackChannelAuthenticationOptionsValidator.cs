@@ -54,6 +54,14 @@ internal sealed class BackChannelAuthenticationOptionsValidator : IValidateOptio
                 "would expire when made, or outlive the longest one a client may ask for.");
         }
 
+        if (settings.MaximumBindingMessageLength <= 0)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(OidcOptions.BackChannelAuthentication)}.{nameof(settings.MaximumBindingMessageLength)} is " +
+                $"{settings.MaximumBindingMessageLength}, so every request carrying a binding_message would be refused. " +
+                "Set the longest binding message, in code points, the authentication devices can show.");
+        }
+
         return ValidateOptionsResult.Success;
     }
 }

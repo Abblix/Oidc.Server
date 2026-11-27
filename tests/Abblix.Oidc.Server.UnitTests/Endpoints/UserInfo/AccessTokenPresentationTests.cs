@@ -21,16 +21,14 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 /// </summary>
 public class AccessTokenPresentationTests
 {
-    public enum Parameter { None, Form, Query }
+    public enum Parameter { None, Form }
 
     [Theory]
     [InlineData(TokenTypes.Bearer, Parameter.None, AccessTokenScheme.Bearer)]
     [InlineData(TokenTypes.DPoP, Parameter.None, AccessTokenScheme.DPoP)]
     [InlineData(null, Parameter.Form, AccessTokenScheme.Bearer)]
-    [InlineData(null, Parameter.Query, AccessTokenScheme.Bearer)]
     [InlineData(TokenTypes.Bearer, Parameter.Form, AccessTokenScheme.Bearer)]
     [InlineData(TokenTypes.DPoP, Parameter.Form, null)]
-    [InlineData(TokenTypes.DPoP, Parameter.Query, null)]
     [InlineData(null, Parameter.None, null)]
     [InlineData(TokenTypes.Basic, Parameter.None, null)]
     public void SchemeOf_NamesTheSchemeTheTokenWasPresentedWith(
@@ -40,7 +38,6 @@ public class AccessTokenPresentationTests
         {
             Parameter.None => new UserInfoRequest(),
             Parameter.Form => new UserInfoRequest { AccessTokenInForm = "token" },
-            Parameter.Query => new UserInfoRequest { AccessTokenInQuery = "token" },
             _ => throw new System.ArgumentOutOfRangeException(nameof(parameter), parameter, null),
         };
         var clientRequest = new ClientRequest

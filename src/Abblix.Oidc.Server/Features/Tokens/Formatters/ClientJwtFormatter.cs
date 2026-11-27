@@ -75,7 +75,7 @@ public partial class ClientJwtFormatter(
         // after registration and a client secret can expire in between
         var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithmInUse;
         var encryptingCredentials = await encryptionKeyResolver.ResolveAsync(
-            profile, clientInfo, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+            tenant, profile, clientInfo, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 
         // A client that registered an algorithm expects what is issued to it encrypted, so a token is not sent in the
         // clear because the client has no key (or none could be read) that algorithm can encrypt to

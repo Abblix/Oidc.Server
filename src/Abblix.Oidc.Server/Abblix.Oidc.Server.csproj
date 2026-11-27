@@ -1,12 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- The library implements Client ID Metadata Documents, so its own code reads the members it marks experimental (ABX9001) for hosts. -->
+        <NoWarn>$(NoWarn);ABX9001</NoWarn>
         <Nullable>enable</Nullable>
         <ImplicitUsings>true</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageId>Abblix.OIDC.Server</PackageId>
         <Title>Abblix OIDC Server</Title>
-        <Description>OpenID Connect and OAuth 2.0 server for ASP.NET Core, certified by the OpenID Foundation. Add a complete identity provider and authorization server to your own .NET application: every OIDC flow, PKCE, PAR, DPoP, JARM, CIBA, device flow, token exchange and FAPI 2.0.</Description>
+        <Description>OpenID Connect and OAuth 2.0 server library for ASP.NET Core, certified by the OpenID Foundation. Add a complete identity provider and authorization server to your own .NET application: every OIDC flow, PKCE, PAR, DPoP, JARM, CIBA, device flow, token exchange and FAPI 2.0.</Description>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Abblix LLP</Authors>
@@ -17,7 +19,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
         <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-        <PackageReleaseNotes>Run a certified OpenID Provider inside your own ASP.NET Core application instead of operating a separate identity product. Abblix OIDC Server is a library: it builds on the standard .NET dependency injection container, stores nothing you do not choose to store, and passes the OpenID Foundation conformance suite in every login and logout profile. What you get: authorization code with PKCE, hybrid and implicit flows, client credentials, device authorization, CIBA, token exchange (RFC 8693) and Rich Authorization Requests (RFC 9396); pushed authorization requests, signed and encrypted request objects, JARM responses and sender-constrained tokens through DPoP or mutual TLS; dynamic client registration and management, discovery and Authorization Server Metadata (RFC 8414), token introspection and revocation, front-channel and back-channel logout, session management. New in 3.0: multi-tenancy, with tenants declared in the settings or kept in a store of the host's own and changed while the server runs; every JWT validation states the token types it accepts (RFC 8725); a client authentication JWT names the issuer as its only audience (RFC 10070); tracing and metrics; per-client budgets on introspection and revocation; a default scope per client and the resources each client may get an access token for; a refresh token reuse policy; and a host step before anything is issued. It runs on .NET 11. Host it through the MVC or the Minimal API integration package. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.0</PackageReleaseNotes>
+        <PackageReleaseNotes>Run a certified OpenID Provider inside your own ASP.NET Core application instead of operating a separate identity product. Abblix OIDC Server is a library: it builds on the standard .NET dependency injection container, stores nothing you do not choose to store, and passes the OpenID Foundation conformance suite in every login and logout profile. What you get: authorization code with PKCE, hybrid and implicit flows, client credentials, device authorization, CIBA, token exchange (RFC 8693) and Rich Authorization Requests (RFC 9396); pushed authorization requests, signed and encrypted request objects, JARM responses and sender-constrained tokens through DPoP or mutual TLS; dynamic client registration and management, discovery and Authorization Server Metadata (RFC 8414), token introspection and revocation, front-channel and back-channel logout, session management. One server serves many tenants, declared in the settings or kept in a store of the host's own and changed while it runs. It runs on .NET 11. Host it through the MVC or the Minimal API integration package. New in 3.1: Client ID Metadata Documents as an experimental feature (draft-ietf-oauth-client-id-metadata-document-03); the server requirements of OAuth 2.1 (draft-ietf-oauth-v2-1-17); the tokens of a session revoked when the session ends, by default (RFC 10017); cross-client token exchange of access tokens addressed to the client (RFC 8693); the grant types and resources of dynamically registered clients and clients from metadata documents listed by the host, the authorization code and refresh token grants and no resource by default in every registration mode, with their offline access and token settings; every endpoint address published on the issuer's scheme, host and port; TLS options of outbound requests to addresses a client supplies set by the host; a logout confirmation page a tenant names; log records of successful token issuance and client registration changes, with the client named on endpoint spans; in-process caches when the host registers none; a tenant read from a store missing a required value refused on its own; the client secret issued at registration returned by registration reads and updates; the client authentication methods of revocation and introspection published in discovery, and only those a tenant's security profile admits; token exchange error codes as RFC 8693 describes them; and resource scopes accepted at dynamic client registration. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.1</PackageReleaseNotes>
         <PackageIcon>Abblix.png</PackageIcon>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
@@ -84,6 +86,8 @@
       <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
       <InternalsVisibleTo Include="Abblix.Oidc.Server.SharedSignals" />
       <InternalsVisibleTo Include="Abblix.Oidc.Server.AspNetCore" />
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc" />
+      <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi" />
     </ItemGroup>
 
 </Project>

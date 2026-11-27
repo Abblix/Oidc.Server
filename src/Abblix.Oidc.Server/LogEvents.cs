@@ -61,7 +61,7 @@ internal static class LogEvents
             public const int GrantSucceeded = Base + 12;
             public const int IssuerNotTrusted = Base + 13;
             public const int AudienceFailedStrict = Base + 14;
-            public const int AudienceFailedPermissive = Base + 15;
+            // Base + 15 was the permissive audience refusal, no longer logged; not reused, so an old alert stays silent
             public const int MissingExpiration = Base + 16;
             public const int TokenOfAnotherKind = Base + 17;
             public const int IssuerIsServedTenant = Base + 18;
@@ -195,6 +195,8 @@ internal static class LogEvents
             public const int TokenValidationFailed = Base + 2;
             public const int CallerRateLimited = Base + 3;
             public const int CallerAndSourceRateLimited = Base + 4;
+            public const int TokenAlreadyRevoked = Base + 5;
+            public const int TokenOfNoClient = Base + 6;
         }
     }
 
@@ -229,6 +231,8 @@ internal static class LogEvents
             public const int TokenEndpointAudienceAccepted = Base + 15;
             public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
             public const int PushedAuthorizationRequestEndpointAudienceAccepted = Base + 17;
+            public const int ClientIdentifiersMismatch = Base + 18;
+            public const int LifetimeTooLong = Base + 19;
         }
 
         /// <summary>
@@ -246,20 +250,7 @@ internal static class LogEvents
             public const int NoMatchingSecret = Base + 4;
             public const int SecretExpired = Base + 5;
             public const int Authenticated = Base + 6;
-        }
-
-        /// <summary>
-        /// <c>Features/ClientAuthentication/ClientSecretJwtAuthenticator.cs</c> -
-        /// client_secret_jwt authentication via HMAC-signed JWT assertions
-        /// (sub-range 3040-3059).
-        /// </summary>
-        public static class ClientSecretJwtAuthenticator
-        {
-            private const int Base = 3040;
-
-            public const int WrongAuthMethod = Base + 2;
-            public const int NoSecretsConfigured = Base + 3;
-            public const int SecretWithoutRawValue = Base + 4;
+            public const int ClientIdentifiersMismatch = Base + 7;
         }
 
         /// <summary>
@@ -284,6 +275,8 @@ internal static class LogEvents
             public const int ClientNotFound = Base + 1;
             public const int NoMatchingPublicKey = Base + 2;
             public const int Authenticated = Base + 3;
+            public const int OutsideValidityPeriod = Base + 4;
+            public const int UnsupportedKeyType = Base + 5;
         }
 
         /// <summary>
@@ -297,6 +290,7 @@ internal static class LogEvents
 
             public const int NoTlsMetadataConfigured = Base + 1;
             public const int Authenticated = Base + 2;
+            public const int ChainNotValidated = Base + 3;
         }
 
         /// <summary>
@@ -318,7 +312,6 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
-            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 
@@ -872,6 +865,7 @@ internal static class LogEvents
             public const int ProofRequiredButMissing = Base + 2;
             public const int ProofKeyMismatch = Base + 3;
             public const int ProofRejected = Base + 4;
+            public const int CertificateRequiredButMissing = Base + 5;
         }
     }
 
@@ -1000,7 +994,8 @@ internal static class LogEvents
     // id here must not repeat one there.
 
     /// <summary>
-    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own.
+    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own, and the clients
+    /// registered, replaced or removed at the registration endpoints.
     /// </summary>
     public static class ClientInformation
     {
@@ -1013,6 +1008,49 @@ internal static class LogEvents
             private const int Base = 10600;
 
             public const int RegistrationEvicted = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientIdMetadataDocuments</c> - a client resolved from the metadata document its identifier
+        /// names, or refused (sub-range 10620-10659).
+        /// </summary>
+        public static class ClientIdMetadataDocuments
+        {
+            private const int Base = 10620;
+
+            public const int IdentifierNotFetched = Base;
+            public const int IdentifierNotAllowed = Base + 1;
+            public const int IdentifierNamesAServer = Base + 2;
+            public const int FetchFailed = Base + 3;
+            public const int DocumentRefused = Base + 4;
+            public const int HeldCopyServed = Base + 5;
+            public const int ClientRefused = Base + 6;
+            public const int LoopbackWithheld = Base + 7;
+            public const int ClientResolved = Base + 8;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientInformation/IssuerClientSecretEncryptor.cs</c> - a client secret kept encrypted that no
+        /// longer decrypts (sub-range 10660-10679).
+        /// </summary>
+        public static class ClientSecretEncryption
+        {
+            private const int Base = 10660;
+
+            public const int SecretNotDecrypted = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/ClientInformation/ClientRegistrationsLog.cs</c> - a client registered, replaced or removed at
+        /// the registration endpoints (sub-range 10680-10699).
+        /// </summary>
+        public static class ClientRegistrationsLog
+        {
+            private const int Base = 10680;
+
+            public const int ClientRegistered = Base;
+            public const int ClientUpdated = Base + 1;
+            public const int ClientRemoved = Base + 2;
         }
     }
 
@@ -1073,6 +1111,17 @@ internal static class LogEvents
             public const int TrustedIssuerIsServedTenant = Base;
             public const int TrustedIssuersNotChecked = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Common/Configuration/RefreshTokenReusePolicyCheck.cs</c> - a client of a tenant read whose refresh token
+        /// reuse is not followed for every token (sub-range 10780-10799).
+        /// </summary>
+        public static class RefreshTokenReusePolicyCheck
+        {
+            private const int Base = 10780;
+
+            public const int ReuseNotFollowed = Base;
+        }
     }
 
     /// <summary>
@@ -1117,6 +1166,18 @@ internal static class LogEvents
 
             public const int JwtNotIssued = Base;
             public const int SigningKeyBelowTheFloor = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/IssuedTokensLog.cs</c> - the tokens the server hands out, at the token endpoint and
+        /// through the front channel of the authorization endpoint (sub-range 11120-11129).
+        /// </summary>
+        public static class IssuedTokensLog
+        {
+            private const int Base = 11120;
+
+            public const int TokensIssued = Base;
+            public const int FrontChannelTokensIssued = Base + 1;
         }
     }
 

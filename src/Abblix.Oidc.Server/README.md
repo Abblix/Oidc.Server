@@ -2,26 +2,31 @@
 
 Abblix OIDC Server is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a certified provider you embed in your own ASP.NET Core application instead of running a separate identity product. It is certified by the OpenID Foundation across all login and logout profiles, builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
 
-## What's New in Version 3.0
+## What's New in Version 3.1
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
+Read [Upgrading to 3.1](https://www.abblix.com/en/docs/upgrading-to-3.1) before moving a 3.0 host. Every change of the release is in [What's new in 3.1](https://www.abblix.com/en/docs/whats-new-in-3.1).
 
 🚀 Features
-- Multi-tenancy: one server serves several issuers, each a tenant with its own clients, scopes, resources, keys and pages, declared in the settings or kept in a store of the host's own and changed while the server runs
-- Every JWT validation states the token types it accepts ([RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html))
-- Tracing and metrics for the protocol endpoints
-- A default scope per client, the resources each client may get an access token for, and one resource per access token
-- Per-client budgets on introspection and revocation
-- A host step before anything is issued
-- Revoking one user's tokens at one client
+- Client ID Metadata Documents, experimental ([draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)), see [below](#client-id-metadata-documents)
+- Server requirements of OAuth 2.1 ([draft-ietf-oauth-v2-1-17](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-17))
 
 ✏️ Improvements
-- Revocation reaches every token of a grant
-- A refresh token reuse policy
-- Three limits on guessing a user code
-- Each logout channel is the deployment's own choice, and a logout confirmation is a value the server issues
-- A client authentication JWT names the issuer as its only audience ([RFC 10070](https://www.rfc-editor.org/rfc/rfc10070.html))
-- Any port on a loopback redirect address
+- Tokens of a session revoked when the session ends, wherever this server checks them ([RFC 10017](https://datatracker.ietf.org/doc/html/rfc10017)), unless `OidcOptions.RevokeSessionTokensOnLogout` is false
+- Cross-client token exchange of access tokens addressed to the client, through `ClientInfo.CrossClientSubjectTokenExchange` ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
+- The grant types and resources of dynamically registered clients and clients from metadata documents listed by the host in `NewClientOptions`, the authorization code and refresh token grants and no resource by default in every registration mode, with their offline access and token settings
+- Every endpoint address discovery and the registration responses publish is on the issuer's scheme, host and port
+- TLS options of outbound requests to client-supplied addresses set by the host, with no certificate downloads by default
+- A logout confirmation page a tenant names in `TenantDefinition.LogoutConfirmationUri`
+- Log records of successful token issuance and client registration changes, and the client named on endpoint spans
+
+🛠 Fixes
+- In-process caches when the host registers none
+- A tenant read from a store that holds a null where a value is required refused on its own, the other tenants served
+- The client secret issued at registration returned by registration reads and updates ([RFC 7592](https://datatracker.ietf.org/doc/html/rfc7592))
+- Client authentication methods of the revocation and introspection endpoints published in discovery ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))
+- Discovery lists only the client authentication methods a tenant's security profile admits
+- Token exchange error codes as [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) describes them
+- Resource scopes accepted at dynamic client registration
 
 ## Implemented Standards
 
@@ -42,6 +47,7 @@ Abblix OIDC Server implements the following standards for authorization and secu
 - JWT-Secured Authorization Request (JAR): [RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)
 - Pushed Authorization Requests (PAR): [RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)
 - Authorization Server Issuer Identification: [RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)
+- Client ID Metadata Document: [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)
 - Multiple Response Types: [Specification](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)
 - Form Post Response Mode: [Specification](https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html)
 
@@ -60,6 +66,47 @@ Abblix OIDC Server implements the following standards for authorization and secu
 - Back-Channel Logout 1.0: [Specification](https://openid.net/specs/openid-connect-backchannel-1_0.html)
 - Client-Initiated Backchannel Authentication (CIBA): [Specification](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
 - Pairwise Pseudonymous Identifiers (PPID): [OpenID Connect Core Section 8](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)
+
+## Client ID Metadata Documents
+
+A client can use the HTTPS URL of a JSON document it publishes as its `client_id` instead of registering, which is how the MCP authorization specification expects clients and servers with no prior relationship to meet. The server fetches the document the first time the client shows up, keeps it for as long as the response's cache headers allow (within `MinimumCacheDuration` and `MaximumCacheDuration`), and checks it the way it checks a dynamic registration request. Discovery then advertises `client_id_metadata_document_supported`.
+
+Available since 3.1, the feature implements [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03), an Internet-Draft. It stays experimental until the draft becomes an RFC and may change in a minor release, so the compiler reports `ABX9001` wherever your code uses it until you suppress that diagnostic.
+
+The sample is a host on the Minimal API adapter (`Abblix.OIDC.Server.MinimalAPI`); an MVC host makes the same calls with `Abblix.OIDC.Server.MVC` and its namespace.
+
+```csharp
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Oidc.Server.MinimalApi;
+
+// Client ID Metadata Documents are experimental until the draft becomes an RFC
+#pragma warning disable ABX9001
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddOidcServices(options =>
+    {
+        // Optional: fetch documents only from URLs starting with these prefixes
+        options.ClientIdMetadataDocuments = options.ClientIdMetadataDocuments with
+        {
+            AllowedClientIdPrefixes = ["https://apps.example.com/"],
+        };
+    })
+    .AddClientIdMetadataDocuments();
+```
+
+- A client resolved this way authenticates with `none` or with a method that proves a key or a certificate, such as `private_key_jwt` with a key its document publishes. A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
+- `NewClientOptions` limits what the client may ask for; a grant type outside `NewClientOptions.AllowedGrantTypes` is left out of the client rather than refusing its document. Unless `NewClientOptions.AllowedResources` lists resources, the client gets access tokens for none.
+- Such a client gets only the authorization code and refresh token grants unless you name others in both `ClientIdMetadataDocuments.AllowedGrantTypes` and `NewClientOptions.AllowedGrantTypes`. One that authenticates with `none` never gets the client credentials, password or JWT bearer grant.
+- A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration assigns every `client_id` unless `NewClientOptions.AcceptProposedClientId` lets registrants propose theirs, and then it refuses a proposed one that is an `https` URL.
+- The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services. A host that sets `BlockPrivateNetworks` to false does not start with this feature on.
+- To try the feature with a client on your own machine, set `ClientIdMetadataDocuments.DocumentAddresses` to `ClientIdMetadataDocumentAddresses.AllowLoopback`. The server then fetches a document from `localhost` or a loopback address, but only for a tenant whose issuer is itself on `localhost` or a loopback address, as section 10.7 of the draft allows for development. Other private addresses are still refused, and so are the URLs inside the document. A tenant with a public issuer gets nothing from the setting, and a client naming a loopback address there is refused with a warning saying so. A host running in the Production environment, or sending outbound requests through `OutboundProxy`, does not start with it set.
+- When a document cannot be fetched for a reason that may pass, such as a timeout, an unreachable host or a 5xx answer, and no valid copy is held, the token and pushed authorization request endpoints answer `503 Service Unavailable` with no body. A document that is fetched and refused gets `invalid_client` there. This follows section 6.1 of draft-03 and is experimental: it may change with the final specification. The authorization endpoint answers both cases with `invalid_client` and does not redirect to the client.
+- A redirect URI must use `https`, `http` to a loopback address, or a private-use scheme such as `com.example.app`. Every other URI in the document must use `https`.
+- Without `AllowedClientIdPrefixes`, an authorization error for such a client is answered by the server with status 400 rather than sent to the client's redirect URI (RFC 9700 section 4.11.2), and so is one for a client registered dynamically while registration needs neither an initial access token nor a software statement from a trusted issuer. A successful authorization still reaches the client. To decide which clients' redirect URIs you trust, register your own `IRedirectUriTrustPolicy`.
+
+Nobody vets what these clients' documents say, so the consent page is the end user's only check on them. Show the host name of the `client_id` next to the client's name. If you show its logo, fetch the image and serve it yourself rather than linking to `logo_uri` (section 10.9 of the draft). A host that grants every client everything it asks for (`AddConsentGrantedForEveryClient`) and sets no `AllowedClientIdPrefixes` does not start, because any URL could then get the user's tokens without the user being asked. Set the prefixes, or register a consent provider that asks the user. A consent your provider remembers must be keyed by the `client_id` URL and the resource together (section 10.12 of the draft), so a consent given to one client is never reused for another.
 
 ## Install
 

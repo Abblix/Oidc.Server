@@ -31,6 +31,12 @@ public sealed class MutableAuthSessionService(TimeProvider clock) : IAuthSession
         _sessions = [..subjects.Select(subject => Session(subject, null))];
 
     /// <summary>
+    /// Replaces the logged-in users with the sessions given as they are, so a test can change one of a session's
+    /// subject, identifier and authentication time while keeping the others.
+    /// </summary>
+    public void SignedIn(params AuthSession[] sessions) => _sessions = sessions;
+
+    /// <summary>
     /// Replaces the logged-in users, each with the authentication level the host recorded for it - null
     /// for a host that records none.
     /// </summary>

@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
@@ -29,27 +31,34 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
 /// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
 /// <param name="grantRevocation">Revokes the grant of a replayed refresh token.</param>
+/// <param name="registrationBinding">Says whether a registration access token still manages its registration.</param>
 public sealed class TokenStatusCheck(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffChecker cutoffChecker,
-	GrantRevocation grantRevocation)
+	GrantRevocation grantRevocation,
+	RegistrationAccessTokenBinding registrationBinding)
 {
 	/// <summary>
 	/// <paramref name="token"/> when nothing recorded at <paramref name="tenant"/> refuses it, otherwise the refusal.
 	/// </summary>
 	/// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
+	/// <param name="clients">The clients of the request being served, where a client the token names is looked
+	/// up.</param>
 	/// <param name="token">The token, already found authentic.</param>
 	/// <param name="options">What the caller validates, which decides whether a cutoff applies.</param>
 	public async Task<Result<JsonWebToken, JwtValidationError>> CheckAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		ValidationOptions options)
 	{
 		// Chain of Responsibility: what is recorded about the principal, then about the token's grant family,
-		// then about the token itself; the first refusal answers
-		var refusal = await CutoffRefusalAsync(tenant, token, options)
+		// then about the token itself, then about the registration a registration access token manages; the first
+		// refusal answers
+		var refusal = await CutoffRefusalAsync(tenant, clients, token, options)
 		              ?? await GrantFamilyRefusalAsync(tenant, token)
-		              ?? await TokenStatusRefusalAsync(tenant, token);
+		              ?? await TokenStatusRefusalAsync(tenant, clients, token)
+		              ?? await RegistrationRefusalAsync(tenant, token);
 
 		return refusal is null ? token : refusal;
 	}
@@ -59,6 +68,7 @@ public sealed class TokenStatusCheck(
 	/// </summary>
 	private async Task<JwtValidationError?> CutoffRefusalAsync(
 		TenantDefinition tenant,
+		IClientInfoProvider clients,
 		JsonWebToken token,
 		ValidationOptions options)
 	{
@@ -76,7 +86,7 @@ public sealed class TokenStatusCheck(
 		if (!options.HasFlag(ValidationOptions.ValidateLifetime))
 			return null;
 
-		return await cutoffChecker.CheckAsync(tenant, token.Payload);
+		return await cutoffChecker.CheckAsync(tenant, clients, token.Payload);
 	}
 
 	/// <summary>
@@ -102,9 +112,42 @@ public sealed class TokenStatusCheck(
 	}
 
 	/// <summary>
+	/// The refusal of a registration access token that no longer manages a registration: revoked, replaced by an
+	/// update, or whose client was deleted (<see cref="RegistrationAccessTokenBinding"/>), so every reader judges it as
+	/// the client configuration endpoint does.
+	/// </summary>
+	private async Task<JwtValidationError?> RegistrationRefusalAsync(TenantDefinition tenant, JsonWebToken token)
+	{
+		if (!JwtTypeName.Matches(token.Header.Type, JwtTypes.RegistrationAccessToken) ||
+		    await registrationBinding.FindRegistrationAsync(tenant, token) is not null)
+		{
+			return null;
+		}
+
+		return new JwtValidationError(JwtError.TokenRevoked, "The registration access token manages no registration");
+	}
+
+	/// <summary>
+	/// The client <paramref name="token"/> was issued to, or null where it names none or none is found.
+	/// </summary>
+	private static async Task<ClientInfo?> TokenClientAsync(
+		TenantDefinition tenant,
+		IClientInfoProvider clients,
+		JsonWebToken token)
+	{
+		if (token.Payload.ClientId is not { } clientId)
+			return null;
+
+		return (await clients.FindClientAsync(tenant, clientId)).TryGetSuccess(out var client) ? client : null;
+	}
+
+	/// <summary>
 	/// The refusal what is recorded about an identified <paramref name="token"/> itself produces, if any.
 	/// </summary>
-	private async Task<JwtValidationError?> TokenStatusRefusalAsync(TenantDefinition tenant, JsonWebToken token)
+	private async Task<JwtValidationError?> TokenStatusRefusalAsync(
+		TenantDefinition tenant,
+		IClientInfoProvider clients,
+		JsonWebToken token)
 	{
 		if (token.Payload.JwtId is not { } jwtId)
 			return null;
@@ -114,7 +157,7 @@ public sealed class TokenStatusCheck(
 			case JsonWebTokenStatus.Used:
 				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
 				// so revoke the whole grant family; the active token dies with it on its next use.
-				await grantRevocation.RevokeAsync(tenant, token.Payload);
+				await grantRevocation.RevokeAsync(tenant, token.Payload, await TokenClientAsync(tenant, clients, token));
 
 				return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 

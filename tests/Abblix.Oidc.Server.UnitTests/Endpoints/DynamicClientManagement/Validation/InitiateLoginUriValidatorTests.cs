@@ -266,7 +266,7 @@ public class InitiateLoginUriValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            initiateLoginUri: new Uri("https://[2001:db8::1]/initiate-login"));
+            initiateLoginUri: new Uri("https://[2001:4860:4860::8888]/initiate-login"));
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);

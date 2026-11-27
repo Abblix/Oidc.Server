@@ -6,8 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -66,6 +68,10 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     {
         Id = "acme",
         Issuer = new Uri(Host + Acme),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2,
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
@@ -74,6 +80,10 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     {
         Id = "globex",
         Issuer = new Uri(Host + Globex),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
 
@@ -90,7 +100,7 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddConsentGrantedForEveryClient();
+        EveryConsentGiven.Register(builder.Services);
         builder.Services.AddDynamicClientRegistration();
         builder.Services.AddSingleton<IUserCredentialsAuthenticator, EveryUserAuthenticates>();
         builder.Services.EnablePasswordGrant();
@@ -99,6 +109,8 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
         {
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
             options.RequireInitialAccessToken = false;
+            // A client registering without a token is given only the sign-in grants unless the host names others
+            options.NewClientOptions = options.NewClientOptions with { AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Password] };
             options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
@@ -159,7 +171,8 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     /// </summary>
     [Theory]
     [InlineData(Globex, HttpStatusCode.OK, null)]
-    [InlineData(Acme, HttpStatusCode.Unauthorized, ErrorCodes.InvalidClient)]
+    // OAuth 2.1 section 3.2.4: a client not using HTTP Basic is refused invalid_client without a challenge, 400
+    [InlineData(Acme, HttpStatusCode.BadRequest, ErrorCodes.InvalidClient)]
     public async Task ThePasswordGrant_IsRefusedAtTheFapi2Tenant(
         string tenant, HttpStatusCode expected, string? expectedError)
     {

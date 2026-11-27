@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -47,11 +48,14 @@ public record ClientSecret
 	/// configuration.
 	/// </summary>
 	/// <remarks>
-	/// The .NET configuration binder treats a byte array as a collection to fill element by element,
-	/// so a hash has no scalar form to bind to without this alias: a settings file would have to spell
-	/// the value out one byte per key. Setting either member sets the hash; reading returns whatever
+	/// Names the notation of the string a settings file carries; the configuration binder also reads
+	/// <see cref="Sha256Hash"/> itself from a Base64 string. Setting either member sets the hash; reading returns whatever
 	/// <see cref="Sha256Hash"/> holds, so the two can never disagree.
+	/// JSON leaves every alias out and carries the hash itself once: written alongside it, an alias is read
+	/// after the hash and overwrites whatever was edited there. The configuration binder ignores the
+	/// serializer's attributes, so binding is unaffected.
 	/// </remarks>
+	[JsonIgnore]
 	public string? Sha256HashBase64
 	{
 		get => Sha256Hash is { } hash ? Convert.ToBase64String(hash) : null;
@@ -63,6 +67,7 @@ public record ClientSecret
 	/// configuration.
 	/// </summary>
 	/// <inheritdoc cref="Sha256HashBase64" path="/remarks"/>
+	[JsonIgnore]
 	public string? Sha512HashBase64
 	{
 		get => Sha512Hash is { } hash ? Convert.ToBase64String(hash) : null;
@@ -75,8 +80,10 @@ public record ClientSecret
 	/// </summary>
 	/// <remarks>
 	/// The same alias as <see cref="Sha256HashBase64"/> in the other common notation. Reading returns
-	/// upper case; either case is accepted when writing.
+	/// upper case; either case is accepted when writing. Left out of JSON for the reason given on
+	/// <see cref="Sha256HashBase64"/>.
 	/// </remarks>
+	[JsonIgnore]
 	public string? Sha256HashHex
 	{
 		get => Sha256Hash is { } hash ? Convert.ToHexString(hash) : null;
@@ -88,6 +95,7 @@ public record ClientSecret
 	/// digest tools print and the form most people paste.
 	/// </summary>
 	/// <inheritdoc cref="Sha256HashHex" path="/remarks"/>
+	[JsonIgnore]
 	public string? Sha512HashHex
 	{
 		get => Sha512Hash is { } hash ? Convert.ToHexString(hash) : null;
@@ -95,8 +103,9 @@ public record ClientSecret
 	}
 
 	/// <summary>
-	/// The plain-text value of the client secret. This property is required for authentication methods
-	/// that need the raw secret value, such as client_secret_jwt (which uses HMAC signatures).
+	/// The plain-text value of a client secret the host declares, for the uses that need the value itself rather than
+	/// its hash: the HMAC key of a client_secret_jwt assertion and the key a JWT is encrypted to the client with. A
+	/// client registered dynamically keeps its secret in <see cref="EncryptedValue"/> instead.
 	/// </summary>
 	/// <remarks>
 	/// While storing plain-text secrets poses security risks, some authentication methods like
@@ -104,6 +113,20 @@ public record ClientSecret
 	/// This value should be stored securely and access should be restricted.
 	/// </remarks>
 	public string? Value { get; init; }
+
+	/// <summary>
+	/// The secret encrypted for the client it was issued to, by the client secret encryption key of its tenant
+	/// (<see cref="MultiTenancy.TenantDefinition.ClientSecretEncryption"/>), so the client configuration endpoint can
+	/// return it when the client reads its registration (RFC 7592 section 3). Null for a secret issued before the tenant
+	/// had such a key, and for one the host declares; a read then answers without the secret.
+	/// </summary>
+	/// <remarks>
+	/// A client_secret_jwt client's assertion is verified with the secret decrypted from here, and a JWT encrypted to it
+	/// with a key derived from it; every other method is verified against the hashes. Without the key it was encrypted
+	/// with it opens to nothing, so replacing the tenant's key ends the client_secret_jwt authentication of a client
+	/// that keeps its secret only here.
+	/// </remarks>
+	public byte[]? EncryptedValue { get; init; }
 
 	/// <summary>
 	/// The expiration date and time for the client secret. Secrets past this date are considered
@@ -127,6 +150,7 @@ public record ClientSecret
 		builder.Append("Sha256Hash = ").Append(Sha256Hash is null ? "none" : "set");
 		builder.Append(", Sha512Hash = ").Append(Sha512Hash is null ? "none" : "set");
 		builder.Append(", Value = ").Append(Value is null ? "none" : "set");
+		builder.Append(", EncryptedValue = ").Append(EncryptedValue is null ? "none" : "set");
 		builder.Append(", ExpiresAt = ").Append(ExpiresAt);
 		return true;
 	}

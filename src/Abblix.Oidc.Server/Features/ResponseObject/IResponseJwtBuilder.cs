@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
@@ -30,14 +31,14 @@ public interface IResponseJwtBuilder
     /// registered an encryption algorithm (JARM section 2.2).
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
-    /// <param name="clientId">The client the response is intended for; supplies the signing/encryption algorithms
-    /// and the <c>aud</c> claim.</param>
+    /// <param name="client">The client the response is intended for, as the request found it; supplies the
+    /// signing/encryption algorithms and the <c>aud</c> claim.</param>
     /// <param name="parameters">The authorization response parameters (the same set the plaintext response modes
     /// would place on the wire), as name-value pairs.</param>
     /// <returns>A task that returns the encoded response JWT, or the refusal when the client asked for its responses
     /// encrypted and publishes no key one can be encrypted to.</returns>
     Task<Result<string, OidcError>> BuildAsync(
         TenantDefinition tenant,
-        string? clientId,
+        ClientInfo client,
         IReadOnlyList<(string name, string? value)> parameters);
 }

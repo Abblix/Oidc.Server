@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Tests.Shared;
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -64,6 +66,10 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
     {
         Id = "acme",
         Issuer = new Uri(Host + Acme),
+        ClientSecretEncryption = new ClientSecretEncryptionSettings
+        {
+            Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        },
         DefaultSecurityProfile = ClientSecurityProfile.Fapi2MessageSigning,
         Clients = [Client()],
         LoginUri = new Uri(LoginPath, UriKind.Relative),
@@ -83,7 +89,7 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
-        builder.Services.AddConsentGrantedForEveryClient();
+        EveryConsentGiven.Register(builder.Services);
         builder.Services.AddDynamicClientRegistration();
         builder.Services.AddOidcServices(options =>
         {

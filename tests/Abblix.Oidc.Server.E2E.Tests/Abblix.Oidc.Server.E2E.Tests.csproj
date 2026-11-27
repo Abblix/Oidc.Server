@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The suite tests the experimental Client ID Metadata Documents (ABX9001). -->
+    <NoWarn>$(NoWarn);ABX9001</NoWarn>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -15,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- The two OpenAPI generators hosts run, so a test can build the document the way a host does. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" />
@@ -37,6 +40,21 @@
   <!-- Reads a WWW-Authenticate challenge by its grammar, shared with the unit tests of the adapters. -->
   <ItemGroup>
     <Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
+    <Compile Include="../Shared/MetadataDocumentOrigin.cs" Link="Shared/MetadataDocumentOrigin.cs" />
+  </ItemGroup>
+
+  <!-- What a test of a host's own cache registers, shared by every suite that checks the library uses it. -->
+  <ItemGroup>
+    <Compile Include="../Shared/HostRegistration.cs" Link="Shared/HostRegistration.cs" />
+    <Compile Include="../Shared/TestCertificateAuthority.cs" Link="Shared/TestCertificateAuthority.cs" />
+    <Compile Include="../Shared/HostRegistrationExtensions.cs" Link="Shared/HostRegistrationExtensions.cs" />
+    <Compile Include="../Shared/RecordingDistributedCache.cs" Link="Shared/RecordingDistributedCache.cs" />
+  </ItemGroup>
+
+  <!-- What a test host registers to have the errors of the clients it registers openly redirected. -->
+  <ItemGroup>
+    <Compile Include="../Shared/EveryRedirectUriTrusted.cs" Link="Shared/EveryRedirectUriTrusted.cs" />
+    <Compile Include="../Shared/EveryGrantTypeForNewClients.cs" Link="Shared/EveryGrantTypeForNewClients.cs" />
   </ItemGroup>
 
 </Project>

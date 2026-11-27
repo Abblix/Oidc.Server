@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
@@ -70,11 +71,10 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                     ErrorCodes.InvalidClientMetadata,
                     "The specified token delivery mode is not supported");
             // CIBA Core 1.0 sections 7.1 and 10.1 require the client to authenticate at both endpoints of the flow,
-            // which a client registered with the method "none" never does.
-            case {
-                BackChannelTokenDeliveryMode: not null,
-                TokenEndpointAuthMethod: ClientAuthenticationMethods.None,
-            }:
+            // which a client registered with the method "none" never does. A delivery mode registers the client for
+            // that flow, so a client naming one is judged as one asking for the grant
+            case { BackChannelTokenDeliveryMode: not null }
+                when ConfidentialGrantTypes.Refuses(context.Request.TokenEndpointAuthMethod, GrantTypes.Ciba):
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     "A client using backchannel authentication must authenticate to the server");

@@ -34,6 +34,9 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
 {
     // The claim the server names the tenant under, which this project cannot reference
     private const string TenantClaim = "abblix_tenant";
+
+    // The claim the server keeps a refresh token's resources under, which this project cannot reference
+    private const string ResourcesClaim = "abblix_resources";
     private const string ErrorMember = ErrorResponse.Parameters.Error;
 
     private static readonly IServiceProvider JwtServices = BuildJwtServices();
@@ -55,7 +58,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, await ResignAsync(RefreshTokenOf(tokens), _ => { }));
+        var (status, body) = await RefreshReadAsync(client, discovery, await ResignAsync(RefreshTokenOf(tokens), _ => { }));
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(TestTenantSettings.TenantId, DecodeJwtPayload(RefreshTokenOf(body!))[TenantClaim]!.GetValue<string>());
@@ -69,7 +72,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, await WithoutTenantAsync(tokens));
+        var (status, body) = await RefreshReadAsync(client, discovery, await WithoutTenantAsync(tokens));
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Equal(ErrorCodes.InvalidGrant, body![ErrorMember]!.GetValue<string>());
@@ -138,7 +141,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
             [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
-        var (status, _) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (status, _) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
 
         Assert.Equal(HttpStatusCode.OK, revocation);
         Assert.Equal(renewal, status);
@@ -153,7 +156,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     {
         var (client, discovery, tokens) = await GenuineAsync();
 
-        var (status, body) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (status, body) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
         var accessToken = body![TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var introspected = await IntrospectAsync(client, discovery, accessToken, TestConstants.ConfidentialClientId);
 
@@ -183,8 +186,8 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
             RefreshTokenOf(tokens),
             payload => payload[TenantClaim] = TestTenantSettings.TenantId,
             host.Services);
-        var (refused, body) = await RefreshAsync(client, discovery, tenantAlone);
-        var (renewed, _) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
+        var (refused, body) = await RefreshReadAsync(client, discovery, tenantAlone);
+        var (renewed, _) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
 
         Assert.Equal(HttpStatusCode.BadRequest, refused);
         Assert.Equal(ErrorCodes.InvalidGrant, body![ErrorMember]!.GetValue<string>());
@@ -192,34 +195,77 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A refresh token of a grant for a resource, whose audience names the resource rather than this server, is still
-    /// renewed only under this server's issuer: its readers leave out the audience check and no other.
+    /// A refresh token of a grant for a resource names this server as its audience, so a resource server checking the
+    /// audience of a token presented to it refuses it, and keeps the resource in the server's own claim, from which
+    /// the access token renewed from it is issued for that resource.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenOfAResourceGrant_NamesThisServer_AndRenewsForTheResource()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var tokens = await ObtainResourceGrantTokensAsync(client, discovery);
+        var payload = DecodeJwtPayload(RefreshTokenOf(tokens));
+
+        var (status, body) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
+
+        Assert.Equal([discovery.Issuer.OriginalString], ExtractAudiences(payload));
+        Assert.Equal(TestConstants.ApiResource, payload[ResourcesClaim]!.AsArray().Single()!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [TestConstants.ApiResource],
+            ExtractAudiences(DecodeJwtPayload(body![TokenResponse.Parameters.AccessToken]!.GetValue<string>())));
+    }
+
+    /// <summary>
+    /// A refresh token holding its grant's resource in the audience and carrying no claim of the server's for it, as
+    /// one issued by 3.0, is renewed for that resource, and only under this server's issuer: its readers leave out the
+    /// audience check and no other.
     /// </summary>
     [Theory]
     [InlineData(false, HttpStatusCode.OK)]
     [InlineData(true, HttpStatusCode.BadRequest)]
-    public async Task ARefreshTokenOfAResourceGrant_IsRenewedOnlyUnderThisIssuer(
+    public async Task ARefreshTokenHoldingItsResourceInTheAudience_IsRenewedForIt_OnlyUnderThisIssuer(
         bool anotherIssuer,
         HttpStatusCode expected)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainResourceGrantTokensAsync(client, discovery);
-        var audience = DecodeJwtPayload(RefreshTokenOf(tokens))[JwtClaimTypes.Audience];
-        Assert.Equal(
-            TestConstants.ApiResource,
-            (audience as JsonArray)?.Single()?.GetValue<string>() ?? audience?.GetValue<string>());
 
         var resigned = await ResignAsync(
             RefreshTokenOf(tokens),
             payload =>
             {
+                payload[JwtClaimTypes.Audience] = TestConstants.ApiResource;
+                payload.Remove(ResourcesClaim);
                 if (anotherIssuer)
                     payload[IanaClaimTypes.Iss] = "https://another.example.com";
             });
-        var (status, _) = await RefreshAsync(client, discovery, resigned);
+        var (status, body) = await RefreshReadAsync(client, discovery, resigned);
 
         Assert.Equal(expected, status);
+        if (status == HttpStatusCode.OK)
+        {
+            Assert.Equal(
+                [TestConstants.ApiResource],
+                ExtractAudiences(DecodeJwtPayload(body![TokenResponse.Parameters.AccessToken]!.GetValue<string>())));
+        }
+    }
+
+    /// <summary>
+    /// The resources a refresh token keeps stay in it: the access token issued for it carries no such claim.
+    /// </summary>
+    [Fact]
+    public async Task TheAccessTokenIssuedForARefreshToken_DoesNotCarryTheServersResourcesClaim()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var tokens = await ObtainResourceGrantTokensAsync(client, discovery);
+
+        var (_, body) = await RefreshReadAsync(client, discovery, RefreshTokenOf(tokens));
+
+        Assert.Null(DecodeJwtPayload(body![TokenResponse.Parameters.AccessToken]!.GetValue<string>())[ResourcesClaim]);
     }
 
     private async Task<(HttpClient Client, DiscoveryDocument Discovery, JsonObject Tokens)> GenuineAsync()
@@ -252,7 +298,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         return await JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
     }
 
-    private static Task<(HttpStatusCode, JsonObject?)> RefreshAsync(
+    private static Task<(HttpStatusCode, JsonObject?)> RefreshReadAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         string refreshToken)

@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -74,7 +75,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     }
 
     [Fact]
-    public async Task Userinfo_binds_access_token_from_query_and_from_bearer_header()
+    public async Task Userinfo_ignores_an_access_token_in_the_query_and_binds_the_bearer_header()
     {
         var client = CreateClient();
         var discovery = await client.FetchDiscoveryAsync();
@@ -83,11 +84,15 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var userInfoEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint);
 
-        // OIDC Core 5.3.1: the access token may be presented as the access_token request parameter. This is the
-        // query branch of the generated UserInfoRequest.BindAsync (SupportsGet -> RequestValues(query, form)).
-        var viaQuery = await OidcFlows.GetJsonAsync(
-            client, OidcFlows.BuildQuery(userInfoEndpoint, new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }));
-        Assert.False(string.IsNullOrEmpty(viaQuery[IanaClaimTypes.Sub]?.GetValue<string>()));
+        // OAuth 2.1 (draft-ietf-oauth-v2-1-17) section 5.1: "resource servers MUST ignore access tokens in a URI query
+        // parameter", so the generated UserInfoRequest.BindAsync reads none from there, and a token sent there twice
+        // beside the header neither counts as a second method (RFC 6750 section 3.1) nor as a repeated parameter
+        using var viaQueryAndHeader = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri($"{userInfoEndpoint}?{UserInfoRequest.Parameters.AccessToken}=a&{UserInfoRequest.Parameters.AccessToken}=b"));
+        viaQueryAndHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        var viaQuery = await client.SendAsync(viaQueryAndHeader, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, viaQuery.StatusCode);
 
         // OIDC Core 5.3.1 RECOMMENDED form: the access token in the Authorization: Bearer header.
         using var request = new HttpRequestMessage(HttpMethod.Get, userInfoEndpoint);
@@ -96,13 +101,19 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         headerResponse.EnsureSuccessStatusCode();
         var viaHeader = JsonNode.Parse(
             await headerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(viaQuery[IanaClaimTypes.Sub]!.GetValue<string>(), viaHeader[IanaClaimTypes.Sub]!.GetValue<string>());
+        Assert.False(string.IsNullOrEmpty(viaHeader[IanaClaimTypes.Sub]?.GetValue<string>()));
     }
 
     [Fact]
     public async Task Endsession_get_binds_id_token_hint_and_redirects_to_registered_post_logout_uri()
     {
-        var client = CreateClient();
+        // The client uses the session at logout, so its hint names the session and the logout needs no confirmation
+        await using var host = factory.WithSessionLogout();
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestFactory.BaseAddress,
+        });
         var discovery = await client.FetchDiscoveryAsync();
         var idToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))

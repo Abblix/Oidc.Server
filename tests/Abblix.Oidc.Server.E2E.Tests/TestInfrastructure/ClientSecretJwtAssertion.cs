@@ -73,4 +73,29 @@ internal static class ClientSecretJwtAssertion
 
         return JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
     }
+
+    /// <summary>
+    /// The private_key_jwt assertion of <paramref name="clientId"/> naming <paramref name="audiences"/>, signed with
+    /// <paramref name="key"/> by the algorithm it names (OpenID Connect Core 1.0 section 9).
+    /// </summary>
+    public static Task<string> IssueWithKeyAsync(string clientId, JsonWebKey key, params string[] audiences)
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = key.Algorithm, Type = JsonWebTokenTypes.ClientAuthentication },
+            Payload =
+            {
+                JwtId = Guid.NewGuid().ToString("N"),
+                Issuer = clientId,
+                Subject = clientId,
+                Audiences = audiences,
+                IssuedAt = now,
+                NotBefore = now,
+                ExpiresAt = now.AddMinutes(1),
+            },
+        };
+
+        return JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
+    }
 }

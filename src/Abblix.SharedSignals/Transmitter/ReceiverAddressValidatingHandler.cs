@@ -16,20 +16,29 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// The delivery endpoint comes from the receiver, so the address has to be judged on the connection the socket
 /// actually makes, not only on the URL the receiver configured. The shared base
-/// (<see cref="AddressValidatingHttpMessageHandler"/>) refuses redirects and calls the policy immediately before
-/// each send; the policy is the same one the sender consults up front, so a statically bad endpoint is refused
-/// early and loudly, and a redirect or a rebinding is caught here on the request that would have carried it.
+/// (<see cref="AddressValidatingHttpMessageHandler"/>) refuses redirects, calls the policy on the address as written
+/// before each send, resolves the host once per send and judges its addresses by the rule the policy names, and
+/// makes connections only to addresses so judged. It is the one place a delivery's address is judged, so a
+/// redirect or a rebinding is caught here on the request that would have carried it.
 /// </remarks>
 /// <param name="addressPolicy">Judges the address of a delivery endpoint.</param>
 public sealed class ReceiverAddressValidatingHandler(ReceiverAddressPolicy addressPolicy)
-    : AddressValidatingHttpMessageHandler
+    : AddressValidatingHttpMessageHandler(addressPolicy.ResolveHost, addressPolicy.OutboundProxy)
 {
     /// <inheritdoc />
-    protected override async Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
+    protected override Task GuardAsync(Uri requestUri, CancellationToken cancellationToken)
     {
-        if (await addressPolicy.RejectionOf(requestUri, cancellationToken) is { } rejection)
+        if (addressPolicy.RejectionOfName(requestUri) is { } rejection)
         {
-            throw new HttpRequestException($"Refusing push delivery to '{requestUri}': {rejection}.");
+            // Scheme, host and port only: the refusal is logged on every pass, and a receiver may carry a secret in
+            // the user information, the path or the query of its endpoint
+            var origin = requestUri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
+            throw new OutboundAddressRefusedException($"Refusing push delivery to '{origin}': {rejection}.");
         }
+
+        return Task.CompletedTask;
     }
+
+    /// <inheritdoc />
+    protected override OutboundAddressRule AddressRuleFor(Uri requestUri) => addressPolicy.AddressRuleFor(requestUri);
 }

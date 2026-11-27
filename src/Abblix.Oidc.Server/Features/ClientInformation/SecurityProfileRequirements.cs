@@ -90,15 +90,6 @@ public sealed record SecurityProfileRequirements
     public bool RequireCertificateBoundTokens { get; init; }
 
     /// <summary>
-    /// The profile refuses an access token sent to a protected resource in the URI query (RFC 6750 section 2.3), as
-    /// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 require, each in the words "shall not
-    /// accept access tokens in the query parameters". The <c>Authorization</c> header (RFC 6750 section 2.1,
-    /// RFC 9449 section 7.1) and the form-encoded body (RFC 6750 section 2.2) stay accepted: the clause names the
-    /// query alone. Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
-    /// </summary>
-    public bool RequireAccessTokenOutsideQuery { get; init; }
-
-    /// <summary>
     /// The profile has the protected resource answer with the <c>x-fapi-interaction-id</c> response header and log it,
     /// as FAPI 1.0 Part 1 section 6.2.1 requires: it "shall set the response header x-fapi-interaction-id to the value
     /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was
@@ -183,6 +174,16 @@ public sealed record SecurityProfileRequirements
     /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
     /// </summary>
     public bool RequireExactHttpsRedirectUris { get; init; }
+
+    /// <summary>
+    /// The profile requires the redirect_uri parameter in every authorization request, the one OAuth 2.1 section 4.1.1
+    /// makes optional for a client with a single registered redirect URI. FAPI 1.0 Part 1 section 5.2.2 clause 9, which
+    /// Part 2 section 5.2.2 takes in: the server "shall require the redirect_uri in the authorization request"; FAPI 2.0
+    /// Security Profile section 5.3.2.2 clause 6: it "shall require the redirect_uri parameter in pushed authorization
+    /// requests", the only ones that profile admits. Enforced by
+    /// <c>Endpoints.Authorization.Validation.RedirectUriValidator</c>.
+    /// </summary>
+    public bool RequireRedirectUriParameter { get; init; }
 
     /// <summary>
     /// The profile requires a client publishing its keys at a jwks_uri to serve it over TLS. FAPI 1.0 Part 2 section
@@ -294,9 +295,9 @@ public sealed record SecurityProfileRequirements
     /// <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
-    /// Narrower than what the server accepts without it: an object naming no audience, or only the endpoint it was
-    /// sent to, passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the server. The issuer
-    /// identifier is the one value that names this server whichever endpoint the object reaches.
+    /// Narrower than what the server accepts without it: an object carrying an audience must name the issuer either
+    /// way, but one naming no audience passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the
+    /// server. This requirement adds that the claim is present.
     /// </remarks>
     public bool RequireIssuerAudienceInRequestObject { get; init; }
 
@@ -444,15 +445,6 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile refuses a request naming a client_id other than the client its credential proves. FAPI 1.0 Part 1
-    /// section 5.2.2, which Part 2 section 5.2.2 takes in: the server "shall return an invalid_client error as defined
-    /// in 5.2 of RFC6749 when mis-matched client identifiers were provided through the client authentication methods
-    /// that permits sending the client identifier in more than one way". Enforced by
-    /// <c>Features.ClientAuthentication.SecurityProfileClientAuthenticator</c>.
-    /// </summary>
-    public bool RequireMatchingClientIdentifiers { get; init; }
-
-    /// <summary>
     /// The profile accepts in the audience of a client authentication assertion only the issuer identifier, as a
     /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: no endpoint URL
     /// and no array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>, and refused in
@@ -476,7 +468,6 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
-        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
 
@@ -484,6 +475,7 @@ public sealed record SecurityProfileRequirements
 
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        RequireRedirectUriParameter = true,
 
         // The audience and lifetime of a request object are FAPI 2.0 Message Signing section 5.3.1, a profile of its
         // own (Fapi2SignedAuthorizationRequestsRequirements below), and not the Security Profile's
@@ -533,12 +525,11 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireRedirectUriParameter = true,
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
-        RequireAccessTokenOutsideQuery = true,
         RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
@@ -728,7 +719,6 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
-        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
@@ -743,10 +733,10 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireRedirectUriParameter = true,
         RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireStringAudienceInClientAssertion = true,
         RequireFapiInteractionId = true,
@@ -859,6 +849,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
         RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
         RequireExactHttpsRedirectUris = RequireExactHttpsRedirectUris || other.RequireExactHttpsRedirectUris,
+        RequireRedirectUriParameter = RequireRedirectUriParameter || other.RequireRedirectUriParameter,
     };
 
     /// <summary>
@@ -888,8 +879,6 @@ public sealed record SecurityProfileRequirements
                 RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
             RequireStringAudienceInClientAssertion =
                 RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
-            RequireMatchingClientIdentifiers =
-                RequireMatchingClientIdentifiers || other.RequireMatchingClientIdentifiers,
             RequireHttpsJwksUri = RequireHttpsJwksUri || other.RequireHttpsJwksUri,
         };
 
@@ -903,8 +892,6 @@ public sealed record SecurityProfileRequirements
             RequireSenderConstrainedTokens =
                 RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
             RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
-            RequireAccessTokenOutsideQuery =
-                RequireAccessTokenOutsideQuery || other.RequireAccessTokenOutsideQuery,
             RequireFapiInteractionId = RequireFapiInteractionId || other.RequireFapiInteractionId,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,

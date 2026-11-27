@@ -184,6 +184,26 @@ public sealed class TelemetryDecoratorGeneratorTests
         Assert.Single(result.GeneratedTrees);
     }
 
+    /// <summary>
+    /// A stage whose result names the client is handed it through a hook of its hand-written part, which the stage
+    /// observation calls on the result; a stage that does not say so gets no hook and passes none.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AStageNamingTheClient_AsksItsHandWrittenPartForIt(bool namesClient)
+    {
+        var (_, result) = Run(
+            $"[assembly: ObservedStage(typeof(IClientStage), \"validation\", NamesClient = {(namesClient ? "true" : "false")})]",
+            "public interface IClientStage { Task<" + Ok + "> CheckAsync(); }",
+            AbblixReferences);
+
+        Assert.Empty(result.Diagnostics);
+        var generated = Assert.Single(result.GeneratedTrees).ToString();
+        Assert.Equal(namesClient, generated.Contains("private partial string? ClientOf("));
+        Assert.Equal(namesClient, generated.Contains(", ClientOf)"));
+    }
+
     [Fact]
     public void ADecoratorNamedAgainInAnotherFile_FailsTheBuildAtTheLaterEntry()
     {
@@ -260,6 +280,7 @@ public sealed class TelemetryDecoratorGeneratorTests
                 {
                     public bool RefusesWithNull { get; set; }
                     public bool NeverRefuses { get; set; }
+                    public bool NamesClient { get; set; }
                 }
             }
             """;

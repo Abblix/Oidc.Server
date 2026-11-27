@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -48,6 +49,7 @@ public class RevokedSessionValidatorTests
         new TokenRequest { GrantType = grantType },
         new ClientRequest { ClientId = TestConstants.DefaultClientId })
     {
+        Clients = Mock.Of<IClientInfoProvider>(),
         AuthorizedGrant = new AuthorizedGrant(
             new AuthSession("user_42", "session_7", AuthenticatedAt, "local"),
             new AuthorizationContext(TestConstants.DefaultClientId, [], null)),
@@ -131,11 +133,24 @@ public class RevokedSessionValidatorTests
     [Theory]
     [InlineData(GrantTypes.ClientCredentials)]
     [InlineData(GrantTypes.JwtBearer)]
-    [InlineData(GrantTypes.TokenExchange)]
     [InlineData(GrantTypes.Password)]
     public async Task AGrantBuildingItsOwnSession_IsNotAskedAbout(string grantType)
     {
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
+
+        Assert.Null(error);
+        _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A token exchange carries the session of its subject token, which the subject token's own validation judges
+    /// against that session's cutoff by its issue time in the same request, so it is not asked about here.
+    /// </summary>
+    [Fact]
+    public async Task ATokenExchange_IsNotAskedAbout()
+    {
+        var error = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, Context(GrantTypes.TokenExchange), CancellationToken.None);
 
         Assert.Null(error);
         _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);
@@ -148,7 +163,7 @@ public class RevokedSessionValidatorTests
     public async Task ARequestWithNoGrantType_IsNotAskedAbout()
     {
         var context = new TokenValidationContext(
-            new TokenRequest(), new ClientRequest { ClientId = TestConstants.DefaultClientId });
+            new TokenRequest(), new ClientRequest { ClientId = TestConstants.DefaultClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, CancellationToken.None);
 

@@ -67,7 +67,7 @@ public partial class JarRichAuthorizationRequestsTests
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterUnsecuredObjectClientAsync(client, discovery, responseType);
 
-        var claims = UnsecuredObjectClaims(clientId, discovery.AuthorizationEndpoint, responseType, namesIssuer);
+        var claims = UnsecuredObjectClaims(clientId, discovery.Issuer, responseType, namesIssuer);
         if (responseMode is not null)
             claims[AuthorizationRequest.Parameters.ResponseMode] = responseMode;
 

@@ -61,7 +61,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             _jwtAlgorithms.Object,
             _serviceKeys.Object,
             _clientInfoProvider.Object,
-            TimeProvider.System, TestEncryptionAlgorithms.Every);
+            TimeProvider.System, TestEncryptionAlgorithms.Every, Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientSecretEncryptor>());
     }
 
     private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)
@@ -426,7 +426,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
         bool secretKept, string authenticationMethod, string? expected)
     {
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .Setup(p => p.FindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId)
             {
                 ClientSecrets = [new ClientSecret { Sha512Hash = [1], Value = secretKept ? "a-client-secret" : null }],

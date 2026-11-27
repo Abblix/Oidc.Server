@@ -35,12 +35,18 @@ public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor
                 new ParResponse { RequestUri = par.RequestUri, ExpiresIn = par.ExpiresIn },
                 statusCode: StatusCodes.Status201Created),
 
+            // A refusal answered by its status, as a client whose metadata document could not be had for now is
+            // (draft-ietf-oauth-client-id-metadata-document-03 section 6.1, experimental)
+            AuthorizationError { Refusal: { } refusal } => refusal.Format(
+                StatusCodes.Status400BadRequest,
+                tenantAccessor.CurrentTenant().IssuerAsWritten()),
+
             // RFC 9126 section 2.3: errors take "the same format as is specified for error responses from the token
-            // endpoint in Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401
-            // with a challenge).
+            // endpoint in Section 5.2 of [RFC6749]", so through the token endpoint's own policy, whose invalid_client
+            // carries the Basic challenge where the refusal says one is owed.
             AuthorizationError error => new OidcError(error.Error, error.ErrorDescription).Format(
                 StatusCodes.Status400BadRequest,
-                tenantAccessor.CurrentTenant().Issuer.OriginalString),
+                tenantAccessor.CurrentTenant().IssuerAsWritten()),
 
             _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
         };

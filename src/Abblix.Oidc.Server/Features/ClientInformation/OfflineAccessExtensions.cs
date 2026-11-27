@@ -9,7 +9,8 @@
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
 /// <summary>
-/// The two questions every reader of an <see cref="OfflineAccess"/> asks, answered in one place.
+/// The two questions every reader of an <see cref="OfflineAccess"/> asks, answered in one place, and whether one value
+/// gives a client as much as another.
 /// </summary>
 internal static class OfflineAccessExtensions
 {
@@ -32,4 +33,12 @@ internal static class OfflineAccessExtensions
         OfflineAccess.Allowed => true,
         _ => throw new ArgumentOutOfRangeException(nameof(offlineAccess), offlineAccess, null),
     };
+
+    /// <summary>
+    /// Whether <paramref name="granted"/> gives a client everything <paramref name="asked"/> would: each of the two
+    /// questions above answered yes for <paramref name="asked"/> is answered yes for <paramref name="granted"/> too.
+    /// </summary>
+    public static bool Covers(this OfflineAccess granted, OfflineAccess asked)
+        => (!asked.IsAllowed() || granted.IsAllowed())
+           && (!asked.IsAllowedWithoutConsentPrompt() || granted.IsAllowedWithoutConsentPrompt());
 }

@@ -10,8 +10,10 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -29,17 +31,20 @@ internal static class ClientManagementServiceCollectionExtensions
     /// facilitating flexible and scalable client management.
     /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
-    /// <param name="newClientOptionsFactory">A factory function to setup options for new client registrations.</param>
     /// <returns>The configured <see cref="IServiceCollection"/>.</returns>
-    internal static IServiceCollection AddDynamicClientEndpoints(
-        this IServiceCollection services,
-        Func<IServiceProvider, NewClientOptions> newClientOptionsFactory)
+    internal static IServiceCollection AddDynamicClientEndpoints(this IServiceCollection services)
     {
         services.AddClientRegistrationContextValidators();
 
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
         services.TryAddSingleton<IInitialAccessTokenValidator, InitialAccessTokenValidator>();
-        services.TryAddTransient(newClientOptionsFactory);
+
+        // Refuse at startup an offline access for new clients the enumeration does not define, and grant types for
+        // them that refuse every registration, which every registration takes and would otherwise fail on
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientOfflineAccessValidator>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientGrantTypesValidator>());
 
         return services
             .AddClientRegistrationEndpoint()

@@ -25,10 +25,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public class ClientSecretBasicAuthenticator(
 	ILogger<ClientSecretBasicAuthenticator> logger,
-	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
 	IHashService hashService)
-	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
+	: ClientSecretAuthenticator(logger, clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.
@@ -52,12 +51,16 @@ public class ClientSecretBasicAuthenticator(
 	/// <param name="request">
 	/// The client request containing the authentication information in the 'Authorization' header.
 	/// </param>
+	/// <param name="clients">The clients of the request being served, where the client is looked up.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
 	/// <see cref="ClientInfo"/>, or why it is not one: no Authorization header presented, or one presented that is
 	/// malformed, of another scheme or not a client's credentials.
 	/// </returns>
-	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 	{
 		if (!IsPresented(request))
 			return ClientAuthenticationFailures.NoCredential;
@@ -73,23 +76,39 @@ public class ClientSecretBasicAuthenticator(
 
 		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
-		// According to RFC 7617: https://www.rfc-editor.org/rfc/rfc7617#section-2.1
-		// the first colon in a user-pass string separates user-id and password from one another,
-		// text after the first colon is part of the password.
-		// User-ids containing colons cannot be encoded in user-pass strings.
+		// RFC 7617 section 2: the first colon in the user-pass string separates the user-id from the password
 		var colonIndex = value.IndexOf(':');
 		if (colonIndex < 0)
 			return ClientAuthenticationFailures.InvalidCredential;
 
+		// RFC 6749 section 2.3.1: the client identifier and the password are each form-urlencoded (Appendix B) before
+		// they are written into the user-pass string, so each is decoded after the split, which an encoded colon in the
+		// client identifier cannot move
+		if (!FormUrlEncoding.TryDecode(value[..colonIndex], out var clientId) ||
+		    !FormUrlEncoding.TryDecode(value[(colonIndex + 1)..], out var secret))
+		{
+			return ClientAuthenticationFailures.InvalidCredential;
+		}
+
+		if (request.NamesAnotherClientThan(clientId))
+		{
+			LogClientIdentifiersMismatch(clientId, Sanitized.Value(request.ClientId));
+			return ClientAuthenticationFailures.InvalidCredential;
+		}
+
 		return await TryAuthenticateAsync(
 			tenant,
-			clientId: value[..colonIndex],
-			secret: value[(colonIndex + 1)..],
+			clients,
+			clientId,
+			secret,
 			ClientAuthenticationMethods.ClientSecretBasic);
 	}
 
 	/// <inheritdoc />
-	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(
+		TenantDefinition tenant,
+		ClientRequest request,
+		IClientInfoProvider clients)
 		=> Task.FromResult<IEnumerable<string>>(
 			IsPresented(request) ? [nameof(ClientRequest.AuthorizationHeaderLines)] : []);
 

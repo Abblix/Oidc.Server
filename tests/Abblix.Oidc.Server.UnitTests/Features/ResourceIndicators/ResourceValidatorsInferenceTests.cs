@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -88,7 +89,7 @@ public class ResourceValidatorsInferenceTests
                     RedirectUri = new Uri("https://client.example.com/callback"),
                     Scope = scopes,
                     Resources = resources,
-                }) { ClientInfo = client };
+                }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client };
                 var error = await new AuthorizationResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
@@ -115,7 +116,7 @@ public class ResourceValidatorsInferenceTests
             {
                 var context = new TokenValidationContext(
                     new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
-                    new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
+                    new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>(), ClientInfo = client };
                 var error = await new TokenResourceValidator(resourceManager)
                     .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 
@@ -199,7 +200,7 @@ public class ResourceValidatorsInferenceTests
         });
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["svc-a"], Scope = [OrdersRead] },
-            new ClientRequest { ClientId = ClientId });
+            new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager())
@@ -231,7 +232,7 @@ public class ResourceValidatorsInferenceTests
         });
         var context = new TokenValidationContext(
             new TokenRequest { GrantType = grantType, Scope = [OrdersRead, BillingRead] },
-            new ClientRequest { ClientId = ClientId });
+            new ClientRequest { ClientId = ClientId }) { Clients = Mock.Of<IClientInfoProvider>() };
 
         var error = await new TokenResourceValidator(
                 SingleIssuer.ResourceManager())
