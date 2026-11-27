@@ -8,7 +8,7 @@
 # such a name into an override takes the full number from here.
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
+if [[ "$#" -ne 1 ]]; then
   echo "usage: full-semver.sh <X.Y | X.Y.Z>[-prerelease]" >&2
   exit 2
 fi
