@@ -555,8 +555,8 @@ jobs:
   # starts it - the Development environment, at the address its own launch profile names, which must be the issuer
   # its discovery document names. The templates are named: each provider must be found and checked, each other
   # template named as one, and a template under no name stops the job, so a renamed or new template cannot drop out
-  # of the check unnoticed. The 3.1 templates live on the templates' release/3.1 branch until their 3.1 release,
-  # and they are installed from their folders, since that release is not published yet.
+  # of the check unnoticed. The templates are read from their default branch and installed from its folders, so the
+  # job checks them as they stand there rather than the package last published.
   templates:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -564,8 +564,7 @@ jobs:
       contents: read
     env:
       VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
-      # Moves to the templates' default branch once Templates 3.1 is released
-      TEMPLATES_REF: release/3.1
+      TEMPLATES_REF: master
       PROVIDER_TEMPLATES: abblix-oidc-server abblix-oidc-server-gettingstarted
       OTHER_TEMPLATES: abblix-react
     steps:
@@ -592,7 +591,7 @@ jobs:
       - name: Name the skipped step when the templates could not be checked out
         if: ${{ failure() && steps.templates_checkout.outcome == 'failure' }}
         run: |
-          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when it was merged or renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to the branch holding the 3.x templates and dispatch the release again; when GitHub could not be reached, re-run this job"
+          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when the templates' default branch was renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to its new name and dispatch the release again; when GitHub could not be reached, re-run this job"
           exit 1
         timeout-minutes: 3
       - name: Download NuGet packages
