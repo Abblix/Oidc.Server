@@ -137,6 +137,25 @@ public sealed class JwtBearerGrantAudienceTests
         Assert.Equal(expected, response.StatusCode);
     }
 
+    /// <summary>
+    /// A grant refused a scope it may not have is granted when the same assertion is presented again without it: the
+    /// scope is judged before the assertion is recorded as used, so the refusal does not spend what the retry needs.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionRefusedAScope_IsGrantedWithoutIt()
+    {
+        await using var app = await StartAsync(strict: true);
+        var assertion = await IssueAssertionAsync(app, Host + Acme + TokenPath);
+
+        using var refused = await PostGrantAsync(app, "auth.example.com", assertion, "not-declared");
+        var body = JsonNode.Parse(await refused.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidScope, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+
+        using var granted = await PostGrantAsync(app, "auth.example.com", assertion, scope: null);
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+    }
+
     private static async Task<WebApplication> StartAsync(bool strict, Uri? mtlsBaseUri = null)
     {
         await TestLicense.Loaded;
@@ -192,9 +211,13 @@ public sealed class JwtBearerGrantAudienceTests
     /// the trusted issuer addressed to <paramref name="audience"/> alone.
     /// </summary>
     private static async Task<HttpResponseMessage> GrantAsync(WebApplication app, string requestHost, string audience)
+        => await PostGrantAsync(app, requestHost, await IssueAssertionAsync(app, audience), scope: null);
+
+    /// <summary>An assertion of the trusted issuer addressed to <paramref name="audience"/> alone.</summary>
+    private static async Task<string> IssueAssertionAsync(WebApplication app, string audience)
     {
         var now = TimeProvider.System.GetUtcNow();
-        var assertion = await app.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+        return await app.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
             new JsonWebToken
             {
                 Header = { Algorithm = SigningAlgorithms.RS256, KeyId = AssertionKey.KeyId },
@@ -209,18 +232,30 @@ public sealed class JwtBearerGrantAudienceTests
                 },
             },
             AssertionKey);
+    }
+
+    /// <summary>
+    /// A JWT bearer grant request presenting <paramref name="assertion"/>, sent with <paramref name="requestHost"/> in its
+    /// Host header and naming <paramref name="scope"/> when given.
+    /// </summary>
+    private static async Task<HttpResponseMessage> PostGrantAsync(
+        WebApplication app, string requestHost, string assertion, string? scope)
+    {
+        var form = new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.JwtBearer,
+            [TokenRequest.Parameters.Assertion] = assertion,
+            [ClientRequest.Parameters.ClientId] = ClientId,
+            [ClientRequest.Parameters.ClientSecret] = ClientSecret,
+        };
+        if (scope is not null)
+            form[TokenRequest.Parameters.Scope] = scope;
 
         using var http = app.GetTestClient();
         http.BaseAddress = new Uri(Host);
         using var request = new HttpRequestMessage(HttpMethod.Post, Acme + TokenPath)
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                [TokenRequest.Parameters.GrantType] = GrantTypes.JwtBearer,
-                [TokenRequest.Parameters.Assertion] = assertion,
-                [ClientRequest.Parameters.ClientId] = ClientId,
-                [ClientRequest.Parameters.ClientSecret] = ClientSecret,
-            }),
+            Content = new FormUrlEncodedContent(form),
         };
         request.Headers.Host = requestHost;
         return await http.SendAsync(request, TestContext.Current.CancellationToken);
