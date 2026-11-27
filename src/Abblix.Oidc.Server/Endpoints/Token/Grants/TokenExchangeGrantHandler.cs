@@ -446,8 +446,8 @@ public class TokenExchangeGrantHandler(IServiceProvider serviceProvider) : IAuth
         // never carries more authority than either the presented subject_token or the client's own
         // registration:
         //
-        // - Explicit request.Scope (2a): already gated against the client's AllowedScopes by
-        //   ScopeValidator in the token pipeline. Additionally bound it to the subject_token's own
+        // - Explicit request.Scope (2a): held to the client's AllowedScopes by ScopeValidator, which
+        //   refuses the request before a token is issued. Additionally bound it to the subject_token's own
         //   scope WHEN the subject token carries a scope claim, an empty one included, so an exchange
         //   cannot amplify authority beyond the presented token. A subject token without a scope claim
         //   (e.g. an id_token) imposes no scope upper bound, so the RFC 8693 id_token -> access_token

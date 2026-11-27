@@ -22,7 +22,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// <remarks>
 /// Read once the grant is authorized and before an authorization code is spent, so a client refused here corrects
 /// the request and redeems the code. A device code or a backchannel request is spent while its grant is authorized,
-/// so for those grants the refusal ends the flow.
+/// so for those grants a resource refusal ends the flow; the scope their token requests name is ignored
+/// (<see cref="TokenRequestScope"/>).
 /// </remarks>
 public class GrantNarrowingValidator : SyncTokenContextValidatorBase
 {
@@ -31,15 +32,16 @@ public class GrantNarrowingValidator : SyncTokenContextValidatorBase
     {
         var grant = context.AuthorizedGrant.Context;
 
+        // Judged first, since only dropping such a resource helps a request also naming a scope only it declares
+        if (context.Resources.Any(definition => grant.Resources?.Contains(definition.Resource) != true))
+            return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.NotGranted);
+
         // A scope partly outside the grant is narrowed to the granted ones, which the response reports in its scope
         if (TokenRequestScope.ServedFor(context) is { Length: > 0 } served &&
             TokenRequestScope.Narrow(grant.Scope, served).Length == 0)
         {
             return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NotGranted);
         }
-
-        if (context.Resources.Any(definition => grant.Resources?.Contains(definition.Resource) != true))
-            return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.NotGranted);
 
         return null;
     }

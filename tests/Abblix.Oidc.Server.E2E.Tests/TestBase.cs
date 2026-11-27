@@ -370,6 +370,20 @@ public abstract class TestBase(TestFactory factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
+    /// <summary>
+    /// Asserts that a token response states <paramref name="expected"/> as its scope and that its access token carries
+    /// exactly that scope, in any order.
+    /// </summary>
+    protected static void AssertIssuedScope(string[] expected, JsonObject tokens)
+    {
+        var stated = tokens[TokenResponse.Parameters.Scope]?.GetValue<string>().Split(' ') ?? [];
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var carried = payload[IanaClaimTypes.Scope]?.GetValue<string>().Split(' ') ?? [];
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), stated.Order(StringComparer.Ordinal));
+        Assert.Equal(expected.Order(StringComparer.Ordinal), carried.Order(StringComparer.Ordinal));
+    }
+
     protected static JsonObject DecodeJwtPayload(string jwt)
     {
         var parts = jwt.Split('.');

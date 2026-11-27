@@ -28,7 +28,10 @@ internal static class TokenRequestScope
     /// code, a refresh token, a device code or a backchannel request carries the scope it was granted, and a token
     /// exchange inherits the subject token's. Such a grant ignores an offline_access the client may not receive a
     /// refresh token for (<see cref="Features.ClientInformation.ClientInfo.ReceivableScopeServedFor"/>), as a device
-    /// authorization or a backchannel authentication request does. Read once the client is known.
+    /// authorization or a backchannel authentication request does. A device code or a backchannel request is redeemed
+    /// by a token request defining no scope (RFC 8628 section 3.4, CIBA Core 1.0 section 10.1), so a scope it names is
+    /// an unrecognized parameter the server ignores (RFC 6749 section 3.2) and never refuses the code it spends. Read
+    /// once the client is known.
     /// </remarks>
     public static string[]? ServedFor(TokenValidationContext context)
         => ServedFor(context.Request, () => context.ClientInfo);
@@ -41,10 +44,13 @@ internal static class TokenRequestScope
 
     /// <remarks>The client is read only for a grant serving its default, the others carrying their own scope.
     /// </remarks>
-    private static string[]? ServedFor(TokenRequest request, Func<ClientInfo> clientInfo)
-        => request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
-            ? clientInfo().ReceivableScopeServedFor(request.Scope)
-            : request.Scope;
+    private static string[]? ServedFor(TokenRequest request, Func<ClientInfo> clientInfo) => request.GrantType switch
+    {
+        GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
+            => clientInfo().ReceivableScopeServedFor(request.Scope),
+        GrantTypes.DeviceAuthorization or GrantTypes.Ciba => [],
+        _ => request.Scope,
+    };
 
     /// <summary>
     /// The scope a token carries of <paramref name="granted"/> when its request is served with

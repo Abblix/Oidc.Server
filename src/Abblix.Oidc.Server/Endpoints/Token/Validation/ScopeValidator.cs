@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -18,8 +19,15 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// This validator checks whether each requested scope is recognized and authorized for use, ensuring that clients
 /// only receive permissions appropriate to their needs and in compliance with server policies.
 /// </summary>
+/// <remarks>
+/// A scope only a resource declares is available when a resource the request speaks for declares it
+/// (<see cref="TokenRequestResources.SpokenFor"/>): one it names, or one its grant holds when it names none, as a
+/// refresh naming no resource does (RFC 6749 section 6, RFC 8707 section 2.2). Read once the grant is authorized.
+/// </remarks>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
-public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase
+/// <param name="resourceManager">The manager the definitions of the resources a request speaks for are read from.
+/// </param>
+public class ScopeValidator(IScopeManager scopeManager, IResourceManager resourceManager): SyncTokenContextValidatorBase
 {
     /// <summary>
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
@@ -38,9 +46,16 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
         if (TokenRequestScope.ServedFor(context) is not { } scope)
             return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
 
+        var spokenFor = TokenRequestResources.SpokenFor(
+            context.AuthorizedGrant.Context.Resources,
+            from definition in context.Resources select definition.Resource);
+
+        // A resource the host no longer knows declares no scope
+        ResourceDefinition[] resources = [.. DefinitionsOf(tenant, spokenFor ?? [])];
+
         if (!scopeManager.Validate(tenant,
                 scope,
-                context.Resources,
+                resources,
                 context.ClientInfo.AllowedScopes,
                 out var scopeDefinitions,
                 out var errorDescription))
@@ -50,5 +65,14 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
 
         context.Scope = scopeDefinitions;
         return null;
+    }
+
+    private IEnumerable<ResourceDefinition> DefinitionsOf(TenantDefinition tenant, Uri[] resources)
+    {
+        foreach (var resource in resources)
+        {
+            if (resourceManager.TryGet(tenant, resource, out var definition))
+                yield return definition;
+        }
     }
 }

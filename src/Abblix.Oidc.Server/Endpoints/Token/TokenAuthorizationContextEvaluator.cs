@@ -36,14 +36,9 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
             authContext.Scope,
             TokenRequestScope.ServedFor(request));
 
-        // Determine the effective resources for the token request.
-        var resources = authContext.Resources;
-        if (resources is { Length: > 0 } && request.Resources is { Length: > 0 })
-        {
-            resources = resources
-                .Intersect(from rd in request.Resources select rd.Resource)
-                .ToArray();
-        }
+        var resources = TokenRequestResources.SpokenFor(
+            authContext.Resources,
+            from definition in request.Resources select definition.Resource);
 
         // Return a new authorization context updated with the determined scopes and resources.
         // Certificate-bound confirmation thumbprint (RFC 8705 section 3): preserve the binding the
