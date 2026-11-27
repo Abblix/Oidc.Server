@@ -52,19 +52,14 @@ jobs:
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
-            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
-            echo "Invalid version input: $INPUT_VERSION" >&2
-            exit 1
-          fi
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
-          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the X.Y
-          # release input to a full X.Y.0 SemVer for the build and pack override only. The tag and
-          # the GitHub Release keep the X.Y form, deliberately: NuGet normalizes X.Y to X.Y.0, so
-          # the published package version is identical, and the short name is what the releases,
-          # their links and the notes files have always used.
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so the X.Y release input is
+          # expanded to a full X.Y.0 SemVer for the build and pack override only, by the same script that
+          # names a release branch's dev builds. The tag and the GitHub Release keep the X.Y form,
+          # deliberately: NuGet normalizes X.Y to X.Y.0, so the published package version is identical,
+          # and the short name is what the releases, their links and the notes files have always used.
           #
           # The cost is stated rather than discovered: MinVer parses a TAG as SemVer, and "2.3" is
           # not one, so it reads none of this repository's release tags. Nothing depends on it
@@ -72,13 +67,12 @@ jobs:
           # MinVerMinimumMajorMinor - but it does mean the height in a dev version counts from the
           # root commit rather than from the last release, and that a tag is not what any number
           # here is derived from. A -prerelease suffix is preserved as given.
-          CORE="${VERSION%%-*}"
-          PRERELEASE=""
-          [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
-          if [[ "$CORE" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            VERSION_FULL="${CORE}.0${PRERELEASE}"
-          else
-            VERSION_FULL="$VERSION"
+          rc=0
+          VERSION_FULL=$(bash .github/scripts/full-semver.sh "$VERSION") || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
+            echo "Invalid version input: $VERSION" >&2
+            exit 1
           fi
           echo "MinVer override version: $VERSION_FULL"
 
