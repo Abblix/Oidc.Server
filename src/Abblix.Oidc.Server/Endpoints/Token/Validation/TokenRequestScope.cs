@@ -7,6 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -28,7 +31,33 @@ internal static class TokenRequestScope
     /// authorization or a backchannel authentication request does. Read once the client is known.
     /// </remarks>
     public static string[]? ServedFor(TokenValidationContext context)
-        => context.Request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
-            ? context.ClientInfo.ReceivableScopeServedFor(context.Request.Scope)
-            : context.Request.Scope;
+        => ServedFor(context.Request, () => context.ClientInfo);
+
+    /// <summary>
+    /// The scope <paramref name="request"/> was served with while it was validated.
+    /// </summary>
+    public static string[]? ServedFor(ValidTokenRequest request)
+        => ServedFor(request.Model, () => request.ClientInfo);
+
+    /// <remarks>The client is read only for a grant serving its default, the others carrying their own scope.
+    /// </remarks>
+    private static string[]? ServedFor(TokenRequest request, Func<ClientInfo> clientInfo)
+        => request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
+            ? clientInfo().ReceivableScopeServedFor(request.Scope)
+            : request.Scope;
+
+    /// <summary>
+    /// The scope a token carries of <paramref name="granted"/> when its request is served with
+    /// <paramref name="served"/>: those of the granted scopes the request names, or all of them when it names none
+    /// (RFC 6749 section 6).
+    /// </summary>
+    /// <remarks>
+    /// Judged by name, since a scope only a resource declares has no definition of its own: the request was refused
+    /// earlier for any name neither the tenant nor a resource it names declares. A request naming none of the granted
+    /// scopes narrows to none, which <see cref="GrantNarrowingValidator"/> refuses before a token is built.
+    /// </remarks>
+    public static string[] Narrow(string[] granted, string[]? served)
+        => served is { Length: > 0 }
+            ? [.. granted.Intersect(served, StringComparer.Ordinal)]
+            : granted;
 }

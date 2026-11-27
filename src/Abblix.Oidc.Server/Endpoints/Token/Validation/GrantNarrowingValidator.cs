@@ -32,8 +32,8 @@ public class GrantNarrowingValidator : SyncTokenContextValidatorBase
         var grant = context.AuthorizedGrant.Context;
 
         // A scope partly outside the grant is narrowed to the granted ones, which the response reports in its scope
-        if (context.Scope.Length > 0 &&
-            !grant.Scope.Intersect(from definition in context.Scope select definition.Scope, StringComparer.Ordinal).Any())
+        if (TokenRequestScope.ServedFor(context) is { Length: > 0 } served &&
+            TokenRequestScope.Narrow(grant.Scope, served).Length == 0)
         {
             return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NotGranted);
         }

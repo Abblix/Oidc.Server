@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -31,14 +32,9 @@ public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEval
     {
         var authContext = request.AuthorizedGrant.Context;
 
-        // Determine the effective scopes for the token request.
-        var scope = authContext.Scope;
-        if (scope is { Length: > 0 } && request.Scope is { Length: > 0 })
-        {
-            scope = scope
-                .Intersect(from sd in request.Scope select sd.Scope, StringComparer.Ordinal)
-                .ToArray();
-        }
+        var scope = TokenRequestScope.Narrow(
+            authContext.Scope,
+            TokenRequestScope.ServedFor(request));
 
         // Determine the effective resources for the token request.
         var resources = authContext.Resources;
