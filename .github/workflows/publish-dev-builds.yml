@@ -453,7 +453,7 @@ jobs:
           RELEASE_BRANCH_VERSION: ${{ steps.line.outputs.version }}
         run: |
           set -euo pipefail
-          # Any package: they all carry the same MinVer version. Matched by SHAPE rather than by
+          # Any package: they all carry the same version. Matched by SHAPE rather than by
           # name, because the name was wrong in two ways at once and both were silent.
           #
           # The glob said Abblix.Oidc.Server while the ids are Abblix.OIDC.Server - PackageId
@@ -497,7 +497,11 @@ jobs:
                 echo "## Dev build published"
               fi
               echo ""
-              echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
+              if [ -n "$RELEASE_BRANCH_VERSION" ]; then
+                echo "Version: \`$VERSION\` (chosen by the step \"Choose the version\" from the branch name)"
+              else
+                echo "Version: \`$VERSION\` (derived by MinVer at pack time)"
+              fi
               echo ""
               echo "Feed: https://github.com/Abblix/Oidc.Server/packages"
               echo ""
