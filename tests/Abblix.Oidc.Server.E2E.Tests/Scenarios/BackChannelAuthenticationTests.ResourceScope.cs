@@ -89,4 +89,69 @@ public partial class BackChannelAuthenticationTests
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
         AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], body);
     }
+
+    /// <summary>
+    /// A redemption naming a scope is not refused for a token its grant leaves with none, as one naming none is not:
+    /// the scope it names is ignored, so it cannot refuse the backchannel request the redemption spends.
+    /// </summary>
+    [Fact]
+    public async Task A_redemption_naming_a_scope_for_a_token_left_with_none_is_answered()
+    {
+        await using var host = CreateCibaHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterCibaClientAsync(client, discovery);
+
+        var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.BackChannelAuthenticationEndpoint!,
+            new Dictionary<string, string>
+            {
+                [CibaParameters.Scope] = Scopes.OpenId,
+                [CibaParameters.LoginHint] = LoginHint,
+                [CibaParameters.Resource] = TestConstants.ApiResource,
+                [ClientRequest.Parameters.ClientId] = ciba.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = ciba.ClientSecret,
+            }));
+        var authRequestId = started[CibaResponse.AuthenticationRequestId]!.GetValue<string>();
+
+        // A scope only a resource the token is not addressed to declares, served as a default the client never named,
+        // leaves the token with no scope
+        using (TestTenant.Enter(host.Services))
+        {
+            using var scope = host.Services.CreateScope();
+            var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
+            var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId);
+            Assert.NotNull(stored);
+
+            var session = new AuthSession(
+                Subject: LoginHint,
+                SessionId: Guid.NewGuid().ToString("N"),
+                AuthenticationTime: scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
+                IdentityProvider: "e2e-test");
+            var context = stored.AuthorizedGrant.Context with
+            {
+                Scope = [TestConstants.OtherApiScope],
+                ClientNamedNoScope = true,
+            };
+            var completed = stored with { AuthorizedGrant = new AuthorizedGrant(session, context) };
+            completed.Status = BackChannelAuthenticationStatus.Authenticated;
+
+            await scope.ServiceProvider
+                .GetRequiredService<IAuthenticationCompletionHandler>()
+                .CompleteAsync(TestTenant.Of(host.Services), authRequestId, completed, TimeSpan.FromMinutes(5));
+        }
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
+        [
+            new(TokenRequest.Parameters.GrantType, GrantTypes.Ciba),
+            new(TokenRequest.Parameters.AuthenticationRequestId, authRequestId),
+            new(TokenRequest.Parameters.Scope, Scopes.OpenId),
+            new(ClientRequest.Parameters.ClientId, ciba.ClientId),
+            new(ClientRequest.Parameters.ClientSecret, ciba.ClientSecret),
+        ]);
+
+        var body = await ReadJsonAsync(response);
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
+    }
 }

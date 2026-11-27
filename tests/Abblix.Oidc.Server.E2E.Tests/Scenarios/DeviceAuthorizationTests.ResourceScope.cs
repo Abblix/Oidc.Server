@@ -87,4 +87,66 @@ public partial class DeviceAuthorizationTests
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
         AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], body);
     }
+
+    /// <summary>
+    /// A poll naming a scope is not refused for a token its grant leaves with none, as a poll naming none is not: the
+    /// scope it names is ignored, so it cannot refuse the device code the poll spends.
+    /// </summary>
+    [Fact]
+    public async Task A_poll_naming_a_scope_for_a_token_left_with_none_is_answered()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var device = await RegisterDeviceClientAsync(client, discovery, "device-scope-left-none");
+
+        var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.DeviceAuthorizationEndpoint!,
+            new Dictionary<string, string>
+            {
+                [DeviceRequest.Parameters.Scope] = Scopes.OpenId,
+                [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
+                [ClientRequest.Parameters.ClientId] = device.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
+            }));
+        var deviceCode = started[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>();
+        var userCode = started[DeviceResponse.Parameters.UserCode]!.GetValue<string>();
+
+        // A scope only a resource the token is not addressed to declares, served as a default the client never named,
+        // leaves the token with no scope
+        using (TestTenant.Enter(Factory.Services))
+        {
+            using var scope = Factory.Services.CreateScope();
+            var approved = await scope.ServiceProvider.GetRequiredService<IUserCodeVerificationService>().ApproveAsync(
+                TestTenant.Of(Factory.Services),
+                userCode,
+                new AuthorizedGrant(
+                    new AuthSession(
+                        "e2e-subject",
+                        Guid.NewGuid().ToString("N"),
+                        scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
+                        "e2e-test"),
+                    new AuthorizationContext(
+                        device.ClientId,
+                        [TestConstants.OtherApiScope],
+                        null,
+                        [new Uri(TestConstants.ApiResource)])
+                    {
+                        ClientNamedNoScope = true,
+                    }));
+            Assert.True(approved);
+        }
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
+        [
+            new(TokenRequest.Parameters.GrantType, GrantTypes.DeviceAuthorization),
+            new(TokenRequest.Parameters.DeviceCode, deviceCode),
+            new(TokenRequest.Parameters.Scope, Scopes.OpenId),
+            new(ClientRequest.Parameters.ClientId, device.ClientId),
+            new(ClientRequest.Parameters.ClientSecret, device.ClientSecret),
+        ]);
+
+        var body = await ReadJsonAsync(response);
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
+    }
 }
