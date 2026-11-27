@@ -591,7 +591,7 @@ jobs:
       - name: Name the skipped step when the templates could not be checked out
         if: ${{ failure() && steps.templates_checkout.outcome == 'failure' }}
         run: |
-          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when it was merged or renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to the branch holding the 3.x templates and dispatch the release again; when GitHub could not be reached, re-run this job"
+          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when the templates' default branch was renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to its new name and dispatch the release again; when GitHub could not be reached, re-run this job"
           exit 1
         timeout-minutes: 3
       - name: Download NuGet packages
