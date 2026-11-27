@@ -203,6 +203,31 @@ public class ResourceScopeNarrowingTests(TestFactory factory) : TestBase(factory
         AssertIssuedScope([Scopes.OpenId, Scopes.OfflineAccess, TestConstants.ApiScope], tokens);
     }
 
+    /// <summary>
+    /// A code refused for naming, beside the resource it was granted for, only that resource's scope its grant does not
+    /// hold is redeemed by the corrected request: the refusal comes before the code is spent.
+    /// </summary>
+    [Fact]
+    public async Task A_code_refused_a_resource_scope_outside_its_grant_stays_redeemable()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (code, verifier) = await AuthorizeAsync(client, discovery, $"{Scopes.OpenId} {Scopes.OfflineAccess}");
+
+        using var refused = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.TokenEndpoint,
+            [
+                .. RedeemForm(code, verifier),
+                new(TokenRequest.Parameters.Scope, TestConstants.ApiScope),
+                new(TokenRequest.Parameters.Resource, TestConstants.ApiResource),
+            ]);
+        await AssertInvalidScopeAsync(refused);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, RedeemForm(code, verifier));
+        AssertIssuedScope([Scopes.OpenId, Scopes.OfflineAccess], tokens);
+    }
+
     /// <summary>The scope a request of <see cref="Matrix"/> or <see cref="IgnoredRows"/> names.</summary>
     internal static string[] Requested(string named, string tenantScope) => named switch
     {
