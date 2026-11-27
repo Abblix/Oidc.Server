@@ -423,8 +423,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -459,7 +457,7 @@ jobs:
         run: |
           cd getting-started
           if ! dotnet build; then
-            echo "::error title=Getting-started samples::A sample does not build against this run's packages; the build output above names it. Skipped step: build Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting-started samples::A sample does not build against this run's packages; the build output above names it. Skipped step: build Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         timeout-minutes: 3
@@ -500,8 +498,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -544,7 +540,7 @@ jobs:
           cd getting-started
           export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
           if ! dotnet run-loop.cs --check --provider "$PROVIDER"; then
-            echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         # The script builds and starts three projects, measured at 44s to 2m18s per provider on hosted runners in the
@@ -730,8 +726,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -750,7 +744,7 @@ jobs:
       - name: Every region of the guide's files has its place in the template
         run: |
           if ! python3 -I getting-started/GettingStartedGuide/guide-files.py check; then
-            echo "::error title=Getting Started guide::A region of the guide's files has no place in the template it is put into; the output above names it. Skipped step: run python GettingStartedGuide/guide-files.py check in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1), fix the guide there, then re-run this job"
+            echo "::error title=Getting Started guide::A region of the guide's files has no place in the template it is put into; the output above names it. Skipped step: run python GettingStartedGuide/guide-files.py check in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job"
             exit 1
           fi
         timeout-minutes: 3
@@ -759,7 +753,7 @@ jobs:
       - name: Follow the guide
         run: |
           if ! bash getting-started/GettingStartedGuide/guide.sh --abblix-version "$VERSION_FULL" --nuget-source "$GITHUB_WORKSPACE/local-packages" "$RUNNER_TEMP/guide"; then
-            echo "::error title=Getting Started guide::The guide does not work on this run's packages; the line starting with guide.sh: step above names the step that failed. Skipped step: run bash GettingStartedGuide/guide.sh --abblix-version <this release> --nuget-source <its packages> <an empty folder> in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1), fix the guide there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting Started guide::The guide does not work on this run's packages; the line starting with guide.sh: step above names the step that failed. Skipped step: run bash GettingStartedGuide/guide.sh --abblix-version <this release> --nuget-source <its packages> <an empty folder> in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         # Measured at 23s to 73s on hosted runners in the samples' own workflow; like there, the extra minutes let the
