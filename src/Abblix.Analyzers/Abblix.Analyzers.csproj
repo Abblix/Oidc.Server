@@ -12,9 +12,11 @@
 
     <!-- Packed by the dev builds only, which publish to the GitHub feed the Abblix repositories restore
          from. A release names its version through MinVerVersionOverride, and this package is not part of
-         what a release ships to nuget.org. -->
-    <IsPackable Condition="'$(MinVerVersionOverride)' == ''">true</IsPackable>
-    <IsPackable Condition="'$(MinVerVersionOverride)' != ''">false</IsPackable>
+         what a release ships to nuget.org. A release branch's dev build names its version the same way,
+         so it says it is a dev build through AbblixDevelopmentBuild: an opt-in, so a build that forgets it
+         loses this package from the feed rather than shipping it with a release. -->
+    <IsPackable Condition="'$(MinVerVersionOverride)' == '' Or '$(AbblixDevelopmentBuild)' == 'true'">true</IsPackable>
+    <IsPackable Condition="'$(MinVerVersionOverride)' != '' And '$(AbblixDevelopmentBuild)' != 'true'">false</IsPackable>
     <GeneratePackageOnBuild>$(IsPackable)</GeneratePackageOnBuild>
     <!-- A build-time tool: a consumer's reference stays out of its own package's dependencies, and the
          analyzer assembly ships under analyzers/ rather than lib/. -->
