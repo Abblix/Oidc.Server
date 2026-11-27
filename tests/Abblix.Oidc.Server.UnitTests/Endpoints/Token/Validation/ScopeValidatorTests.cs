@@ -9,7 +9,12 @@
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using System;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -27,11 +32,13 @@ public class ScopeValidatorTests
 {
     private readonly Mock<IScopeManager> _scopeManager;
     private readonly ScopeValidator _validator;
+    private readonly GrantedScopeValidator _grantedValidator;
 
     public ScopeValidatorTests()
     {
         _scopeManager = new Mock<IScopeManager>(MockBehavior.Strict);
         _validator = new ScopeValidator(_scopeManager.Object);
+        _grantedValidator = new GrantedScopeValidator(_scopeManager.Object, Mock.Of<IResourceManager>(MockBehavior.Strict));
     }
 
     private static TokenValidationContext CreateContext(
@@ -47,6 +54,7 @@ public class ScopeValidatorTests
         {
             Clients = Mock.Of<IClientInfoProvider>(),
             ClientInfo = new ClientInfo("test-client"),
+            AuthorizedGrant = GrantFor(scope),
         };
         if (resources != null)
         {
@@ -272,7 +280,22 @@ public class ScopeValidatorTests
     {
         Clients = Mock.Of<IClientInfoProvider>(),
         ClientInfo = client,
+        AuthorizedGrant = GrantFor([]),
     };
+
+    /// <summary>
+    /// Runs <paramref name="context"/> through both scope validators in the order the token endpoint does, each judging
+    /// the grants it owns.
+    /// </summary>
+    private async Task<OidcError?> JudgeAsync(TokenValidationContext context)
+        => await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken) ??
+           await _grantedValidator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+    /// <summary>A grant holding <paramref name="scope"/> and no resource, as the validator reads it once authorized.
+    /// </summary>
+    private static AuthorizedGrant GrantFor(string[] scope) => new(
+        new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
+        new AuthorizationContext("test-client", scope, null));
 
     /// <summary>
     /// A request of a grant starting from the client alone that names no scope is served with the client's default
@@ -322,7 +345,7 @@ public class ScopeValidatorTests
     {
         var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+        var error = await JudgeAsync(context);
 
         Assert.Equal(ErrorCodes.InvalidScope, error?.Error);
     }
@@ -351,6 +374,7 @@ public class ScopeValidatorTests
                 DefaultScope = ["read", Scopes.OfflineAccess],
                 RequireScope = requireScope,
             },
+            AuthorizedGrant = GrantFor([]),
         };
         SetupScopeManagerForScopes("read", Scopes.OfflineAccess);
 
@@ -377,6 +401,7 @@ public class ScopeValidatorTests
                 AllowedScopes = ["read", Scopes.OfflineAccess],
                 DefaultScope = ["read"],
             },
+            AuthorizedGrant = GrantFor([]),
         };
         SetupScopeManagerForScopes("read", Scopes.OfflineAccess);
 
@@ -399,7 +424,7 @@ public class ScopeValidatorTests
     {
         var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+        var error = await JudgeAsync(context);
 
         Assert.Null(error);
         Assert.Empty(context.Scope);

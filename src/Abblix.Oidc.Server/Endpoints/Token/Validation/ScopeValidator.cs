@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -18,6 +17,12 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// This validator checks whether each requested scope is recognized and authorized for use, ensuring that clients
 /// only receive permissions appropriate to their needs and in compliance with server policies.
 /// </summary>
+/// <remarks>
+/// Judges a grant the request itself authorizes, before the grant is built: its grant holds the resources the request
+/// names, so a scope only a resource declares is judged against those, and a refusal spends nothing the grant handler
+/// would consume, such as a JWT bearer assertion recorded as used. A grant authorized earlier is judged once it is
+/// known (<see cref="GrantedScopeValidator"/>).
+/// </remarks>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
 public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase
 {
@@ -34,21 +39,7 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
-    {
-        if (TokenRequestScope.ServedFor(context) is not { } scope)
-            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
-
-        if (!scopeManager.Validate(tenant,
-                scope,
-                context.Resources,
-                context.ClientInfo.AllowedScopes,
-                out var scopeDefinitions,
-                out var errorDescription))
-        {
-            return new OidcError(ErrorCodes.InvalidScope, errorDescription);
-        }
-
-        context.Scope = scopeDefinitions;
-        return null;
-    }
+        => GrantsAuthorizedEarlier.Include(context.Request.GrantType)
+            ? null
+            : TokenRequestScope.Judge(scopeManager, tenant, context, context.Resources);
 }

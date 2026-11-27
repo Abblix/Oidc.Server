@@ -370,6 +370,41 @@ public abstract class TestBase(TestFactory factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
+    /// <summary>
+    /// The token request parameters naming <paramref name="scope"/>, and the test resource too when
+    /// <paramref name="namesResource"/>.
+    /// </summary>
+    protected static KeyValuePair<string, string>[] ScopeNaming(string[] scope, bool namesResource) =>
+    [
+        new(TokenRequest.Parameters.Scope, string.Join(' ', scope)),
+        .. namesResource
+            ? [new KeyValuePair<string, string>(TokenRequest.Parameters.Resource, TestConstants.ApiResource)]
+            : Array.Empty<KeyValuePair<string, string>>(),
+    ];
+
+    /// <summary>Asserts that a token request was answered with tokens, and returns the response.</summary>
+    protected static async Task<JsonObject> AssertAnsweredAsync(HttpResponseMessage response)
+    {
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = JsonNode.Parse(raw)!.AsObject();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
+        return body;
+    }
+
+    /// <summary>
+    /// Asserts that a token response states <paramref name="expected"/> as its scope and that its access token carries
+    /// exactly that scope, in any order.
+    /// </summary>
+    protected static void AssertIssuedScope(string[] expected, JsonObject tokens)
+    {
+        var stated = tokens[TokenResponse.Parameters.Scope]?.GetValue<string>().Split(' ') ?? [];
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var carried = payload[IanaClaimTypes.Scope]?.GetValue<string>().Split(' ') ?? [];
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), stated.Order(StringComparer.Ordinal));
+        Assert.Equal(expected.Order(StringComparer.Ordinal), carried.Order(StringComparer.Ordinal));
+    }
+
     protected static JsonObject DecodeJwtPayload(string jwt)
     {
         var parts = jwt.Split('.');

@@ -65,4 +65,9 @@ public record ValidTokenRequest(
             context.ProofKeyThumbprint)
     {
     }
+
+    /// <summary>
+    /// The scope the client itself names in <see cref="Model"/> (<see cref="TokenRequestScope.NamedIn"/>).
+    /// </summary>
+    internal string[] NamedScope => TokenRequestScope.NamedIn(Model);
 }

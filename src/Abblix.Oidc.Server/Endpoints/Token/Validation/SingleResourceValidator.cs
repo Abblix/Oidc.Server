@@ -18,8 +18,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// name one (<see cref="Features.ClientInformation.ClientInfo.SingleResourceAccessTokens"/>).
 /// </summary>
 /// <remarks>
-/// The access token names the resources the request names, else every resource of its grant, and its grant's
-/// audiences, an audience equal to a declared resource counting as that resource (<see cref="ResourceScopes.AddressedBy"/>).
+/// The access token names the resources the request speaks for (<see cref="TokenRequestResources.SpokenFor"/>), and
+/// its grant's audiences, an audience equal to a declared resource counting as that resource
+/// (<see cref="ResourceScopes.AddressedBy"/>).
 /// The audiences are the grant's because the token is built from it: a token exchange carries the ones its request
 /// names into its grant, and no other grant reads them off the request. Read once the grant is
 /// authorized and before an authorization code or a refresh token is spent, so a client refused here repeats the
@@ -34,11 +35,10 @@ public class SingleResourceValidator : SyncTokenContextValidatorBase
         if (!context.ClientInfo.SingleResourceAccessTokens)
             return null;
 
-        var request = context.Request;
         var grant = context.AuthorizedGrant.Context;
         var addressed = ResourceScopes.AddressedBy(
             tenant,
-            request.Resources is { Length: > 0 } named ? named : grant.Resources,
+            TokenRequestResources.SpokenFor(grant.Resources, context.Request.Resources ?? []),
             grant.Audiences);
 
         if (addressed.Length > 1)

@@ -72,7 +72,7 @@ public class GrantNarrowingValidatorTests
         var refusal = await ValidateAsync(
             granted,
             null,
-            named.Select(scope => new ScopeDefinition(scope)).ToArray(),
+            named,
             []);
 
         Assert.Equal(error, refusal?.Error);
@@ -83,11 +83,11 @@ public class GrantNarrowingValidatorTests
     private static Task<OidcError?> ValidateAsync(
         string[] grantedScope,
         Uri[]? grantedResources,
-        ScopeDefinition[] scope,
+        string[] scope,
         ResourceDefinition[] resources)
     {
         var context = new TokenValidationContext(
-            new TokenRequest { GrantType = GrantTypes.RefreshToken },
+            new TokenRequest { GrantType = GrantTypes.RefreshToken, Scope = scope },
             new ClientRequest { ClientId = ClientId })
         {
             Clients = Mock.Of<IClientInfoProvider>(),
@@ -95,7 +95,6 @@ public class GrantNarrowingValidatorTests
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
                 new AuthorizationContext(ClientId, grantedScope, null, grantedResources)),
-            Scope = scope,
             Resources = resources,
         };
 
