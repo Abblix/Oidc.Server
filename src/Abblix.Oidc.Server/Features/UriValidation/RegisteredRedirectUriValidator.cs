@@ -10,8 +10,9 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
 /// Matches the redirect URI of an authorization request against one registered redirect URI as written
-/// (<see cref="RedirectUriComparison"/>), and against a registered loopback IP redirect URI with any port, because a
-/// native app takes a free port from the operating system at the time of the request (RFC 8252 section 7.3).
+/// (<see cref="RedirectUriComparison"/>), and against a registered loopback redirect URI with any port, because a
+/// native app takes a free port from the operating system at the time of the request
+/// (<see cref="LoopbackHosts.IsLoopbackRedirectUri"/>).
 /// </summary>
 /// <remarks>
 /// Only <see cref="UriValidatorFactory.CreateForRedirectUris"/> creates it.
@@ -19,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.UriValidation;
 /// <param name="registered">The registered redirect URI to match against.</param>
 internal sealed class RegisteredRedirectUriValidator(Uri registered) : IUriValidator
 {
-	private readonly bool _anyPort = LoopbackHosts.IsLoopbackIpRedirectUri(registered);
+	private readonly bool _anyPort = LoopbackHosts.IsLoopbackRedirectUri(registered);
 
 	/// <summary>
 	/// Validates the specified URI against the registered one.
