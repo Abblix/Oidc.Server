@@ -31,6 +31,7 @@ public partial class ClientManagementTests
 {
     private const string PrivateUseRedirectUri = "com.example.app:/oauth2redirect";
     private const string RegisteredLoopbackRedirectUri = "http://127.0.0.1:4000/oauth2redirect";
+    private const string RegisteredLocalhostRedirectUri = "http://localhost/oauth2redirect";
     private const string ClaimedHttpsRedirectUri = "https://app.example.com/oauth2redirect";
 
     /// <summary>
@@ -135,7 +136,8 @@ public partial class ClientManagementTests
     /// RFC 8252 section 7: "authorization servers MUST offer at least the three redirect URI options described in the
     /// following subsections to native apps". The private-use scheme (section 7.1) and the loopback interface on the
     /// port the app listens on at the time of the request (section 7.3, "The authorization server MUST allow any port
-    /// to be specified at the time of the request for loopback IP redirect URIs") are registered as a native client;
+    /// to be specified at the time of the request for loopback IP redirect URIs", and RFC 9700 section 4.1.3 the same for
+    /// "a localhost URI") are registered as a native client;
     /// a claimed https URI (section 7.2), "indistinguishable to the authorization server from a regular web-based client
     /// redirect URI", as a web client without credentials, since OpenID Connect Dynamic Client Registration 1.0
     /// section 2 has native clients "only register redirect_uris using custom URI schemes or loopback URLs using the
@@ -144,6 +146,7 @@ public partial class ClientManagementTests
     [Theory]
     [InlineData(ApplicationTypes.Native, PrivateUseRedirectUri)]
     [InlineData(ApplicationTypes.Native, "http://127.0.0.1:51004/oauth2redirect")]
+    [InlineData(ApplicationTypes.Native, "http://localhost:53111/oauth2redirect")]
     [InlineData(ApplicationTypes.Web, ClaimedHttpsRedirectUri)]
     public async Task A_native_app_receives_a_code_at_its_redirect_uri_and_redeems_it(
         string applicationType, string redirectUri)
@@ -155,7 +158,10 @@ public partial class ClientManagementTests
             applicationType == ApplicationTypes.Native ? PrivateUseRedirectUri : ClaimedHttpsRedirectUri);
         metadata[RequestMembers.ApplicationType] = applicationType;
         if (applicationType == ApplicationTypes.Native)
+        {
             metadata[RequestMembers.RedirectUris]!.AsArray().Add(RegisteredLoopbackRedirectUri);
+            metadata[RequestMembers.RedirectUris]!.AsArray().Add(RegisteredLocalhostRedirectUri);
+        }
 
         var registered = await RegisterClientAsync(client, discovery, metadata);
         var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();

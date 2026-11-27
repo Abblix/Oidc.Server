@@ -418,7 +418,6 @@ public class RedirectUriValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync accepts localhost redirect URI.
-    /// RFC 8252 section 8.3 calls localhost NOT RECOMMENDED for native apps, so it keeps an exact match, port included.
     /// Tests support for native application redirect URIs.
     /// </summary>
     [Fact]
@@ -610,15 +609,18 @@ public class RedirectUriValidatorTests
 
     /// <summary>
     /// A desktop app takes a free port from the operating system at sign-in, so the port it sends differs from the
-    /// one it registered. RFC 8252 section 7.3 requires any port to be allowed for a loopback IP redirect URI, and
-    /// section 8.4 keeps every other component an exact match.
+    /// one it registered. RFC 8252 section 7.3 requires any port to be allowed for a loopback IP redirect URI, and RFC
+    /// 9700 section 4.1.3 for a native app "using a localhost URI" too; section 8.4 of RFC 8252 keeps every other
+    /// component an exact match.
     /// </summary>
     [Theory]
+    [InlineData("http://localhost/callback", "http://localhost:53111/callback")]
+    [InlineData("http://localhost:51004/oauth2redirect", "http://localhost:51005/oauth2redirect")]
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
     [InlineData("http://[::1]:61023/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
     [InlineData("http://127.0.0.1/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
     [InlineData("http://[::1]/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
-    public async Task ValidateAsync_LoopbackIpWithAnotherPort_ShouldSucceed(string registered, string requested)
+    public async Task ValidateAsync_LoopbackWithAnotherPort_ShouldSucceed(string registered, string requested)
     {
         var redirectUri = new Uri(requested);
         var context = CreateContext(redirectUri, new Uri(registered));
@@ -650,9 +652,9 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Only the port of a loopback IP redirect URI is free (RFC 8252 section 8.4). A different path, host, scheme or
-    /// query is still refused, as is a URI carrying user information or a fragment, and so is another port on <c>localhost</c>, on a loopback address other than
-    /// <c>127.0.0.1</c> or on an <c>https</c> loopback URI, none of which section 7.3 covers.
+    /// Only the port of a loopback redirect URI is free (RFC 8252 section 8.4). A different path, host, scheme or query is
+    /// still refused, as is a URI carrying user information or a fragment, and so is another port on a loopback address
+    /// other than <c>127.0.0.1</c> or on an <c>https</c> loopback URI, none of which section 7.3 covers.
     /// </summary>
     [Theory]
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/other")]
@@ -662,8 +664,13 @@ public class RedirectUriValidatorTests
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://[::1]:51005/oauth2redirect")]
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://user@127.0.0.1:51005/oauth2redirect")]
     [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect#done")]
-    [InlineData("http://localhost:51004/oauth2redirect", "http://localhost:51005/oauth2redirect")]
     [InlineData("http://127.0.0.2:51004/oauth2redirect", "http://127.0.0.2:51005/oauth2redirect")]
+    [InlineData("http://localhost/callback", "http://localhost:53111/other")]
+    [InlineData("http://localhost/callback", "http://127.0.0.1:53111/callback")]
+    [InlineData("http://localhost/callback", "https://localhost:53111/callback")]
+    [InlineData("http://localhost/callback", "http://localhost:53111/callback?next=1")]
+    [InlineData("http://localhost/callback", "http://localhost.:53111/callback")]
+    [InlineData("https://localhost/callback", "https://localhost:53111/callback")]
     [InlineData("https://127.0.0.1:51004/oauth2redirect", "https://127.0.0.1:51005/oauth2redirect")]
     public async Task ValidateAsync_LoopbackWithAnotherComponent_ShouldReturnError(string registered, string requested)
     {
@@ -727,6 +734,7 @@ public class RedirectUriValidatorTests
     [Theory]
     [InlineData(ApplicationTypes.Web, "http://client.example.com/callback", false)]
     [InlineData(ApplicationTypes.Web, "http://127.0.0.1:8080/callback", false)]
+    [InlineData(ApplicationTypes.Web, "http://localhost:8080/callback", false)]
     [InlineData(ApplicationTypes.Web, "com.example.app:/callback", false)]
     [InlineData(ApplicationTypes.Web, "https://client.example.com/callback", true)]
     [InlineData(ApplicationTypes.Native, "http://127.0.0.1:8080/callback", true)]
@@ -740,6 +748,23 @@ public class RedirectUriValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
+    /// The port allowance belongs to a native app's loopback redirect: a web client is refused one on another port, as it
+    /// is the one it registered.
+    /// </summary>
+    [Theory]
+    [InlineData("http://localhost/callback", "http://localhost:53111/callback")]
+    [InlineData("http://127.0.0.1/callback", "http://127.0.0.1:53111/callback")]
+    public async Task ValidateAsync_WebClientLoopbackWithAnotherPort_IsRefused(string registered, string requested)
+    {
+        var context = CreateContextFor(ApplicationTypes.Web, new Uri(requested), new Uri(registered));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+        Assert.Null(context.ValidRedirectUri);
     }
 
     /// <summary>
