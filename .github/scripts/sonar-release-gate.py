@@ -121,7 +121,7 @@ def check_same_code(commit, develop, analysed, failures, notes, steps):
 
 # The files Sonar must have analysed, named by kind rather than read from the analysis: a list
 # taken from the analysed set would lose a whole language the analysis dropped, and pass.
-ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts', '.xml', '.config', '.ps1')
+ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts', '.xml', '.config', '.ps1', '.sh')
 ANALYSED_NAMES = ('Dockerfile',)
 ANALYSED_DIRECTORIES = ('.github/workflows/', '.github/actions/')
 

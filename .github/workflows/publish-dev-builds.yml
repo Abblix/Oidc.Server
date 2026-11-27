@@ -197,6 +197,9 @@ jobs:
               height=$(( $(git rev-list --count --first-parent HEAD) - 1 ))
               version="$core-$RELEASE_BRANCH_IDENTIFIERS.$height"
               ;;
+            *)
+              # develop or a manual run from another branch: MinVer names the version
+              ;;
           esac
           echo "ref=$REF version=${version:-none, MinVer derives it from Directory.Build.props}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
