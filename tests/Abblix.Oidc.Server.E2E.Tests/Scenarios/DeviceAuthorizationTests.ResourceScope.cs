@@ -104,7 +104,8 @@ public partial class DeviceAuthorizationTests
             discovery.DeviceAuthorizationEndpoint!,
             new Dictionary<string, string>
             {
-                [DeviceRequest.Parameters.Scope] = Scopes.OpenId,
+                // Only an offline_access a client of this grant alone may not receive, so the client names no scope
+                [DeviceRequest.Parameters.Scope] = Scopes.OfflineAccess,
                 [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
                 [ClientRequest.Parameters.ClientId] = device.ClientId,
                 [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
@@ -112,8 +113,7 @@ public partial class DeviceAuthorizationTests
         var deviceCode = started[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>();
         var userCode = started[DeviceResponse.Parameters.UserCode]!.GetValue<string>();
 
-        // A scope only a resource the token is not addressed to declares, served as a default the client never named,
-        // leaves the token with no scope
+        // A scope only a resource the token is not addressed to declares leaves the token with no scope
         using (TestTenant.Enter(Factory.Services))
         {
             using var scope = Factory.Services.CreateScope();
@@ -130,10 +130,7 @@ public partial class DeviceAuthorizationTests
                         device.ClientId,
                         [TestConstants.OtherApiScope],
                         null,
-                        [new Uri(TestConstants.ApiResource)])
-                    {
-                        ClientNamedNoScope = true,
-                    }));
+                        [new Uri(TestConstants.ApiResource)])));
             Assert.True(approved);
         }
 

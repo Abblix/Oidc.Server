@@ -107,7 +107,8 @@ public partial class BackChannelAuthenticationTests
             discovery.BackChannelAuthenticationEndpoint!,
             new Dictionary<string, string>
             {
-                [CibaParameters.Scope] = Scopes.OpenId,
+                // Only an offline_access a client of this grant alone may not receive, so the client names no scope
+                [CibaParameters.Scope] = Scopes.OfflineAccess,
                 [CibaParameters.LoginHint] = LoginHint,
                 [CibaParameters.Resource] = TestConstants.ApiResource,
                 [ClientRequest.Parameters.ClientId] = ciba.ClientId,
@@ -115,8 +116,7 @@ public partial class BackChannelAuthenticationTests
             }));
         var authRequestId = started[CibaResponse.AuthenticationRequestId]!.GetValue<string>();
 
-        // A scope only a resource the token is not addressed to declares, served as a default the client never named,
-        // leaves the token with no scope
+        // A scope only a resource the token is not addressed to declares leaves the token with no scope
         using (TestTenant.Enter(host.Services))
         {
             using var scope = host.Services.CreateScope();
@@ -129,11 +129,7 @@ public partial class BackChannelAuthenticationTests
                 SessionId: Guid.NewGuid().ToString("N"),
                 AuthenticationTime: scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
                 IdentityProvider: "e2e-test");
-            var context = stored.AuthorizedGrant.Context with
-            {
-                Scope = [TestConstants.OtherApiScope],
-                ClientNamedNoScope = true,
-            };
+            var context = stored.AuthorizedGrant.Context with { Scope = [TestConstants.OtherApiScope] };
             var completed = stored with { AuthorizedGrant = new AuthorizedGrant(session, context) };
             completed.Status = BackChannelAuthenticationStatus.Authenticated;
 
