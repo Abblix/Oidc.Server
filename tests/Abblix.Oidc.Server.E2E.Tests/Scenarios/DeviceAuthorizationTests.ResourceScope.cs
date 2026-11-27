@@ -6,10 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
@@ -35,57 +35,21 @@ public partial class DeviceAuthorizationTests
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
-        var device = await RegisterDeviceClientAsync(client, discovery, "device-resource-scope");
-        var requested = ResourceScopeNarrowingTests.Requested(named, Scopes.OpenId);
-
-        var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
+        var (device, deviceCode) = await ApprovedDeviceCodeAsync(
             client,
-            discovery.DeviceAuthorizationEndpoint!,
-            new Dictionary<string, string>
-            {
-                [DeviceRequest.Parameters.Scope] = $"{Scopes.OpenId} {TestConstants.ApiScope}",
-                [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
-                [ClientRequest.Parameters.ClientId] = device.ClientId,
-                [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
-            }));
-        var deviceCode = started[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>();
-        var userCode = started[DeviceResponse.Parameters.UserCode]!.GetValue<string>();
+            discovery,
+            "device-resource-scope",
+            $"{Scopes.OpenId} {TestConstants.ApiScope}",
+            [Scopes.OpenId, TestConstants.ApiScope]);
 
-        using (TestTenant.Enter(Factory.Services))
-        {
-            using var scope = Factory.Services.CreateScope();
-            var approved = await scope.ServiceProvider.GetRequiredService<IUserCodeVerificationService>().ApproveAsync(
-                TestTenant.Of(Factory.Services),
-                userCode,
-                new AuthorizedGrant(
-                    new AuthSession(
-                        "e2e-subject",
-                        Guid.NewGuid().ToString("N"),
-                        scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
-                        "e2e-test"),
-                    new AuthorizationContext(
-                        device.ClientId,
-                        [Scopes.OpenId, TestConstants.ApiScope],
-                        null,
-                        [new Uri(TestConstants.ApiResource)])));
-            Assert.True(approved);
-        }
+        using var response = await PollAsync(
+            client,
+            discovery,
+            device,
+            deviceCode,
+            ScopeNaming(ResourceScopeNarrowingTests.Requested(named, Scopes.OpenId), namesResource));
 
-        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
-        [
-            new(TokenRequest.Parameters.GrantType, GrantTypes.DeviceAuthorization),
-            new(TokenRequest.Parameters.DeviceCode, deviceCode),
-            new(TokenRequest.Parameters.Scope, string.Join(' ', requested)),
-            new(ClientRequest.Parameters.ClientId, device.ClientId),
-            new(ClientRequest.Parameters.ClientSecret, device.ClientSecret),
-            .. namesResource
-                ? [new KeyValuePair<string, string>(TokenRequest.Parameters.Resource, TestConstants.ApiResource)]
-                : Array.Empty<KeyValuePair<string, string>>(),
-        ]);
-
-        var body = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
-        AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], body);
+        AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], await AssertAnsweredAsync(response));
     }
 
     /// <summary>
@@ -97,29 +61,55 @@ public partial class DeviceAuthorizationTests
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
-        var device = await RegisterDeviceClientAsync(client, discovery, "device-scope-left-none");
 
+        // Only an offline_access a client of this grant alone may not receive, so the client names no scope, and a
+        // scope only a resource the token is not addressed to declares leaves the token with none
+        var (device, deviceCode) = await ApprovedDeviceCodeAsync(
+            client,
+            discovery,
+            "device-scope-left-none",
+            Scopes.OfflineAccess,
+            [TestConstants.OtherApiScope]);
+
+        using var response = await PollAsync(
+            client,
+            discovery,
+            device,
+            deviceCode,
+            [new(TokenRequest.Parameters.Scope, Scopes.OpenId)]);
+
+        await AssertAnsweredAsync(response);
+    }
+
+    /// <summary>
+    /// A device code a registered client started for <paramref name="startScope"/> and the test resource, approved for
+    /// <paramref name="grantedScope"/> on that resource.
+    /// </summary>
+    private async Task<(DeviceClient Device, string DeviceCode)> ApprovedDeviceCodeAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientName,
+        string startScope,
+        string[] grantedScope)
+    {
+        var device = await RegisterDeviceClientAsync(client, discovery, clientName);
         var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
             client,
             discovery.DeviceAuthorizationEndpoint!,
             new Dictionary<string, string>
             {
-                // Only an offline_access a client of this grant alone may not receive, so the client names no scope
-                [DeviceRequest.Parameters.Scope] = Scopes.OfflineAccess,
+                [DeviceRequest.Parameters.Scope] = startScope,
                 [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
                 [ClientRequest.Parameters.ClientId] = device.ClientId,
                 [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
             }));
-        var deviceCode = started[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>();
-        var userCode = started[DeviceResponse.Parameters.UserCode]!.GetValue<string>();
 
-        // A scope only a resource the token is not addressed to declares leaves the token with no scope
         using (TestTenant.Enter(Factory.Services))
         {
             using var scope = Factory.Services.CreateScope();
             var approved = await scope.ServiceProvider.GetRequiredService<IUserCodeVerificationService>().ApproveAsync(
                 TestTenant.Of(Factory.Services),
-                userCode,
+                started[DeviceResponse.Parameters.UserCode]!.GetValue<string>(),
                 new AuthorizedGrant(
                     new AuthSession(
                         "e2e-subject",
@@ -128,22 +118,29 @@ public partial class DeviceAuthorizationTests
                         "e2e-test"),
                     new AuthorizationContext(
                         device.ClientId,
-                        [TestConstants.OtherApiScope],
+                        grantedScope,
                         null,
                         [new Uri(TestConstants.ApiResource)])));
             Assert.True(approved);
         }
 
-        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
+        return (device, started[DeviceResponse.Parameters.DeviceCode]!.GetValue<string>());
+    }
+
+    /// <summary>A poll for <paramref name="deviceCode"/> as <paramref name="device"/>, carrying
+    /// <paramref name="parameters"/> too.</summary>
+    private static Task<HttpResponseMessage> PollAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        DeviceClient device,
+        string deviceCode,
+        IEnumerable<KeyValuePair<string, string>> parameters)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
         [
             new(TokenRequest.Parameters.GrantType, GrantTypes.DeviceAuthorization),
             new(TokenRequest.Parameters.DeviceCode, deviceCode),
-            new(TokenRequest.Parameters.Scope, Scopes.OpenId),
             new(ClientRequest.Parameters.ClientId, device.ClientId),
             new(ClientRequest.Parameters.ClientSecret, device.ClientSecret),
+            .. parameters,
         ]);
-
-        var body = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
-    }
 }

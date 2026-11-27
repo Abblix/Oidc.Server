@@ -6,15 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
@@ -37,57 +39,21 @@ public partial class BackChannelAuthenticationTests
         await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
-        var ciba = await RegisterCibaClientAsync(client, discovery);
-        var requested = ResourceScopeNarrowingTests.Requested(named, Scopes.OpenId);
-
-        var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
+        var (ciba, authRequestId) = await AuthenticatedRequestAsync(
+            host,
             client,
-            discovery.BackChannelAuthenticationEndpoint!,
-            new Dictionary<string, string>
-            {
-                [CibaParameters.Scope] = $"{Scopes.OpenId} {TestConstants.ApiScope}",
-                [CibaParameters.LoginHint] = LoginHint,
-                [CibaParameters.Resource] = TestConstants.ApiResource,
-                [ClientRequest.Parameters.ClientId] = ciba.ClientId,
-                [ClientRequest.Parameters.ClientSecret] = ciba.ClientSecret,
-            }));
-        var authRequestId = started[CibaResponse.AuthenticationRequestId]!.GetValue<string>();
+            discovery,
+            $"{Scopes.OpenId} {TestConstants.ApiScope}",
+            grantedScope: null);
 
-        using (TestTenant.Enter(host.Services))
-        {
-            using var scope = host.Services.CreateScope();
-            var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
-            var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId);
-            Assert.NotNull(stored);
+        using var response = await RedeemAsync(
+            client,
+            discovery,
+            ciba,
+            authRequestId,
+            ScopeNaming(ResourceScopeNarrowingTests.Requested(named, Scopes.OpenId), namesResource));
 
-            var session = new AuthSession(
-                Subject: LoginHint,
-                SessionId: Guid.NewGuid().ToString("N"),
-                AuthenticationTime: scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
-                IdentityProvider: "e2e-test");
-            var completed = stored with { AuthorizedGrant = new AuthorizedGrant(session, stored.AuthorizedGrant.Context) };
-            completed.Status = BackChannelAuthenticationStatus.Authenticated;
-
-            await scope.ServiceProvider
-                .GetRequiredService<IAuthenticationCompletionHandler>()
-                .CompleteAsync(TestTenant.Of(host.Services), authRequestId, completed, TimeSpan.FromMinutes(5));
-        }
-
-        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
-        [
-            new(TokenRequest.Parameters.GrantType, GrantTypes.Ciba),
-            new(TokenRequest.Parameters.AuthenticationRequestId, authRequestId),
-            new(TokenRequest.Parameters.Scope, string.Join(' ', requested)),
-            new(ClientRequest.Parameters.ClientId, ciba.ClientId),
-            new(ClientRequest.Parameters.ClientSecret, ciba.ClientSecret),
-            .. namesResource
-                ? [new KeyValuePair<string, string>(TokenRequest.Parameters.Resource, TestConstants.ApiResource)]
-                : Array.Empty<KeyValuePair<string, string>>(),
-        ]);
-
-        var body = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
-        AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], body);
+        AssertIssuedScope([Scopes.OpenId, TestConstants.ApiScope], await AssertAnsweredAsync(response));
     }
 
     /// <summary>
@@ -100,15 +66,44 @@ public partial class BackChannelAuthenticationTests
         await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
-        var ciba = await RegisterCibaClientAsync(client, discovery);
 
+        // Only an offline_access a client of this grant alone may not receive, so the client names no scope, and a
+        // scope only a resource the token is not addressed to declares leaves the token with none
+        var (ciba, authRequestId) = await AuthenticatedRequestAsync(
+            host,
+            client,
+            discovery,
+            Scopes.OfflineAccess,
+            [TestConstants.OtherApiScope]);
+
+        using var response = await RedeemAsync(
+            client,
+            discovery,
+            ciba,
+            authRequestId,
+            [new(TokenRequest.Parameters.Scope, Scopes.OpenId)]);
+
+        await AssertAnsweredAsync(response);
+    }
+
+    /// <summary>
+    /// A backchannel request a registered client made for <paramref name="requestScope"/> and the test resource,
+    /// authenticated by the end user with the scope it asked for, or with <paramref name="grantedScope"/> when given.
+    /// </summary>
+    private static async Task<(CibaClient Ciba, string AuthRequestId)> AuthenticatedRequestAsync(
+        WebApplicationFactory<Program> host,
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string requestScope,
+        string[]? grantedScope)
+    {
+        var ciba = await RegisterCibaClientAsync(client, discovery);
         var started = await ReadJsonAsync(await FormPostHelpers.PostFormAsync(
             client,
             discovery.BackChannelAuthenticationEndpoint!,
             new Dictionary<string, string>
             {
-                // Only an offline_access a client of this grant alone may not receive, so the client names no scope
-                [CibaParameters.Scope] = Scopes.OfflineAccess,
+                [CibaParameters.Scope] = requestScope,
                 [CibaParameters.LoginHint] = LoginHint,
                 [CibaParameters.Resource] = TestConstants.ApiResource,
                 [ClientRequest.Parameters.ClientId] = ciba.ClientId,
@@ -116,7 +111,6 @@ public partial class BackChannelAuthenticationTests
             }));
         var authRequestId = started[CibaResponse.AuthenticationRequestId]!.GetValue<string>();
 
-        // A scope only a resource the token is not addressed to declares leaves the token with no scope
         using (TestTenant.Enter(host.Services))
         {
             using var scope = host.Services.CreateScope();
@@ -129,7 +123,9 @@ public partial class BackChannelAuthenticationTests
                 SessionId: Guid.NewGuid().ToString("N"),
                 AuthenticationTime: scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
                 IdentityProvider: "e2e-test");
-            var context = stored.AuthorizedGrant.Context with { Scope = [TestConstants.OtherApiScope] };
+            var context = grantedScope is null
+                ? stored.AuthorizedGrant.Context
+                : stored.AuthorizedGrant.Context with { Scope = grantedScope };
             var completed = stored with { AuthorizedGrant = new AuthorizedGrant(session, context) };
             completed.Status = BackChannelAuthenticationStatus.Authenticated;
 
@@ -138,16 +134,23 @@ public partial class BackChannelAuthenticationTests
                 .CompleteAsync(TestTenant.Of(host.Services), authRequestId, completed, TimeSpan.FromMinutes(5));
         }
 
-        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
+        return (ciba, authRequestId);
+    }
+
+    /// <summary>A token request redeeming <paramref name="authRequestId"/> as <paramref name="ciba"/>, carrying
+    /// <paramref name="parameters"/> too.</summary>
+    private static Task<HttpResponseMessage> RedeemAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        CibaClient ciba,
+        string authRequestId,
+        IEnumerable<KeyValuePair<string, string>> parameters)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
         [
             new(TokenRequest.Parameters.GrantType, GrantTypes.Ciba),
             new(TokenRequest.Parameters.AuthenticationRequestId, authRequestId),
-            new(TokenRequest.Parameters.Scope, Scopes.OpenId),
             new(ClientRequest.Parameters.ClientId, ciba.ClientId),
             new(ClientRequest.Parameters.ClientSecret, ciba.ClientSecret),
+            .. parameters,
         ]);
-
-        var body = await ReadJsonAsync(response);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
-    }
 }
