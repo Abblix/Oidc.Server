@@ -11,30 +11,32 @@ using System.Net;
 namespace Abblix.Oidc.Server.Features.UriValidation;
 
 /// <summary>
-/// The loopback host rules redirect URIs are held to: which hosts count as a loopback IP redirect URI at the
-/// authorization endpoint (RFC 8252 section 7.3), which a native client may register for an <c>http</c> URI, and
-/// which a web client must not register (OpenID Connect Dynamic Client Registration 1.0 section 2).
+/// The loopback host rules redirect URIs are held to: which registered redirect URIs accept any port at the
+/// authorization endpoint, which hosts a native client may register for an <c>http</c> URI, and which a web client must
+/// not register (OpenID Connect Dynamic Client Registration 1.0 section 2).
 /// </summary>
 internal static class LoopbackHosts
 {
 	/// <summary>
-	/// Reports whether <paramref name="uri"/> is a loopback IP redirect URI in the sense of RFC 8252 section 7.3:
-	/// the <c>http</c> scheme with a host that normalizes to <c>127.0.0.1</c> or <c>[::1]</c>. <c>localhost</c> is not one,
-	/// section 8.3 calling it NOT RECOMMENDED, and neither is any other address of the loopback range.
+	/// Reports whether <paramref name="uri"/> is a loopback redirect URI whose port the authorization endpoint leaves
+	/// free: the <c>http</c> scheme with a host <see cref="IsNativeLoopbackHost"/> accepts. RFC 8252 section 7.3 has the
+	/// server "allow any port to be specified at the time of the request for loopback IP redirect URIs", and RFC 9700
+	/// section 4.1.3 makes the same exception for "native apps using a localhost URI". Only a native app is served at an
+	/// <c>http</c> redirect URI at all (<see cref="RedirectUriSchemes.IsAllowed"/>).
 	/// </summary>
 	/// <param name="uri">The registered redirect URI.</param>
-	public static bool IsLoopbackIpRedirectUri(Uri uri)
-		=> uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && IsLoopbackIpLiteral(uri.DnsSafeHost);
+	public static bool IsLoopbackRedirectUri(Uri uri)
+		=> uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && IsNativeLoopbackHost(uri);
 
 	/// <summary>
 	/// Reports whether the host of <paramref name="uri"/>, an <c>http</c> URI whose scheme the caller has checked, is
-	/// one a native client may register: <c>localhost</c>, or one <see cref="IsLoopbackIpRedirectUri"/> accepts.
-	/// These are the hosts OpenID Connect Dynamic Client Registration 1.0 section 2 names for a native client's
-	/// loopback URLs.
+	/// one a native client may register: <c>localhost</c>, or one that normalizes to <c>127.0.0.1</c> or <c>[::1]</c>,
+	/// and no other address of the loopback range. These are the hosts OpenID Connect Dynamic Client Registration 1.0
+	/// section 2 names for a native client's loopback URLs.
 	/// </summary>
 	/// <param name="uri">The registered <c>http</c> URI.</param>
 	public static bool IsNativeLoopbackHost(Uri uri)
-		=> uri.Host == "localhost" || IsLoopbackIpRedirectUri(uri);
+		=> uri.Host == "localhost" || IsLoopbackIpLiteral(uri.DnsSafeHost);
 
 	/// <summary>
 	/// Reports whether <paramref name="uri"/> names any loopback host, <c>localhost</c> included, the whole range a
