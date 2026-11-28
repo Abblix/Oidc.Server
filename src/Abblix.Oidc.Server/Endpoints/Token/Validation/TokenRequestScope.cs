@@ -6,7 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -25,10 +31,77 @@ internal static class TokenRequestScope
     /// code, a refresh token, a device code or a backchannel request carries the scope it was granted, and a token
     /// exchange inherits the subject token's. Such a grant ignores an offline_access the client may not receive a
     /// refresh token for (<see cref="Features.ClientInformation.ClientInfo.ReceivableScopeServedFor"/>), as a device
-    /// authorization or a backchannel authentication request does. Read once the client is known.
+    /// authorization or a backchannel authentication request does. What the request names is
+    /// <see cref="NamedIn"/>. Read once the client is known.
     /// </remarks>
     public static string[]? ServedFor(TokenValidationContext context)
-        => context.Request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
-            ? context.ClientInfo.ReceivableScopeServedFor(context.Request.Scope)
-            : context.Request.Scope;
+        => ServedFor(context.Request, () => context.ClientInfo);
+
+    /// <summary>
+    /// The scope <paramref name="request"/> was served with while it was validated.
+    /// </summary>
+    public static string[]? ServedFor(ValidTokenRequest request)
+        => ServedFor(request.Model, () => request.ClientInfo);
+
+    /// <remarks>The client is read only for a grant serving its default, the others carrying their own scope.
+    /// </remarks>
+    private static string[]? ServedFor(TokenRequest request, Func<ClientInfo> clientInfo)
+        => request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer
+            ? clientInfo().ReceivableScopeServedFor(NamedIn(request))
+            : NamedIn(request);
+
+    /// <summary>
+    /// The scope the client itself names in <paramref name="request"/>, before any default is served.
+    /// </summary>
+    /// <remarks>
+    /// A device code or a backchannel request is redeemed by a token request defining no scope (RFC 8628 section 3.4,
+    /// CIBA Core 1.0 section 10.1), so a scope it names is an unrecognized parameter the server ignores (RFC 6749
+    /// section 3.2): it names none here, and nothing judging the scope refuses the code such a request spends.
+    /// </remarks>
+    public static string[] NamedIn(TokenRequest request)
+        => request.GrantType is GrantTypes.DeviceAuthorization or GrantTypes.Ciba ? [] : request.Scope;
+
+    /// <summary>
+    /// Judges the scope <paramref name="context"/>'s request is served with against what <paramref name="tenant"/>
+    /// declares and what <paramref name="resources"/> declare, and holds it to the client's registered scopes; on
+    /// success the definitions of the tenant's scopes among it are set on the context.
+    /// </summary>
+    /// <returns>The refusal, or null when every scope served is available to the client.</returns>
+    public static OidcError? Judge(
+        IScopeManager scopeManager,
+        TenantDefinition tenant,
+        TokenValidationContext context,
+        ResourceDefinition[] resources)
+    {
+        if (ServedFor(context) is not { } scope)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
+
+        if (!scopeManager.Validate(tenant,
+                scope,
+                resources,
+                context.ClientInfo.AllowedScopes,
+                out var scopeDefinitions,
+                out var errorDescription))
+        {
+            return new OidcError(ErrorCodes.InvalidScope, errorDescription);
+        }
+
+        context.Scope = scopeDefinitions;
+        return null;
+    }
+
+    /// <summary>
+    /// The scope a token carries of <paramref name="granted"/> when its request is served with
+    /// <paramref name="served"/>: those of the granted scopes the request names, or all of them when it names none
+    /// (RFC 6749 section 6).
+    /// </summary>
+    /// <remarks>
+    /// Judged by name, since a scope only a resource declares has no definition of its own: the request was refused
+    /// earlier for any name neither the tenant nor a resource it names declares. A request naming none of the granted
+    /// scopes narrows to none, which <see cref="GrantNarrowingValidator"/> refuses before a token is built.
+    /// </remarks>
+    public static string[] Narrow(string[] granted, string[]? served)
+        => served is { Length: > 0 }
+            ? [.. granted.Intersect(served, StringComparer.Ordinal)]
+            : granted;
 }

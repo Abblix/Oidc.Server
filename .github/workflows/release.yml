@@ -52,19 +52,14 @@ jobs:
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
-            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
-            echo "Invalid version input: $INPUT_VERSION" >&2
-            exit 1
-          fi
           VERSION="$INPUT_VERSION"
           echo "Using explicit version: $VERSION"
 
-          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the X.Y
-          # release input to a full X.Y.0 SemVer for the build and pack override only. The tag and
-          # the GitHub Release keep the X.Y form, deliberately: NuGet normalizes X.Y to X.Y.0, so
-          # the published package version is identical, and the short name is what the releases,
-          # their links and the notes files have always used.
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so the X.Y release input is
+          # expanded to a full X.Y.0 SemVer for the build and pack override only, by the same script that
+          # names a release branch's dev builds. The tag and the GitHub Release keep the X.Y form,
+          # deliberately: NuGet normalizes X.Y to X.Y.0, so the published package version is identical,
+          # and the short name is what the releases, their links and the notes files have always used.
           #
           # The cost is stated rather than discovered: MinVer parses a TAG as SemVer, and "2.3" is
           # not one, so it reads none of this repository's release tags. Nothing depends on it
@@ -72,13 +67,12 @@ jobs:
           # MinVerMinimumMajorMinor - but it does mean the height in a dev version counts from the
           # root commit rather than from the last release, and that a tag is not what any number
           # here is derived from. A -prerelease suffix is preserved as given.
-          CORE="${VERSION%%-*}"
-          PRERELEASE=""
-          [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
-          if [[ "$CORE" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            VERSION_FULL="${CORE}.0${PRERELEASE}"
-          else
-            VERSION_FULL="$VERSION"
+          rc=0
+          VERSION_FULL=$(bash .github/scripts/full-semver.sh "$VERSION") || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
+            echo "Invalid version input: $VERSION" >&2
+            exit 1
           fi
           echo "MinVer override version: $VERSION_FULL"
 
@@ -423,8 +417,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -459,7 +451,7 @@ jobs:
         run: |
           cd getting-started
           if ! dotnet build; then
-            echo "::error title=Getting-started samples::A sample does not build against this run's packages; the build output above names it. Skipped step: build Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting-started samples::A sample does not build against this run's packages; the build output above names it. Skipped step: build Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         timeout-minutes: 3
@@ -500,8 +492,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -544,7 +534,7 @@ jobs:
           cd getting-started
           export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
           if ! dotnet run-loop.cs --check --provider "$PROVIDER"; then
-            echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         # The script builds and starts three projects, measured at 44s to 2m18s per provider on hosted runners in the
@@ -559,8 +549,8 @@ jobs:
   # starts it - the Development environment, at the address its own launch profile names, which must be the issuer
   # its discovery document names. The templates are named: each provider must be found and checked, each other
   # template named as one, and a template under no name stops the job, so a renamed or new template cannot drop out
-  # of the check unnoticed. The 3.1 templates live on the templates' release/3.1 branch until their 3.1 release,
-  # and they are installed from their folders, since that release is not published yet.
+  # of the check unnoticed. The templates are read from their default branch and installed from its folders, so the
+  # job checks them as they stand there rather than the package last published.
   templates:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -568,8 +558,7 @@ jobs:
       contents: read
     env:
       VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
-      # Moves to the templates' default branch once Templates 3.1 is released
-      TEMPLATES_REF: release/3.1
+      TEMPLATES_REF: master
       PROVIDER_TEMPLATES: abblix-oidc-server abblix-oidc-server-gettingstarted
       OTHER_TEMPLATES: abblix-react
     steps:
@@ -596,7 +585,7 @@ jobs:
       - name: Name the skipped step when the templates could not be checked out
         if: ${{ failure() && steps.templates_checkout.outcome == 'failure' }}
         run: |
-          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when it was merged or renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to the branch holding the 3.x templates and dispatch the release again; when GitHub could not be reached, re-run this job"
+          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when the templates' default branch was renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to its new name and dispatch the release again; when GitHub could not be reached, re-run this job"
           exit 1
         timeout-minutes: 3
       - name: Download NuGet packages
@@ -730,8 +719,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
-          # The samples on 3.1 wait on this branch until 3.1 is released; then this goes back to master
-          ref: feature/samples-on-3-1
           path: getting-started
           persist-credentials: false
         timeout-minutes: 3
@@ -750,7 +737,7 @@ jobs:
       - name: Every region of the guide's files has its place in the template
         run: |
           if ! python3 -I getting-started/GettingStartedGuide/guide-files.py check; then
-            echo "::error title=Getting Started guide::A region of the guide's files has no place in the template it is put into; the output above names it. Skipped step: run python GettingStartedGuide/guide-files.py check in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1), fix the guide there, then re-run this job"
+            echo "::error title=Getting Started guide::A region of the guide's files has no place in the template it is put into; the output above names it. Skipped step: run python GettingStartedGuide/guide-files.py check in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job"
             exit 1
           fi
         timeout-minutes: 3
@@ -759,7 +746,7 @@ jobs:
       - name: Follow the guide
         run: |
           if ! bash getting-started/GettingStartedGuide/guide.sh --abblix-version "$VERSION_FULL" --nuget-source "$GITHUB_WORKSPACE/local-packages" "$RUNNER_TEMP/guide"; then
-            echo "::error title=Getting Started guide::The guide does not work on this run's packages; the line starting with guide.sh: step above names the step that failed. Skipped step: run bash GettingStartedGuide/guide.sh --abblix-version <this release> --nuget-source <its packages> <an empty folder> in Abblix/Oidc.Server.GettingStarted (feature/samples-on-3-1), fix the guide there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            echo "::error title=Getting Started guide::The guide does not work on this run's packages; the line starting with guide.sh: step above names the step that failed. Skipped step: run bash GettingStartedGuide/guide.sh --abblix-version <this release> --nuget-source <its packages> <an empty folder> in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
         # Measured at 23s to 73s on hosted runners in the samples' own workflow; like there, the extra minutes let the

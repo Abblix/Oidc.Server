@@ -158,7 +158,7 @@ public class TokenRequestProcessor(
 	/// none - unless a host declares offline_access as the scope of a resource the refreshed token does not address.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
-		=> request.Model.Scope is { Length: > 0 } ||
+		=> request.NamedScope is { Length: > 0 } ||
 		   context is { Scope.Length: > 0, ClientNamedNoScope: false } &&
 		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
