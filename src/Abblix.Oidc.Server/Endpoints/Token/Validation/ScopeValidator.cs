@@ -19,9 +19,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </summary>
 /// <remarks>
 /// Judges a grant the request itself authorizes, before the grant is built: its grant holds the resources the request
-/// names, so a scope only a resource declares is judged against those, and a refusal spends nothing the grant handler
-/// would consume, such as a JWT bearer assertion recorded as used. A grant authorized earlier is judged once it is
-/// known (<see cref="GrantedScopeValidator"/>).
+/// names, so a scope only a resource declares is judged against those. A grant authorized earlier is judged once it
+/// is known (<see cref="GrantedScopeValidator"/>).
 /// </remarks>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
 public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase

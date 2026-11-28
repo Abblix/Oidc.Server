@@ -53,6 +53,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.AddTelemetryDecorator<ITokenRequestValidator, ObservedTokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
+         services.Decorate<ITokenRequestProcessor, JwtBearerAssertionReplayPreventingDecorator>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, ObservedTokenRequestProcessor>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, MeasuredTokenRequestProcessor>();
 
@@ -84,8 +85,10 @@ public static class TokenEndpointServiceCollectionExtensions
         //   AuthorizationGrantValidator, so what can refuse without the grant runs before it:
         //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry that
         //   must still find the grant. DPoPBindingValidator reads the grant and follows it.
-        // - ScopeValidator judges a grant the request itself authorizes before AuthorizationGrantValidator builds it,
-        //   so a refusal spends nothing its handler consumes, a JWT bearer assertion's jti included.
+        // - ScopeValidator judges a grant the request itself authorizes before AuthorizationGrantValidator builds it.
+        // - The jti of a JWT bearer assertion is recorded as used by a decorator around the processor, as the
+        //   authorization code is spent, so a refusal of any validator here, the ones following
+        //   AuthorizationGrantValidator included, leaves the assertion for the corrected request.
         // - GrantNarrowingValidator, GrantedScopeValidator, SingleResourceValidator and AllowedResourceValidator read
         //   the grant the token is built from, so they follow AuthorizationGrantValidator, and the authorization code
         //   they may refuse a request for is spent only after validation. GrantedScopeValidator judges a grant

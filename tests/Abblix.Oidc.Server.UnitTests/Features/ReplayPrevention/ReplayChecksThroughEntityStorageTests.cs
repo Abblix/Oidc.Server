@@ -17,7 +17,10 @@ using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Endpoints.Token;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -214,8 +217,8 @@ public class ReplayChecksThroughEntityStorageTests
     }
 
     /// <summary>
-    /// The grant handler reserves a bearer assertion's jti in the replay cache the server registers, so the second
-    /// presentation is refused by the storage's add-if-absent.
+    /// A bearer assertion's jti is reserved in the replay cache the server registers around the token processor, so
+    /// the second presentation is refused by the storage's add-if-absent, before the processor is reached.
     /// </summary>
     [Fact]
     public async Task AJwtBearerAssertionPresentedTwice_IsRefusedByTheStorage()
@@ -261,13 +264,26 @@ public class ReplayChecksThroughEntityStorageTests
             requestInfo.Object,
             sessions.Object,
             policy);
+        var inner = new Mock<ITokenRequestProcessor>(MockBehavior.Strict);
+        var issued = new OidcError("issued", "The processor was reached");
+        inner
+            .Setup(p => p.ProcessAsync(It.IsAny<TenantDefinition>(), It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync(issued);
+        var decorator = new JwtBearerAssertionReplayPreventingDecorator(inner.Object, policy);
         var request = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = "assertion" };
         var client = new ClientInfo(ClientId);
         var ct = TestContext.Current.CancellationToken;
 
-        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetSuccess(out _));
-        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetFailure(out var error));
+        for (var presentation = 0; presentation < 2; presentation++)
+            Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetSuccess(out _));
+
+        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, Mock.Of<IClientInfoProvider>(), ct)).TryGetSuccess(out var grant));
+        var valid = new ValidTokenRequest(request, grant, client, [], []);
+        Assert.True((await decorator.ProcessAsync(SingleIssuer.Tenant, valid)).TryGetFailure(out var first));
+        Assert.Same(issued, first);
+        Assert.True((await decorator.ProcessAsync(SingleIssuer.Tenant, valid)).TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        inner.Verify(p => p.ProcessAsync(It.IsAny<TenantDefinition>(), It.IsAny<ValidTokenRequest>()), Times.Once);
         var key = Prefix + SingleUseTokenKey.JwtBearerGrant("https://idp.example.com", "bearer-jti");
         Assert.Equal([key, key], _storage.Claimed);
     }
