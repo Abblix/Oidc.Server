@@ -53,7 +53,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.AddTelemetryDecorator<ITokenRequestValidator, ObservedTokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
-         services.Decorate<ITokenRequestProcessor, JwtBearerAssertionReplayPreventingDecorator>();
+         services.Decorate<ITokenRequestProcessor, SingleUseRedemptionDecorator>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, ObservedTokenRequestProcessor>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, MeasuredTokenRequestProcessor>();
 
@@ -78,22 +78,21 @@ public static class TokenEndpointServiceCollectionExtensions
         //   the client's registered scope set. A request failing both authentication and its resources is
         //   therefore answered invalid_client: a client that cannot authenticate gets nothing a target could fix.
         // - AuthorizationGrantValidator must precede RevokedSessionValidator, which reads the AuthSession
-        //   the former resolves. It also has to stay in validation rather than move into the processor:
-        //   the authorization code is spent by a decorator around the processor, so a refusal there would
-        //   burn a code the request never earned.
-        // - The device code and the backchannel authentication request are spent INSIDE
-        //   AuthorizationGrantValidator, so what can refuse without the grant runs before it:
-        //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry that
-        //   must still find the grant. DPoPBindingValidator reads the grant and follows it.
-        // - ScopeValidator judges a grant the request itself authorizes before AuthorizationGrantValidator builds it.
-        // - The jti of a JWT bearer assertion is recorded as used by a decorator around the processor, as the
-        //   authorization code is spent, so a refusal of any validator here, the ones following
-        //   AuthorizationGrantValidator included, leaves the assertion for the corrected request.
+        //   the former resolves.
+        // - Nothing here spends what a grant is redeemed with only once: the authorization code, the jti of a JWT
+        //   bearer assertion, the device code and the backchannel authentication request are spent by the decorators
+        //   around the processor once it has issued tokens (AuthorizationCodeReusePreventingDecorator,
+        //   SingleUseRedemptionDecorator), so a refusal of any validator here, or of the processor, leaves them for
+        //   the corrected request.
+        // - Resolving a password grant asks the host to check the end user's credentials, so what can refuse without
+        //   the grant runs before AuthorizationGrantValidator, and a request a corrected one would let through is not
+        //   charged a sign-in: ScopeValidator, judging a grant the request itself authorizes before it is built, and
+        //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry.
+        //   DPoPBindingValidator reads the grant and follows it.
         // - GrantNarrowingValidator, GrantedScopeValidator, SingleResourceValidator and AllowedResourceValidator read
-        //   the grant the token is built from, so they follow AuthorizationGrantValidator, and the authorization code
-        //   they may refuse a request for is spent only after validation. GrantedScopeValidator judges a grant
-        //   authorized earlier against the resources it holds when the request names none; a token request redeeming
-        //   a device code or a backchannel request, spent before it, names no scope it reads (TokenRequestScope).
+        //   the grant the token is built from, so they follow AuthorizationGrantValidator. GrantedScopeValidator
+        //   judges a grant authorized earlier against the resources it holds when the request names none; a token
+        //   request redeeming a device code or a backchannel request names no scope it reads (TokenRequestScope).
         //   GrantNarrowingValidator comes first, so a resource outside the grant is refused as not granted rather
         //   than counted against the others, and before a scope only that resource declares is judged unavailable.
         services.TryAddEnumerable([

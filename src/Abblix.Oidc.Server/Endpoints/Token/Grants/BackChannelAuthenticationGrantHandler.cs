@@ -135,7 +135,7 @@ public class BackChannelAuthenticationGrantHandler(
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
                 => await RedeemUnlessExpiredAsync(tenant,
-                    request.AuthenticationRequestId, authenticated, clientInfo, processor),
+                    request.AuthenticationRequestId, authenticated, clientInfo, processor, cancellationToken),
 
             // If the user has not yet been authenticated and the request is still pending, either
             // tell a client that asked early to slow down, or wait for a status change (long
@@ -210,7 +210,7 @@ public class BackChannelAuthenticationGrantHandler(
             { Status: not BackChannelAuthenticationStatus.Pending } advanced)
         {
             return await ProcessUpdatedRequest(tenant, 
-                advanced, authenticationRequestId, clientInfo);
+                advanced, authenticationRequestId, clientInfo, cancellationToken);
         }
 
         // Asking early pushes the instant further out rather than resetting it from now: a client
@@ -272,7 +272,7 @@ public class BackChannelAuthenticationGrantHandler(
 
         var updatedRequest = await storage.TryGetAsync(tenant, authenticationRequestId);
         return await ProcessUpdatedRequest(tenant, 
-            updatedRequest, authenticationRequestId, clientInfo);
+            updatedRequest, authenticationRequestId, clientInfo, cancellationToken);
     }
 
     /// <summary>
@@ -283,12 +283,14 @@ public class BackChannelAuthenticationGrantHandler(
     /// <param name="updatedRequest">The updated authentication request from storage, or null if expired.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
+    /// <param name="cancellationToken">Abandons the redemption when the caller stops waiting.</param>
     /// <returns>Either an authorized grant, access denied error, expired token error, or authorization_pending.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> ProcessUpdatedRequest(
         TenantDefinition tenant,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest? updatedRequest,
         [Credential] string authenticationRequestId,
-        ClientInfo clientInfo)
+        ClientInfo clientInfo,
+        CancellationToken cancellationToken)
     {
         // Validate client ownership before processing (security critical)
         if (updatedRequest?.AuthorizedGrant.Context.ClientId != clientInfo.ClientId)
@@ -303,7 +305,7 @@ public class BackChannelAuthenticationGrantHandler(
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
                 return await RedeemUnlessExpiredAsync(tenant,
-                    authenticationRequestId, authenticated, clientInfo, grantProcessor);
+                    authenticationRequestId, authenticated, clientInfo, grantProcessor, cancellationToken);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
                 return new OidcError(
@@ -338,7 +340,8 @@ public class BackChannelAuthenticationGrantHandler(
         [Credential] string authenticationRequestId,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticated,
         ClientInfo clientInfo,
-        IBackChannelGrantProcessor processor)
+        IBackChannelGrantProcessor processor,
+        CancellationToken cancellationToken)
     {
         if (authenticated.ExpiresAt <= timeProvider.GetUtcNow())
         {
@@ -346,7 +349,8 @@ public class BackChannelAuthenticationGrantHandler(
             return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
         }
 
-        return await _redeemer.RedeemAsync(tenant, authenticationRequestId, authenticated, clientInfo, processor);
+        return await _redeemer.RedeemAsync(
+            tenant, authenticationRequestId, authenticated, clientInfo, processor, cancellationToken);
     }
 
     /// <summary>

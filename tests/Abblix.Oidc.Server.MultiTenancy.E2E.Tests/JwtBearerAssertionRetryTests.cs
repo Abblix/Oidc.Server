@@ -48,6 +48,9 @@ public sealed class JwtBearerAssertionRetryTests
 
     private static readonly Uri Orders = new("https://orders.example.com");
     private static readonly Uri Billing = new("https://billing.example.com");
+    private static readonly Uri Ledger = new("https://ledger.example.com");
+    private static readonly Uri Payments = new("https://payments.example.com");
+    private static readonly Uri Archive = new("https://archive.example.com");
 
     private static readonly RsaJsonWebKey AssertionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
@@ -102,6 +105,42 @@ public sealed class JwtBearerAssertionRetryTests
         Assert.Equal(ErrorCodes.InvalidTarget, await ErrorResponseReader.ErrorCodeOf(refused));
 
         using var granted = await PostGrantAsync(app, OneResourceAllowedClient, assertion, resources: [Orders]);
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+    }
+
+    /// <summary>
+    /// Two resources each publishing an encryption key are refused as an invalid target, since an encrypted token has
+    /// one recipient, and the same assertion naming one of them is then issued a token.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionRefusedTwoResourcesEachPublishingAKey_IsGrantedOne()
+    {
+        await using var app = await StartAsync();
+        var assertion = await IssueAssertionAsync(app);
+
+        using var refused = await PostGrantAsync(app, AnyResourceClient, assertion, resources: [Ledger, Payments]);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidTarget, await ErrorResponseReader.ErrorCodeOf(refused));
+
+        using var granted = await PostGrantAsync(app, AnyResourceClient, assertion, resources: [Ledger]);
+        Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
+    }
+
+    /// <summary>
+    /// A resource publishing only keys no token can be encrypted to is refused as an invalid target, and the same
+    /// assertion naming another resource is then issued a token.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionRefusedAResourceItsTokenCannotBeEncryptedTo_IsGrantedAnother()
+    {
+        await using var app = await StartAsync();
+        var assertion = await IssueAssertionAsync(app);
+
+        using var refused = await PostGrantAsync(app, AnyResourceClient, assertion, resources: [Archive]);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidTarget, await ErrorResponseReader.ErrorCodeOf(refused));
+
+        using var granted = await PostGrantAsync(app, AnyResourceClient, assertion, resources: [Orders]);
         Assert.Equal(HttpStatusCode.OK, granted.StatusCode);
     }
 
@@ -180,7 +219,14 @@ public sealed class JwtBearerAssertionRetryTests
                 Id = "acme",
                 Issuer = new Uri(Host + Acme),
                 SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-                Resources = [new ResourceDefinition(Orders), new ResourceDefinition(Billing)],
+                Resources =
+                [
+                    new ResourceDefinition(Orders),
+                    new ResourceDefinition(Billing),
+                    PublishingAKey(Ledger, EncryptionAlgorithms.KeyManagement.RsaOaep256),
+                    PublishingAKey(Payments, EncryptionAlgorithms.KeyManagement.RsaOaep256),
+                    PublishingAKey(Archive, SigningAlgorithms.RS256),
+                ],
                 Clients =
                 [
                     BearerClient(AnyResourceClient),
@@ -196,6 +242,17 @@ public sealed class JwtBearerAssertionRetryTests
         app.MapOidcEndpoints();
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
+    }
+
+    /// <summary>
+    /// A resource publishing one key declaring <paramref name="algorithm"/>: a key management algorithm a token is
+    /// encrypted to it under, or a signing one nothing can be encrypted under.
+    /// </summary>
+    private static ResourceDefinition PublishingAKey(Uri resource, string algorithm)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        key.Algorithm = algorithm;
+        return new ResourceDefinition(resource) { Jwks = new JsonWebKeySet([key.Sanitize(includePrivateKeys: false)]) };
     }
 
     private static ClientInfo BearerClient(string clientId, Action<ClientInfo>? configure = null)

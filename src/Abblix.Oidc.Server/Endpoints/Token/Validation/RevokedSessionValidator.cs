@@ -26,9 +26,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// a back-channel request - and a grant redeemed inside it founds a refresh family that stays past the cutoff
 /// for its whole life, because rotation carries the first issue time forward.
 /// <para>
-/// A validator rather than a step in the processor, because the processor runs downstream of an irreversible
-/// spend: <see cref="AuthorizationCodeReusePreventingDecorator"/> removes the authorization code before
-/// delegating, so a refusal there would burn a code the request never earned. Validation happens first.
+/// A validator rather than a step in the processor, because it needs no token to answer: what a grant is redeemed
+/// with is spent only once the processor has issued tokens, so a refusal here, like one there, burns nothing, and
+/// judging the session before anything is issued is the cheaper of the two.
 /// </para>
 /// <para>
 /// It asks only about grants that carry a session from an earlier request. Client credentials and jwt-bearer

@@ -56,7 +56,7 @@ internal static class TokenRequestScope
     /// <remarks>
     /// A device code or a backchannel request is redeemed by a token request defining no scope (RFC 8628 section 3.4,
     /// CIBA Core 1.0 section 10.1), so a scope it names is an unrecognized parameter the server ignores (RFC 6749
-    /// section 3.2): it names none here, and nothing judging the scope refuses the code such a request spends.
+    /// section 3.2): it names none here, and nothing judging the scope refuses such a request for it.
     /// </remarks>
     public static string[] NamedIn(TokenRequest request)
         => request.GrantType is GrantTypes.DeviceAuthorization or GrantTypes.Ciba ? [] : request.Scope;

@@ -14,52 +14,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 partial class DeviceCodeGrantHandler
 {
     /// <summary>
-    /// The escaped TYPES only, matching the approval-side record: what an entry of a type carries is that
-    /// type's own business, and naming it here would put a deployment's data in a log line.
-    /// </summary>
-    /// <remarks>
-    /// The refusal an operator has the least other evidence for: the approval path refuses the same shape,
-    /// so its warning cannot have fired on this record, and the client sees an <c>access_denied</c> that
-    /// says nothing about which type escaped.
-    ///
-    /// The message states what was observed and what was done, and stops there. What it must NOT say is
-    /// which write produced the mismatch: the baseline and the grant live in the same host-owned record,
-    /// so narrowing the baseline reads identically to widening the grant, and a host may have replaced
-    /// <see cref="Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces.IUserCodeVerificationService"/>
-    /// so that no approval ran at all. Naming a cause the gate cannot establish sends an operator looking
-    /// for a write that never happened.
-    /// </remarks>
-    [LoggerMessage(
-        EventId = LogEvents.Device.DeviceCodeGrantHandler.GrantedAuthorizationDetailsExceedTheRequest,
-        Level = LogLevel.Warning,
-        Message = "Client {ClientId} presented a device code whose stored grant carries " +
-                  "authorization_details types the device authorization request never asked for, so the " +
-                  "redemption is refused and no token was issued. Types: {EscapedTypes}. The comparison " +
-                  "is by type, because RFC 9396 section 6.1 defines no universal comparator for two arbitrary " +
-                  "entries.")]
-    private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
-
-    /// <summary>
-    /// The per-type validator's own words, which the client never sees.
-    /// </summary>
-    /// <remarks>
-    /// A granted-phase rejection is explained to whoever runs the host, so the validator writes for whoever
-    /// has to act on it and may name a tenant, a ceiling or a configuration key. The client is told only that the
-    /// deployment will not issue these details; this is where the sentence that explains it lives.
-    /// </remarks>
-    [LoggerMessage(
-        EventId = LogEvents.Device.DeviceCodeGrantHandler.GrantedAuthorizationDetailsRefused,
-        Level = LogLevel.Warning,
-        Message = "Client {ClientId} presented a device code whose stored grant the per-type validators " +
-                  "will not issue, so the redemption is refused and no token was issued: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, Sanitized Reason);
-
-    /// <summary>
     /// The only account of a record that cannot be looked at afterwards.
     /// </summary>
     /// <remarks>
-    /// The device code is claimed before anything is judged, so by the time this fires the record is gone
-    /// and a second poll answers expired_token. Nothing else says what was wrong with it.
+    /// The record is removed as it is refused, so a second poll answers as for a code the storage does not
+    /// hold. Nothing else says what was wrong with it.
     ///
     /// Error rather than Warning, and it names the MEMBER rather than the status: nothing in this library
     /// writes a record in this shape, so it is a defect in code outside it that WRITES one, and the

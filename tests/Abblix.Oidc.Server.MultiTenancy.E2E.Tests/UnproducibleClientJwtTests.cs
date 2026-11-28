@@ -71,8 +71,9 @@ public sealed class UnproducibleClientJwtTests
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
     /// <summary>
-    /// An ID token no tenant key can sign is refused with unauthorized_client, and the code it was asked for stays
-    /// spent: it was claimed before the tokens were issued, so a second redemption is invalid_grant.
+    /// An ID token no tenant key can sign is refused with unauthorized_client, and the code it was asked for is left
+    /// unspent: it is claimed only once the tokens are issued, so a second redemption is refused the same way rather
+    /// than as a reuse.
     /// </summary>
     [Fact]
     public async Task AnIdTokenNoTenantKeySigns_IsRefusedWithUnauthorizedClient()
@@ -90,7 +91,7 @@ public sealed class UnproducibleClientJwtTests
 
         var again = await RedeemAsync(host, code);
         Assert.Equal(
-            ErrorCodes.InvalidGrant,
+            ErrorCodes.UnauthorizedClient,
             (await ReadJsonAsync(again))[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 

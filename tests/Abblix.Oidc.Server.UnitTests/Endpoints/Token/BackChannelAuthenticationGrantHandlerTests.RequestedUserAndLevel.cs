@@ -367,14 +367,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             }
         });
 
-        var handler = new BackChannelAuthenticationGrantHandler(
+        var handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
             CreateMockServiceProvider(storage.Object),
-            statusNotifier.Object);
+            statusNotifier.Object));
 
         var clientInfo = new ClientInfo(ClientId)
         {

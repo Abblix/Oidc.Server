@@ -20,10 +20,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// of the granted scopes.
 /// </summary>
 /// <remarks>
-/// Read once the grant is authorized and before an authorization code is spent, so a client refused here corrects
-/// the request and redeems the code. A device code or a backchannel request is spent while its grant is authorized,
-/// so for those grants a resource refusal ends the flow; the scope their token requests name is ignored
-/// (<see cref="TokenRequestScope"/>).
+/// Read once the grant is authorized, and before what it is redeemed with only once is spent, so a client refused
+/// here corrects the request and redeems the code, the device code or the backchannel request. The scope a token
+/// request redeeming a device code or a backchannel request names is ignored (<see cref="TokenRequestScope"/>).
 /// </remarks>
 public class GrantNarrowingValidator : SyncTokenContextValidatorBase
 {

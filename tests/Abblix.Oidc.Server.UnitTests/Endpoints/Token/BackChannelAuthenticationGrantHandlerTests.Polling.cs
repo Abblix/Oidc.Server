@@ -57,14 +57,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
-        var handler = new BackChannelAuthenticationGrantHandler(
+        var handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
             serviceProvider,
-            statusNotifier.Object);
+            statusNotifier.Object));
 
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -148,14 +148,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
-        var handler = new BackChannelAuthenticationGrantHandler(
+        var handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
             serviceProvider,
-            statusNotifier.Object);
+            statusNotifier.Object));
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
@@ -257,13 +257,13 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
-        var handler = new BackChannelAuthenticationGrantHandler(
+        var handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
-            serviceProvider); // Status notifier is null
+            serviceProvider)); // Status notifier is null
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
@@ -315,14 +315,14 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var serviceProvider = CreateMockServiceProvider(storage.Object);
 
-        var handler = new BackChannelAuthenticationGrantHandler(
+        var handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
             serviceProvider,
-            statusNotifier.Object);
+            statusNotifier.Object));
 
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };

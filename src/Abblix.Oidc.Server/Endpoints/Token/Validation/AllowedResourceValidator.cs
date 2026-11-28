@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// names, every one of them inside the grant (<see cref="GrantNarrowingValidator"/>), and when the request names none,
 /// the grant holds none and names no audience, the tenant's default resource indicator
 /// (<see cref="Common.AuthorizationContextExtensions.WithDefaultResource"/>), which is held too. Read once the grant
-/// is authorized and before an authorization code or a refresh token is spent. The audiences a token exchange names
+/// is authorized and before what it is redeemed with is spent. The audiences a token exchange names
 /// are held to the client's token exchange audiences instead.
 /// </remarks>
 public class AllowedResourceValidator : SyncTokenContextValidatorBase

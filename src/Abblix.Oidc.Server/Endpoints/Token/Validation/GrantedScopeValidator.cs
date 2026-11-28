@@ -21,10 +21,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// naming no resource does (RFC 6749 section 6, RFC 8707 section 2.2).
 /// </summary>
 /// <remarks>
-/// A refusal here spends nothing a corrected request needs: an authorization code and a refresh token are spent only
-/// after validation, and a device code or a backchannel request, spent while its grant is authorized, is redeemed by
-/// a request whose scope is ignored (<see cref="TokenRequestScope"/>). Any other grant is judged before it is built
-/// (<see cref="ScopeValidator"/>).
+/// A refusal here spends nothing a corrected request needs: what a grant is redeemed with is spent only once tokens
+/// are issued. A device code or a backchannel request is redeemed by a request whose scope is ignored
+/// (<see cref="TokenRequestScope"/>). Any other grant is judged before it is built (<see cref="ScopeValidator"/>).
 /// </remarks>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
 /// <param name="resourceManager">The manager the definitions of the resources a request speaks for are read from.

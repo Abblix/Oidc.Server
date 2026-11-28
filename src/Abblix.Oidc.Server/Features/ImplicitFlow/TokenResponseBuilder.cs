@@ -57,8 +57,8 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
         }
         catch (AudienceKeyRefusedException refused)
         {
-            // RFC 8707 section 2: a resource none of whose keys a token can be encrypted to is refused as the token
-            // endpoint refuses it, with invalid_target, here on the authorization error response
+            // RFC 8707 section 2: a resource the token cannot be encrypted to is refused as the token endpoint refuses
+            // it, with invalid_target, here on the authorization error response
             return new AuthorizationError(
                 request.Model,
                 ErrorCodes.InvalidTarget,
