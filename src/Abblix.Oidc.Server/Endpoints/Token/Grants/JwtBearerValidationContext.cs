@@ -29,4 +29,10 @@ internal sealed record JwtBearerValidationContext(
 	/// keys off a value already read rather than reading the accessor a second time.
 	/// </summary>
 	public DateTimeOffset? ExpiresAt { get; init; }
+
+	/// <summary>
+	/// The assertion as it is recorded as used once the request has passed every check, or <c>null</c> where the
+	/// deployment does not require a jti and nothing is recorded.
+	/// </summary>
+	public SingleUseAssertion? SingleUse { get; init; }
 }

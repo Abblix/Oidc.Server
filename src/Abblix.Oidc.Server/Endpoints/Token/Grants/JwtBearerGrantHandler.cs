@@ -54,7 +54,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
 /// <param name="assertionPolicy">Holds a verified assertion to the deployment's and the issuer's policy: expiry,
-/// algorithm, token type, age, replay and scopes, and names the parameters its signature is verified with.</param>
+/// algorithm, token type, age, jti and scopes, and names the parameters its signature is verified with.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -101,7 +101,7 @@ public partial class JwtBearerGrantHandler(
 			.Bind(ctx => assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
 			.Bind(ctx => assertionPolicy.ValidateTokenType(ctx, clientInfo))
 			.Bind(ctx => assertionPolicy.ValidateJwtAge(tenant, ctx, clientInfo))
-			.BindAsync(ctx => assertionPolicy.ValidateReplayAsync(ctx, clientInfo))
+			.Bind(ctx => assertionPolicy.ValidateJwtId(ctx, clientInfo))
 			.Bind(ctx => assertionPolicy.ValidateScopes(ctx, request.Scope))
 			.MapSuccessAsync(ctx => Task.FromResult(CreateAuthorizedGrant(ctx, request.Scope, request.Resources, clientInfo)));
 	}

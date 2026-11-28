@@ -823,35 +823,56 @@ Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 	}
 
 	/// <summary>
-	/// Verifies that replay attacks are detected when the same jti is used twice.
-	/// RFC 7523 Section 3 lets the authorization server keep the set of used jti values and
-	/// refuse a repeat. Uniqueness is not a MUST there - this server chooses to enforce it.
+	/// RFC 7523 Section 3 lets the authorization server keep the set of used jti values and refuse a repeat. The
+	/// handler records nothing: the grant carries the assertion's issuer, jti and expiry, for the assertion to be
+	/// recorded as used once the request has passed the checks following the handler too.
 	/// </summary>
 	[Fact]
-	public async Task ReplayAttack_WithReusedJti_ShouldReject()
+	public async Task AJtiTheDeploymentRequires_IsCarriedOnTheGrant_NotRecordedByTheHandler()
 	{
-		// Arrange
 		var (handler, mocks) = CreateHandler(requireJti: true);
 		var jwt = CreateValidJwt();
 		jwt.Payload.JwtId = "unique-jti-12345";
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
-		mocks.ReplayCache
-			.Setup(c => c.TryReserveAsync(SingleUseTokenKey.JwtBearerGrant(Issuer, "unique-jti-12345"), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-			.ReturnsAsync(false);
-		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
 		{
 			GrantType = GrantTypes.JwtBearer,
 			Assertion = Assertion
 		};
 
-		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
-		// Assert
-		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+		Assert.True(result.TryGetSuccess(out var grant));
+		Assert.Equal(
+			new SingleUseAssertion(Issuer, "unique-jti-12345", jwt.Header.KeyId, jwt.Payload.ExpiresAt!.Value),
+			grant.SingleUseAssertion);
+		mocks.ReplayCache.Verify(
+			c => c.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
+			Times.Never);
+	}
+
+	/// <summary>
+	/// A deployment not requiring a jti records no assertion, so the grant carries none to record.
+	/// </summary>
+	[Fact]
+	public async Task AJtiTheDeploymentDoesNotRequire_IsNotCarriedOnTheGrant()
+	{
+		var (handler, mocks) = CreateHandler(requireJti: false);
+		var jwt = CreateValidJwt();
+		jwt.Payload.JwtId = "unique-jti-12345";
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetSuccess(out var grant));
+		Assert.Null(grant.SingleUseAssertion);
 	}
 
 	/// <summary>

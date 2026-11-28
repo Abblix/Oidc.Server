@@ -50,6 +50,13 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }
 
     /// <summary>
+    /// The JWT Bearer assertion this grant is built from, recorded as used before its token is issued, or
+    /// <c>null</c> where the grant spends no assertion.
+    /// </summary>
+    [NotStored("Recorded as used before the token is issued; redeeming a stored grant presents no assertion")]
+    internal Grants.SingleUseAssertion? SingleUseAssertion { get; init; }
+
+    /// <summary>
     /// When the end user authorized this grant: when the authorization code was issued, or when the device
     /// authorization was approved. <c>null</c> for a grant built elsewhere, such as one a host writes for a CIBA
     /// request, which is then taken to be authorized when its session was authenticated.
