@@ -49,6 +49,8 @@ public partial class DeviceCodeGrantHandler(
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IAuthorizationGrantHandler
 {
+    private readonly DeviceGrantRedeemer _redeemer = new(logger, storage, authorizationDetailsPolicy);
+
     /// <inheritdoc />
     public IEnumerable<string> GrantTypesSupported
     {
@@ -77,9 +79,7 @@ public partial class DeviceCodeGrantHandler(
         // already run out (RFC 8628 section 3.2).
         var now = timeProvider.GetUtcNow();
 
-        // The token goes no further: the storage this decision reads before the claim takes none, and
-        // nothing after the claim may give up, so no step of it has a use for the token.
-        return await DecideAsync(tenant, request.DeviceCode, clientInfo, deviceRequest, now);
+        return await DecideAsync(tenant, request.DeviceCode, clientInfo, deviceRequest, now, cancellationToken);
     }
 
     /// <summary>
@@ -98,12 +98,14 @@ public partial class DeviceCodeGrantHandler(
     /// <param name="clientInfo">The client the answer goes to.</param>
     /// <param name="deviceRequest">What the store held when it was read, or null when it held nothing.</param>
     /// <param name="now">The one clock reading this answer is decided on.</param>
+    /// <param name="cancellationToken">Abandons the decision when the caller stops waiting.</param>
     private async Task<Result<AuthorizedGrant, OidcError>> DecideAsync(
         TenantDefinition tenant,
         [Credential] string deviceCode,
         ClientInfo clientInfo,
         Features.DeviceAuthorization.DeviceAuthorizationRequest? deviceRequest,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         var deviceAuthOptions = options.Value.DeviceAuthorization
             .NotNull(nameof(OidcOptions.DeviceAuthorization));
@@ -135,73 +137,11 @@ public partial class DeviceCodeGrantHandler(
                 await storage.RemoveAsync(tenant, deviceCode);
                 return new OidcError(ErrorCodes.ExpiredToken, "The device code has expired");
 
-            // User has authorized the device - claim the authorization
-            case { Status: DeviceAuthorizationStatus.Authorized }
-                when !await storage.TryRemoveAsync(tenant, deviceCode, deviceRequest.UserCode):
-
-                // Removed through the store's claim protocol, which is what keeps two polls from both
-                // being told they took the authorized grant, however many processes are polling. The
-                // grant itself was read before the switch, outside any of it. A decision landing after
-                // the claim re-reads the record and refuses, so what stays open is the window between
-                // that read and its write: issues 194 and 435.
-                // A refusal below is not a diagnosis: a competitor produces it, and so does a
-                // claim that expired mid-protocol with nobody to lose to. RFC 8628 requires no such
-                // single exchange of a device code anywhere; that is this library's decision, and this
-                // arm is where it is enforced.
-
-                return new OidcError(
-                    ErrorCodes.ExpiredToken,
-                    "The device code has expired or was already used");
-
             // User has authorized the device - return the authorized grant
             case { Status: DeviceAuthorizationStatus.Authorized, AuthorizedGrant: { } authorizedGrant }:
 
-                // Judged again, on what is actually being redeemed. IUserCodeVerificationService refuses a
-                // widened grant when the end user approves, but a host writes to that same storage through
-                // the public seam and can do so afterwards - a retried or corrected approval is the ordinary
-                // shape of that, not an attack. CIBA judges at both ends for the same reason.
-                //
-                // What this catches is a host that FORGOT, not one that lies: the baseline it compares
-                // against lives in the same host-owned record, so anything able to widen the grant can
-                // widen the baseline in the same write. Worth having anyway, because forgetting is what
-                // actually happens, and the record still carries what the client asked for, so the
-                // comparison costs no new state.
-                //
-                // The same computation as at approval, deliberately: a second, slightly different test here
-                // would disagree with the first on exactly the inputs nobody wrote a test for.
-                if (GrantedAuthorizationDetails.EscapedTypes(deviceRequest, authorizedGrant) is
-                    { Length: > 0 } escaped)
-                {
-                    LogGrantedAuthorizationDetailsExceedTheRequest(
-                        clientInfo.ClientId, string.Join(", ", escaped));
-
-                    return new OidcError(
-                        ErrorCodes.AccessDenied,
-                        "The grant carries authorization_details the device authorization request "
-                        + "did not ask for");
-                }
-
-                // And what the type comparison above structurally cannot see: an entry of a type the
-                // request DID ask for, carrying content it did not - a raised amount, a widened set of
-                // accounts. RFC 9396 section 6.1 leaves that to the type's own validator, so this asks it.
-                // On a copy: the question must not rewrite its own subject. And without a cancellation
-                // token, because the code is already claimed: giving up here would spend it and issue
-                // nothing, where finishing issues tokens a departed client simply never reads.
-                if (await authorizationDetailsPolicy.RefuseAsync(
-                        tenant,
-                        authorizedGrant,
-                        deviceRequest.AuthorizationDetails,
-                        clientInfo,
-                        CancellationToken.None) is { } refusal)
-                {
-                    // The reason goes to the log and a fixed string to the client, matching the gate
-                    // above: a granted-phase rejection's text is written for whoever runs the host, not
-                    // for the client.
-                    LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
-                    return refusal.Error;
-                }
-
-                return authorizedGrant;
+                return await _redeemer.RedeemAsync(
+                    tenant, deviceCode, clientInfo, deviceRequest, authorizedGrant, cancellationToken);
 
             // Authorized, and nothing to issue from. Reached only when the grant is missing, because the
             // arm above binds it - and nothing in this library writes such a record: approval sets the
@@ -213,19 +153,10 @@ public partial class DeviceCodeGrantHandler(
             // got HTTP 500 and an operator got a sentence pointing at a state machine that is not the
             // problem.
             //
-            // The code is already claimed by the arm two above, which removes it before anything is
-            // judged, so the record is gone by the time this is reached: a retry answers expired_token and
-            // nobody can look at what was stored. That makes this log line the only account of it, which
-            // is why it names the missing member rather than the status, and why it sits at Error.
-            //
-            // Refusing WITHOUT consuming the code, so the record survives for an operator to inspect, is
-            // the real alternative. It cannot be taken HERE, because by this point the code is already
-            // spent, but it could be taken in an arm of its own placed above the claiming one - a property
-            // pattern naming the missing member compiles there and leaves storage untouched.
-            //
-            // Declined anyway. Such an arm carves an exception out of single use, and makes whether a
-            // device code survives its redemption depend on which member of the record happened to be
-            // missing - a rule nobody would find while reading either arm on its own.
+            // Nothing can ever be issued from such a record, so it is removed as an expired one is, and a retry
+            // answers as for a code the storage does not hold. That makes this log line the only account of it,
+            // which is why it names the missing member rather than the status, and why it sits at Error. Keeping
+            // the record for an operator to inspect would answer every poll until its expiry with this line again.
             //
             // invalid_grant rather than one of the device-specific codes: section 3.5 admits the errors of
             // RFC 6749 section 5.2 alongside its own four, and this is a grant that cannot be used rather
@@ -233,6 +164,7 @@ public partial class DeviceCodeGrantHandler(
             case { Status: DeviceAuthorizationStatus.Authorized }:
 
                 LogAuthorizedRecordCarriesNoGrant(clientInfo.ClientId);
+                await storage.RemoveAsync(tenant, deviceCode);
 
                 return new OidcError(
                     ErrorCodes.InvalidGrant,
@@ -253,7 +185,7 @@ public partial class DeviceCodeGrantHandler(
                 if (await storage.TryGetByDeviceCodeAsync(tenant, deviceCode) is
                     { Status: not DeviceAuthorizationStatus.Pending } advanced)
                 {
-                    return await DecideAsync(tenant, deviceCode, clientInfo, advanced, now);
+                    return await DecideAsync(tenant, deviceCode, clientInfo, advanced, now, cancellationToken);
                 }
 
                 // Asking early pushes the instant further out rather than resetting it from now, so a

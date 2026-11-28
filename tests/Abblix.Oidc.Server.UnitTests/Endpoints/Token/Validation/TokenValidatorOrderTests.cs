@@ -26,10 +26,9 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 /// The order of the token endpoint's validators as the library composes them.
 /// </summary>
 /// <remarks>
-/// A device code and a backchannel authentication request are spent while <see cref="AuthorizationGrantValidator"/>
-/// resolves the grant, so every refusal a client is expected to recover from by retrying has to come before it.
-/// The DPoP nonce challenge is one: RFC 9449 section 8 answers it with the same request and a fresh proof, and
-/// behind the spend that retry finds the grant gone.
+/// Resolving a password grant in <see cref="AuthorizationGrantValidator"/> asks the host to check the end user's
+/// credentials, so a refusal a client is expected to recover from by retrying comes before it. The DPoP nonce
+/// challenge is one: RFC 9449 section 8 answers it with the same request and a fresh proof.
 /// </remarks>
 public class TokenValidatorOrderTests
 {

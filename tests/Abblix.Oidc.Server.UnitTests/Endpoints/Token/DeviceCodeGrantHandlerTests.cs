@@ -111,10 +111,11 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// Verifies that when the user has authorized the device, the handler returns the authorized grant
-    /// and removes the request from storage (single-use device code).
+    /// carrying the device code to claim, which removes the request from storage (single-use device code) only
+    /// when spent, once tokens are issued.
     /// </summary>
     [Fact]
-    public async Task AuthorizedRequest_ShouldReturnGrantAndRemoveFromStorage()
+    public async Task AuthorizedRequest_ShouldReturnGrantThatRemovesItFromStorageWhenSpent()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -142,7 +143,10 @@ public class DeviceCodeGrantHandlerTests
         Assert.NotNull(grant);
         Assert.Equal(UserId, grant.AuthSession.Subject);
         Assert.Equal(ClientId, grant.Context.ClientId);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Never);
 
+        Assert.NotNull(grant.Redemption);
+        Assert.Null(await grant.Redemption.SpendAsync(SingleIssuer.Tenant, clientInfo));
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
@@ -173,7 +177,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
@@ -182,12 +186,10 @@ public class DeviceCodeGrantHandlerTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
 
-        // The arm that claims the code runs first, so the refusal follows a code that no longer exists and
-        // a second poll answers expired_token rather than access_denied. That is right - RFC 8628 section
-        // 3.5 has the client stop polling on any code other than authorization_pending or slow_down, and
-        // the user-denial refusal beside this one removes first for the same reason - but it depends on the
-        // order of the arms, which nothing else here would notice being changed.
-        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
+        // access_denied ends the flow - RFC 8628 section 3.5 has the client stop polling on any code other than
+        // authorization_pending or slow_down - so the record is removed as the user-denial refusal removes it, and
+        // a second poll answers as for a code the storage does not hold
+        _storage.Verify(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -254,7 +256,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
@@ -303,7 +305,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
@@ -337,7 +339,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await handler.AuthorizeAsync(
             SingleIssuer.Tenant,
@@ -354,6 +356,7 @@ public class DeviceCodeGrantHandlerTests
         // and a fixed string goes on the wire. A granted-phase rejection is a host-side defect, and no
         // other one in this library reaches a client.
         Assert.DoesNotContain("instructedAmount", error.ErrorDescription, StringComparison.Ordinal);
+        _storage.Verify(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -400,11 +403,11 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// A poll abandoned by its client after the device code has been claimed still yields the grant: the
-    /// claim cannot be undone, so abandoning past it would spend the code and issue nothing.
+    /// A poll abandoned by its client while its grant is judged gives up there: the device code is claimed only once
+    /// tokens are issued for it, so giving up spends nothing.
     /// </summary>
     [Fact]
-    public async Task AnAbandonedPoll_PastTheClaim_StillYieldsTheGrant()
+    public async Task AnAbandonedPoll_GivesUpWithoutClaimingTheCode()
     {
         var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
         var handler = HandlerWith(policy);
@@ -418,16 +421,14 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
-        var result = await handler.AuthorizeAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
-            Mock.Of<IClientInfoProvider>(), new CancellationToken(canceled: true));
+            Mock.Of<IClientInfoProvider>(), new CancellationToken(canceled: true)));
 
-        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
-        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
+        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Never);
     }
 
     /// <summary>
@@ -469,9 +470,9 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// Verifies that when the removal does not come back with the record - a competitor claimed the
-    /// device code, or a claim expired mid-protocol with nobody to lose to - the handler returns an
-    /// ExpiredToken error per RFC 8628 Section 3.5, which is what stops a second set of tokens being
-    /// issued for one device code.
+    /// device code, or a claim expired mid-protocol with nobody to lose to - spending the grant's device code
+    /// answers an ExpiredToken error per RFC 8628 Section 3.5, which is what stops a second set of tokens being
+    /// handed over for one device code.
     /// </summary>
     [Fact]
     public async Task AuthorizedRequest_RaceCondition_ShouldReturnExpiredTokenError()
@@ -496,9 +497,11 @@ public class DeviceCodeGrantHandlerTests
 
         // Act
         var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
+        Assert.True(result.TryGetSuccess(out var grant));
+        var error = await grant.Redemption!.SpendAsync(SingleIssuer.Tenant, clientInfo);
 
         // Assert
-        Assert.True(result.TryGetFailure(out var error));
+        Assert.NotNull(error);
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
         Assert.Contains("already used", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
@@ -1127,7 +1130,7 @@ public class DeviceCodeGrantHandlerTests
         };
 
         _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
             SingleIssuer.Tenant,
@@ -1135,5 +1138,6 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+        _storage.Verify(storage => storage.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 }

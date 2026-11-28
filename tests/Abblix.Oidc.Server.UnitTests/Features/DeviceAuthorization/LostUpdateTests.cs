@@ -109,7 +109,8 @@ public class LostUpdateTests
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("a-client", grant.Context.ClientId);
 
-        // And the code is spent, so a second poll cannot be answered with the same grant.
+        // And the code, spent once tokens are issued, cannot answer a second poll with the same grant.
+        Assert.Null(await grant.Redemption!.SpendAsync(SingleIssuer.Tenant, new ClientInfo("a-client")));
         Assert.Null(await DeviceStorageOver(RealStorage(cache)).TryGetByDeviceCodeAsync(SingleIssuer.Tenant, DeviceCode));
     }
 

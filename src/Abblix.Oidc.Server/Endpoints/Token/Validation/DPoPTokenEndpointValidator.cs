@@ -37,10 +37,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// sender-constrained token and none will be certificate-bound, and a present-and-valid
 /// proof still binds the token (RFC 9449 section 5.2 server-side opportunistic binding).
 /// <para>
-/// And BEFORE <see cref="AuthorizationGrantValidator"/>, because resolving a device code or a backchannel
-/// authentication request spends it. Nothing here reads the grant, so a proof that is refused - a nonce the
-/// server asks for, which RFC 9449 section 8 answers by retrying - is refused while the grant can still be
-/// redeemed by that retry. What does depend on the grant, the key or certificate it was bound to, is
+/// And BEFORE <see cref="AuthorizationGrantValidator"/>, because resolving a password grant asks the host to check
+/// the end user's credentials. Nothing here reads the grant, so a proof that is refused - a nonce the server asks
+/// for, which RFC 9449 section 8 answers by retrying - is refused before that check is made for a request the retry
+/// repeats. What does depend on the grant, the key or certificate it was bound to, is
 /// <see cref="DPoPBindingValidator"/>'s.
 /// </para>
 /// </remarks>
@@ -88,8 +88,8 @@ public partial class DPoPTokenEndpointValidator(
         // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by a DPoP proof or
         // a certificate-bound token over mutual TLS (RFC 8705 section 3). Without a proof the requirement is met
         // only when the token will be certificate-bound, and that is decided by the client's registration and
-        // the certificate on this request, not by the grant. So the answer is given here, before a device code or
-        // a backchannel authentication request is spent. A grant bound to a certificate for a client not bound as
+        // the certificate on this request, not by the grant. So the answer is given here, before the grant is
+        // resolved. A grant bound to a certificate for a client not bound as
         // the registration now stands - one issued while authenticating with mutual TLS bound by itself - is
         // therefore refused here on refresh without a proof, although the evaluator would keep its binding. The
         // profile tightens, and the granular RequireDPoP toggle cannot weaken it.

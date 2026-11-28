@@ -54,49 +54,72 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// decoupled flow the end user authenticates out of band, so what the request named is compared against
     /// whoever the host reported by the time a grant is asked for.
     /// <para>
-    /// Judged twice, on two different objects, because one comparison cannot do both jobs. Before the
-    /// request is consumed, so an ordinary mismatch spends nothing - redeeming removes the stored entry.
-    /// And again on the grant the processor returned, because the processor consumes the stored request
-    /// itself, and between the earlier read and that removal a host - writing to that same storage through
-    /// the public seam - can replace what is stored. Judging only the earlier copy would approve one grant
-    /// and hand over another.
+    /// Judged twice, on two different objects, because one comparison cannot do both jobs. Here, on the grant
+    /// as read, which is the one the tokens are issued from, so an ordinary mismatch spends nothing. And again,
+    /// once tokens are issued, on the grant the processor returns as it consumes the stored request
+    /// (<see cref="ClaimAsync"/>), because between the earlier read and that removal a host - writing to that same
+    /// storage through the public seam - can replace what is stored, and a replacement this request would be
+    /// refused for refuses it there.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="authenticationRequestId">The authentication request being redeemed.</param>
+    /// <param name="request">The authenticated request, as read for this token request.</param>
+    /// <param name="clientInfo">The client redeeming it.</param>
+    /// <param name="processor">The processor of the client's delivery mode, which consumes the request.</param>
+    /// <param name="cancellationToken">Abandons the judgement when the caller stops waiting.</param>
     public async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
         TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         StoredRequest request,
         ClientInfo clientInfo,
-        IBackChannelGrantProcessor processor)
+        IBackChannelGrantProcessor processor,
+        CancellationToken cancellationToken)
     {
         var yardstick = BackChannelGrantYardstick.Of(request);
 
         if (RefuseBeforeRedemption(tenant, yardstick, clientInfo) is { } early)
             return early;
 
-        var result = await processor.ProcessAuthenticatedRequestAsync(tenant, authenticationRequestId, request);
-        if (result.TryGetFailure(out var error))
-            return error;
-
-        var grant = result.GetSuccess();
-
-        if (RefuseRedeemed(tenant, yardstick, grant, clientInfo) is { } late)
-            return late;
+        var grant = request.AuthorizedGrant;
 
         // And what the type comparison structurally cannot see: an entry of a type the request DID ask
         // for, carrying content it did not. RFC 9396 section 6.1 leaves that to the type's own validator, so this
-        // asks it - on a copy, because the question must not rewrite its own subject. Without the caller's
-        // cancellation token, because the request is already taken: giving up here would spend it and issue
-        // nothing, where finishing issues tokens a departed client simply never reads.
+        // asks it - on a copy, because the question must not rewrite its own subject.
         if (await authorizationDetailsPolicy.RefuseAsync(
-                tenant, grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
-            is not { } refusal)
-            return grant;
+                tenant, grant, request.RequestedAuthorizationDetails, clientInfo, cancellationToken)
+            is { } refusal)
+        {
+            // The reason goes to the log and a fixed string to the client: a granted-phase rejection's text is
+            // written for whoever runs the host, not for the client.
+            LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
+            return refusal.Error;
+        }
 
-        // The reason goes to the log and a fixed string to the client: a granted-phase rejection's text is
-        // written for whoever runs the host, not for the client.
-        LogGrantedAuthorizationDetailsRefused(clientInfo.ClientId, refusal.Reason);
-        return refusal.Error;
+        // The request is consumed once tokens are issued, so a refusal its client can correct - a resource outside
+        // the grant - leaves it for the corrected token request
+        return grant with
+        {
+            Redemption = new BackChannelRequestRedemption(this, processor, authenticationRequestId, yardstick),
+        };
+    }
+
+    /// <summary>
+    /// Consumes the request through <paramref name="processor"/>, and judges the grant it consumed.
+    /// </summary>
+    /// <returns>The refusal, or <c>null</c> once this request has consumed it.</returns>
+    public async Task<OidcError?> ClaimAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        BackChannelGrantYardstick yardstick,
+        ClientInfo clientInfo,
+        IBackChannelGrantProcessor processor)
+    {
+        var result = await processor.ProcessAuthenticatedRequestAsync(tenant, authenticationRequestId, yardstick.Request);
+        if (result.TryGetFailure(out var error))
+            return error;
+
+        return RefuseRedeemed(tenant, yardstick, result.GetSuccess(), clientInfo);
     }
 
     /// <summary>
@@ -131,8 +154,8 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// The processor removes the stored entry and returns the grant it found there, so between the check
     /// before redemption and that removal a host - writing to that same storage through the public seam - can
     /// replace what is stored, which is the ordinary shape of a retried or corrected completion rather than an
-    /// attack. Approving one grant and handing over another is the whole failure this comparison exists to
-    /// prevent.
+    /// attack. A replacement this request would be refused for refuses it here too, and the tokens issued from the
+    /// grant as read are not handed over.
     /// </remarks>
     private OidcError? RefuseRedeemed(TenantDefinition tenant, BackChannelGrantYardstick yardstick, AuthorizedGrant grant, ClientInfo clientInfo)
     {

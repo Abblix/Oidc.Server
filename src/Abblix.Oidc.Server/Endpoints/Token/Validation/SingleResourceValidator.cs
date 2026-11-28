@@ -23,9 +23,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// (<see cref="ResourceScopes.AddressedBy"/>).
 /// The audiences are the grant's because the token is built from it: a token exchange carries the ones its request
 /// names into its grant, and no other grant reads them off the request. Read once the grant is
-/// authorized and before an authorization code or a refresh token is spent, so a client refused here repeats the
-/// request naming one resource. A device code or a backchannel request is spent while its grant is authorized, so
-/// those grants are held to one resource at their own request.
+/// authorized and before what it is redeemed with is spent, so a client refused here repeats the request naming one
+/// resource.
 /// </remarks>
 public class SingleResourceValidator : SyncTokenContextValidatorBase
 {

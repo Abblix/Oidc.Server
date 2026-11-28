@@ -53,7 +53,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     private const string UserId = "user_456";
 
     private readonly Mock<IBackChannelRequestStorage> _storage;
-    private readonly BackChannelAuthenticationGrantHandler _handler;
+    private readonly IAuthorizationGrantHandler _handler;
 
     /// <summary>
     /// Where the next-poll instant lives: a record of its own, keyed per request.
@@ -88,13 +88,13 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         var serviceProvider = CreateMockServiceProvider(_storage.Object);
 
-        _handler = new BackChannelAuthenticationGrantHandler(
+        _handler = new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             _storage.Object,
             _pollSchedule,
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
-            serviceProvider);
+            serviceProvider));
     }
 
     /// <summary>
@@ -397,11 +397,11 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
-    /// A token request abandoned by its client after the authentication request has been taken still yields
-    /// the grant: taking it cannot be undone, so abandoning past it would spend the request and issue nothing.
+    /// A token request abandoned by its client while its grant is judged gives up there: the authentication request
+    /// is taken only once tokens are issued for it, so giving up spends nothing.
     /// </summary>
     [Fact]
-    public async Task AnAbandonedTokenRequest_PastTheTake_StillYieldsTheGrant()
+    public async Task AnAbandonedTokenRequest_GivesUpWithoutTakingTheRequest()
     {
         var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
         var handler = HandlerWith(policy);
@@ -416,18 +416,16 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         };
 
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
-        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
-        var result = await handler.AuthorizeAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => handler.AuthorizeAsync(
             SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = AuthReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
-            Mock.Of<IClientInfoProvider>(), new CancellationToken(canceled: true));
+            Mock.Of<IClientInfoProvider>(), new CancellationToken(canceled: true)));
 
-        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
         Assert.Same(authRequest.RequestedAuthorizationDetails, policy.LastRequested);
-        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Never);
     }
 
     private AuthorizedGrant GrantWithDetails(JsonArray details)
@@ -435,8 +433,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
             new AuthorizationContext(ClientId, [Scopes.OpenId], null) { AuthorizationDetails = details });
 
-    private BackChannelAuthenticationGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
-        => new(
+    private IAuthorizationGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
+        => new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             _storage.Object,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
@@ -445,7 +443,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            CreateMockServiceProvider(_storage.Object, policy));
+            CreateMockServiceProvider(_storage.Object, policy)));
 
     /// <summary>
     /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
@@ -772,8 +770,8 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     /// <summary>
     /// The handler the token endpoint calls, over a storage this row owns instead of the shared stand-in.
     /// </summary>
-    private BackChannelAuthenticationGrantHandler HandlerOver(IBackChannelRequestStorage requests)
-        => new(
+    private IAuthorizationGrantHandler HandlerOver(IBackChannelRequestStorage requests)
+        => new SpendingGrantHandler(new BackChannelAuthenticationGrantHandler(
             requests,
             NewPollSchedule(),
             new EntityStorageKeyFactory(),
@@ -782,7 +780,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            new TestServiceProvider(requests));
+            new TestServiceProvider(requests)));
 
     /// <summary>
     /// Verifies that when the authentication request is still pending (user hasn't authenticated yet)

@@ -23,10 +23,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </summary>
 /// <remarks>
 /// Runs AFTER <see cref="AuthorizationGrantValidator"/>, since every check here reads the grant it resolves,
-/// and after <see cref="DPoPTokenEndpointValidator"/>, whose validated proof key it compares. The grants spent
-/// while they are resolved - a device code, a backchannel authentication request - are not bound to a key or
-/// a certificate by this library, so nothing here refuses one of them after it is gone unless a host bound it
-/// itself. For a grant that is bound, a refusal says the request is not the one the grant was bound to.
+/// and after <see cref="DPoPTokenEndpointValidator"/>, whose validated proof key it compares. What a grant is
+/// redeemed with is spent only once tokens are issued, so a request refused here leaves it for one presenting the
+/// key or the certificate the grant was bound to.
 /// </remarks>
 public partial class DPoPBindingValidator(ILogger<DPoPBindingValidator> logger) : ITokenContextValidator
 {
