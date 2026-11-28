@@ -15,14 +15,14 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token;
 
 /// <summary>
-/// Records the JWT Bearer assertion a grant is built from as used (RFC 7523 Section 3) before its token is issued,
-/// and refuses the request when it already is.
+/// Records the JWT Bearer assertion a grant is built from as used (RFC 7523 Section 3) before the processor it
+/// wraps runs, and refuses the request when it already is.
 /// </summary>
 /// <remarks>
 /// The record is made around the processor, after every validator of the token endpoint, as the authorization code
 /// is spent by <see cref="AuthorizationCodeReusePreventingDecorator"/>: a request refused for something its client
 /// can correct, such as a scope the assertion's issuer does not allow or a resource the client may not have, leaves
-/// the assertion for the corrected request.
+/// the assertion for the corrected request. A refusal of the processor it wraps comes after the record.
 /// </remarks>
 /// <param name="processor">The processor issuing the token once the assertion is recorded.</param>
 /// <param name="assertionPolicy">Records the assertion and refuses one already used.</param>

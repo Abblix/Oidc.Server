@@ -10,7 +10,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
 /// The JWT Bearer assertion a grant is built from, recorded as used (RFC 7523 Section 3) only once the request
-/// presenting it has passed every check, so a refusal the client can correct leaves the assertion for its retry.
+/// presenting it has passed every validator of the token endpoint, so a validator's refusal leaves the assertion for
+/// the corrected request. The token processor's own refusals follow the record.
 /// </summary>
 /// <param name="Issuer">The issuer of the assertion, which scopes its identifier.</param>
 /// <param name="JwtId">The assertion's jti.</param>

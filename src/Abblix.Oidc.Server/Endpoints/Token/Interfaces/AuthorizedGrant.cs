@@ -50,7 +50,7 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }
 
     /// <summary>
-    /// The JWT Bearer assertion this grant is built from, recorded as used before its token is issued, or
+    /// The JWT Bearer assertion this grant is built from, recorded as used before the token processor runs, or
     /// <c>null</c> where the grant spends no assertion.
     /// </summary>
     [NotStored("Recorded as used before the token is issued; redeeming a stored grant presents no assertion")]
