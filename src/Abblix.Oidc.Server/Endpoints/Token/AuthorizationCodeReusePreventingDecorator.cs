@@ -32,9 +32,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// one hold of a per-key gate; a second instance sees no such gate, and both callers can be handed the
 /// grant. Which storage is registered therefore decides whether this defense holds beyond one node.
 /// <para>
-/// The second defense is not complete on its own terms either: the write-back is what it rests on, so a
-/// first redemption that ends without issuing tokens leaves nothing for it to catch. The refusal this
-/// class returns is the same string either way.
+/// The code is claimed only once the processor it wraps has issued tokens, so a request refused anywhere, the
+/// processor included, leaves the code for the corrected one. The second defense rests on the write-back, which a
+/// redemption makes only after its claim, so a reuse arriving between the two is refused without the first
+/// redemption's tokens being revoked. The refusal this class returns is the same string either way.
 /// </para>
 /// <para>
 /// This class decorates the standard token request processing flow with additional security measures
@@ -72,75 +73,89 @@ public class AuthorizationCodeReusePreventingDecorator(
             return await processor.ProcessAsync(tenant, request);
         }
 
-        // Claim the code by removing it. Not atomically, whatever the store's method names suggest: the
-        // extension assembles the protocol from separate Get, Set and Remove calls, and says so. This
-        // happens AFTER the grant
-        // validators have already checked client binding and PKCE, so a failed validation never
-        // reaches here and never burns the code - but two concurrent redemptions of a valid code
-        // now contend for a single claim instead of both passing a stale "not yet used" check.
+        // A code a redemption already issued tokens for is reused, whatever else the request would be answered with,
+        // so it is refused and what was issued is revoked before anything else is decided
+        if (request.AuthorizedGrant.IssuedTokens is { Length: > 0 })
+        {
+            return await ClaimAsync(tenant, code, request.ClientInfo) ?? AlreadyUsed();
+        }
+
+        // The code is claimed only once tokens are issued for it, so a refusal of the processor - a resource the
+        // token cannot be encrypted to, a scope narrowed to none - leaves the code for the corrected request, as a
+        // validator's refusal does. Issuing writes nothing, so a redemption losing the claim drops its tokens unseen.
+        var result = await processor.ProcessAsync(tenant, request);
+        if (!result.TryGetSuccess(out var tokenResponse))
+        {
+            return result;
+        }
+
+        if (await ClaimAsync(tenant, code, request.ClientInfo) is { } refusal)
+        {
+            return refusal;
+        }
+
+        // Register issued tokens as part of the authorization code grant
+        var issuedTokensList = new List<TokenInfo>();
+
+        void TryRegisterToken(JsonWebToken? token)
+        {
+            if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt }})
+            {
+                issuedTokensList.Add(new TokenInfo(jwtId, expiresAt));
+            }
+        }
+
+        TryRegisterToken(tokenResponse.AccessToken.Token);
+        TryRegisterToken(tokenResponse.RefreshToken?.Token);
+
+        if (issuedTokensList.Count > 0)
+        {
+            // The family the refresh token founded is written back too, for a reuse to revoke it
+            await authorizationCodeService.UpdateAuthorizationGrantAsync(
+                tenant,
+                code,
+                request.AuthorizedGrant with
+                {
+                    IssuedTokens = issuedTokensList.ToArray(),
+                    GrantId = tokenResponse.RefreshToken?.Token.Payload.GrantId,
+                },
+                request.ClientInfo.AuthorizationCodeExpiresIn);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Claims the code by removing it, refusing the request when the claim is not handed the grant, or is handed one
+    /// a redemption already issued tokens for, which are then revoked.
+    /// </summary>
+    /// <returns>The refusal, or <c>null</c> once this request holds the code.</returns>
+    private async Task<OidcError?> ClaimAsync(TenantDefinition tenant, [Credential] string code, ClientInfo client)
+    {
+        // Not atomically, whatever the store's method names suggest: the extension assembles the protocol from
+        // separate Get, Set and Remove calls, and says so. Two concurrent redemptions of a valid code contend for a
+        // single claim instead of both passing a stale "not yet used" check.
         var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(tenant, code);
 
-        // The code did not come back. The claim answers with the grant only when this caller ran the
-        // protocol to the end with its own claim still in the store, so everything short of that arrives
-        // here as one outcome - and there is no listing the ways, which is what the sibling comments this
-        // branch rewrote were each short of. It reaches a single caller with no competitor as readily as
-        // a contended one: a first request whose processing issues no tokens never writes the grant back,
-        // so the client's next attempt with that code finds nothing.
-        //
-        // The refusal below is the right answer for whatever arrived, and a diagnosis for none of it.
-        // Whichever of them it was, this redemption loses - reject without issuing a second set.
+        // The code did not come back. The claim answers with the grant only when this caller ran the protocol to the
+        // end with its own claim still in the store, so everything short of that arrives here as one outcome, the
+        // right answer for whatever arrived and a diagnosis for none of it: this redemption loses.
         if (!claim.TryGetSuccess(out var claimedGrant))
         {
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "The authorization code was already used");
+            return AlreadyUsed();
         }
 
         // The claimed grant carries tokens from a prior successful redemption - a sequential reuse
         if (claimedGrant.IssuedTokens is { Length: > 0 } issuedTokens)
         {
-            await RevokeAsync(tenant, issuedTokens, claimedGrant.GrantId, request.ClientInfo);
-            return new OidcError(
-                ErrorCodes.InvalidGrant,
-                "The authorization code was already used");
+            await RevokeAsync(tenant, issuedTokens, claimedGrant.GrantId, client);
+            return AlreadyUsed();
         }
 
-        // We won the claim - proceed with processing the request using the decorated processor.
-        var result = await processor.ProcessAsync(tenant, request);
-
-        // Register issued tokens as part of the authorization code grant
-        if (result.TryGetSuccess(out var tokenResponse))
-        {
-            var issuedTokensList = new List<TokenInfo>();
-
-            void TryRegisterToken(JsonWebToken? token)
-            {
-                if (token is { Payload: { JwtId: { } jwtId, ExpiresAt: { } expiresAt }})
-                {
-                    issuedTokensList.Add(new TokenInfo(jwtId, expiresAt));
-                }
-            }
-
-            TryRegisterToken(tokenResponse.AccessToken.Token);
-            TryRegisterToken(tokenResponse.RefreshToken?.Token);
-
-            if (issuedTokensList.Count > 0)
-            {
-                // The family the refresh token founded is written back too, for a reuse to revoke it
-                await authorizationCodeService.UpdateAuthorizationGrantAsync(
-                    tenant,
-                    code,
-                    request.AuthorizedGrant with
-                    {
-                        IssuedTokens = issuedTokensList.ToArray(),
-                        GrantId = tokenResponse.RefreshToken?.Token.Payload.GrantId,
-                    },
-                    request.ClientInfo.AuthorizationCodeExpiresIn);
-            }
-        }
-
-        return result;
+        return null;
     }
+
+    private static OidcError AlreadyUsed() => new(ErrorCodes.InvalidGrant, "The authorization code was already used");
 
     /// <summary>
     /// Revokes what the first redemption of a reused code issued.

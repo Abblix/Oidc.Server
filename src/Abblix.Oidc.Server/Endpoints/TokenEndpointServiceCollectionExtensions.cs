@@ -53,7 +53,7 @@ public static class TokenEndpointServiceCollectionExtensions
          services.AddTelemetryDecorator<ITokenRequestValidator, ObservedTokenRequestValidator>();
          services.TryAddScoped<ITokenRequestProcessor, TokenRequestProcessor>();
          services.Decorate<ITokenRequestProcessor, AuthorizationCodeReusePreventingDecorator>();
-         services.Decorate<ITokenRequestProcessor, JwtBearerAssertionReplayPreventingDecorator>();
+         services.Decorate<ITokenRequestProcessor, SingleUseRedemptionDecorator>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, ObservedTokenRequestProcessor>();
          services.AddTelemetryDecorator<ITokenRequestProcessor, MeasuredTokenRequestProcessor>();
 

@@ -30,8 +30,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// Each check is one link of the handler's validation chain (Chain of Responsibility): it passes the context on
 /// or answers with the refusal. <see cref="AuthorizationGrantServiceCollectionExtensions.AddJwtBearerGrant"/>
 /// registers it for <see cref="JwtBearerGrantHandler"/>; a host has no call to make on it. The record of the
-/// assertion as used is not one of those links: it is made by <see cref="JwtBearerAssertionReplayPreventingDecorator"/>
-/// once the request has passed every validator of the token endpoint, the ones following the handler included.
+/// assertion as used is not one of those links: it is made by <see cref="SingleUseRedemptionDecorator"/>
+/// once the request is answered with tokens.
 /// </remarks>
 /// <param name="logger">Records why an assertion was refused.</param>
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
@@ -252,7 +252,7 @@ public sealed partial class JwtBearerAssertionPolicy(
 
 	/// <summary>
 	/// Validates that the JWT names the jti its replay protection (RFC 7523 Section 3) records, and carries it on the
-	/// context for <see cref="ReserveAsync"/>, which records it once the request has passed every validator.
+	/// context for <see cref="ReserveAsync"/>, which records it once the request is answered with tokens.
 	/// </summary>
 	internal Result<JwtBearerValidationContext, OidcError> ValidateJwtId(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
@@ -272,7 +272,7 @@ public sealed partial class JwtBearerAssertionPolicy(
 		// An assertion carrying no expiry names no window to remember it for, so the identifier is held for the
 		// fallback the cache publishes
 		var expiresAt = ctx.ExpiresAt ?? timeProvider.GetUtcNow() + ConfiguredReplayCache.DefaultExpiration;
-		return ctx with { SingleUse = new SingleUseAssertion(ctx.Issuer, jti, ctx.Jwt.Header.KeyId, expiresAt) };
+		return ctx with { SingleUse = new SingleUseAssertion(this, ctx.Issuer, jti, ctx.Jwt.Header.KeyId, expiresAt) };
 	}
 
 	/// <summary>

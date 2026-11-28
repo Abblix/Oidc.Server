@@ -46,6 +46,6 @@ internal static class JwtBearerGrants
 			AuthenticationTime: authenticatedAt,
 			IdentityProvider: ctx.Issuer);
 
-		return new AuthorizedGrant(authSession, context) { SingleUseAssertion = ctx.SingleUse };
+		return new AuthorizedGrant(authSession, context) { Redemption = ctx.SingleUse };
 	}
 }

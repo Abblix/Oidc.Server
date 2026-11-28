@@ -50,11 +50,12 @@ public record AuthorizedGrant(AuthSession AuthSession, AuthorizationContext Cont
     public DateTimeOffset? ExpiresNoLaterThan { get; init; }
 
     /// <summary>
-    /// The JWT Bearer assertion this grant is built from, recorded as used before the token processor runs, or
-    /// <c>null</c> where the grant spends no assertion.
+    /// What this grant is redeemed with only once - the JWT Bearer assertion it is built from, the device code or the
+    /// backchannel authentication request it was read from - spent once the request is answered with tokens, or
+    /// <c>null</c> where the grant has nothing of the kind, or spends it otherwise.
     /// </summary>
-    [NotStored("Recorded as used before the token is issued; redeeming a stored grant presents no assertion")]
-    internal Grants.SingleUseAssertion? SingleUseAssertion { get; init; }
+    [NotStored("Spent by the token request reading the grant; a stored grant is read again with its own")]
+    internal ISingleUseRedemption? Redemption { get; init; }
 
     /// <summary>
     /// When the end user authorized this grant: when the authorization code was issued, or when the device

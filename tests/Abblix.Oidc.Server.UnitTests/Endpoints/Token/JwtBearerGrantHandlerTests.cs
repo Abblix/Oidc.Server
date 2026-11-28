@@ -844,9 +844,10 @@ Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetSuccess(out var grant));
+		var assertion = Assert.IsType<SingleUseAssertion>(grant.Redemption);
 		Assert.Equal(
-			new SingleUseAssertion(Issuer, "unique-jti-12345", jwt.Header.KeyId, jwt.Payload.ExpiresAt!.Value),
-			grant.SingleUseAssertion);
+			(Issuer, "unique-jti-12345", jwt.Header.KeyId, jwt.Payload.ExpiresAt!.Value),
+			(assertion.Issuer, assertion.JwtId, assertion.KeyId, assertion.ExpiresAt));
 		mocks.ReplayCache.Verify(
 			c => c.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
 			Times.Never);
@@ -872,7 +873,7 @@ Mock.Of<IClientInfoProvider>(), 			TestContext.Current.CancellationToken);
 		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), Mock.Of<IClientInfoProvider>(), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Null(grant.SingleUseAssertion);
+		Assert.Null(grant.Redemption);
 	}
 
 	/// <summary>
