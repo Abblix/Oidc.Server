@@ -36,13 +36,13 @@ public interface IAudienceKeyResolver
     /// A resource that publishes no key contributes nothing, which is how it says a signed JWS is what it
     /// expects. Several resources each publishing a key have no correct answer: compact JWE serialization
     /// carries one recipient, so encrypting to one of them would silently leave the token unreadable to the
-    /// rest - refuse instead of choosing. Unknown resources never reach here, having been rejected as
+    /// rest - the token is refused for them instead of choosing, as RFC 8707 Section 3 lets a server be "unable to
+    /// fulfill a token request with multiple resources". Unknown resources never reach here, having been rejected as
     /// <c>invalid_target</c> during request validation (RFC 8707 Section 2).
     /// </remarks>
-    /// <exception cref="InvalidOperationException">
-    /// Several of the named resources each publish an encryption key.</exception>
     /// <exception cref="AudienceKeyRefusedException">A named resource publishes encryption keys, none of which this
-    /// server can encrypt to under <paramref name="profile"/>.</exception>
+    /// server can encrypt to under <paramref name="profile"/>, or several of the named resources each publish one.
+    /// </exception>
     Task<AudienceEncryptionKey?> FindEncryptionKeyAsync(
         TenantDefinition tenant,
         IReadOnlyCollection<Uri> resources,
@@ -99,7 +99,9 @@ public class AudienceKeyResolver(
 
             if (audienceKey is not null)
             {
-                throw new InvalidOperationException(
+                throw new AudienceKeyRefusedException(
+                    [keyOwner!, resource],
+                    defaultAlgorithm,
                     $"The access token names several resources that each publish an encryption key " +
                     $"('{keyOwner}' and '{resource}'), and an encrypted JWT has a single recipient. " +
                     $"Request one such resource per token, or remove the key from all but one of them.");

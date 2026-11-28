@@ -1005,10 +1005,12 @@ public class AccessTokenServiceTests
     /// <summary>
     /// Two audiences that each publish a key have no correct answer, because compact JWE serialization carries
     /// a single recipient. Encrypting to one would leave the token unreadable to the other while looking
-    /// successful, so the request is refused instead.
+    /// successful, so the token is refused for those resources (RFC 8707 section 3: "an authorization server may be
+    /// unwilling or unable to fulfill a token request with multiple resources"), as a resource the token cannot be
+    /// encrypted to is.
     /// </summary>
     [Fact]
-    public async Task CreateAccessToken_SeveralResourcesPublishKeys_Throws()
+    public async Task CreateAccessToken_SeveralResourcesPublishKeys_IsRefused()
     {
         var service = CreateServiceWithResources(new()
         {
@@ -1016,12 +1018,11 @@ public class AccessTokenServiceTests
             [BillingApi] = [new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "billing-enc" }],
         });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var refused = await Assert.ThrowsAsync<AudienceKeyRefusedException>(
             async () => await service.CreateAccessTokenAsync(
                 SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo(), grantId: null, null));
 
-        Assert.Contains(OrdersApi.OriginalString, exception.Message);
-        Assert.Contains(BillingApi.OriginalString, exception.Message);
+        Assert.Equal([OrdersApi, BillingApi], refused.Resources);
     }
 
     // Narrowing authorization_details to the audience the token is addressed to

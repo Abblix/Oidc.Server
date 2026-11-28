@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Records the refusal of an audience whose published keys a token cannot be encrypted to.
+/// Records the refusal of an audience a token cannot be encrypted to.
 /// </summary>
 /// <remarks>
 /// The refusal is the resource's to answer for rather than the server's, so it is recorded as a warning and goes on as
@@ -37,8 +37,7 @@ internal static partial class AudienceKeyRefusal
     /// <param name="context">The authorization context naming the token's audience.</param>
     /// <param name="audienceKeys">Answers which key, if any, the named audience published.</param>
     /// <param name="logger">Records the refusal.</param>
-    /// <exception cref="AudienceKeyRefusedException">The audience publishes keys, none of which a token can be
-    /// encrypted to.</exception>
+    /// <exception cref="AudienceKeyRefusedException">The token cannot be encrypted to its audience.</exception>
     public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         ServiceJwtEncryption encryption,
         TenantDefinition tenant,
@@ -54,7 +53,7 @@ internal static partial class AudienceKeyRefusal
         catch (AudienceKeyRefusedException refused)
         {
             LogAudienceKeyRefused(
-                logger, Sanitized.Value(string.Join(" ", refused.Resources)), Sanitized.Value(refused.DefaultAlgorithm));
+                logger, Sanitized.Value(string.Join(" ", refused.Resources)), Sanitized.Value(refused.Message));
             throw;
         }
     }
@@ -62,6 +61,6 @@ internal static partial class AudienceKeyRefusal
     [LoggerMessage(
         EventId = LogEvents.TokenIssuance.AccessTokenService.AudienceKeyRefused,
         Level = LogLevel.Warning,
-        Message = "No access token issued for {Resources}: none of the encryption keys it publishes is one a token can be encrypted to under the security profile in force, a key declaring no algorithm taken under {DefaultAlgorithm}, the access token's own encryption setting or the default")]
-    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources, Sanitized defaultAlgorithm);
+        Message = "No access token issued for {Resources}, which it cannot be encrypted to: {Reason}")]
+    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources, Sanitized reason);
 }
